@@ -47,7 +47,12 @@ export interface TextEl extends Base {
   color: string;
   /** Font preset; missing means the clean sans-serif default. */
   font?: FontId;
+  bold?: boolean;
+  italic?: boolean;
+  align?: TextAlign;
 }
+
+export type TextAlign = "left" | "center" | "right";
 
 export interface StickyEl extends Base {
   kind: "sticky";
@@ -60,6 +65,9 @@ export interface StickyEl extends Base {
   font?: FontId;
   /** Text size; missing means 18. */
   fontSize?: number;
+  bold?: boolean;
+  italic?: boolean;
+  align?: TextAlign;
 }
 
 export interface ImageEl extends Base {

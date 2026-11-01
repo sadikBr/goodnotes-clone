@@ -57,7 +57,13 @@ function rectOfPoints(pts: ArrayLike<ArrayLike<number>>, pad = 0): Rect {
  * on real font metrics; without one (e.g. in unit tests) only explicit line
  * breaks are counted.
  */
-type LineCounter = (text: string, fontSize: number, width: number, font: string | undefined) => number;
+export interface TextStyle {
+  font?: string;
+  bold?: boolean;
+  italic?: boolean;
+  align?: "left" | "center" | "right";
+}
+type LineCounter = (text: string, fontSize: number, width: number, style: TextStyle) => number;
 let countLines: LineCounter = (text) => text.split("\n").length;
 
 export function setLineCounter(counter: LineCounter) {
@@ -65,8 +71,8 @@ export function setLineCounter(counter: LineCounter) {
 }
 
 /** Text box height including word-wrapped lines. */
-export function textHeight(text: string, fontSize: number, width = Infinity, font?: string): number {
-  return Math.max(1, countLines(text, fontSize, width, font)) * fontSize * 1.35;
+export function textHeight(text: string, fontSize: number, width = Infinity, style: TextStyle = {}): number {
+  return Math.max(1, countLines(text, fontSize, width, style)) * fontSize * 1.35;
 }
 
 export function bounds(el: El): Rect {
@@ -79,7 +85,7 @@ export function bounds(el: El): Rect {
       return rectOfPoints(s.points, el.width / 2);
     }
     case "text":
-      return { x: el.x, y: el.y, w: el.w, h: textHeight(el.text, el.fontSize, el.w, el.font) };
+      return { x: el.x, y: el.y, w: el.w, h: textHeight(el.text, el.fontSize, el.w, el) };
     case "sticky":
     case "image":
       return { x: el.x, y: el.y, w: el.w, h: el.h };

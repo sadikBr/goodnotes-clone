@@ -28,9 +28,10 @@ import {
   type ShapeKind,
 } from "./geometry";
 import { inkToTextDialog } from "./inkToText";
+import { continueList, currentList, toggleList, type ListKind } from "./textFormat";
 import { beautify, detectBrace, recognizeShape } from "./beautify";
 import { anchorsAsTargets, paperTargets, snapMove, type Anchor, type Guide, type Target } from "./snap";
-import { fromStored, newId, nextZ, PEN_STYLES, toStored, type El, type PenStyle, type Pt, type ShapeEl, type StickyEl, type StrokeEl, type TextEl } from "./model";
+import { fromStored, newId, nextZ, PEN_STYLES, toStored, type El, type PenStyle, type Pt, type ShapeEl, type StickyEl, type StrokeEl, type TextAlign, type TextEl } from "./model";
 import { drawElement, drawGuides, drawHandles, drawLasso, drawSelection, drawStroke, drawTemplate, fitTextToBox, paperLayout, preloadImages, renderPage, templatePreview, textAnchors, type ImageCache } from "./render";
 
 type Tool = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "sticky" | "hand";
@@ -143,6 +144,8 @@ export class EditorScreen {
   private widths: Record<string, number> = loadWidths();
   private textFont: FontId = getPref(TEXT_FONT_KEY, "sans", FONT_PRESETS.map((f) => f.id));
   private selectionBarKey = "";
+  /** Formatting applied to new text boxes and sticky notes. */
+  private textFormat: { bold: boolean; italic: boolean; align: TextAlign } = { bold: false, italic: false, align: "left" };
   private eraserMode: "precise" | "stroke" = getPref(ERASER_MODE_KEY, "precise", ["precise", "stroke"] as const);
   private zoom = 1;
   private selection = new Set<string>();
@@ -531,7 +534,7 @@ export class EditorScreen {
         ),
       );
     }
-    if (this.tool === "text" || this.tool === "sticky") return this.fontPicker();
+    if (this.tool === "text" || this.tool === "sticky") return h("div", { class: "text-options" }, this.fontPicker(), this.formatControls());
     if (this.tool === "eraser") {
       const mode = (id: "precise" | "stroke", label: string, title: string) =>
         h(
@@ -602,6 +605,52 @@ export class EditorScreen {
       anchor,
       FONT_PRESETS.map((f) => ({ label: f.label, fontFamily: f.family, checked: f.id === current, action: () => pick(f.id) })),
     );
+  }
+
+  /**
+   * Bold / italic / list / alignment buttons. They show and change the text
+   * box being edited, or set the defaults for the next new one.
+   */
+  private formatControls(): HTMLElement {
+    const target = this.editing?.el;
+    const f = target ? { bold: !!target.bold, italic: !!target.italic, align: target.align ?? "left" } : this.textFormat;
+    const list = target ? currentList(this.editing!.input.value) : null;
+    const btn = (label: string, content: HTMLElement | string, active: boolean, onclick: () => void, cls = "") =>
+      h("button", { class: `tool-btn small fmt-btn ${cls}${active ? " active" : ""}`, "aria-pressed": String(active), "aria-label": label, title: label, onclick }, content);
+    return h(
+      "div",
+      { class: "tool-group options", role: "group", "aria-label": "Text format" },
+      btn("Bold (Ctrl+B)", h("b", {}, "B"), f.bold, () => this.applyFormat({ bold: !f.bold })),
+      btn("Italic (Ctrl+I)", h("i", {}, "I"), f.italic, () => this.applyFormat({ italic: !f.italic }), "serif"),
+      h("span", { class: "divider" }),
+      btn("Bulleted list", icon("listBullet"), list === "bullet", () => this.applyFormat({ list: "bullet" })),
+      btn("Numbered list", icon("listNumber"), list === "number", () => this.applyFormat({ list: "number" })),
+      h("span", { class: "divider" }),
+      btn("Align left", icon("alignLeft"), f.align === "left", () => this.applyFormat({ align: "left" })),
+      btn("Align centre", icon("alignCenter"), f.align === "center", () => this.applyFormat({ align: "center" })),
+      btn("Align right", icon("alignRight"), f.align === "right", () => this.applyFormat({ align: "right" })),
+    );
+  }
+
+  /** Applies formatting to the box being edited (and remembers it for new boxes). */
+  private applyFormat(change: { bold?: boolean; italic?: boolean; align?: TextAlign; list?: ListKind }) {
+    if (change.bold !== undefined) this.textFormat.bold = change.bold;
+    if (change.italic !== undefined) this.textFormat.italic = change.italic;
+    if (change.align) this.textFormat.align = change.align;
+    const ed = this.editing;
+    if (ed) {
+      if (change.bold !== undefined) ed.el.bold = change.bold;
+      if (change.italic !== undefined) ed.el.italic = change.italic;
+      if (change.align) ed.el.align = change.align;
+      if (change.list) {
+        ed.input.value = toggleList(ed.input.value, change.list);
+        ed.el.text = ed.input.value;
+        ed.input.setSelectionRange(ed.input.value.length, ed.input.value.length);
+      }
+      this.positionEditor();
+      ed.input.focus({ preventScroll: true });
+    }
+    this.renderToolbar();
   }
 
   /** Applies a font or size change to the text box being edited, if any. */
@@ -1095,11 +1144,11 @@ export class EditorScreen {
         if (existing && (existing.kind === "text" || existing.kind === "sticky")) {
           this.startTextEdit(existing, false);
         } else if (tool === "text") {
-          const el: TextEl = { id: newId(), z: nextZ(this.elements), kind: "text", x, y: y - 12, w: Math.min(420, this.page.width - x - 20), text: "", fontSize: this.widths.text, color: this.colors.text, font: this.textFont };
+          const el: TextEl = { id: newId(), z: nextZ(this.elements), kind: "text", x, y: y - 12, w: Math.min(420, this.page.width - x - 20), text: "", fontSize: this.widths.text, color: this.colors.text, font: this.textFont, ...this.textFormat };
           el.w = Math.max(120, el.w);
           this.startTextEdit(el, true);
         } else {
-          const el: StickyEl = { id: newId(), z: nextZ(this.elements), kind: "sticky", x: x - 20, y: y - 20, w: 220, h: 200, text: "", color: this.colors.sticky, font: this.textFont, fontSize: this.widths.sticky };
+          const el: StickyEl = { id: newId(), z: nextZ(this.elements), kind: "sticky", x: x - 20, y: y - 20, w: 220, h: 200, text: "", color: this.colors.sticky, font: this.textFont, fontSize: this.widths.sticky, ...this.textFormat };
           this.startTextEdit(el, true);
         }
         this.canvas.releasePointerCapture(e.pointerId);
@@ -1650,6 +1699,7 @@ export class EditorScreen {
         fontBtn,
         h("button", { class: "icon-btn small text-btn", "aria-label": "Smaller text", title: "Smaller text", onclick: () => this.styleSelectedText({ scale: 1 / 1.15 }) }, "A−"),
         h("button", { class: "icon-btn small text-btn", "aria-label": "Larger text", title: "Larger text", onclick: () => this.styleSelectedText({ scale: 1.15 }) }, "A+"),
+        ...this.selectionFormatButtons(texts),
         h("span", { class: "divider" }),
       );
     }
@@ -1723,13 +1773,36 @@ export class EditorScreen {
   }
 
   /** Applies a font and/or size change to every selected text box and sticky note. */
-  private styleSelectedText(change: { font?: FontId; scale?: number }) {
+  private selectionFormatButtons(texts: (TextEl | StickyEl)[]): HTMLElement[] {
+    const all = (pred: (t: TextEl | StickyEl) => boolean) => texts.every(pred);
+    const bold = all((t) => !!t.bold);
+    const italic = all((t) => !!t.italic);
+    const align = all((t) => (t.align ?? "left") === "center") ? "center" : all((t) => t.align === "right") ? "right" : "left";
+    const list = texts.every((t) => currentList(t.text) === "bullet") ? "bullet" : texts.every((t) => currentList(t.text) === "number") ? "number" : null;
+    const nextAlign: Record<TextAlign, TextAlign> = { left: "center", center: "right", right: "left" };
+    const alignIcon = { left: "alignLeft", center: "alignCenter", right: "alignRight" } as const;
+    const b = (label: string, content: HTMLElement | string, active: boolean, onclick: () => void) =>
+      h("button", { class: `icon-btn small fmt-btn${active ? " active" : ""}`, "aria-pressed": String(active), "aria-label": label, title: label, onclick }, content);
+    return [
+      b("Bold", h("b", {}, "B"), bold, () => this.styleSelectedText({ bold: !bold })),
+      b("Italic", h("i", { class: "serif" }, "I"), italic, () => this.styleSelectedText({ italic: !italic })),
+      b("Bulleted list", icon("listBullet"), list === "bullet", () => this.styleSelectedText({ list: "bullet" })),
+      b("Numbered list", icon("listNumber"), list === "number", () => this.styleSelectedText({ list: "number" })),
+      b(`Alignment: ${align} (click to change)`, icon(alignIcon[align]), false, () => this.styleSelectedText({ align: nextAlign[align] })),
+    ];
+  }
+
+  private styleSelectedText(change: { font?: FontId; scale?: number; bold?: boolean; italic?: boolean; align?: TextAlign; list?: ListKind }) {
     if (!this.selectedText().length) return;
     this.snapshot();
     this.elements = this.elements.map((el) => {
       if (!this.selection.has(el.id) || (el.kind !== "text" && el.kind !== "sticky")) return el;
       const next = { ...el };
       if (change.font) next.font = change.font;
+      if (change.bold !== undefined) next.bold = change.bold;
+      if (change.italic !== undefined) next.italic = change.italic;
+      if (change.align) next.align = change.align;
+      if (change.list) next.text = toggleList(el.text, change.list);
       if (change.scale) {
         const size = (el.kind === "text" ? el.fontSize : el.fontSize ?? 18) * change.scale;
         next.fontSize = Math.round(Math.min(96, Math.max(8, size)));
@@ -1812,6 +1885,20 @@ export class EditorScreen {
       if (e.key === "Escape") {
         e.preventDefault();
         input.blur();
+      } else if (e.key === "Enter" && !e.shiftKey && input.selectionStart === input.selectionEnd) {
+        const next = continueList(input.value, input.selectionStart);
+        if (next) {
+          e.preventDefault();
+          input.value = next.value;
+          input.setSelectionRange(next.caret, next.caret);
+          el.text = input.value;
+          this.positionEditor();
+          this.renderToolbar();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === "b" || e.key.toLowerCase() === "i")) {
+        e.preventDefault();
+        if (e.key.toLowerCase() === "b") this.applyFormat({ bold: !el.bold });
+        else this.applyFormat({ italic: !el.italic });
       }
       e.stopPropagation();
     });
@@ -1832,6 +1919,9 @@ export class EditorScreen {
     input.style.top = `${el.y * z}px`;
     input.style.width = `${el.w * z}px`;
     input.style.fontFamily = fontPreset(el.font).family;
+    input.style.fontWeight = el.bold ? "bold" : "normal";
+    input.style.fontStyle = el.italic ? "italic" : "normal";
+    input.style.textAlign = el.align ?? "left";
     if (el.kind === "text") {
       input.style.fontSize = `${el.fontSize * z}px`;
       input.style.color = el.color;

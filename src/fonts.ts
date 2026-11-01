@@ -38,8 +38,8 @@ export function fontPreset(id: string | undefined): FontPreset {
 }
 
 /** CSS / canvas font string, e.g. `24px "Caveat", cursive`. */
-export function fontCss(id: string | undefined, sizePx: number): string {
-  return `${sizePx}px ${fontPreset(id).family}`;
+export function fontCss(id: string | undefined, sizePx: number, style?: { bold?: boolean; italic?: boolean }): string {
+  return `${style?.italic ? "italic " : ""}${style?.bold ? "bold " : ""}${sizePx}px ${fontPreset(id).family}`;
 }
 
 const loaded = new Set<string>();

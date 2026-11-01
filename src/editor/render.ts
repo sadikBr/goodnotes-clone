@@ -1,5 +1,6 @@
 import type { Template } from "../api";
-import { handlesFor, isClosedShape, pressureWidth, setLineCounter, textHeight, type Rect } from "./geometry";
+import { handlesFor, isClosedShape, pressureWidth, setLineCounter, textHeight, type Rect, type TextStyle } from "./geometry";
+import { LIST_MARKER } from "./textFormat";
 import { fontCss } from "../fonts";
 import type { El, Pt, ShapeEl, StickyEl, StrokeEl, TextEl } from "./model";
 import type { Anchor, Guide } from "./snap";
@@ -299,13 +300,45 @@ function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number
 
 // Give geometry (selection, hit-testing) the same line wrapping as drawing.
 let measureCtx: CanvasRenderingContext2D | null = null;
-setLineCounter((text, fontSize, width, font) => {
+setLineCounter((text, fontSize, width, style) => {
   if (typeof document === "undefined") return text.split("\n").length;
   measureCtx ??= document.createElement("canvas").getContext("2d");
   if (!measureCtx) return text.split("\n").length;
-  measureCtx.font = fontCss(font, fontSize);
-  return wrapLines(measureCtx, text, width).length;
+  return layoutText(measureCtx, text, 0, 0, width, fontSize, fontSize, style).length;
 });
+
+export interface LaidLine {
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+}
+
+/**
+ * Lays out text: word wrap, list items with a hanging indent (wrapped lines
+ * line up after the bullet/number) and left/centre/right alignment. Shared
+ * by drawing, hit-testing, alignment guides and PDF export.
+ */
+export function layoutText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, w: number, size: number, lineH: number, style: TextStyle): LaidLine[] {
+  ctx.font = fontCss(style.font, size, style);
+  const out: LaidLine[] = [];
+  let row = 0;
+  for (const para of text.split("\n")) {
+    const m = LIST_MARKER.exec(para);
+    const indent = m ? ctx.measureText(m[0]).width : 0;
+    const body = m ? para.slice(m[0].length) : para;
+    wrapLines(ctx, body, Math.max(10, w - indent)).forEach((line, i) => {
+      const t = i === 0 && m ? m[0] + line : line;
+      const lw = ctx.measureText(t).width;
+      const baseX = i === 0 ? x : x + indent;
+      const avail = i === 0 ? w : w - indent;
+      const lx = style.align === "center" ? baseX + (avail - lw) / 2 : style.align === "right" ? baseX + avail - lw : baseX;
+      out.push({ text: t, x: lx, y: y + row * lineH, width: lw });
+      row++;
+    });
+  }
+  return out;
+}
 
 /** Width of the longest line of `text` in the given font and size. */
 export function measureText(text: string, font: string | undefined, size: number): number {
@@ -336,26 +369,24 @@ export function textAnchors(el: TextEl): Anchor[] {
   measureCtx ??= document.createElement("canvas").getContext("2d");
   const ctx = measureCtx;
   if (!ctx) return [];
-  ctx.font = fontCss(el.font, el.fontSize);
+  const lines = layoutText(ctx, el.text, el.x, el.y, el.w, el.fontSize, el.fontSize * 1.35, el);
   ctx.textBaseline = "top";
-  const lineH = el.fontSize * 1.35;
   const baseOff = ctx.measureText("H").actualBoundingBoxDescent;
   const xm = ctx.measureText("x");
   const midOff = (xm.actualBoundingBoxDescent - xm.actualBoundingBoxAscent) / 2;
   const out: Anchor[] = [];
   let left = Infinity, right = -Infinity, top = Infinity, bottom = -Infinity;
-  wrapLines(ctx, el.text, el.w).forEach((line, i) => {
-    if (!line.trim()) return;
-    const m = ctx.measureText(line);
-    const lineTop = el.y + i * lineH;
-    const l = el.x - m.actualBoundingBoxLeft;
-    const r = el.x + m.actualBoundingBoxRight;
-    out.push({ axis: "y", kind: "baseline", value: lineTop + baseOff, span: [l, r] }, { axis: "y", kind: "mid", value: lineTop + midOff, span: [l, r] });
+  for (const line of lines) {
+    if (!line.text.trim()) continue;
+    const m = ctx.measureText(line.text);
+    const l = line.x - m.actualBoundingBoxLeft;
+    const r = line.x + m.actualBoundingBoxRight;
+    out.push({ axis: "y", kind: "baseline", value: line.y + baseOff, span: [l, r] }, { axis: "y", kind: "mid", value: line.y + midOff, span: [l, r] });
     left = Math.min(left, l);
     right = Math.max(right, r);
-    top = Math.min(top, lineTop - m.actualBoundingBoxAscent);
-    bottom = Math.max(bottom, lineTop + m.actualBoundingBoxDescent);
-  });
+    top = Math.min(top, line.y - m.actualBoundingBoxAscent);
+    bottom = Math.max(bottom, line.y + m.actualBoundingBoxDescent);
+  }
   ctx.textBaseline = "alphabetic";
   if (out.length) {
     const span: [number, number] = [top, bottom];
@@ -398,10 +429,8 @@ export function drawGuides(ctx: CanvasRenderingContext2D, guides: Guide[], zoom:
 function drawText(ctx: CanvasRenderingContext2D, el: TextEl) {
   ctx.save();
   ctx.fillStyle = el.color;
-  ctx.font = fontCss(el.font, el.fontSize);
   ctx.textBaseline = "top";
-  const lines = wrapLines(ctx, el.text, el.w);
-  lines.forEach((line, i) => ctx.fillText(line, el.x, el.y + i * el.fontSize * 1.35));
+  for (const line of layoutText(ctx, el.text, el.x, el.y, el.w, el.fontSize, el.fontSize * 1.35, el)) ctx.fillText(line.text, line.x, line.y);
   ctx.restore();
 }
 
@@ -416,10 +445,9 @@ function drawSticky(ctx: CanvasRenderingContext2D, el: StickyEl) {
   ctx.fillStyle = "#1f2937";
   const size = el.fontSize ?? 18;
   const lineH = size * 1.33;
-  ctx.font = fontCss(el.font, size);
   ctx.textBaseline = "top";
-  const lines = wrapLines(ctx, el.text, el.w - 24);
-  lines.slice(0, Math.max(1, Math.floor((el.h - 24) / lineH))).forEach((line, i) => ctx.fillText(line, el.x + 12, el.y + 12 + i * lineH));
+  const lines = layoutText(ctx, el.text, el.x + 12, el.y + 12, el.w - 24, size, lineH, el);
+  for (const line of lines.slice(0, Math.max(1, Math.floor((el.h - 24) / lineH)))) ctx.fillText(line.text, line.x, line.y);
   ctx.restore();
 }
 

@@ -72,6 +72,11 @@ export const ICONS = {
   sTriangle: svg('<path d="M12 4l9 16H3z"/>'),
   sDiamond: svg('<path d="M12 3l9 9-9 9-9-9z"/>'),
   sStar: svg('<path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6-4.5-4.2 6.1-.7z"/>'),
+  listBullet: svg('<circle cx="5" cy="7" r="1.3" fill="currentColor"/><circle cx="5" cy="12" r="1.3" fill="currentColor"/><circle cx="5" cy="17" r="1.3" fill="currentColor"/><path d="M10 7h10M10 12h10M10 17h10"/>'),
+  listNumber: svg('<path d="M4 5h2v5M4 10h3M4 14h3l-3 4h3"/><path d="M11 7h9M11 12h9M11 17h9"/>'),
+  alignLeft: svg('<path d="M4 6h16M4 10h10M4 14h16M4 18h10"/>'),
+  alignCenter: svg('<path d="M4 6h16M7 10h10M4 14h16M7 18h10"/>'),
+  alignRight: svg('<path d="M4 6h16M10 10h10M4 14h16M10 18h10"/>'),
   fill: svg('<rect x="4" y="4" width="16" height="16" rx="2" fill="currentColor" fill-opacity="0.35"/>'),
 };
 

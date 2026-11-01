@@ -1194,3 +1194,23 @@ select option {
   width: 100%;
   justify-content: center;
 }
+
+/* ------------------------------------------------------ text formatting */
+
+.text-options {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.fmt-btn {
+  font-size: 15px;
+  color: var(--text);
+}
+.fmt-btn.serif i,
+.fmt-btn i.serif {
+  font-family: Georgia, "Times New Roman", serif;
+}
+.selection-bar .fmt-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
