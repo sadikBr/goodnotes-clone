@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Inkleaf
+GenericName=Handwritten notes
+Comment=Notebooks for handwriting, drawing and typed notes
+Exec=inkleaf
+Icon=inkleaf
+Terminal=false
+Categories=Office;
+Keywords=notes;handwriting;notebook;pen;stylus;drawing;
+StartupWMClass=inkleaf

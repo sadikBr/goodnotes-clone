@@ -75,6 +75,20 @@ rustup target add x86_64-pc-windows-gnu
 npm run tauri build -- --target x86_64-pc-windows-gnu --bundles nsis
 ```
 
+### Linux packages
+
+Arch Linux (including Omarchy): `packaging/arch/PKGBUILD` installs a release
+build. Put it next to `inkleaf-<version>-x86_64.tar.gz` (binary, desktop entry,
+icons) and run `makepkg -si`. It uses the system `webkit2gtk-4.1`.
+
+```bash
+npm run tauri build -- --no-bundle         # release binary: src-tauri/target/release/inkleaf
+npm run tauri build -- --bundles deb,rpm   # Debian/Ubuntu and Fedora packages
+```
+
+If the window stays blank on Wayland with an NVIDIA GPU, start it with
+`WEBKIT_DISABLE_DMABUF_RENDERER=1 inkleaf` (a WebKitGTK driver issue).
+
 Tests:
 
 ```bash
@@ -87,6 +101,6 @@ on Linux, `~/Library/Application Support/app.inkleaf.desktop/` on macOS).
 
 ## Not implemented yet
 
-Cloud sync and collaboration, handwriting recognition, and PDF import/annotation.
+Cloud sync and collaboration, handwriting recognition outside Windows, and PDF import/annotation.
 [Report 05](docs/reverse-engineering/05-inkleaf-mapping.md) explains how each
 could be added.
