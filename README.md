@@ -18,6 +18,8 @@ no Goodnotes code, assets or branding.
 - **Pen-only mode:** when a stylus is detected, only the pen writes; finger and mouse scroll, and two fingers pinch-zoom. Touches while the pen is writing or hovering are ignored (palm rejection). Toggle with the pen button in the top-right; the choice is remembered
 - **Shapes:** pick line, arrow, rectangle, ellipse/circle, triangle, diamond or star and drag (Shift for squares, circles and 45° lines; optional fill), or use *Auto* / *draw and hold* with the pen to turn rough strokes into clean shapes (recognizer in Rust)
 - **Objects:** text boxes, sticky notes, images (insert or paste)
+- **Handwriting fonts:** eight presets for typed text: Clean, Quick notes, Neat print, Casual, Bubbly, Light pencil, Cursive and Architect. Pick one before or while typing, or lasso-select text boxes and sticky notes and change the font or size (A− / A+) from the selection bar. The fonts are bundled, so they work offline (SIL Open Font License; see `public/third-party-licenses.txt`)
+- **Sizes:** each tool shows its exact size in px, with one-tap presets, − / + buttons and a box to type a value. Sizes are remembered
 - **Lasso:** select, move, recolour, duplicate, copy/paste, delete
 - **Pages:** sidebar thumbnails, add / insert / duplicate / reorder / delete / bookmark
 - **Editing:** undo/redo, zoom (Ctrl+wheel, pinch, fit width), pan tool

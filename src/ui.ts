@@ -194,6 +194,9 @@ export interface MenuItem {
   label: string;
   action: () => void;
   danger?: boolean;
+  /** Optional CSS font-family, e.g. to preview a font in its own face. */
+  fontFamily?: string;
+  checked?: boolean;
 }
 
 /** Opens a small popup menu anchored to an element. */
@@ -205,7 +208,9 @@ export function popupMenu(anchor: HTMLElement, items: MenuItem[]) {
       h(
         "button",
         {
-          role: "menuitem",
+          role: item.checked === undefined ? "menuitem" : "menuitemradio",
+          "aria-checked": item.checked === undefined ? undefined : String(item.checked),
+          style: item.fontFamily ? { fontFamily: item.fontFamily, fontSize: "18px" } : undefined,
           class: item.danger ? "danger" : "",
           onclick: (e: Event) => {
             e.stopPropagation();
@@ -231,6 +236,84 @@ export function popupMenu(anchor: HTMLElement, items: MenuItem[]) {
   };
   setTimeout(() => document.addEventListener("pointerdown", dismiss, true));
   (menu.querySelector("button") as HTMLButtonElement | null)?.focus();
+}
+
+export interface SizeControlOptions {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  unit: string;
+  presets: number[];
+  /** "dot" previews line thickness, "letter" previews text size. */
+  preview: "dot" | "letter";
+  onChange(value: number): void;
+}
+
+/**
+ * Size picker: one-tap presets plus a − / value / + stepper showing the
+ * exact number, which can also be typed in.
+ */
+export function sizeControl(o: SizeControlOptions): HTMLElement {
+  let value = o.value;
+  const decimals = o.step < 1 ? 1 : 0;
+  const clamp = (v: number) => Math.min(o.max, Math.max(o.min, Math.round(v / o.step) * o.step));
+  const input = h("input", {
+    type: "number",
+    class: "size-value",
+    min: String(o.min),
+    max: String(o.max),
+    step: String(o.step),
+    "aria-label": `${o.label} (${o.unit})`,
+  });
+  const maxPreset = Math.max(...o.presets);
+  const presetBtns = o.presets.map((p) => {
+    const mark =
+      o.preview === "dot"
+        ? h("span", { class: "size-dot", style: { width: `${4 + (p / maxPreset) * 14}px`, height: `${4 + (p / maxPreset) * 14}px` } })
+        : h("span", { class: "size-letter", style: { fontSize: `${10 + (p / maxPreset) * 12}px` } }, "A");
+    const b = h("button", { class: "size-preset", type: "button", title: `${p} ${o.unit}`, "aria-label": `${o.label} ${p} ${o.unit}` }, mark);
+    b.addEventListener("click", () => set(p));
+    return b;
+  });
+  const sync = () => {
+    input.value = value.toFixed(decimals);
+    presetBtns.forEach((b, i) => b.setAttribute("aria-pressed", String(Math.abs(o.presets[i] - value) < 1e-6)));
+  };
+  const set = (v: number) => {
+    const next = clamp(v);
+    if (!Number.isFinite(next)) return sync();
+    value = next;
+    sync();
+    o.onChange(value);
+  };
+  const stepBy = (dir: number) => {
+    // Small steps for fine sizes, larger ones further up the range.
+    const delta = value >= 20 ? Math.max(o.step, 2) : value >= 8 ? Math.max(o.step, 1) : o.step;
+    set(value + dir * delta);
+  };
+  input.addEventListener("change", () => set(Number(input.value)));
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      set(Number(input.value));
+      input.blur();
+    }
+  });
+  sync();
+  return h(
+    "div",
+    { class: "size-control", role: "group", "aria-label": o.label },
+    h("div", { class: "size-presets" }, ...presetBtns),
+    h(
+      "div",
+      { class: "size-stepper" },
+      h("button", { type: "button", class: "step-btn", "aria-label": `Smaller ${o.label.toLowerCase()}`, onclick: () => stepBy(-1) }, "−"),
+      input,
+      h("span", { class: "size-unit" }, o.unit),
+      h("button", { type: "button", class: "step-btn", "aria-label": `Larger ${o.label.toLowerCase()}`, onclick: () => stepBy(1) }, "+"),
+    ),
+  );
 }
 
 export function relativeTime(ms: number): string {

@@ -52,9 +52,21 @@ function rectOfPoints(pts: ArrayLike<ArrayLike<number>>, pad = 0): Rect {
   return { x: x0 - pad, y: y0 - pad, w: x1 - x0 + 2 * pad, h: y1 - y0 + 2 * pad };
 }
 
-/** Approximate text box height from line count. */
-export function textHeight(text: string, fontSize: number): number {
-  return Math.max(1, text.split("\n").length) * fontSize * 1.35;
+/**
+ * Counts wrapped lines for a text box. The renderer installs a measurer based
+ * on real font metrics; without one (e.g. in unit tests) only explicit line
+ * breaks are counted.
+ */
+type LineCounter = (text: string, fontSize: number, width: number, font: string | undefined) => number;
+let countLines: LineCounter = (text) => text.split("\n").length;
+
+export function setLineCounter(counter: LineCounter) {
+  countLines = counter;
+}
+
+/** Text box height including word-wrapped lines. */
+export function textHeight(text: string, fontSize: number, width = Infinity, font?: string): number {
+  return Math.max(1, countLines(text, fontSize, width, font)) * fontSize * 1.35;
 }
 
 export function bounds(el: El): Rect {
@@ -67,7 +79,7 @@ export function bounds(el: El): Rect {
       return rectOfPoints(s.points, el.width / 2);
     }
     case "text":
-      return { x: el.x, y: el.y, w: el.w, h: textHeight(el.text, el.fontSize) };
+      return { x: el.x, y: el.y, w: el.w, h: textHeight(el.text, el.fontSize, el.w, el.font) };
     case "sticky":
     case "image":
       return { x: el.x, y: el.y, w: el.w, h: el.h };

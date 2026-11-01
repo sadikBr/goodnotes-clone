@@ -833,3 +833,138 @@ button {
   color: var(--muted);
   font-size: 13px;
 }
+
+/* -------------------------------------------------------- size control */
+
+.size-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.size-presets {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.size-preset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+}
+.size-preset:hover {
+  color: var(--text);
+}
+.size-preset[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: var(--shadow);
+}
+.size-dot {
+  display: block;
+  border-radius: 50%;
+  background: currentColor;
+}
+.size-letter {
+  font-weight: 600;
+  line-height: 1;
+}
+.size-stepper {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.step-btn {
+  width: 30px;
+  height: 100%;
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text);
+}
+.step-btn:hover {
+  background: var(--surface-2);
+}
+.size-value {
+  width: 46px;
+  height: 100%;
+  border: none;
+  border-left: 1px solid var(--border);
+  background: transparent;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  padding: 0 2px 0 0;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.size-value::-webkit-outer-spin-button,
+.size-value::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.size-unit {
+  padding: 0 8px 0 3px;
+  color: var(--muted);
+  font-size: 12px;
+  border-right: 1px solid var(--border);
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+/* --------------------------------------------------------- font picker */
+
+.font-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  min-width: 170px;
+  padding: 0 10px 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  font-size: 18px;
+}
+.font-picker .font-name {
+  flex: 1;
+  text-align: left;
+  white-space: nowrap;
+}
+.font-picker .icon,
+.font-picker svg {
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+.popup-menu [aria-checked="true"]::after {
+  content: "✓";
+  float: right;
+  color: var(--accent);
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+}
+.selection-bar .text-btn {
+  width: auto;
+  padding: 0 8px;
+  font-weight: 600;
+  font-size: 13px;
+}
+.font-picker.small {
+  min-width: 130px;
+  height: 30px;
+  font-size: 16px;
+}

@@ -1,5 +1,6 @@
 import type { Template } from "../api";
-import { pressureWidth, textHeight, type Rect } from "./geometry";
+import { pressureWidth, setLineCounter, textHeight, type Rect } from "./geometry";
+import { fontCss } from "../fonts";
 import type { El, Pt, ShapeEl, StickyEl, StrokeEl, TextEl } from "./model";
 
 const LINE_COLOR = "rgba(96, 140, 200, 0.35)";
@@ -263,12 +264,20 @@ function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number
   return out;
 }
 
-export const FONT_STACK = '"Inter", "Segoe UI", system-ui, -apple-system, sans-serif';
+// Give geometry (selection, hit-testing) the same line wrapping as drawing.
+let measureCtx: CanvasRenderingContext2D | null = null;
+setLineCounter((text, fontSize, width, font) => {
+  if (typeof document === "undefined") return text.split("\n").length;
+  measureCtx ??= document.createElement("canvas").getContext("2d");
+  if (!measureCtx) return text.split("\n").length;
+  measureCtx.font = fontCss(font, fontSize);
+  return wrapLines(measureCtx, text, width).length;
+});
 
 function drawText(ctx: CanvasRenderingContext2D, el: TextEl) {
   ctx.save();
   ctx.fillStyle = el.color;
-  ctx.font = `${el.fontSize}px ${FONT_STACK}`;
+  ctx.font = fontCss(el.font, el.fontSize);
   ctx.textBaseline = "top";
   const lines = wrapLines(ctx, el.text, el.w);
   lines.forEach((line, i) => ctx.fillText(line, el.x, el.y + i * el.fontSize * 1.35));
@@ -284,10 +293,12 @@ function drawSticky(ctx: CanvasRenderingContext2D, el: StickyEl) {
   ctx.fillRect(el.x, el.y, el.w, el.h);
   ctx.shadowColor = "transparent";
   ctx.fillStyle = "#1f2937";
-  ctx.font = `18px ${FONT_STACK}`;
+  const size = el.fontSize ?? 18;
+  const lineH = size * 1.33;
+  ctx.font = fontCss(el.font, size);
   ctx.textBaseline = "top";
   const lines = wrapLines(ctx, el.text, el.w - 24);
-  lines.slice(0, Math.floor((el.h - 24) / 24)).forEach((line, i) => ctx.fillText(line, el.x + 12, el.y + 12 + i * 24));
+  lines.slice(0, Math.max(1, Math.floor((el.h - 24) / lineH))).forEach((line, i) => ctx.fillText(line, el.x + 12, el.y + 12 + i * lineH));
   ctx.restore();
 }
 

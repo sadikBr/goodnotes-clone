@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bounds, buildShape, hitTest, insideLasso, isHeld, pointInPolygon, pressureWidth, translate, unionRects } from "./geometry";
+import { bounds, buildShape, hitTest, setLineCounter, insideLasso, isHeld, pointInPolygon, pressureWidth, translate, unionRects } from "./geometry";
 import { fromStored, nextZ, toStored, type El, type StrokeEl } from "./model";
 
 const stroke = (points: [number, number][], width = 4): StrokeEl => ({
@@ -46,6 +46,14 @@ describe("geometry", () => {
     expect(translate(text, 5, 5)).toMatchObject({ x: 6, y: 7 });
     const s = translate(stroke([[0, 0]]), 3, 4) as StrokeEl;
     expect(s.points[0]).toEqual([3, 4, 0.5]);
+  });
+
+  it("sizes text boxes by wrapped lines when a line counter is installed", () => {
+    const text: El = { id: "t", z: 0, kind: "text", x: 0, y: 0, w: 100, text: "one two three four", fontSize: 20, color: "#000" };
+    expect(bounds(text).h).toBeCloseTo(27);
+    setLineCounter((t, _size, width) => Math.ceil((t.length * 10) / width));
+    expect(bounds(text).h).toBeCloseTo(2 * 27);
+    setLineCounter((t) => t.split("\n").length);
   });
 
   it("unions rectangles", () => {

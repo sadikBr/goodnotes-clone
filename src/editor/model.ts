@@ -1,4 +1,5 @@
 import type { RecognizedShape, StoredElement } from "../api";
+import type { FontId } from "../fonts";
 
 /** x, y and normalised pen pressure (0..1). */
 export type Pt = [number, number, number];
@@ -44,6 +45,8 @@ export interface TextEl extends Base {
   text: string;
   fontSize: number;
   color: string;
+  /** Font preset; missing means the clean sans-serif default. */
+  font?: FontId;
 }
 
 export interface StickyEl extends Base {
@@ -54,6 +57,9 @@ export interface StickyEl extends Base {
   h: number;
   text: string;
   color: string;
+  font?: FontId;
+  /** Text size; missing means 18. */
+  fontSize?: number;
 }
 
 export interface ImageEl extends Base {

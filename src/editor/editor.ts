@@ -1,8 +1,9 @@
 // Notebook editor: page canvas, tools, page sidebar, undo/redo and autosave.
 
 import { api, TEMPLATES, type ExportFormat, type ExportPage, type Notebook, type P2, type Page, type RecognizedShape, type Template } from "../api";
+import { ensureFonts, FONT_PRESETS, fontPreset, type FontId } from "../fonts";
 import { getPref, hasPref, setPref } from "../prefs";
-import { confirmDialog, formDialog, h, icon, popupMenu, reportError, toast } from "../ui";
+import { confirmDialog, formDialog, h, icon, popupMenu, reportError, sizeControl, toast } from "../ui";
 import { bounds, buildShape, hitTest, insideLasso, isHeld, rectContains, translate, unionRects, type Rect, type ShapeKind } from "./geometry";
 import { fromStored, newId, nextZ, PEN_STYLES, toStored, type El, type PenStyle, type Pt, type ShapeEl, type StickyEl, type TextEl } from "./model";
 import { drawElement, drawLasso, drawSelection, drawStroke, drawTemplate, preloadImages, renderPage, type ImageCache } from "./render";
@@ -40,6 +41,34 @@ const SHAPE_KINDS: { id: ShapeKind; label: string; icon: Parameters<typeof icon>
   { id: "star", label: "Star", icon: "sStar" },
 ];
 
+const WIDTHS_KEY = "inkleaf-sizes";
+const TEXT_FONT_KEY = "inkleaf-text-font";
+
+/** Size control ranges and one-tap presets per tool. */
+const SIZE_SPECS: Record<string, { label: string; min: number; max: number; step: number; presets: number[]; preview: "dot" | "letter" }> = {
+  pen: { label: "Pen size", min: 0.5, max: 20, step: 0.5, presets: [1, 2, 3, 5, 8], preview: "dot" },
+  highlighter: { label: "Highlighter size", min: 4, max: 48, step: 1, presets: [8, 12, 18, 26, 36], preview: "dot" },
+  eraser: { label: "Eraser size", min: 4, max: 80, step: 1, presets: [6, 10, 16, 28, 48], preview: "dot" },
+  shape: { label: "Line width", min: 0.5, max: 20, step: 0.5, presets: [1, 2, 3, 5, 8], preview: "dot" },
+  text: { label: "Text size", min: 8, max: 96, step: 1, presets: [14, 18, 24, 32, 48], preview: "letter" },
+  sticky: { label: "Text size", min: 10, max: 48, step: 1, presets: [14, 18, 22, 28, 36], preview: "letter" },
+};
+const DEFAULT_WIDTHS: Record<string, number> = { pen: 3, highlighter: 18, eraser: 14, shape: 3, text: 20, sticky: 18 };
+
+function loadWidths(): Record<string, number> {
+  const out = { ...DEFAULT_WIDTHS };
+  try {
+    const saved = JSON.parse(getPref<string>(WIDTHS_KEY, "{}")) as Record<string, unknown>;
+    for (const [k, v] of Object.entries(saved)) {
+      const spec = SIZE_SPECS[k];
+      if (spec && typeof v === "number" && v >= spec.min && v <= spec.max) out[k] = v;
+    }
+  } catch {
+    /* ignore corrupt preferences */
+  }
+  return out;
+}
+
 const EXPORT_SCALE: Record<ExportFormat, number> = { pdf: 3, png: 3, pptx: 2 };
 const MAX_UNDO = 100;
 
@@ -70,7 +99,9 @@ export class EditorScreen {
   private redoStack: string[] = [];
   private tool: Tool = "pen";
   private colors: Record<string, string> = { pen: INK_COLORS[0], highlighter: "#facc15", shape: INK_COLORS[0], text: INK_COLORS[0], sticky: STICKY_COLORS[0] };
-  private widths: Record<string, number> = { pen: 3, highlighter: 18, eraser: 14, shape: 3 };
+  private widths: Record<string, number> = loadWidths();
+  private textFont: FontId = getPref(TEXT_FONT_KEY, "sans", FONT_PRESETS.map((f) => f.id));
+  private selectionBarKey = "";
   private zoom = 1;
   private selection = new Set<string>();
   private clipboard: El[] = [];
@@ -190,6 +221,7 @@ export class EditorScreen {
     this.index = i;
     try {
       this.elements = fromStored(await api.elements(this.page.id));
+      void this.loadFontsFor(this.elements);
     } catch (e) {
       reportError(e);
       this.elements = [];
@@ -312,12 +344,20 @@ export class EditorScreen {
         )
       : null;
     let width: HTMLElement | null = null;
-    if (this.widths[this.tool] !== undefined) {
+    const spec = SIZE_SPECS[this.tool];
+    if (spec) {
       const tool = this.tool;
-      const max = tool === "highlighter" ? 40 : tool === "eraser" ? 60 : 16;
-      const input = h("input", { type: "range", min: "1", max: String(max), step: "0.5", value: String(this.widths[tool]), "aria-label": "Size" });
-      input.addEventListener("input", () => (this.widths[tool] = Number(input.value)));
-      width = h("label", { class: "width-control", title: "Size" }, input);
+      width = sizeControl({
+        ...spec,
+        value: this.widths[tool],
+        unit: "px",
+        onChange: (v) => {
+          this.widths[tool] = v;
+          setPref(WIDTHS_KEY, JSON.stringify(this.widths));
+          if (tool === "text" || tool === "sticky") this.applyToEditing({ fontSize: v });
+          if (tool === "eraser") this.draw();
+        },
+      });
     }
     this.toolbar.replaceChildren(h("div", { class: "tool-group" }, ...tools));
     const options = [this.toolOptions(), swatches, width].filter((x): x is HTMLElement => x !== null);
@@ -348,6 +388,7 @@ export class EditorScreen {
         ),
       );
     }
+    if (this.tool === "text" || this.tool === "sticky") return this.fontPicker();
     if (this.tool === "shape") {
       return h(
         "div",
@@ -367,6 +408,54 @@ export class EditorScreen {
       );
     }
     return null;
+  }
+
+  /** Button showing the current handwriting font; opens the preset list. */
+  private fontPicker(): HTMLElement {
+    const current = fontPreset(this.editing?.el.font ?? this.textFont);
+    const btn = h(
+      "button",
+      { class: "font-picker", "aria-haspopup": "menu", "aria-label": `Font: ${current.label}`, title: "Handwriting font", style: { fontFamily: current.family } },
+      h("span", { class: "font-name" }, current.label),
+      icon("down"),
+    );
+    btn.addEventListener("click", () =>
+      this.openFontMenu(btn, current.id, (font) => {
+        this.textFont = font;
+        setPref(TEXT_FONT_KEY, font);
+        this.applyToEditing({ font });
+        this.renderToolbar();
+      }),
+    );
+    return btn;
+  }
+
+  private openFontMenu(anchor: HTMLElement, current: FontId | null, pick: (font: FontId) => void) {
+    void ensureFonts(FONT_PRESETS.map((f) => f.id)); // so the menu previews render in their own faces
+    popupMenu(
+      anchor,
+      FONT_PRESETS.map((f) => ({ label: f.label, fontFamily: f.family, checked: f.id === current, action: () => pick(f.id) })),
+    );
+  }
+
+  /** Applies a font or size change to the text box being edited, if any. */
+  private applyToEditing(patch: { font?: FontId; fontSize?: number }) {
+    const ed = this.editing;
+    if (!ed) return;
+    if (patch.font) ed.el.font = patch.font;
+    if (patch.fontSize !== undefined && (ed.el.kind === "text" || ed.el.kind === "sticky")) ed.el.fontSize = patch.fontSize;
+    this.positionEditor();
+    void ensureFonts([ed.el.font]);
+    ed.input.focus({ preventScroll: true });
+  }
+
+  /** Waits for any handwriting fonts the elements use, then redraws. */
+  private async loadFontsFor(elements: El[]) {
+    const ids = elements.filter((el) => el.kind === "text" || el.kind === "sticky").map((el) => (el as TextEl | StickyEl).font);
+    if (await ensureFonts(ids)) {
+      this.rebuildCache();
+      this.draw();
+    }
   }
 
   private setTool(tool: Tool) {
@@ -786,11 +875,11 @@ export class EditorScreen {
         if (existing && (existing.kind === "text" || existing.kind === "sticky")) {
           this.startTextEdit(existing, false);
         } else if (tool === "text") {
-          const el: TextEl = { id: newId(), z: nextZ(this.elements), kind: "text", x, y: y - 12, w: Math.min(420, this.page.width - x - 20), text: "", fontSize: 20, color: this.colors.text };
+          const el: TextEl = { id: newId(), z: nextZ(this.elements), kind: "text", x, y: y - 12, w: Math.min(420, this.page.width - x - 20), text: "", fontSize: this.widths.text, color: this.colors.text, font: this.textFont };
           el.w = Math.max(120, el.w);
           this.startTextEdit(el, true);
         } else {
-          const el: StickyEl = { id: newId(), z: nextZ(this.elements), kind: "sticky", x: x - 20, y: y - 20, w: 220, h: 200, text: "", color: this.colors.sticky };
+          const el: StickyEl = { id: newId(), z: nextZ(this.elements), kind: "sticky", x: x - 20, y: y - 20, w: 220, h: 200, text: "", color: this.colors.sticky, font: this.textFont, fontSize: this.widths.sticky };
           this.startTextEdit(el, true);
         }
         this.canvas.releasePointerCapture(e.pointerId);
@@ -1067,20 +1156,67 @@ export class EditorScreen {
       bar.hidden = true;
       return;
     }
-    if (bar.hidden || !bar.childElementCount) this.renderSelectionBar();
+    const key = [...this.selection].sort().join();
+    if (bar.hidden || key !== this.selectionBarKey) {
+      this.selectionBarKey = key;
+      this.renderSelectionBar();
+    }
     bar.hidden = false;
     const top = Math.max(4, sel.y * this.zoom - 52);
     bar.style.left = `${Math.max(4, sel.x * this.zoom)}px`;
     bar.style.top = `${top}px`;
   }
 
+  private selectedText(): (TextEl | StickyEl)[] {
+    return this.elements.filter((el): el is TextEl | StickyEl => this.selection.has(el.id) && (el.kind === "text" || el.kind === "sticky"));
+  }
+
   private renderSelectionBar() {
+    const texts = this.selectedText();
+    const textControls: HTMLElement[] = [];
+    if (texts.length) {
+      const fonts = new Set(texts.map((t) => t.font ?? "sans"));
+      const current = fonts.size === 1 ? fontPreset([...fonts][0]) : null;
+      const fontBtn = h(
+        "button",
+        { class: "font-picker small", "aria-haspopup": "menu", title: "Handwriting font for the selected text", style: { fontFamily: current?.family ?? "inherit" } },
+        h("span", { class: "font-name" }, current?.label ?? "Mixed fonts"),
+        icon("down"),
+      );
+      fontBtn.addEventListener("click", () => this.openFontMenu(fontBtn, current?.id ?? null, (font) => this.styleSelectedText({ font })));
+      textControls.push(
+        fontBtn,
+        h("button", { class: "icon-btn small text-btn", "aria-label": "Smaller text", title: "Smaller text", onclick: () => this.styleSelectedText({ scale: 1 / 1.15 }) }, "A−"),
+        h("button", { class: "icon-btn small text-btn", "aria-label": "Larger text", title: "Larger text", onclick: () => this.styleSelectedText({ scale: 1.15 }) }, "A+"),
+        h("span", { class: "divider" }),
+      );
+    }
     this.selectionBar.replaceChildren(
+      ...textControls,
       ...INK_COLORS.slice(0, 6).map((c) => h("button", { class: "swatch small", style: { background: c }, "aria-label": `Recolour ${c}`, onclick: () => this.recolorSelection(c) })),
       h("span", { class: "divider" }),
       h("button", { class: "icon-btn small", "aria-label": "Duplicate selection", title: "Duplicate (Ctrl+D)", onclick: () => this.duplicateSelection() }, icon("copy")),
       h("button", { class: "icon-btn small", "aria-label": "Delete selection", title: "Delete", onclick: () => this.deleteSelection() }, icon("trash")),
     );
+  }
+
+  /** Applies a font and/or size change to every selected text box and sticky note. */
+  private styleSelectedText(change: { font?: FontId; scale?: number }) {
+    if (!this.selectedText().length) return;
+    this.snapshot();
+    this.elements = this.elements.map((el) => {
+      if (!this.selection.has(el.id) || (el.kind !== "text" && el.kind !== "sticky")) return el;
+      const next = { ...el };
+      if (change.font) next.font = change.font;
+      if (change.scale) {
+        const size = (el.kind === "text" ? el.fontSize : el.fontSize ?? 18) * change.scale;
+        next.fontSize = Math.round(Math.min(96, Math.max(8, size)));
+      }
+      return next;
+    });
+    this.selectionBarKey = "";
+    this.changed();
+    void this.loadFontsFor(this.selectedText());
   }
 
   private deleteSelection() {
@@ -1156,7 +1292,12 @@ export class EditorScreen {
       }
       e.stopPropagation();
     });
-    input.addEventListener("blur", () => this.finishTextEdit());
+    input.addEventListener("blur", (e) => {
+      const to = e.relatedTarget as HTMLElement | null;
+      // Choosing a font or size in the options bar keeps the text box open.
+      if (to && (this.optionsBar.contains(to) || to.closest(".popup-menu"))) return;
+      this.finishTextEdit();
+    });
     input.focus({ preventScroll: true });
   }
 
@@ -1167,6 +1308,7 @@ export class EditorScreen {
     input.style.left = `${el.x * z}px`;
     input.style.top = `${el.y * z}px`;
     input.style.width = `${el.w * z}px`;
+    input.style.fontFamily = fontPreset(el.font).family;
     if (el.kind === "text") {
       input.style.fontSize = `${el.fontSize * z}px`;
       input.style.color = el.color;
@@ -1174,7 +1316,8 @@ export class EditorScreen {
       input.style.height = `${Math.max(el.fontSize * 1.6 * z, input.scrollHeight)}px`;
     } else {
       input.style.height = `${el.h * z}px`;
-      input.style.fontSize = `${18 * z}px`;
+      input.style.fontSize = `${(el.fontSize ?? 18) * z}px`;
+      input.style.lineHeight = "1.33";
       input.style.padding = `${12 * z}px`;
       input.style.background = el.color;
     }
@@ -1188,6 +1331,7 @@ export class EditorScreen {
     el.text = input.value.replace(/\s+$/, "");
     input.remove();
     this.hiddenIds.delete(el.id);
+    void this.loadFontsFor([el]);
     const before = this.undoStack[this.undoStack.length - 1];
     if (el.kind === "text" && !el.text.trim()) {
       this.elements = this.elements.filter((x) => x.id !== el.id);
@@ -1240,6 +1384,7 @@ export class EditorScreen {
       for (const p of pages) {
         const els = p.id === this.page.id ? this.elements : fromStored(await api.elements(p.id));
         await preloadImages(els, this.images);
+        await ensureFonts(els.map((el) => (el.kind === "text" || el.kind === "sticky" ? el.font : undefined)));
         const canvas = renderPage(p.template, p.paperColor, p.width, p.height, els, EXPORT_SCALE[format], this.images);
         rendered.push({
           dataUrl: format === "png" ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", 0.9),
