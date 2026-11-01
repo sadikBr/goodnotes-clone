@@ -1,5 +1,5 @@
 import type { Template } from "../api";
-import { pressureWidth, setLineCounter, textHeight, type Rect } from "./geometry";
+import { handlesFor, pressureWidth, setLineCounter, textHeight, type Rect } from "./geometry";
 import { fontCss } from "../fonts";
 import type { El, Pt, ShapeEl, StickyEl, StrokeEl, TextEl } from "./model";
 
@@ -274,6 +274,27 @@ setLineCounter((text, fontSize, width, font) => {
   return wrapLines(measureCtx, text, width).length;
 });
 
+/** Width of the longest line of `text` in the given font and size. */
+export function measureText(text: string, font: string | undefined, size: number): number {
+  measureCtx ??= document.createElement("canvas").getContext("2d");
+  if (!measureCtx) return text.length * size * 0.5;
+  measureCtx.font = fontCss(font, size);
+  return Math.max(...text.split("\n").map((line) => measureCtx!.measureText(line).width));
+}
+
+/**
+ * Picks a font size so `text` covers roughly the same area as the
+ * handwriting it replaces: width-driven, limited by the ink's height.
+ */
+export function fitTextToBox(text: string, font: string | undefined, box: Rect): { fontSize: number; width: number } {
+  const lines = Math.max(1, text.split("\n").length);
+  const perUnit = measureText(text, font, 100) / 100;
+  const byWidth = perUnit > 0 ? box.w / perUnit : box.h;
+  const byHeight = (box.h / lines) * 1.15;
+  const fontSize = Math.round(Math.min(160, Math.max(10, Math.min(byWidth, byHeight * 1.6))));
+  return { fontSize, width: Math.ceil(measureText(text, font, fontSize) + fontSize * 0.4) };
+}
+
 function drawText(ctx: CanvasRenderingContext2D, el: TextEl) {
   ctx.save();
   ctx.fillStyle = el.color;
@@ -340,6 +361,23 @@ export function drawSelection(ctx: CanvasRenderingContext2D, r: Rect, zoom: numb
   ctx.lineWidth = 1.5 / zoom;
   ctx.setLineDash([6 / zoom, 4 / zoom]);
   ctx.strokeRect(r.x - 6, r.y - 6, r.w + 12, r.h + 12);
+  ctx.restore();
+}
+
+/** Resize handles: squares on the box, circles on line endpoints. */
+export function drawHandles(ctx: CanvasRenderingContext2D, el: El, zoom: number) {
+  const size = 9 / zoom;
+  ctx.save();
+  ctx.lineWidth = 1.5 / zoom;
+  ctx.strokeStyle = "#2563eb";
+  ctx.fillStyle = "#ffffff";
+  for (const hdl of handlesFor(el)) {
+    ctx.beginPath();
+    if (hdl.id === "p0" || hdl.id === "p1") ctx.arc(hdl.x, hdl.y, size * 0.6, 0, Math.PI * 2);
+    else ctx.rect(hdl.x - size / 2, hdl.y - size / 2, size, size);
+    ctx.fill();
+    ctx.stroke();
+  }
   ctx.restore();
 }
 

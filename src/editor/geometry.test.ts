@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bounds, buildShape, hitTest, setLineCounter, insideLasso, isHeld, pointInPolygon, pressureWidth, translate, unionRects } from "./geometry";
+import { bounds, buildShape, convertShape, geomBox, handleAt, handlesFor, hitForSelect, hitTest, resizeElement, setLineCounter, insideLasso, isHeld, pointInPolygon, pressureWidth, translate, unionRects } from "./geometry";
 import { fromStored, nextZ, toStored, type El, type StrokeEl } from "./model";
 
 const stroke = (points: [number, number][], width = 4): StrokeEl => ({
@@ -96,6 +96,58 @@ describe("buildShape", () => {
   it("ignores taps and auto mode", () => {
     expect(buildShape("rectangle", [0, 0], [1, 1])).toBeNull();
     expect(buildShape("auto", [0, 0], [100, 100])).toBeNull();
+  });
+});
+
+describe("shape editing", () => {
+  const rect: El = { id: "r", z: 0, kind: "shape", color: "#000", width: 2, fill: null, shape: { kind: "rectangle", points: [[0, 0], [100, 0], [100, 50], [0, 50]] } };
+  const line: El = { id: "l", z: 0, kind: "shape", color: "#000", width: 2, fill: null, shape: { kind: "arrow", points: [[0, 0], [100, 0]] } };
+
+  it("offers 8 box handles for shapes and 2 for lines", () => {
+    expect(handlesFor(rect)).toHaveLength(8);
+    expect(handlesFor(line).map((h) => h.id)).toEqual(["p0", "p1"]);
+    expect(handleAt(rect, 101, 51, 4)).toBe("se");
+    expect(handleAt(rect, 50, 25, 4)).toBeNull();
+  });
+
+  it("resizes from a corner keeping the opposite corner fixed", () => {
+    const r = resizeElement(rect, "se", [200, 150]);
+    expect(geomBox(r)).toEqual({ x: 0, y: 0, w: 200, h: 150 });
+    const w = resizeElement(rect, "w", [50, 999]);
+    expect(geomBox(w)).toEqual({ x: 50, y: 0, w: 50, h: 50 });
+  });
+
+  it("keeps proportions with Shift and never inverts", () => {
+    const r = resizeElement(rect, "se", [300, 60], true);
+    expect(geomBox(r)).toEqual({ x: 0, y: 0, w: 300, h: 150 });
+    const tiny = resizeElement(rect, "e", [-500, 0]);
+    expect(geomBox(tiny).w).toBe(4);
+  });
+
+  it("resizes ellipses, images and sticky notes", () => {
+    const e: El = { id: "e", z: 0, kind: "shape", color: "#000", width: 2, fill: null, shape: { kind: "ellipse", cx: 50, cy: 50, rx: 50, ry: 25 } };
+    expect(resizeElement(e, "e", [200, 0])).toMatchObject({ shape: { cx: 100, rx: 100, ry: 25 } });
+    const img: El = { id: "i", z: 0, kind: "image", x: 10, y: 10, w: 100, h: 100, src: "x" };
+    expect(resizeElement(img, "nw", [0, 0])).toMatchObject({ x: 0, y: 0, w: 110, h: 110 });
+  });
+
+  it("moves line endpoints, snapping with Shift", () => {
+    const moved = resizeElement(line, "p1", [80, 60]);
+    expect(moved).toMatchObject({ shape: { points: [[0, 0], [80, 60]] } });
+    const snapped = resizeElement(line, "p1", [100, 8], true) as { shape: { points: [number, number][] } };
+    expect(Math.abs(snapped.shape.points[1][1])).toBeLessThan(1e-9);
+  });
+
+  it("selects closed shapes by tapping inside", () => {
+    expect(hitForSelect(rect, 50, 25, 2)).toBe(true);
+    expect(hitForSelect(line, 50, 25, 2)).toBe(false);
+  });
+
+  it("converts shapes to other kinds in the same box", () => {
+    const e = convertShape(rect, "ellipse");
+    expect(e).toMatchObject({ shape: { kind: "ellipse", cx: 50, cy: 25, rx: 50, ry: 25 } });
+    expect(convertShape(line, "line")).toMatchObject({ shape: { kind: "line", points: [[0, 0], [100, 0]] } });
+    expect(convertShape(line, "star")).toBe(line);
   });
 });
 

@@ -23,6 +23,13 @@ base64 = "0.22"
 tauri-plugin-dialog = "=2.8.3"
 zip = { version = "9.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
+[target.'cfg(windows)'.dependencies]
+# Offline handwriting recognition (Windows Ink); same versions Tauri already uses.
+windows = { version = "0.62", features = ["UI_Input_Inking", "Foundation", "Foundation_Collections", "Win32_System_WinRT"] }
+windows-core = "0.62"
+windows-collections = "0.3"
+windows-future = "0.3"
+
 [profile.release]
 codegen-units = 1
 lto = true

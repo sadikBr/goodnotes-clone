@@ -264,9 +264,9 @@ fn build_pptx(pages: &[ExportPage]) -> AppResult<Vec<u8>> {
     let stored =
         zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
     let put = |zip: &mut zip::ZipWriter<std::io::Cursor<Vec<u8>>>,
-                   name: &str,
-                   data: &[u8],
-                   compress: bool|
+               name: &str,
+               data: &[u8],
+               compress: bool|
      -> AppResult<()> {
         zip.start_file(name, if compress { opts } else { stored })
             .map_err(|e| AppError::Invalid(format!("zip error: {e}")))?;

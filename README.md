@@ -20,7 +20,9 @@ no Goodnotes code, assets or branding.
 - **Objects:** text boxes, sticky notes, images (insert or paste)
 - **Handwriting fonts:** eight presets for typed text: Clean, Quick notes, Neat print, Casual, Bubbly, Light pencil, Cursive and Architect. Pick one before or while typing, or lasso-select text boxes and sticky notes and change the font or size (A− / A+) from the selection bar. The fonts are bundled, so they work offline (SIL Open Font License; see `public/third-party-licenses.txt`)
 - **Sizes:** each tool shows its exact size in px, with one-tap presets, − / + buttons and a box to type a value. Sizes are remembered
-- **Lasso:** select, move, recolour, duplicate, copy/paste, delete
+- **Lasso:** draw around items or tap one to select it; move, recolour, duplicate, copy/paste, delete
+- **Edit shapes:** tap a shape with the lasso to get handles. Drag corners or edges to resize (Shift keeps proportions) and drag line/arrow ends to move them. The bar above it changes the shape type, line width (exact px), fill and colour. Images and sticky notes resize the same way
+- **Apply a font to handwriting:** lasso-select pen writing (e.g. a title) and choose *Apply font*. On Windows the built-in offline handwriting recognizer (Windows Ink) reads the words and suggests alternatives; you can correct the text, preview it in every handwriting font, and it replaces the ink at the same place and size (optionally keeping the ink). Elsewhere you type what you wrote
 - **Pages:** sidebar thumbnails, add / insert / duplicate / reorder / delete / bookmark
 - **Editing:** undo/redo, zoom (Ctrl+wheel, pinch, fit width), pan tool
 - **Export:** PDF (whole notebook or one page), PowerPoint .pptx (one slide per page) or PNG, through a native Save dialog that defaults to `Documents/Inkleaf Exports/`. Pages are exported as high-resolution images (PDF/PNG about 290 DPI, PowerPoint about 190 DPI), so text isn't selectable in the export
@@ -46,6 +48,7 @@ src-tauri/            Rust backend (Tauri 2)
   src/ink.rs          Stroke simplification and shape recognition (+ tests)
   src/commands.rs     Tauri command layer
   src/export.rs       PDF and PowerPoint writers (+ tests)
+  src/handwriting.rs  Handwriting recognition via Windows Ink (Windows only)
   src/lib.rs          App setup and command registration
 src/                  TypeScript frontend (Vite, no framework)
   api.ts              Typed backend API (Tauri invoke, or an in-browser mock)

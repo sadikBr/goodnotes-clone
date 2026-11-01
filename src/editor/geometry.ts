@@ -227,3 +227,145 @@ export function buildShape(kind: ShapeKind, a: P2, b: P2, constrain = false): Re
     }
   }
 }
+
+// ------------------------------------------------------- editing handles
+
+export type Handle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "p0" | "p1";
+
+/** Elements that can be reshaped with handles. */
+export function isResizable(el: El): boolean {
+  return el.kind === "shape" || el.kind === "image" || el.kind === "sticky";
+}
+
+function isSegment(el: El): el is Extract<El, { kind: "shape" }> & { shape: { kind: "line" | "arrow"; points: P2[] } } {
+  return el.kind === "shape" && (el.shape.kind === "line" || el.shape.kind === "arrow");
+}
+
+/** Geometric box of an element (without stroke width). */
+export function geomBox(el: El): Rect {
+  if (el.kind === "shape") {
+    const s = el.shape;
+    if (s.kind === "ellipse") return { x: s.cx - s.rx, y: s.cy - s.ry, w: 2 * s.rx, h: 2 * s.ry };
+    return rectOfPoints(s.points);
+  }
+  return bounds(el);
+}
+
+export function handlesFor(el: El): { id: Handle; x: number; y: number }[] {
+  if (!isResizable(el)) return [];
+  if (isSegment(el)) {
+    const [a, b] = [el.shape.points[0], el.shape.points[el.shape.points.length - 1]];
+    return [
+      { id: "p0", x: a[0], y: a[1] },
+      { id: "p1", x: b[0], y: b[1] },
+    ];
+  }
+  const r = geomBox(el);
+  const [x0, y0, x1, y1, cx, cy] = [r.x, r.y, r.x + r.w, r.y + r.h, r.x + r.w / 2, r.y + r.h / 2];
+  return [
+    { id: "nw", x: x0, y: y0 },
+    { id: "n", x: cx, y: y0 },
+    { id: "ne", x: x1, y: y0 },
+    { id: "e", x: x1, y: cy },
+    { id: "se", x: x1, y: y1 },
+    { id: "s", x: cx, y: y1 },
+    { id: "sw", x: x0, y: y1 },
+    { id: "w", x: x0, y: cy },
+  ];
+}
+
+export function handleAt(el: El, x: number, y: number, radius: number): Handle | null {
+  for (const hdl of handlesFor(el)) if (Math.hypot(hdl.x - x, hdl.y - y) <= radius) return hdl.id;
+  return null;
+}
+
+export const HANDLE_CURSORS: Record<Handle, string> = {
+  nw: "nwse-resize",
+  se: "nwse-resize",
+  ne: "nesw-resize",
+  sw: "nesw-resize",
+  n: "ns-resize",
+  s: "ns-resize",
+  e: "ew-resize",
+  w: "ew-resize",
+  p0: "move",
+  p1: "move",
+};
+
+const MIN_SIZE = 4;
+
+/**
+ * Returns `el` reshaped by dragging `handle` to `p`. Box handles keep the
+ * opposite side fixed; `keepAspect` (Shift) scales proportionally from a
+ * corner. Segment handles move one endpoint (Shift snaps to 45°).
+ */
+export function resizeElement(el: El, handle: Handle, p: P2, keepAspect = false): El {
+  if (isSegment(el)) {
+    const pts = el.shape.points.map((q) => [q[0], q[1]] as P2);
+    const idx = handle === "p0" ? 0 : pts.length - 1;
+    const other = pts[handle === "p0" ? pts.length - 1 : 0];
+    let [x, y] = p;
+    if (keepAspect) {
+      const len = Math.hypot(x - other[0], y - other[1]);
+      const step = Math.PI / 4;
+      const ang = Math.round(Math.atan2(y - other[1], x - other[0]) / step) * step;
+      x = other[0] + Math.cos(ang) * len;
+      y = other[1] + Math.sin(ang) * len;
+    }
+    pts[idx] = [x, y];
+    return { ...el, shape: { ...el.shape, points: pts } };
+  }
+  if (!isResizable(el) || handle === "p0" || handle === "p1") return el;
+  const box = geomBox(el);
+  let x0 = box.x;
+  let y0 = box.y;
+  let x1 = box.x + box.w;
+  let y1 = box.y + box.h;
+  // Move the dragged edges, never past the opposite edge.
+  if (handle.includes("w")) x0 = Math.min(p[0], x1 - MIN_SIZE);
+  if (handle.includes("e")) x1 = Math.max(p[0], x0 + MIN_SIZE);
+  if (handle.includes("n")) y0 = Math.min(p[1], y1 - MIN_SIZE);
+  if (handle.includes("s")) y1 = Math.max(p[1], y0 + MIN_SIZE);
+  if (keepAspect && handle.length === 2 && box.w > 0 && box.h > 0) {
+    const scale = Math.max((x1 - x0) / box.w, (y1 - y0) / box.h);
+    const w = box.w * scale;
+    const hh = box.h * scale;
+    if (handle.includes("w")) x0 = x1 - w;
+    else x1 = x0 + w;
+    if (handle.includes("n")) y0 = y1 - hh;
+    else y1 = y0 + hh;
+  }
+  const sx = box.w > 0 ? (x1 - x0) / box.w : 1;
+  const sy = box.h > 0 ? (y1 - y0) / box.h : 1;
+  const map = ([x, y]: P2): P2 => [x0 + (x - box.x) * sx, y0 + (y - box.y) * sy];
+  if (el.kind === "shape") {
+    const s = el.shape;
+    if (s.kind === "ellipse") return { ...el, shape: { ...s, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, rx: (x1 - x0) / 2, ry: (y1 - y0) / 2 } };
+    return { ...el, shape: { ...s, points: s.points.map(map) } };
+  }
+  if (el.kind === "image" || el.kind === "sticky") return { ...el, x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  return el;
+}
+
+/** Hit test for tap-to-select: closed shapes also count when tapped inside. */
+export function hitForSelect(el: El, x: number, y: number, radius: number): boolean {
+  if (hitTest(el, x, y, radius)) return true;
+  if (el.kind !== "shape") return false;
+  const s = el.shape;
+  if (s.kind === "ellipse") return Math.hypot((x - s.cx) / Math.max(s.rx, 1e-6), (y - s.cy) / Math.max(s.ry, 1e-6)) <= 1;
+  if (s.kind === "line" || s.kind === "arrow") return false;
+  return pointInPolygon(x, y, s.points);
+}
+
+/** Re-creates a shape as another kind inside the same box (line ↔ arrow keep their ends). */
+export function convertShape(el: El, kind: ShapeKind): El {
+  if (el.kind !== "shape" || kind === "auto") return el;
+  if (isSegment(el)) {
+    if (kind === "line" || kind === "arrow") return { ...el, shape: { kind, points: el.shape.points } };
+    return el;
+  }
+  if (kind === "line" || kind === "arrow") return el;
+  const r = geomBox(el);
+  const shape = buildShape(kind, [r.x, r.y], [r.x + r.w, r.y + r.h]);
+  return shape ? { ...el, shape } : el;
+}

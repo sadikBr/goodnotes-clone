@@ -90,6 +90,13 @@ export type RecognizedShape =
 
 export type ExportFormat = "pdf" | "pptx" | "png";
 
+export interface HandwritingRecognition {
+  /** False when this computer has no handwriting recognizer. */
+  available: boolean;
+  /** Best guess first. */
+  candidates: string[];
+}
+
 /** One rendered page handed to the exporter. */
 export interface ExportPage {
   dataUrl: string;
@@ -134,6 +141,7 @@ export interface Backend {
   /** Asks where to save; resolves to null when the user cancels. */
   chooseExportPath(fileName: string, format: ExportFormat): Promise<string | null>;
   exportDocument(path: string, format: ExportFormat, pages: ExportPage[]): Promise<string>;
+  recognizeHandwriting(strokes: P2[][]): Promise<HandwritingRecognition>;
 }
 
 const FORMAT_FILTERS: Record<ExportFormat, { name: string; extensions: string[] }> = {
@@ -184,6 +192,7 @@ class TauriBackend implements Backend {
   };
   exportDocument = (path: string, format: ExportFormat, pages: ExportPage[]) =>
     invoke<string>("export_document", { path, format, pages });
+  recognizeHandwriting = (strokes: P2[][]) => invoke<HandwritingRecognition>("recognize_handwriting", { strokes });
 }
 
 export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;

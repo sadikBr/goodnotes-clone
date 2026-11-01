@@ -7,6 +7,7 @@ import type {
   Backend,
   ExportFormat,
   ExportPage,
+  HandwritingRecognition,
   Folder,
   Library,
   NewNotebook,
@@ -331,6 +332,10 @@ export class MockBackend implements Backend {
 
   async chooseExportPath(fileName: string, format: ExportFormat): Promise<string | null> {
     return `${fileName}.${format}`;
+  }
+
+  async recognizeHandwriting(_strokes: P2[][]): Promise<HandwritingRecognition> {
+    return { available: false, candidates: [] };
   }
 
   /** Browser preview: PNG downloads directly; PDF/PPTX need the desktop app. */

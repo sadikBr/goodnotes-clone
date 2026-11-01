@@ -2,6 +2,7 @@ pub mod commands;
 pub mod db;
 pub mod error;
 pub mod export;
+pub mod handwriting;
 pub mod ink;
 
 use tauri::Manager;
@@ -51,6 +52,7 @@ pub fn run() {
             commands::simplify_stroke,
             commands::default_export_dir,
             commands::export_document,
+            commands::recognize_handwriting,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Inkleaf");

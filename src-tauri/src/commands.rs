@@ -10,6 +10,7 @@ use crate::db::{
 };
 use crate::error::{AppError, AppResult};
 use crate::export::{self, ExportPage, Format};
+use crate::handwriting::{self, InkStroke, Recognition};
 use crate::ink::{self, InkPoint, Shape, P2};
 
 #[tauri::command]
@@ -180,6 +181,15 @@ pub fn recognize_shape(points: Vec<P2>) -> Option<Shape> {
 #[tauri::command]
 pub fn simplify_stroke(points: Vec<InkPoint>, epsilon: f64) -> Vec<InkPoint> {
     ink::simplify(&points, epsilon)
+}
+
+/// Recognises handwritten strokes as text using the OS recognizer (Windows).
+/// Runs off the main thread because recognition blocks until it finishes.
+#[tauri::command]
+pub async fn recognize_handwriting(strokes: Vec<InkStroke>) -> Result<Recognition, String> {
+    tauri::async_runtime::spawn_blocking(move || handwriting::recognize(&strokes))
+        .await
+        .map_err(|e| format!("recognition task failed: {e}"))?
 }
 
 /// Suggested save location for an export: `~/Documents/Inkleaf Exports/<name>.<ext>`.

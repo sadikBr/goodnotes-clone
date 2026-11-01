@@ -1527,6 +1527,10 @@ dependencies = [
  "tauri-plugin-dialog",
  "thiserror 2.0.21",
  "uuid",
+ "windows",
+ "windows-collections",
+ "windows-core",
+ "windows-future",
  "zip",
 ]
 

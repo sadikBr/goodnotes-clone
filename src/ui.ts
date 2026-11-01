@@ -304,7 +304,7 @@ export function sizeControl(o: SizeControlOptions): HTMLElement {
   return h(
     "div",
     { class: "size-control", role: "group", "aria-label": o.label },
-    h("div", { class: "size-presets" }, ...presetBtns),
+    presetBtns.length ? h("div", { class: "size-presets" }, ...presetBtns) : null,
     h(
       "div",
       { class: "size-stepper" },

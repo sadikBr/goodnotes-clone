@@ -4,9 +4,28 @@ import { api, TEMPLATES, type ExportFormat, type ExportPage, type Notebook, type
 import { ensureFonts, FONT_PRESETS, fontPreset, type FontId } from "../fonts";
 import { getPref, hasPref, setPref } from "../prefs";
 import { confirmDialog, formDialog, h, icon, popupMenu, reportError, sizeControl, toast } from "../ui";
-import { bounds, buildShape, hitTest, insideLasso, isHeld, rectContains, translate, unionRects, type Rect, type ShapeKind } from "./geometry";
-import { fromStored, newId, nextZ, PEN_STYLES, toStored, type El, type PenStyle, type Pt, type ShapeEl, type StickyEl, type TextEl } from "./model";
-import { drawElement, drawLasso, drawSelection, drawStroke, drawTemplate, preloadImages, renderPage, type ImageCache } from "./render";
+import {
+  bounds,
+  buildShape,
+  convertShape,
+  HANDLE_CURSORS,
+  handleAt,
+  hitForSelect,
+  hitTest,
+  insideLasso,
+  isHeld,
+  isResizable,
+  rectContains,
+  resizeElement,
+  translate,
+  unionRects,
+  type Handle,
+  type Rect,
+  type ShapeKind,
+} from "./geometry";
+import { inkToTextDialog } from "./inkToText";
+import { fromStored, newId, nextZ, PEN_STYLES, toStored, type El, type PenStyle, type Pt, type ShapeEl, type StickyEl, type StrokeEl, type TextEl } from "./model";
+import { drawElement, drawHandles, drawLasso, drawSelection, drawStroke, drawTemplate, fitTextToBox, preloadImages, renderPage, type ImageCache } from "./render";
 
 type Tool = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "sticky" | "hand";
 
@@ -78,7 +97,8 @@ type Gesture =
   | { type: "lasso"; points: P2[] }
   | { type: "move"; start: P2; original: El[]; dx: number; dy: number }
   | { type: "pan"; sx: number; sy: number; left: number; top: number }
-  | { type: "shape"; start: P2; preview: ShapeEl | null };
+  | { type: "shape"; start: P2; preview: ShapeEl | null }
+  | { type: "handle"; handle: Handle; original: El; preview: El };
 
 /** Finger / mouse navigation while in pen-only mode. */
 type Nav =
@@ -705,12 +725,16 @@ export class EditorScreen {
       drawLasso(ctx, g.points, this.zoom);
     } else if (g?.type === "move") {
       for (const el of g.original) drawElement(ctx, translate(el, g.dx, g.dy), this.images, () => {});
+    } else if (g?.type === "handle") {
+      drawElement(ctx, g.preview, this.images, () => {});
     }
-    const sel = this.selectionBounds();
+    const sel = g?.type === "handle" ? bounds(g.preview) : this.selectionBounds();
     if (sel) {
       const r = g?.type === "move" ? { ...sel, x: sel.x + g.dx, y: sel.y + g.dy } : sel;
       drawSelection(ctx, r, this.zoom);
     }
+    const editable = g?.type === "handle" ? g.preview : g ? null : this.singleResizable();
+    if (editable) drawHandles(ctx, editable, this.zoom);
     if (this.tool === "eraser" && this.cursor) {
       ctx.save();
       ctx.strokeStyle = "rgba(100,100,100,0.8)";
@@ -855,6 +879,14 @@ export class EditorScreen {
         this.eraseAt(x, y);
         break;
       case "lasso": {
+        const single = this.singleResizable();
+        const handle = single ? handleAt(single, x, y, 10 / this.zoom) : null;
+        if (single && handle) {
+          this.gesture = { type: "handle", handle, original: single, preview: single };
+          this.hiddenIds.add(single.id);
+          this.rebuildCache();
+          break;
+        }
         const sel = this.selectionBounds();
         if (sel && rectContains({ x: sel.x - 8, y: sel.y - 8, w: sel.w + 16, h: sel.h + 16 }, x, y)) {
           const original = this.elements.filter((el) => this.selection.has(el.id));
@@ -902,6 +934,7 @@ export class EditorScreen {
     this.cursor = this.point(e);
     if (!g) {
       if (this.tool === "eraser") this.draw();
+      if (this.tool === "lasso") this.updateHoverCursor();
       return;
     }
     const events = typeof e.getCoalescedEvents === "function" ? e.getCoalescedEvents() : [];
@@ -928,6 +961,9 @@ export class EditorScreen {
       case "move":
         g.dx = this.cursor[0] - g.start[0];
         g.dy = this.cursor[1] - g.start[1];
+        break;
+      case "handle":
+        g.preview = resizeElement(g.original, g.handle, this.cursor, e.shiftKey);
         break;
       case "shape": {
         const shape = buildShape(this.shapeKind, g.start, this.cursor, e.shiftKey);
@@ -1021,11 +1057,36 @@ export class EditorScreen {
         this.gesture = null;
         if (g.changed) this.changed();
         break;
-      case "lasso":
+      case "lasso": {
         this.gesture = null;
-        for (const el of this.elements) if (insideLasso(el, g.points)) this.selection.add(el.id);
+        const xs = g.points.map((p) => p[0]);
+        const ys = g.points.map((p) => p[1]);
+        const tap = Math.max(...xs) - Math.min(...xs) < 6 / this.zoom && Math.max(...ys) - Math.min(...ys) < 6 / this.zoom;
+        if (tap) {
+          // A tap selects the topmost item under the pointer.
+          const [tx, ty] = g.points[0];
+          const hit = [...this.elements].reverse().find((el) => hitForSelect(el, tx, ty, 6 / this.zoom));
+          if (hit) this.selection.add(hit.id);
+        } else {
+          for (const el of this.elements) if (insideLasso(el, g.points)) this.selection.add(el.id);
+        }
         this.draw();
         break;
+      }
+      case "handle": {
+        this.gesture = null;
+        this.hiddenIds.delete(g.original.id);
+        if (g.preview !== g.original) {
+          this.snapshot();
+          this.elements = this.elements.map((el) => (el.id === g.original.id ? g.preview : el));
+          this.selectionBarKey = "";
+          this.changed();
+        } else {
+          this.rebuildCache();
+          this.draw();
+        }
+        break;
+      }
       case "move": {
         this.gesture = null;
         this.hiddenIds.clear();
@@ -1167,6 +1228,88 @@ export class EditorScreen {
     bar.style.top = `${top}px`;
   }
 
+  /** The selected element when exactly one reshapeable item is selected. */
+  private singleResizable(): El | null {
+    if (this.selection.size !== 1) return null;
+    const el = this.elements.find((x) => this.selection.has(x.id));
+    return el && isResizable(el) ? el : null;
+  }
+
+  private updateHoverCursor() {
+    const single = this.singleResizable();
+    const c = this.cursor;
+    let cursor = "";
+    if (single && c) {
+      const hd = handleAt(single, c[0], c[1], 10 / this.zoom);
+      if (hd) cursor = HANDLE_CURSORS[hd];
+    }
+    if (!cursor && c) {
+      const sel = this.selectionBounds();
+      if (sel && rectContains({ x: sel.x - 8, y: sel.y - 8, w: sel.w + 16, h: sel.h + 16 }, c[0], c[1])) cursor = "move";
+    }
+    this.canvas.style.cursor = cursor;
+  }
+
+  /** Applies a change to the single selected shape, as one undo step. */
+  private updateSelectedShape(change: (el: El) => El, refreshBar = true) {
+    const single = this.singleResizable();
+    if (!single) return;
+    const next = change(single);
+    if (next === single) return;
+    this.snapshot();
+    this.elements = this.elements.map((el) => (el.id === single.id ? next : el));
+    if (refreshBar) this.selectionBarKey = "";
+    this.changed();
+  }
+
+  /** Pen strokes in the selection (highlighter marks are ignored). */
+  private selectedInk(): StrokeEl[] {
+    return this.elements.filter((el): el is StrokeEl => this.selection.has(el.id) && el.kind === "stroke" && el.tool === "pen");
+  }
+
+  /**
+   * Replaces the selected handwriting with text in a handwriting font. The
+   * OS recognizer suggests the words (on Windows); the user can correct them.
+   */
+  private async applyFontToInk() {
+    const ink = this.selectedInk();
+    if (!ink.length) return;
+    const recognition = api.recognizeHandwriting(ink.map((s) => s.points.map((p) => [p[0], p[1]] as P2)));
+    const result = await inkToTextDialog(recognition, this.textFont === "sans" ? "caveat" : this.textFont);
+    if (!result) return;
+    await ensureFonts([result.font]);
+    const box = unionRects(ink.map(bounds))!;
+    const { fontSize, width } = fitTextToBox(result.text, result.font, box);
+    const counts = new Map<string, number>();
+    for (const s of ink) counts.set(s.color, (counts.get(s.color) ?? 0) + s.points.length);
+    const color = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    const lines = result.text.split("\n").length;
+    const text: TextEl = {
+      id: newId(),
+      z: nextZ(this.elements),
+      kind: "text",
+      x: box.x,
+      y: box.y + (box.h - lines * fontSize * 1.35) / 2,
+      w: Math.min(width, Math.max(60, this.page.width - box.x)),
+      text: result.text,
+      fontSize,
+      color,
+      font: result.font,
+    };
+    this.snapshot();
+    if (!result.keepInk) {
+      const gone = new Set(ink.map((s) => s.id));
+      this.elements = this.elements.filter((el) => !gone.has(el.id));
+    }
+    this.elements.push(text);
+    this.selection = new Set([text.id]);
+    this.selectionBarKey = "";
+    this.textFont = result.font;
+    setPref(TEXT_FONT_KEY, result.font);
+    this.changed();
+    toast("Handwriting replaced with text. Use the font menu above it to try other fonts, or Ctrl+Z to undo");
+  }
+
   private selectedText(): (TextEl | StickyEl)[] {
     return this.elements.filter((el): el is TextEl | StickyEl => this.selection.has(el.id) && (el.kind === "text" || el.kind === "sticky"));
   }
@@ -1191,7 +1334,67 @@ export class EditorScreen {
         h("span", { class: "divider" }),
       );
     }
+    const inkControls: HTMLElement[] = [];
+    if (this.selectedInk().length) {
+      inkControls.push(
+        h(
+          "button",
+          { class: "icon-btn small apply-font", title: "Turn this handwriting into text in a handwriting font", onclick: () => void this.applyFontToInk() },
+          icon("text"),
+          "Apply font",
+        ),
+        h("span", { class: "divider" }),
+      );
+    }
+    const shapeControls: HTMLElement[] = [];
+    const single = this.singleResizable();
+    if (single?.kind === "shape") {
+      const closed = single.shape.kind !== "line" && single.shape.kind !== "arrow";
+      const kindBtn = h("button", { class: "icon-btn small apply-font", "aria-haspopup": "menu", title: "Change shape" }, icon(SHAPE_KINDS.find((k) => k.id === single.shape.kind)?.icon ?? "shape"), icon("down"));
+      kindBtn.addEventListener("click", () =>
+        popupMenu(
+          kindBtn,
+          SHAPE_KINDS.filter((k) => k.id !== "auto" && (closed ? k.id !== "line" && k.id !== "arrow" : k.id === "line" || k.id === "arrow")).map((k) => ({
+            label: k.label,
+            checked: k.id === single.shape.kind,
+            action: () => this.updateSelectedShape((el) => convertShape(el, k.id)),
+          })),
+        ),
+      );
+      shapeControls.push(
+        kindBtn,
+        sizeControl({
+          label: "Line width",
+          value: single.width,
+          min: 0.5,
+          max: 20,
+          step: 0.5,
+          unit: "px",
+          presets: [],
+          preview: "dot",
+          onChange: (v) => this.updateSelectedShape((el) => (el.kind === "shape" ? { ...el, width: v } : el), false),
+        }),
+      );
+      if (closed) {
+        shapeControls.push(
+          h(
+            "button",
+            {
+              class: `icon-btn small${single.fill ? " active" : ""}`,
+              "aria-pressed": String(!!single.fill),
+              "aria-label": single.fill ? "Remove fill" : "Fill shape",
+              title: single.fill ? "Remove fill" : "Fill shape",
+              onclick: () => this.updateSelectedShape((el) => (el.kind === "shape" ? { ...el, fill: el.fill ? null : `${el.color}33` } : el)),
+            },
+            icon("fill"),
+          ),
+        );
+      }
+      shapeControls.push(h("span", { class: "divider" }));
+    }
     this.selectionBar.replaceChildren(
+      ...inkControls,
+      ...shapeControls,
       ...textControls,
       ...INK_COLORS.slice(0, 6).map((c) => h("button", { class: "swatch small", style: { background: c }, "aria-label": `Recolour ${c}`, onclick: () => this.recolorSelection(c) })),
       h("span", { class: "divider" }),
@@ -1231,7 +1434,8 @@ export class EditorScreen {
     this.snapshot();
     this.elements = this.elements.map((el) => {
       if (!this.selection.has(el.id)) return el;
-      if (el.kind === "stroke" || el.kind === "shape" || el.kind === "text") return { ...el, color };
+      if (el.kind === "shape") return { ...el, color, fill: el.fill ? `${color}33` : null };
+      if (el.kind === "stroke" || el.kind === "text") return { ...el, color };
       return el;
     });
     this.changed();
