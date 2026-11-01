@@ -24,7 +24,10 @@ Goodnotes code, assets, templates or branding are used.
 | Dynamic templates | Paper templates: blank, ruled, narrow ruled, grid, dotted, Cornell |
 | `darkThemeEnabled` | Light/dark theme for the app UI (paper stays paper-coloured) |
 | `undo`/`redo` (`UnifiedUndo`) | Per-page snapshot undo/redo (100 steps) |
-| Pointer events handled in-engine, stylus detection | Pointer events with pressure; once a pen is seen, touch only pans (palm rejection) |
+| Pointer events handled in-engine, stylus detection (`disconnectStylus`, `onStylusEnabledUpdated`) | Pen-only mode turns on when a stylus is first seen; touch and mouse then scroll and pinch-zoom, with palm rejection |
+| Pen styles (`changeStrokeStyle`) | Fountain, ballpoint, pencil, calligraphy and brush pens |
+| `onLineDrawn`, `onArrowDrawn`, `onDefinedShapeDrawn` | Shape picker: line, arrow, rectangle, ellipse, triangle, diamond, star, plus Auto recognition |
+| `onExportingFileProgressUpdate` | Export to PDF, PowerPoint and PNG |
 
 ## Deliberately out of scope
 

@@ -73,6 +73,82 @@ function strokePath(ctx: CanvasRenderingContext2D, pts: Pt[]) {
   ctx.lineTo(last[0], last[1]);
 }
 
+/** Draws smoothed segments, each with its own width (for pressure/taper). */
+function strokeSegments(ctx: CanvasRenderingContext2D, pts: Pt[], widthAt: (i: number) => number) {
+  if (pts.length === 1) {
+    ctx.lineWidth = widthAt(0);
+    strokePath(ctx, pts);
+    ctx.stroke();
+    return;
+  }
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1];
+    const b = pts[i];
+    const prevMid: [number, number] = i > 1 ? [(pts[i - 2][0] + a[0]) / 2, (pts[i - 2][1] + a[1]) / 2] : [a[0], a[1]];
+    const mid: [number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    ctx.lineWidth = (widthAt(i - 1) + widthAt(i)) / 2;
+    ctx.beginPath();
+    ctx.moveTo(prevMid[0], prevMid[1]);
+    ctx.quadraticCurveTo(a[0], a[1], mid[0], mid[1]);
+    if (i === pts.length - 1) ctx.lineTo(b[0], b[1]);
+    ctx.stroke();
+  }
+}
+
+// Pencil grain: a small tile of per-pixel alpha noise, tinted per colour.
+const grainCache = new Map<string, HTMLCanvasElement>();
+function grainTile(color: string): HTMLCanvasElement {
+  let tile = grainCache.get(color);
+  if (tile) return tile;
+  tile = document.createElement("canvas");
+  tile.width = tile.height = 48;
+  const t = tile.getContext("2d")!;
+  t.fillStyle = color;
+  t.fillRect(0, 0, 48, 48);
+  const img = t.getImageData(0, 0, 48, 48);
+  let seed = 7;
+  for (let i = 3; i < img.data.length; i += 4) {
+    seed = (seed * 16807) % 2147483647;
+    img.data[i] = 70 + (seed % 186); // alpha 70..255
+  }
+  t.putImageData(img, 0, 0);
+  grainCache.set(color, tile);
+  return tile;
+}
+
+/** Calligraphy: a flat nib held at 45°, swept along the path. */
+function drawCalligraphy(ctx: CanvasRenderingContext2D, el: StrokeEl) {
+  const pts = el.points;
+  const angle = -Math.PI / 4;
+  ctx.fillStyle = el.color;
+  ctx.strokeStyle = el.color;
+  ctx.lineWidth = Math.max(0.6, el.width * 0.18);
+  const nib = (p: Pt): [number, number] => {
+    const half = (el.width * 1.4 * (0.55 + 0.6 * Math.min(1, Math.max(0.05, p[2])))) / 2;
+    return [Math.cos(angle) * half, Math.sin(angle) * half];
+  };
+  if (pts.length === 1) {
+    const [nx, ny] = nib(pts[0]);
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0] - nx, pts[0][1] - ny);
+    ctx.lineTo(pts[0][0] + nx, pts[0][1] + ny);
+    ctx.stroke();
+    return;
+  }
+  // One ribbon outline (one nib edge out, the other back). Non-zero filling
+  // keeps twisted sections solid and avoids seams between segments.
+  const offs = pts.map(nib);
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0] + offs[0][0], pts[0][1] + offs[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0] + offs[i][0], pts[i][1] + offs[i][1]);
+  for (let i = pts.length - 1; i >= 0; i--) ctx.lineTo(pts[i][0] - offs[i][0], pts[i][1] - offs[i][1]);
+  ctx.closePath();
+  ctx.fill("nonzero");
+  // Thin centre line keeps strokes parallel to the nib visible.
+  strokePath(ctx, pts);
+  ctx.stroke();
+}
+
 export function drawStroke(ctx: CanvasRenderingContext2D, el: StrokeEl) {
   const pts = el.points;
   if (pts.length === 0) return;
@@ -90,27 +166,59 @@ export function drawStroke(ctx: CanvasRenderingContext2D, el: StrokeEl) {
     ctx.restore();
     return;
   }
-  const uniform = pts.every((p) => Math.abs(p[2] - pts[0][2]) < 0.02);
-  if (uniform) {
-    ctx.lineWidth = pressureWidth(el.width, pts[0][2]);
-    strokePath(ctx, pts);
-    ctx.stroke();
-  } else {
-    // Variable width: draw smoothed segments, each with its own width.
-    for (let i = 1; i < pts.length; i++) {
-      const a = pts[i - 1];
-      const b = pts[i];
-      const prevMid: [number, number] = i > 1 ? [(pts[i - 2][0] + a[0]) / 2, (pts[i - 2][1] + a[1]) / 2] : [a[0], a[1]];
-      const mid: [number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-      ctx.lineWidth = pressureWidth(el.width, (a[2] + b[2]) / 2);
-      ctx.beginPath();
-      ctx.moveTo(prevMid[0], prevMid[1]);
-      ctx.quadraticCurveTo(a[0], a[1], mid[0], mid[1]);
-      if (i === pts.length - 1) ctx.lineTo(b[0], b[1]);
+  const n = pts.length;
+  switch (el.style ?? "fountain") {
+    case "ballpoint":
+      // Even line regardless of pressure.
+      ctx.lineWidth = Math.max(0.8, el.width * 0.8);
+      strokePath(ctx, pts);
       ctx.stroke();
+      break;
+    case "pencil": {
+      const avg = pts.reduce((s, p) => s + p[2], 0) / n;
+      ctx.strokeStyle = ctx.createPattern(grainTile(el.color), "repeat") ?? el.color;
+      ctx.globalAlpha = 0.55 + 0.4 * Math.min(1, avg * 1.4);
+      ctx.lineWidth = Math.max(0.8, el.width * (0.55 + 0.45 * avg));
+      strokePath(ctx, pts);
+      ctx.stroke();
+      break;
+    }
+    case "calligraphy":
+      drawCalligraphy(ctx, el);
+      break;
+    case "brush": {
+      const ramp = Math.min(8, Math.max(2, Math.floor(n / 4)));
+      strokeSegments(ctx, pts, (i) => {
+        const taper = Math.min(1, (i + 1) / ramp, (n - i) / ramp);
+        return el.width * 1.7 * (0.3 + 0.8 * Math.min(1, pts[i][2])) * (0.2 + 0.8 * taper);
+      });
+      break;
+    }
+    case "fountain": {
+      const uniform = pts.every((p) => Math.abs(p[2] - pts[0][2]) < 0.02);
+      if (uniform) {
+        ctx.lineWidth = pressureWidth(el.width, pts[0][2]);
+        strokePath(ctx, pts);
+        ctx.stroke();
+      } else {
+        strokeSegments(ctx, pts, (i) => pressureWidth(el.width, pts[i][2]));
+      }
+      break;
     }
   }
   ctx.restore();
+}
+
+function drawArrowHead(ctx: CanvasRenderingContext2D, from: [number, number], to: [number, number], width: number) {
+  const angle = Math.atan2(to[1] - from[1], to[0] - from[0]);
+  const len = Math.max(12, width * 4.5);
+  ctx.beginPath();
+  for (const side of [-1, 1]) {
+    const a = angle + Math.PI - side * 0.45;
+    ctx.moveTo(to[0], to[1]);
+    ctx.lineTo(to[0] + Math.cos(a) * len, to[1] + Math.sin(a) * len);
+  }
+  ctx.stroke();
 }
 
 function drawShape(ctx: CanvasRenderingContext2D, el: ShapeEl) {
@@ -126,13 +234,14 @@ function drawShape(ctx: CanvasRenderingContext2D, el: ShapeEl) {
   } else {
     ctx.moveTo(s.points[0][0], s.points[0][1]);
     for (const p of s.points.slice(1)) ctx.lineTo(p[0], p[1]);
-    if (s.kind !== "line") ctx.closePath();
+    if (s.kind !== "line" && s.kind !== "arrow") ctx.closePath();
   }
-  if (el.fill) {
+  if (el.fill && s.kind !== "line" && s.kind !== "arrow") {
     ctx.fillStyle = el.fill;
     ctx.fill();
   }
   ctx.stroke();
+  if (s.kind === "arrow" && s.points.length >= 2) drawArrowHead(ctx, s.points[s.points.length - 2], s.points[s.points.length - 1], el.width);
   ctx.restore();
 }
 
@@ -260,3 +369,26 @@ export function renderPage(
 }
 
 export { textHeight };
+
+/** Ensures every image element is decoded before an offscreen render. */
+export async function preloadImages(elements: El[], images: ImageCache): Promise<void> {
+  await Promise.all(
+    elements
+      .filter((el) => el.kind === "image")
+      .map((el) => {
+        const src = (el as Extract<El, { kind: "image" }>).src;
+        let img = images.get(src);
+        if (img && img.complete) return Promise.resolve();
+        if (!img) {
+          img = new Image();
+          images.set(src, img);
+          img.src = src;
+        }
+        const pending = img;
+        return new Promise<void>((resolve) => {
+          pending.addEventListener("load", () => resolve(), { once: true });
+          pending.addEventListener("error", () => resolve(), { once: true });
+        });
+      }),
+  );
+}

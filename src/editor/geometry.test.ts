@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bounds, hitTest, insideLasso, isHeld, pointInPolygon, pressureWidth, translate, unionRects } from "./geometry";
+import { bounds, buildShape, hitTest, insideLasso, isHeld, pointInPolygon, pressureWidth, translate, unionRects } from "./geometry";
 import { fromStored, nextZ, toStored, type El, type StrokeEl } from "./model";
 
 const stroke = (points: [number, number][], width = 4): StrokeEl => ({
@@ -61,6 +61,33 @@ describe("geometry", () => {
     const pts: [number, number, number][] = [[0, 0, 0.5], [50, 0, 0.5], [100, 0, 0.5], [100.5, 0, 0.5], [100.6, 0, 0.5]];
     expect(isHeld([0, 100, 200, 500, 900], pts, 600, 2)).toBe(true);
     expect(isHeld([0, 100, 200, 250, 300], pts, 600, 2)).toBe(false);
+  });
+});
+
+describe("buildShape", () => {
+  it("normalises boxes dragged in any direction", () => {
+    const r = buildShape("rectangle", [100, 100], [20, 40]);
+    expect(r).toEqual({ kind: "rectangle", points: [[20, 40], [100, 40], [100, 100], [20, 100]] });
+  });
+
+  it("constrains to squares, circles and 45° lines", () => {
+    const c = buildShape("ellipse", [0, 0], [100, 40], true);
+    expect(c).toMatchObject({ kind: "ellipse", rx: 50, ry: 50 });
+    const l = buildShape("line", [0, 0], [100, 8], true);
+    expect(l && l.kind === "line" && Math.abs(l.points[1][1])).toBeLessThan(1e-9);
+  });
+
+  it("builds stars, diamonds, triangles and arrows", () => {
+    expect(buildShape("star", [0, 0], [100, 100])).toMatchObject({ kind: "polygon" });
+    expect((buildShape("star", [0, 0], [100, 100]) as { points: unknown[] }).points).toHaveLength(10);
+    expect((buildShape("diamond", [0, 0], [100, 50]) as { points: unknown[] }).points).toHaveLength(4);
+    expect(buildShape("triangle", [0, 0], [100, 50])).toMatchObject({ kind: "triangle" });
+    expect(buildShape("arrow", [0, 0], [50, 50])).toMatchObject({ kind: "arrow" });
+  });
+
+  it("ignores taps and auto mode", () => {
+    expect(buildShape("rectangle", [0, 0], [1, 1])).toBeNull();
+    expect(buildShape("auto", [0, 0], [100, 100])).toBeNull();
   });
 });
 

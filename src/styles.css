@@ -793,3 +793,43 @@ button {
     width: 96px;
   }
 }
+
+/* ---------------------------------------------- tool options & pen mode */
+
+.tool-group.options {
+  align-items: center;
+}
+.tool-btn.small {
+  width: 32px;
+  height: 30px;
+}
+.tool-group .divider {
+  height: 18px;
+  margin: 0 3px;
+}
+.pen-only-btn {
+  color: var(--muted);
+}
+.pen-only-btn.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.options-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 6px 12px;
+  min-height: 46px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.options-bar[hidden] {
+  display: none;
+}
+.options-hint {
+  color: var(--muted);
+  font-size: 13px;
+}

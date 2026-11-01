@@ -3,6 +3,7 @@
 // the same contract is used so the UI can be developed without the shell.
 
 import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
 import { MockBackend } from "./mockBackend";
 
 export type Template = "blank" | "ruled" | "narrow-ruled" | "grid" | "dotted" | "cornell";
@@ -84,8 +85,19 @@ export interface NewNotebook {
 
 export type P2 = [number, number];
 export type RecognizedShape =
-  | { kind: "line" | "triangle" | "rectangle" | "polygon"; points: P2[] }
+  | { kind: "line" | "arrow" | "triangle" | "rectangle" | "polygon"; points: P2[] }
   | { kind: "ellipse"; cx: number; cy: number; rx: number; ry: number };
+
+export type ExportFormat = "pdf" | "pptx" | "png";
+
+/** One rendered page handed to the exporter. */
+export interface ExportPage {
+  dataUrl: string;
+  widthPx: number;
+  heightPx: number;
+  pageWidth: number;
+  pageHeight: number;
+}
 
 export interface Backend {
   library(): Promise<Library>;
@@ -119,8 +131,16 @@ export interface Backend {
   search(query: string): Promise<SearchHit[]>;
   recognizeShape(points: P2[]): Promise<RecognizedShape | null>;
   simplifyStroke(points: [number, number, number][], epsilon: number): Promise<[number, number, number][]>;
-  exportPng(fileName: string, dataUrl: string): Promise<string>;
+  /** Asks where to save; resolves to null when the user cancels. */
+  chooseExportPath(fileName: string, format: ExportFormat): Promise<string | null>;
+  exportDocument(path: string, format: ExportFormat, pages: ExportPage[]): Promise<string>;
 }
+
+const FORMAT_FILTERS: Record<ExportFormat, { name: string; extensions: string[] }> = {
+  pdf: { name: "PDF document", extensions: ["pdf"] },
+  pptx: { name: "PowerPoint presentation", extensions: ["pptx"] },
+  png: { name: "PNG image", extensions: ["png"] },
+};
 
 class TauriBackend implements Backend {
   library = () => invoke<Library>("library");
@@ -158,7 +178,12 @@ class TauriBackend implements Backend {
   recognizeShape = (points: P2[]) => invoke<RecognizedShape | null>("recognize_shape", { points });
   simplifyStroke = (points: [number, number, number][], epsilon: number) =>
     invoke<[number, number, number][]>("simplify_stroke", { points, epsilon });
-  exportPng = (fileName: string, dataUrl: string) => invoke<string>("export_png", { fileName, dataUrl });
+  chooseExportPath = async (fileName: string, format: ExportFormat) => {
+    const defaultPath = await invoke<string>("default_export_dir", { fileName, format });
+    return save({ title: "Export", defaultPath, filters: [FORMAT_FILTERS[format]] });
+  };
+  exportDocument = (path: string, format: ExportFormat, pages: ExportPage[]) =>
+    invoke<string>("export_document", { path, format, pages });
 }
 
 export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;

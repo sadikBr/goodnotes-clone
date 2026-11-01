@@ -1,13 +1,15 @@
 //! Tauri command layer: thin wrappers that expose the database and ink
 //! geometry to the webview frontend.
 
-use base64::Engine;
+use std::path::PathBuf;
+
 use tauri::{AppHandle, Manager, State};
 
 use crate::db::{
     Db, Element, Folder, Library, NewNotebook, Notebook, Page, SearchHit, TrashContents,
 };
 use crate::error::{AppError, AppResult};
+use crate::export::{self, ExportPage, Format};
 use crate::ink::{self, InkPoint, Shape, P2};
 
 #[tauri::command]
@@ -180,16 +182,11 @@ pub fn simplify_stroke(points: Vec<InkPoint>, epsilon: f64) -> Vec<InkPoint> {
     ink::simplify(&points, epsilon)
 }
 
-/// Writes a PNG (sent as a `data:image/png;base64,` URL) into
-/// `~/Documents/Inkleaf Exports/` and returns the absolute path.
+/// Suggested save location for an export: `~/Documents/Inkleaf Exports/<name>.<ext>`.
+/// The folder is created so the save dialog can open inside it.
 #[tauri::command]
-pub fn export_png(app: AppHandle, file_name: String, data_url: String) -> AppResult<String> {
-    let encoded = data_url
-        .strip_prefix("data:image/png;base64,")
-        .ok_or_else(|| AppError::Invalid("expected a PNG data URL".into()))?;
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(encoded)
-        .map_err(|e| AppError::Invalid(format!("invalid base64: {e}")))?;
+pub fn default_export_dir(app: AppHandle, file_name: String, format: String) -> AppResult<String> {
+    let format = Format::parse(&format)?;
     let dir = app
         .path()
         .document_dir()
@@ -197,12 +194,42 @@ pub fn export_png(app: AppHandle, file_name: String, data_url: String) -> AppRes
         .map_err(|e| AppError::Invalid(format!("no documents directory: {e}")))?
         .join("Inkleaf Exports");
     std::fs::create_dir_all(&dir)?;
-    let path = dir.join(sanitize_file_name(&file_name));
+    Ok(dir
+        .join(sanitize_file_name(&file_name, format.extension()))
+        .to_string_lossy()
+        .into_owned())
+}
+
+/// Builds a PDF, PPTX or PNG from rendered pages and writes it to `path`
+/// (chosen by the user in the native save dialog). Returns the final path.
+#[tauri::command]
+pub fn export_document(path: String, format: String, pages: Vec<ExportPage>) -> AppResult<String> {
+    let format = Format::parse(&format)?;
+    let path = with_extension(PathBuf::from(path), format.extension());
+    if path.file_name().is_none() {
+        return Err(AppError::Invalid("choose a file name to export to".into()));
+    }
+    let bytes = export::build(format, &pages)?;
     std::fs::write(&path, bytes)?;
     Ok(path.to_string_lossy().into_owned())
 }
 
-fn sanitize_file_name(name: &str) -> String {
+/// Ensures the path ends in `.ext` (case-insensitive), appending it otherwise.
+fn with_extension(path: PathBuf, ext: &str) -> PathBuf {
+    let matches = path
+        .extension()
+        .map(|e| e.to_string_lossy().eq_ignore_ascii_case(ext))
+        .unwrap_or(false);
+    if matches {
+        path
+    } else {
+        let mut s = path.into_os_string();
+        s.push(format!(".{ext}"));
+        PathBuf::from(s)
+    }
+}
+
+fn sanitize_file_name(name: &str, ext: &str) -> String {
     let cleaned: String = name
         .chars()
         .map(|c| {
@@ -219,25 +246,45 @@ fn sanitize_file_name(name: &str) -> String {
     } else {
         cleaned
     };
-    if base.to_lowercase().ends_with(".png") {
+    if base.to_lowercase().ends_with(&format!(".{ext}")) {
         base
     } else {
-        format!("{base}.png")
+        format!("{base}.{ext}")
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::sanitize_file_name;
+    use super::{sanitize_file_name, with_extension};
+    use std::path::PathBuf;
 
     #[test]
     fn file_names_cannot_escape_the_export_directory() {
-        assert_eq!(sanitize_file_name("../../etc/passwd"), "_.._etc_passwd.png");
         assert_eq!(
-            sanitize_file_name("Lecture 1 - page 2"),
-            "Lecture 1 - page 2.png"
+            sanitize_file_name("../../etc/passwd", "png"),
+            "_.._etc_passwd.png"
         );
-        assert_eq!(sanitize_file_name(""), "export.png");
-        assert_eq!(sanitize_file_name("a.PNG"), "a.PNG");
+        assert_eq!(
+            sanitize_file_name("Lecture 1 - page 2", "pdf"),
+            "Lecture 1 - page 2.pdf"
+        );
+        assert_eq!(sanitize_file_name("", "pptx"), "export.pptx");
+        assert_eq!(sanitize_file_name("a.PNG", "png"), "a.PNG");
+    }
+
+    #[test]
+    fn export_paths_get_the_right_extension() {
+        assert_eq!(
+            with_extension(PathBuf::from("/tmp/notes"), "pdf"),
+            PathBuf::from("/tmp/notes.pdf")
+        );
+        assert_eq!(
+            with_extension(PathBuf::from("/tmp/notes.PDF"), "pdf"),
+            PathBuf::from("/tmp/notes.PDF")
+        );
+        assert_eq!(
+            with_extension(PathBuf::from("/tmp/notes.png"), "pptx"),
+            PathBuf::from("/tmp/notes.png.pptx")
+        );
     }
 }

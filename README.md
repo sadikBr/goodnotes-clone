@@ -14,13 +14,14 @@ no Goodnotes code, assets or branding.
 
 - **Library:** notebooks with colour covers and live first-page previews, nested folders, favourites, search over titles and typed text, trash with recover / delete forever, duplicate, move, rename
 - **Paper:** blank, ruled, narrow ruled, grid, dotted and Cornell templates, switchable per page
-- **Ink:** pen with stylus pressure, translucent highlighter, stroke eraser, colour palette and size slider
-- **Shapes:** the Shape tool, or *draw and hold* with the pen, turns rough strokes into lines, rectangles, triangles, polygons, circles and ellipses (recognizer in Rust)
+- **Pen types:** fountain pen (pressure-sensitive), ballpoint, pencil (grain texture), calligraphy (flat 45° nib) and brush pen (tapered); translucent highlighter, stroke eraser, colour palette and size slider
+- **Pen-only mode:** when a stylus is detected, only the pen writes; finger and mouse scroll, and two fingers pinch-zoom. Touches while the pen is writing or hovering are ignored (palm rejection). Toggle with the pen button in the top-right; the choice is remembered
+- **Shapes:** pick line, arrow, rectangle, ellipse/circle, triangle, diamond or star and drag (Shift for squares, circles and 45° lines; optional fill), or use *Auto* / *draw and hold* with the pen to turn rough strokes into clean shapes (recognizer in Rust)
 - **Objects:** text boxes, sticky notes, images (insert or paste)
 - **Lasso:** select, move, recolour, duplicate, copy/paste, delete
 - **Pages:** sidebar thumbnails, add / insert / duplicate / reorder / delete / bookmark
-- **Editing:** undo/redo, zoom (Ctrl+wheel, fit width), pan tool, palm rejection (touch pans once a pen is used)
-- **Export:** current page as PNG to `~/Documents/Inkleaf Exports/`
+- **Editing:** undo/redo, zoom (Ctrl+wheel, pinch, fit width), pan tool
+- **Export:** PDF (whole notebook or one page), PowerPoint .pptx (one slide per page) or PNG, through a native Save dialog that defaults to `Documents/Inkleaf Exports/`. Pages are exported as high-resolution images (PDF/PNG about 290 DPI, PowerPoint about 190 DPI), so text isn't selectable in the export
 - **Themes:** light and dark mode
 
 ### Keyboard shortcuts
@@ -41,7 +42,8 @@ no Goodnotes code, assets or branding.
 src-tauri/            Rust backend (Tauri 2)
   src/db.rs           SQLite schema, library/page/element persistence, search (+ tests)
   src/ink.rs          Stroke simplification and shape recognition (+ tests)
-  src/commands.rs     Tauri command layer, PNG export
+  src/commands.rs     Tauri command layer
+  src/export.rs       PDF and PowerPoint writers (+ tests)
   src/lib.rs          App setup and command registration
 src/                  TypeScript frontend (Vite, no framework)
   api.ts              Typed backend API (Tauri invoke, or an in-browser mock)
@@ -53,7 +55,7 @@ docs/reverse-engineering/   Goodnotes web architecture reports
 
 ## Development
 
-Prerequisites: Node 20+, Rust 1.80+, and the
+Prerequisites: Node 20+, Rust 1.90+, and the
 [Tauri system dependencies](https://tauri.app/start/prerequisites/) for your OS
 (on Debian/Ubuntu: `libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev`).
 
@@ -62,13 +64,17 @@ npm install
 npm run tauri dev         # run the desktop app with hot reload
 npm run tauri build       # build installers / bundles for this OS
 npm run dev               # frontend only in a browser (uses the mock backend)
+
+# Windows installer from Linux (MinGW): needs mingw-w64 and nsis
+rustup target add x86_64-pc-windows-gnu
+npm run tauri build -- --target x86_64-pc-windows-gnu --bundles nsis
 ```
 
 Tests:
 
 ```bash
 npm run typecheck && npm test          # TypeScript + frontend unit tests (Vitest)
-cd src-tauri && cargo test             # Rust unit tests (database + ink geometry)
+cd src-tauri && cargo test             # Rust unit tests (database, ink geometry, PDF/PPTX export)
 ```
 
 Data lives in the OS app-data directory (e.g. `~/.local/share/app.inkleaf.desktop/inkleaf.db`

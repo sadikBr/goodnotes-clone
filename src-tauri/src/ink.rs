@@ -171,7 +171,7 @@ fn closed_corners(points: &[P2], epsilon: f64, min_gap: f64) -> Vec<P2> {
     // Merge corners that are too close to each other (including wrap-around).
     let mut merged: Vec<P2> = Vec::new();
     for c in corners {
-        if merged.last().map_or(true, |&l| dist(l, c) >= min_gap) {
+        if merged.last().is_none_or(|&l| dist(l, c) >= min_gap) {
             merged.push(c);
         }
     }

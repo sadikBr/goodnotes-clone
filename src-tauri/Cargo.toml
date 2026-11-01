@@ -3,7 +3,7 @@ name = "inkleaf"
 version = "0.1.0"
 description = "Inkleaf - a handwritten note-taking desktop app"
 edition = "2021"
-rust-version = "1.80"
+rust-version = "1.90"
 
 [lib]
 name = "inkleaf_lib"
@@ -20,6 +20,8 @@ rusqlite = { version = "0.37", features = ["bundled"] }
 uuid = { version = "1", features = ["v4"] }
 thiserror = "2"
 base64 = "0.22"
+tauri-plugin-dialog = "=2.8.3"
+zip = { version = "9.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [profile.release]
 codegen-units = 1

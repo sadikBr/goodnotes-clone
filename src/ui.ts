@@ -58,6 +58,21 @@ export const ICONS = {
   down: svg('<path d="M6 9l6 6 6-6"/>'),
   moon: svg('<path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/>'),
   close: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
+  stylus: svg('<path d="M15 4l5 5-9.5 9.5-6 1.5 1.5-6z"/><path d="M13 6l5 5"/><path d="M3 21l2-2"/>'),
+  fountain: svg('<path d="M12 3l5 7-5 11-5-11z"/><path d="M12 10v5"/><circle cx="12" cy="9" r="1"/>'),
+  ballpoint: svg('<path d="M9 3h6v12l-3 5-3-5z"/><path d="M9 15h6"/>'),
+  pencil: svg('<path d="M9 3h6v12l-3 6-3-6z"/><path d="M9 15h6"/><path d="M11 19h2"/><path d="M9 6h6"/>'),
+  calligraphy: svg('<path d="M14 3l5 5-8 8-4 1 1-4z"/><path d="M4 21c3-1 5-2 7-5"/>'),
+  brush: svg('<path d="M14 4c2-1 5 2 4 4l-6 6-3-3z"/><path d="M9 11c-3 0-4 2-4 4s-1 3-2 4c3 1 7 0 8-3"/>'),
+  sAuto: svg('<path d="M5 19c2-6 5-9 9-10"/><path d="M15 3l1.2 2.8L19 7l-2.8 1.2L15 11l-1.2-2.8L11 7l2.8-1.2z"/>'),
+  sLine: svg('<path d="M5 19L19 5"/>'),
+  sArrow: svg('<path d="M5 19L19 5"/><path d="M11 5h8v8"/>'),
+  sRectangle: svg('<rect x="4" y="6" width="16" height="12" rx="1"/>'),
+  sEllipse: svg('<ellipse cx="12" cy="12" rx="8.5" ry="6.5"/>'),
+  sTriangle: svg('<path d="M12 4l9 16H3z"/>'),
+  sDiamond: svg('<path d="M12 3l9 9-9 9-9-9z"/>'),
+  sStar: svg('<path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6-4.5-4.2 6.1-.7z"/>'),
+  fill: svg('<rect x="4" y="4" width="16" height="16" rx="2" fill="currentColor" fill-opacity="0.35"/>'),
 };
 
 let toastTimer: number | undefined;

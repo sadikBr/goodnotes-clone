@@ -5,6 +5,8 @@
 
 import type {
   Backend,
+  ExportFormat,
+  ExportPage,
   Folder,
   Library,
   NewNotebook,
@@ -327,11 +329,17 @@ export class MockBackend implements Backend {
     return points;
   }
 
-  async exportPng(fileName: string, dataUrl: string) {
+  async chooseExportPath(fileName: string, format: ExportFormat): Promise<string | null> {
+    return `${fileName}.${format}`;
+  }
+
+  /** Browser preview: PNG downloads directly; PDF/PPTX need the desktop app. */
+  async exportDocument(path: string, format: ExportFormat, pages: ExportPage[]): Promise<string> {
+    if (format !== "png") throw new Error("PDF and PowerPoint export are available in the desktop app");
     const a = document.createElement("a");
-    a.href = dataUrl;
-    a.download = fileName.endsWith(".png") ? fileName : `${fileName}.png`;
+    a.href = pages[0].dataUrl;
+    a.download = path;
     a.click();
-    return a.download;
+    return path;
   }
 }

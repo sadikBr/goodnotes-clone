@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod db;
 pub mod error;
+pub mod export;
 pub mod ink;
 
 use tauri::Manager;
@@ -8,6 +9,7 @@ use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
@@ -47,7 +49,8 @@ pub fn run() {
             commands::search,
             commands::recognize_shape,
             commands::simplify_stroke,
-            commands::export_png,
+            commands::default_export_dir,
+            commands::export_document,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Inkleaf");

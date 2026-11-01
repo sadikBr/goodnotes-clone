@@ -1,10 +1,11 @@
 // Notebook editor: page canvas, tools, page sidebar, undo/redo and autosave.
 
-import { api, TEMPLATES, type Notebook, type P2, type Page, type Template } from "../api";
+import { api, TEMPLATES, type ExportFormat, type ExportPage, type Notebook, type P2, type Page, type RecognizedShape, type Template } from "../api";
+import { getPref, hasPref, setPref } from "../prefs";
 import { confirmDialog, formDialog, h, icon, popupMenu, reportError, toast } from "../ui";
-import { bounds, hitTest, insideLasso, isHeld, rectContains, translate, unionRects, type Rect } from "./geometry";
-import { fromStored, newId, nextZ, toStored, type El, type Pt, type ShapeEl, type StickyEl, type TextEl } from "./model";
-import { drawElement, drawLasso, drawSelection, drawStroke, drawTemplate, renderPage, type ImageCache } from "./render";
+import { bounds, buildShape, hitTest, insideLasso, isHeld, rectContains, translate, unionRects, type Rect, type ShapeKind } from "./geometry";
+import { fromStored, newId, nextZ, PEN_STYLES, toStored, type El, type PenStyle, type Pt, type ShapeEl, type StickyEl, type TextEl } from "./model";
+import { drawElement, drawLasso, drawSelection, drawStroke, drawTemplate, preloadImages, renderPage, type ImageCache } from "./render";
 
 type Tool = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "sticky" | "hand";
 
@@ -22,6 +23,24 @@ const TOOLS: { id: Tool; label: string; key: string }[] = [
 const INK_COLORS = ["#111827", "#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2", "#facc15"];
 const STICKY_COLORS = ["#fef08a", "#bbf7d0", "#bfdbfe", "#fbcfe8", "#fed7aa"];
 const HOLD_MS = 550;
+/** Touches this soon after pen activity are treated as a resting palm. */
+const PALM_GUARD_MS = 400;
+const PEN_ONLY_KEY = "inkleaf-pen-only";
+const PEN_STYLE_KEY = "inkleaf-pen-style";
+const SHAPE_KIND_KEY = "inkleaf-shape-kind";
+
+const SHAPE_KINDS: { id: ShapeKind; label: string; icon: Parameters<typeof icon>[0] }[] = [
+  { id: "auto", label: "Freehand (auto-detect shape)", icon: "sAuto" },
+  { id: "line", label: "Line", icon: "sLine" },
+  { id: "arrow", label: "Arrow", icon: "sArrow" },
+  { id: "rectangle", label: "Rectangle", icon: "sRectangle" },
+  { id: "ellipse", label: "Ellipse / circle", icon: "sEllipse" },
+  { id: "triangle", label: "Triangle", icon: "sTriangle" },
+  { id: "diamond", label: "Diamond", icon: "sDiamond" },
+  { id: "star", label: "Star", icon: "sStar" },
+];
+
+const EXPORT_SCALE: Record<ExportFormat, number> = { pdf: 3, png: 3, pptx: 2 };
 const MAX_UNDO = 100;
 
 type Gesture =
@@ -29,7 +48,13 @@ type Gesture =
   | { type: "erase"; changed: boolean }
   | { type: "lasso"; points: P2[] }
   | { type: "move"; start: P2; original: El[]; dx: number; dy: number }
-  | { type: "pan"; sx: number; sy: number; left: number; top: number };
+  | { type: "pan"; sx: number; sy: number; left: number; top: number }
+  | { type: "shape"; start: P2; preview: ShapeEl | null };
+
+/** Finger / mouse navigation while in pen-only mode. */
+type Nav =
+  | { kind: "pan"; id: number; sx: number; sy: number; left: number; top: number }
+  | { kind: "pinch"; startDist: number; startZoom: number; anchor: P2 };
 
 export interface EditorCallbacks {
   close(): void;
@@ -50,7 +75,15 @@ export class EditorScreen {
   private selection = new Set<string>();
   private clipboard: El[] = [];
   private gesture: Gesture | null = null;
-  private penSeen = false;
+  private penOnly = getPref<string>(PEN_ONLY_KEY, "false") === "true";
+  private lastPenAt = -Infinity;
+  private navPointers = new Map<number, { x: number; y: number }>();
+  private nav: Nav | null = null;
+  private pinchFrame = 0;
+  private penStyle: PenStyle = getPref(PEN_STYLE_KEY, "fountain", PEN_STYLES.map((p) => p.id));
+  private shapeKind: ShapeKind = getPref(SHAPE_KIND_KEY, "auto", SHAPE_KINDS.map((k) => k.id));
+  private shapeFill = false;
+  private penOnlyBtn = h("button", { class: "icon-btn pen-only-btn", "aria-label": "Pen-only mode", onclick: () => this.setPenOnly(!this.penOnly, true) }, icon("stylus"));
   private hiddenIds = new Set<string>();
   private images: ImageCache = new Map();
   private saveTimer: number | undefined;
@@ -67,6 +100,7 @@ export class EditorScreen {
   private pageList = h("ol", { class: "page-list", "aria-label": "Pages" });
   private toolbar = h("div", { class: "toolbar", role: "toolbar", "aria-label": "Tools" });
   private statusBar = h("div", { class: "status-bar" });
+  private optionsBar = h("div", { class: "options-bar", role: "toolbar", "aria-label": "Tool options" });
   private selectionBar = h("div", { class: "selection-bar", hidden: true });
   private titleBtn = h("button", { class: "title-btn", title: "Rename notebook" });
   private fileInput = h("input", { type: "file", accept: "image/png,image/jpeg,image/gif,image/webp", hidden: true });
@@ -74,6 +108,7 @@ export class EditorScreen {
   constructor(private cb: EditorCallbacks) {
     this.root.append(
       h("header", { class: "editor-header" }, this.headerLeft(), this.toolbar, this.headerRight()),
+      this.optionsBar,
       h("div", { class: "editor-body" }, h("aside", { class: "page-sidebar" }, this.pageList, h("button", { class: "btn add-page", onclick: () => this.addPage(this.pages.length) }, icon("plus"), "Add page")), h("div", { class: "canvas-area" }, this.scroller, this.statusBar)),
       this.fileInput,
     );
@@ -197,11 +232,49 @@ export class EditorScreen {
       h("span", { class: "divider" }),
       template,
       h("button", { class: "icon-btn", "aria-label": "Insert image", title: "Insert image", onclick: () => this.fileInput.click() }, icon("image")),
-      h("button", { class: "icon-btn", "aria-label": "Export page as PNG", title: "Export page as PNG", onclick: () => this.exportPage() }, icon("download")),
+      this.exportButton(),
+      h("span", { class: "divider" }),
+      this.penOnlyBtn,
     );
   }
 
   private templateSelect!: HTMLSelectElement;
+
+  private exportButton(): HTMLButtonElement {
+    const btn = h("button", { class: "icon-btn", "aria-label": "Export", title: "Export", "aria-haspopup": "menu" }, icon("download"));
+    btn.addEventListener("click", () =>
+      popupMenu(btn, [
+        { label: "PDF — whole notebook", action: () => this.exportAs("pdf", "all") },
+        { label: "PDF — this page", action: () => this.exportAs("pdf", "current") },
+        { label: "PowerPoint (.pptx) — whole notebook", action: () => this.exportAs("pptx", "all") },
+        { label: "PowerPoint (.pptx) — this page", action: () => this.exportAs("pptx", "current") },
+        { label: "PNG image — this page", action: () => this.exportAs("png", "current") },
+      ]),
+    );
+    return btn;
+  }
+
+  private renderPenOnlyButton() {
+    const b = this.penOnlyBtn;
+    b.classList.toggle("active", this.penOnly);
+    b.setAttribute("aria-pressed", String(this.penOnly));
+    b.title = this.penOnly
+      ? "Pen-only mode is on: only the pen writes; touch and mouse scroll and zoom. Click to turn off."
+      : "Pen-only mode is off: any input writes. Click to turn on.";
+  }
+
+  private setPenOnly(on: boolean, explicit: boolean) {
+    this.penOnly = on;
+    if (explicit || !hasPref(PEN_ONLY_KEY)) setPref(PEN_ONLY_KEY, String(on));
+    this.renderPenOnlyButton();
+    toast(on ? "Pen-only mode on: the pen writes, touch and mouse scroll and pinch-zoom" : "Pen-only mode off: touch and mouse can write again");
+  }
+
+  /** Records pen activity; the first time a pen is seen, pen-only mode turns on. */
+  private notePen() {
+    this.lastPenAt = performance.now();
+    if (!this.penOnly && !hasPref(PEN_ONLY_KEY)) this.setPenOnly(true, false);
+  }
 
   private renderToolbar() {
     const tools = TOOLS.map((t) =>
@@ -246,8 +319,54 @@ export class EditorScreen {
       input.addEventListener("input", () => (this.widths[tool] = Number(input.value)));
       width = h("label", { class: "width-control", title: "Size" }, input);
     }
-    this.toolbar.replaceChildren(h("div", { class: "tool-group" }, ...tools), swatches ?? "", width ?? "");
+    this.toolbar.replaceChildren(h("div", { class: "tool-group" }, ...tools));
+    const options = [this.toolOptions(), swatches, width].filter((x): x is HTMLElement => x !== null);
+    const hints: Partial<Record<Tool, string>> = {
+      lasso: "Draw around items to select them, then drag to move",
+      hand: "Drag to scroll · Ctrl + scroll or pinch to zoom",
+    };
+    if (options.length === 0) options.push(h("span", { class: "options-hint" }, hints[this.tool] ?? ""));
+    this.optionsBar.replaceChildren(...options);
+    this.renderPenOnlyButton();
     this.canvas.dataset.tool = this.tool;
+  }
+
+  /** Secondary choices for the active tool: pen type, or shape kind and fill. */
+  private toolOptions(): HTMLElement | null {
+    const chip = (label: string, ic: Parameters<typeof icon>[0], active: boolean, onclick: () => void) =>
+      h("button", { class: `tool-btn small${active ? " active" : ""}`, "aria-pressed": String(active), "aria-label": label, title: label, onclick }, icon(ic));
+    if (this.tool === "pen") {
+      return h(
+        "div",
+        { class: "tool-group options", role: "group", "aria-label": "Pen type" },
+        ...PEN_STYLES.map((p) =>
+          chip(p.label, p.id, this.penStyle === p.id, () => {
+            this.penStyle = p.id;
+            setPref(PEN_STYLE_KEY, p.id);
+            this.renderToolbar();
+          }),
+        ),
+      );
+    }
+    if (this.tool === "shape") {
+      return h(
+        "div",
+        { class: "tool-group options", role: "group", "aria-label": "Shape" },
+        ...SHAPE_KINDS.map((k) =>
+          chip(k.label, k.icon, this.shapeKind === k.id, () => {
+            this.shapeKind = k.id;
+            setPref(SHAPE_KIND_KEY, k.id);
+            this.renderToolbar();
+          }),
+        ),
+        h("span", { class: "divider" }),
+        chip(this.shapeFill ? "Fill on" : "Fill off", "fill", this.shapeFill, () => {
+          this.shapeFill = !this.shapeFill;
+          this.renderToolbar();
+        }),
+      );
+    }
+    return null;
   }
 
   private setTool(tool: Tool) {
@@ -415,7 +534,17 @@ export class EditorScreen {
   private onWheel(e: WheelEvent) {
     if (!(e.ctrlKey || e.metaKey)) return;
     e.preventDefault();
-    this.setZoom(this.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1));
+    this.zoomAt(this.zoom * Math.exp(-e.deltaY * 0.0025), { x: e.clientX, y: e.clientY });
+  }
+
+  /** Zooms so that the page point under `client` (or `anchor`) stays under `client`. */
+  private zoomAt(z: number, client: { x: number; y: number }, anchor?: P2) {
+    const pagePt = anchor ?? this.point({ clientX: client.x, clientY: client.y });
+    this.zoom = Math.max(0.25, Math.min(4, z));
+    this.layout();
+    const r = this.canvas.getBoundingClientRect();
+    this.scroller.scrollLeft += r.left + pagePt[0] * this.zoom - client.x;
+    this.scroller.scrollTop += r.top + pagePt[1] * this.zoom - client.y;
   }
 
   private layout() {
@@ -470,7 +599,19 @@ export class EditorScreen {
     const g = this.gesture;
     if (g?.type === "draw") {
       if (g.preview) drawElement(ctx, g.preview, this.images, () => {});
-      else drawStroke(ctx, { id: "live", z: 0, kind: "stroke", tool: g.tool === "highlighter" ? "highlighter" : "pen", color: this.colors[g.tool], width: this.widths[g.tool], points: g.points });
+      else
+        drawStroke(ctx, {
+          id: "live",
+          z: 0,
+          kind: "stroke",
+          tool: g.tool === "highlighter" ? "highlighter" : "pen",
+          style: g.tool === "pen" ? this.penStyle : undefined,
+          color: this.colors[g.tool],
+          width: this.widths[g.tool],
+          points: g.points,
+        });
+    } else if (g?.type === "shape") {
+      if (g.preview) drawElement(ctx, g.preview, this.images, () => {});
     } else if (g?.type === "lasso") {
       drawLasso(ctx, g.points, this.zoom);
     } else if (g?.type === "move") {
@@ -569,7 +710,10 @@ export class EditorScreen {
     c.addEventListener("pointerdown", (e) => this.onDown(e));
     c.addEventListener("pointermove", (e) => this.onMove(e));
     c.addEventListener("pointerup", (e) => this.onUp(e));
-    c.addEventListener("pointercancel", () => this.cancelGesture());
+    c.addEventListener("pointercancel", (e) => {
+      if (this.navPointers.has(e.pointerId)) this.navUp(e);
+      else this.cancelGesture();
+    });
     c.addEventListener("pointerleave", () => {
       this.cursor = null;
       if (!this.gesture) this.draw();
@@ -592,20 +736,28 @@ export class EditorScreen {
   }
 
   private onDown(e: PointerEvent) {
+    if (e.pointerType === "pen") this.notePen();
+    // Pen-only mode: anything that isn't the pen navigates instead of writing.
+    if (this.penOnly && e.pointerType !== "pen") {
+      this.navDown(e);
+      return;
+    }
     if (e.button !== 0 && e.pointerType === "mouse") return;
     if (this.gesture) return;
     this.finishTextEdit();
-    if (e.pointerType === "pen") this.penSeen = true;
     const [x, y] = this.point(e);
-    let tool = this.tool;
-    // Palm rejection: once a stylus has been used, touch only scrolls.
-    if (e.pointerType === "touch" && this.penSeen) tool = "hand";
+    const tool = this.tool;
     this.canvas.setPointerCapture(e.pointerId);
 
     switch (tool) {
       case "pen":
       case "highlighter":
       case "shape":
+        if (tool === "shape" && this.shapeKind !== "auto") {
+          this.gesture = { type: "shape", start: [x, y], preview: null };
+          break;
+        }
+        // Freehand ink; with the shape tool in auto mode it is recognised on lift.
         this.gesture = { type: "draw", tool, points: [[x, y, this.pressure(e)]], times: [e.timeStamp], preview: null, holdTimer: 0 };
         this.armHold();
         break;
@@ -652,6 +804,11 @@ export class EditorScreen {
   }
 
   private onMove(e: PointerEvent) {
+    if (e.pointerType === "pen") this.notePen();
+    if (this.navPointers.has(e.pointerId)) {
+      this.navMove(e);
+      return;
+    }
     const g = this.gesture;
     this.cursor = this.point(e);
     if (!g) {
@@ -683,6 +840,11 @@ export class EditorScreen {
         g.dx = this.cursor[0] - g.start[0];
         g.dy = this.cursor[1] - g.start[1];
         break;
+      case "shape": {
+        const shape = buildShape(this.shapeKind, g.start, this.cursor, e.shiftKey);
+        g.preview = shape ? this.makeShapeEl(shape) : null;
+        break;
+      }
       case "pan":
         this.scroller.scrollLeft = g.left - (e.clientX - g.sx);
         this.scroller.scrollTop = g.top - (e.clientY - g.sy);
@@ -725,6 +887,10 @@ export class EditorScreen {
   }
 
   private async onUp(e: PointerEvent) {
+    if (this.navPointers.has(e.pointerId)) {
+      this.navUp(e);
+      return;
+    }
     const g = this.gesture;
     if (!g) return;
     if (this.canvas.hasPointerCapture(e.pointerId)) this.canvas.releasePointerCapture(e.pointerId);
@@ -749,7 +915,16 @@ export class EditorScreen {
           } catch {
             /* keep the raw points */
           }
-          this.addElement({ id: newId(), z: nextZ(this.elements), kind: "stroke", tool, color: this.colors[g.tool], width: this.widths[g.tool], points });
+          this.addElement({
+            id: newId(),
+            z: nextZ(this.elements),
+            kind: "stroke",
+            tool,
+            style: tool === "pen" ? this.penStyle : undefined,
+            color: this.colors[g.tool],
+            width: this.widths[g.tool],
+            points,
+          });
         }
         break;
       }
@@ -778,7 +953,69 @@ export class EditorScreen {
       case "pan":
         this.gesture = null;
         break;
+      case "shape":
+        this.gesture = null;
+        if (g.preview) {
+          g.preview.z = nextZ(this.elements);
+          this.addElement(g.preview);
+        } else this.draw();
+        break;
     }
+  }
+
+  private makeShapeEl(shape: RecognizedShape): ShapeEl {
+    const color = this.colors.shape;
+    const closed = shape.kind !== "line" && shape.kind !== "arrow";
+    return { id: newId(), z: 0, kind: "shape", shape, color, width: this.widths.shape, fill: this.shapeFill && closed ? `${color}33` : null };
+  }
+
+  // ------------------------------------------------- pen-only navigation
+
+  private navDown(e: PointerEvent) {
+    // Palm rejection: ignore touches while the pen is writing or hovering.
+    if (e.pointerType === "touch" && (this.gesture || performance.now() - this.lastPenAt < PALM_GUARD_MS)) return;
+    this.canvas.setPointerCapture(e.pointerId);
+    this.navPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    this.startNav();
+  }
+
+  private startNav() {
+    const pts = [...this.navPointers.entries()];
+    if (pts.length >= 2) {
+      const [a, b] = [pts[0][1], pts[1][1]];
+      const mid = { clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 };
+      this.nav = { kind: "pinch", startDist: Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)), startZoom: this.zoom, anchor: this.point(mid) };
+    } else if (pts.length === 1) {
+      const [id, p] = pts[0];
+      this.nav = { kind: "pan", id, sx: p.x, sy: p.y, left: this.scroller.scrollLeft, top: this.scroller.scrollTop };
+    } else {
+      this.nav = null;
+    }
+  }
+
+  private navMove(e: PointerEvent) {
+    this.navPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const nav = this.nav;
+    if (nav?.kind === "pan" && nav.id === e.pointerId) {
+      this.scroller.scrollLeft = nav.left - (e.clientX - nav.sx);
+      this.scroller.scrollTop = nav.top - (e.clientY - nav.sy);
+    } else if (nav?.kind === "pinch" && !this.pinchFrame) {
+      // Relayout at most once per frame while pinching.
+      this.pinchFrame = requestAnimationFrame(() => {
+        this.pinchFrame = 0;
+        const pts = [...this.navPointers.values()];
+        if (this.nav?.kind !== "pinch" || pts.length < 2) return;
+        const [a, b] = pts;
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        this.zoomAt(this.nav.startZoom * (dist / this.nav.startDist), { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, this.nav.anchor);
+      });
+    }
+  }
+
+  private navUp(e: PointerEvent) {
+    this.navPointers.delete(e.pointerId);
+    if (this.canvas.hasPointerCapture(e.pointerId)) this.canvas.releasePointerCapture(e.pointerId);
+    this.startNav();
   }
 
   private cancelGesture() {
@@ -990,15 +1227,33 @@ export class EditorScreen {
     reader.readAsDataURL(file);
   }
 
-  private async exportPage() {
+  private async exportAs(format: ExportFormat, scope: "all" | "current") {
     try {
       this.finishTextEdit();
-      const p = this.page;
-      const canvas = renderPage(p.template, p.paperColor, p.width, p.height, this.elements, 2, this.images);
-      const path = await api.exportPng(`${this.notebook.title} - page ${this.index + 1}`, canvas.toDataURL("image/png"));
-      toast(`Exported to ${path}`);
+      await this.flush();
+      const pages = scope === "all" ? this.pages : [this.page];
+      const name = scope === "all" ? this.notebook.title : `${this.notebook.title} - page ${this.index + 1}`;
+      const path = await api.chooseExportPath(name, format);
+      if (!path) return;
+      toast(`Exporting ${pages.length} page${pages.length > 1 ? "s" : ""}…`);
+      const rendered: ExportPage[] = [];
+      for (const p of pages) {
+        const els = p.id === this.page.id ? this.elements : fromStored(await api.elements(p.id));
+        await preloadImages(els, this.images);
+        const canvas = renderPage(p.template, p.paperColor, p.width, p.height, els, EXPORT_SCALE[format], this.images);
+        rendered.push({
+          dataUrl: format === "png" ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", 0.9),
+          widthPx: canvas.width,
+          heightPx: canvas.height,
+          pageWidth: p.width,
+          pageHeight: p.height,
+        });
+      }
+      const saved = await api.exportDocument(path, format, rendered);
+      toast(`Exported to ${saved}`);
     } catch (e) {
       reportError(e);
     }
   }
+
 }

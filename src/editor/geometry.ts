@@ -1,4 +1,4 @@
-import type { P2 } from "../api";
+import type { P2, RecognizedShape } from "../api";
 import type { El, Pt } from "./model";
 
 export interface Rect {
@@ -101,7 +101,7 @@ export function hitTest(el: El, x: number, y: number, radius: number): boolean {
         const d = Math.abs(Math.hypot(nx, ny) - 1) * Math.min(s.rx, s.ry);
         return d <= radius + el.width / 2 || (el.fill !== null && Math.hypot(nx, ny) <= 1);
       }
-      const closed = s.kind !== "line";
+      const closed = s.kind !== "line" && s.kind !== "arrow";
       if (distToPolyline(x, y, s.points, closed) <= radius + el.width / 2) return true;
       return closed && el.fill !== null && pointInPolygon(x, y, s.points);
     }
@@ -155,4 +155,63 @@ export function isHeld(times: number[], pts: Pt[], ms: number, tolerance: number
     if (Math.hypot(pts[i][0] - last[0], pts[i][1] - last[1]) > tolerance) return end - times[i] >= ms;
   }
   return end - times[0] >= ms;
+}
+
+export type ShapeKind = "auto" | "line" | "arrow" | "rectangle" | "ellipse" | "triangle" | "diamond" | "star";
+
+/**
+ * Builds the chosen shape from a drag between `a` and `b`. With `constrain`
+ * (Shift), boxes become squares/circles and lines snap to 45° steps.
+ * Returns null for "auto" (recognition) or a drag too small to see.
+ */
+export function buildShape(kind: ShapeKind, a: P2, b: P2, constrain = false): RecognizedShape | null {
+  let [x1, y1] = b;
+  const [x0, y0] = a;
+  if (kind === "auto") return null;
+  if (kind === "line" || kind === "arrow") {
+    if (constrain) {
+      const len = Math.hypot(x1 - x0, y1 - y0);
+      const step = Math.PI / 4;
+      const ang = Math.round(Math.atan2(y1 - y0, x1 - x0) / step) * step;
+      x1 = x0 + Math.cos(ang) * len;
+      y1 = y0 + Math.sin(ang) * len;
+    }
+    if (Math.hypot(x1 - x0, y1 - y0) < 3) return null;
+    return { kind, points: [[x0, y0], [x1, y1]] };
+  }
+  let w = x1 - x0;
+  let h = y1 - y0;
+  if (constrain) {
+    const side = Math.max(Math.abs(w), Math.abs(h));
+    w = Math.sign(w || 1) * side;
+    h = Math.sign(h || 1) * side;
+  }
+  if (Math.abs(w) < 3 || Math.abs(h) < 3) return null;
+  const left = Math.min(x0, x0 + w);
+  const top = Math.min(y0, y0 + h);
+  const right = left + Math.abs(w);
+  const bottom = top + Math.abs(h);
+  const cx = (left + right) / 2;
+  const cy = (top + bottom) / 2;
+  switch (kind) {
+    case "rectangle":
+      return { kind: "rectangle", points: [[left, top], [right, top], [right, bottom], [left, bottom]] };
+    case "ellipse":
+      return { kind: "ellipse", cx, cy, rx: (right - left) / 2, ry: (bottom - top) / 2 };
+    case "triangle":
+      return { kind: "triangle", points: [[cx, top], [right, bottom], [left, bottom]] };
+    case "diamond":
+      return { kind: "polygon", points: [[cx, top], [right, cy], [cx, bottom], [left, cy]] };
+    case "star": {
+      const rx = (right - left) / 2;
+      const ry = (bottom - top) / 2;
+      const points: P2[] = [];
+      for (let i = 0; i < 10; i++) {
+        const r = i % 2 === 0 ? 1 : 0.42;
+        const t = -Math.PI / 2 + (i * Math.PI) / 5;
+        points.push([cx + Math.cos(t) * rx * r, cy + Math.sin(t) * ry * r]);
+      }
+      return { kind: "polygon", points };
+    }
+  }
 }

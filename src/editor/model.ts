@@ -8,9 +8,21 @@ interface Base {
   z: number;
 }
 
+export type PenStyle = "fountain" | "ballpoint" | "pencil" | "calligraphy" | "brush";
+
+export const PEN_STYLES: { id: PenStyle; label: string }[] = [
+  { id: "fountain", label: "Fountain pen" },
+  { id: "ballpoint", label: "Ballpoint" },
+  { id: "pencil", label: "Pencil" },
+  { id: "calligraphy", label: "Calligraphy" },
+  { id: "brush", label: "Brush pen" },
+];
+
 export interface StrokeEl extends Base {
   kind: "stroke";
   tool: "pen" | "highlighter";
+  /** Pen nib; strokes saved before pen styles existed default to fountain. */
+  style?: PenStyle;
   color: string;
   width: number;
   points: Pt[];
