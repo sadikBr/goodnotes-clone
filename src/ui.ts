@@ -99,6 +99,8 @@ interface Field {
   type?: "text" | "select" | "color-swatches";
   value?: string;
   options?: { value: string; label: string }[];
+  /** Colours for a "color-swatches" field (defaults to cover colours). */
+  colors?: { color: string; label: string }[];
 }
 
 export const COVER_COLORS = ["#2563eb", "#0d9488", "#16a34a", "#ca8a04", "#ea580c", "#dc2626", "#db2777", "#7c3aed", "#475569", "#111827"];
@@ -129,9 +131,10 @@ export function formDialog(title: string, fields: Field[], submitLabel = "Save")
         form.append(h("label", {}, h("span", {}, f.label), select));
       } else if (f.type === "color-swatches") {
         const row = h("div", { class: "swatches", role: "radiogroup", "aria-label": f.label });
-        if (!values[f.name]) values[f.name] = COVER_COLORS[0];
-        for (const c of COVER_COLORS) {
-          const b = h("button", { type: "button", class: "swatch", style: { background: c }, "aria-label": c, role: "radio", "aria-checked": String(c === values[f.name]) });
+        const palette = f.colors ?? COVER_COLORS.map((c) => ({ color: c, label: c }));
+        if (!values[f.name]) values[f.name] = palette[0].color;
+        for (const { color: c, label } of palette) {
+          const b = h("button", { type: "button", class: "swatch", style: { background: c }, "aria-label": label, title: label, role: "radio", "aria-checked": String(c === values[f.name]) });
           b.addEventListener("click", () => {
             values[f.name] = c;
             row.querySelectorAll(".swatch").forEach((s) => s.setAttribute("aria-checked", "false"));

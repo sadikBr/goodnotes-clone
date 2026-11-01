@@ -159,7 +159,7 @@ export class MockBackend implements Backend {
       updatedAt: now,
       trashedAt: null,
     });
-    this.s.pages.push(this.newPage(id, 0, template, input.paperColor ?? "#fffdf7", 794, 1123));
+    this.s.pages.push(this.newPage(id, 0, template, input.paperColor ?? "#fffdf7", input.width ?? 794, input.height ?? 1123));
     this.persist();
     return this.nb(id);
   }

@@ -4,8 +4,13 @@ import { fontCss } from "../fonts";
 import type { El, Pt, ShapeEl, StickyEl, StrokeEl, TextEl } from "./model";
 import type { Anchor, Guide } from "./snap";
 
-const LINE_COLOR = "rgba(96, 140, 200, 0.35)";
-const MARGIN_COLOR = "rgba(220, 80, 80, 0.45)";
+/** True for dark paper, where lines and dots need to be light. */
+export function isDarkPaper(color: string): boolean {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(color.trim());
+  if (!m) return false;
+  const [r, g, b] = [m[1], m[2], m[3]].map((x) => parseInt(x, 16) / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.45;
+}
 
 /** Where the paper's writing lines and margin are (shared with alignment guides). */
 export function paperLayout(template: Template, w: number, h: number): { rules: number[]; ruleSpan: [number, number]; margin: number | null } {
@@ -36,6 +41,9 @@ export function drawTemplate(ctx: CanvasRenderingContext2D, template: Template, 
   ctx.fillStyle = paper;
   ctx.fillRect(0, 0, w, h);
   ctx.save();
+  const dark = isDarkPaper(paper);
+  const LINE_COLOR = dark ? "rgba(170, 190, 225, 0.28)" : "rgba(96, 140, 200, 0.35)";
+  const MARGIN_COLOR = dark ? "rgba(255, 120, 120, 0.45)" : "rgba(220, 80, 80, 0.45)";
   ctx.lineWidth = 1;
   ctx.strokeStyle = LINE_COLOR;
   const hline = (y: number, x0 = 0, x1 = w) => {
@@ -63,7 +71,7 @@ export function drawTemplate(ctx: CanvasRenderingContext2D, template: Template, 
       for (let x = 24; x < w; x += 24) vline(x);
       break;
     case "dotted":
-      ctx.fillStyle = "rgba(90, 100, 120, 0.45)";
+      ctx.fillStyle = dark ? "rgba(200, 210, 225, 0.4)" : "rgba(90, 100, 120, 0.45)";
       for (let y = 24; y < h; y += 24) for (let x = 24; x < w; x += 24) ctx.fillRect(x - 1, y - 1, 2.2, 2.2);
       break;
     case "cornell": {

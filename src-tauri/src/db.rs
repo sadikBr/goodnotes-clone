@@ -140,6 +140,18 @@ fn validate_template(t: &str) -> AppResult<()> {
     }
 }
 
+/// Accepts `#rrggbb` colours only.
+fn validate_color(color: &str) -> AppResult<()> {
+    let ok = color.len() == 7
+        && color.starts_with('#')
+        && color[1..].chars().all(|c| c.is_ascii_hexdigit());
+    if ok {
+        Ok(())
+    } else {
+        Err(AppError::Invalid(format!("invalid colour '{color}'")))
+    }
+}
+
 fn validate_name(name: &str) -> AppResult<String> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
@@ -381,6 +393,16 @@ impl Db {
         let title = validate_name(&input.title)?;
         let template = input.template.clone().unwrap_or_else(|| "ruled".into());
         validate_template(&template)?;
+        if let Some(color) = &input.paper_color {
+            validate_color(color)?;
+        }
+        for size in [input.width, input.height].into_iter().flatten() {
+            if !(100.0..=5000.0).contains(&size) {
+                return Err(AppError::Invalid(
+                    "page size must be between 100 and 5000 units".into(),
+                ));
+            }
+        }
         let mut conn = self.conn();
         if let Some(folder) = &input.folder_id {
             ensure_exists(&conn, "folders", folder)?;
@@ -678,6 +700,9 @@ impl Db {
         paper_color: Option<&str>,
     ) -> AppResult<()> {
         validate_template(template)?;
+        if let Some(color) = paper_color {
+            validate_color(color)?;
+        }
         let conn = self.conn();
         let n = conn.execute(
             "UPDATE pages SET template = ?2, paper_color = COALESCE(?3, paper_color), updated_at = ?4 WHERE id = ?1",
@@ -1068,6 +1093,39 @@ mod tests {
             pages.iter().map(|p| p.position).collect::<Vec<_>>(),
             vec![0, 1]
         );
+    }
+
+    #[test]
+    fn notebooks_take_custom_paper_size_and_colour() {
+        let db = db();
+        let nb = db
+            .create_notebook(&NewNotebook {
+                title: "Landscape".into(),
+                width: Some(1123.0),
+                height: Some(794.0),
+                paper_color: Some("#22262d".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        let page = &db.pages(&nb.id).unwrap()[0];
+        assert_eq!((page.width, page.height), (1123.0, 794.0));
+        assert_eq!(page.paper_color, "#22262d");
+        let added = db.add_page(&nb.id, None, None).unwrap();
+        assert_eq!(
+            (added.width, added.paper_color.as_str()),
+            (1123.0, "#22262d")
+        );
+        db.set_page_template(&page.id, "grid", Some("#ffffff"))
+            .unwrap();
+        assert!(db
+            .set_page_template(&page.id, "grid", Some("red; drop"))
+            .is_err());
+        let bad = NewNotebook {
+            title: "x".into(),
+            width: Some(5.0),
+            ..Default::default()
+        };
+        assert!(db.create_notebook(&bad).is_err());
     }
 
     #[test]

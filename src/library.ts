@@ -1,6 +1,6 @@
 // Library screen: folders, notebooks, favourites, trash and search.
 
-import { api, TEMPLATES, type Folder, type Library, type Notebook, type Template } from "./api";
+import { api, PAPER_COLORS, PAPER_SIZES, TEMPLATES, type Folder, type Library, type Notebook, type Template } from "./api";
 import { confirmDialog, formDialog, h, icon, popupMenu, relativeTime, reportError, toast, type MenuItem } from "./ui";
 
 export type LibraryView = { kind: "all" } | { kind: "favourites" } | { kind: "trash" } | { kind: "folder"; id: string };
@@ -286,13 +286,26 @@ export class LibraryScreen {
       [
         { name: "title", label: "Title", value: "Untitled notebook" },
         { name: "template", label: "Paper", type: "select", value: "ruled", options: TEMPLATES.map((t) => ({ value: t.id, label: t.label })) },
+        { name: "size", label: "Page size", type: "select", value: "a4", options: PAPER_SIZES.map((p) => ({ value: p.id, label: p.label })) },
+        { name: "orientation", label: "Orientation", type: "select", value: "portrait", options: [{ value: "portrait", label: "Portrait" }, { value: "landscape", label: "Landscape" }] },
+        { name: "paper", label: "Paper colour", type: "color-swatches", value: "#fffdf7", colors: PAPER_COLORS },
         { name: "cover", label: "Cover", type: "color-swatches" },
       ],
       "Create",
     );
     if (!r) return;
     try {
-      const nb = await api.createNotebook({ title: r.title, folderId, template: r.template as Template, coverColor: r.cover });
+      const size = PAPER_SIZES.find((p) => p.id === r.size) ?? PAPER_SIZES[0];
+      const landscape = r.orientation === "landscape";
+      const nb = await api.createNotebook({
+        title: r.title,
+        folderId,
+        template: r.template as Template,
+        coverColor: r.cover,
+        paperColor: r.paper,
+        width: landscape ? size.h : size.w,
+        height: landscape ? size.w : size.h,
+      });
       this.cb.openNotebook(nb.id);
     } catch (e) {
       reportError(e);

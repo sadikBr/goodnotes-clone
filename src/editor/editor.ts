@@ -1,6 +1,6 @@
 // Notebook editor: page canvas, tools, page sidebar, undo/redo and autosave.
 
-import { api, TEMPLATES, type ExportFormat, type ExportPage, type Notebook, type P2, type Page, type RecognizedShape, type Template } from "../api";
+import { api, PAPER_COLORS, TEMPLATES, type ExportFormat, type ExportPage, type Notebook, type P2, type Page, type RecognizedShape, type Template } from "../api";
 import { ensureFonts, FONT_PRESETS, fontPreset, type FontId } from "../fonts";
 import { getPref, hasPref, setPref } from "../prefs";
 import { confirmDialog, formDialog, h, icon, popupMenu, reportError, sizeControl, toast } from "../ui";
@@ -46,7 +46,7 @@ const TOOLS: { id: Tool; label: string; key: string }[] = [
   { id: "hand", label: "Pan", key: " " },
 ];
 
-const INK_COLORS = ["#111827", "#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2", "#facc15"];
+const INK_COLORS = ["#111827", "#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2", "#facc15", "#ffffff"];
 const STICKY_COLORS = ["#fef08a", "#bbf7d0", "#bfdbfe", "#fbcfe8", "#fed7aa"];
 const HOLD_MS = 550;
 /** Touches this soon after pen activity are treated as a resting palm. */
@@ -355,11 +355,42 @@ export class EditorScreen {
         h("span", { class: "template-card-label" }, t.label),
       ),
     );
+    const colours = h(
+      "div",
+      { class: "swatches paper-colours", role: "radiogroup", "aria-label": "Paper colour" },
+      ...PAPER_COLORS.map((c) =>
+        h("button", {
+          class: "swatch",
+          role: "radio",
+          title: c.label,
+          "aria-label": `${c.label} paper`,
+          "aria-checked": String(c.color.toLowerCase() === this.page.paperColor.toLowerCase()),
+          style: { background: c.color },
+          onclick: () => {
+            close();
+            void this.setPaper({ color: c.color }, false);
+          },
+        }),
+      ),
+    );
     const panel = h(
       "div",
       { class: "template-popover", role: "dialog", "aria-label": "Page paper" },
       h("div", { class: "template-popover-title" }, "Paper for this page"),
       h("div", { class: "template-grid", role: "radiogroup", "aria-label": "Paper style" }, ...cards),
+      h("div", { class: "template-popover-title spaced" }, "Paper colour"),
+      colours,
+      h(
+        "button",
+        {
+          class: "btn apply-all",
+          onclick: () => {
+            close();
+            void this.setPaper({ template: this.page.template, color: this.page.paperColor }, true);
+          },
+        },
+        "Apply this paper to all pages",
+      ),
     );
     const onOutside = (e: Event) => {
       const t = e.target as Node;
@@ -621,7 +652,8 @@ export class EditorScreen {
   private renderPageList() {
     this.pageList.replaceChildren(
       ...this.pages.map((p, i) => {
-        const thumb = p.thumbnail ? h("img", { src: p.thumbnail, alt: "" }) : h("div", { class: "thumb-blank", style: { background: p.paperColor } });
+        const aspect = `${p.width} / ${p.height}`;
+        const thumb = p.thumbnail ? h("img", { src: p.thumbnail, alt: "", style: { aspectRatio: aspect } }) : h("div", { class: "thumb-blank", style: { background: p.paperColor, aspectRatio: aspect } });
         const more = h("button", { class: "icon-btn small page-more", "aria-label": `Page ${i + 1} options` }, icon("more"));
         more.addEventListener("click", (e) => {
           e.stopPropagation();
@@ -710,6 +742,42 @@ export class EditorScreen {
     } catch (e) {
       reportError(e);
     }
+  }
+
+  /** Changes paper style and/or colour for this page, or every page. */
+  private async setPaper(change: { template?: Template; color?: string }, allPages: boolean) {
+    try {
+      await this.flush();
+      const targets = allPages ? this.pages : [this.page];
+      for (const p of targets) {
+        const template = change.template ?? p.template;
+        await api.setPageTemplate(p.id, template, change.color ?? null);
+        p.template = template;
+        if (change.color) p.paperColor = change.color;
+      }
+      this.renderTemplateButton();
+      this.rebuildCache();
+      this.draw();
+      this.scheduleSave(); // refreshes this page's thumbnail
+      if (allPages) {
+        await this.refreshThumbnails(targets.filter((p) => p.id !== this.page.id));
+        toast(`Paper applied to all ${targets.length} pages`);
+      }
+    } catch (e) {
+      reportError(e);
+    }
+  }
+
+  /** Re-renders stored thumbnails for pages not currently open. */
+  private async refreshThumbnails(pages: Page[]) {
+    for (const p of pages) {
+      const els = fromStored(await api.elements(p.id));
+      await preloadImages(els, this.images);
+      const thumb = renderPage(p.template, p.paperColor, p.width, p.height, els, 200 / p.width, this.images).toDataURL("image/jpeg", 0.82);
+      await api.setPageThumbnail(p.id, thumb);
+      p.thumbnail = thumb;
+    }
+    this.renderPageList();
   }
 
   private async setTemplate(template: Template) {

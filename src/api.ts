@@ -81,7 +81,27 @@ export interface NewNotebook {
   coverColor?: string;
   template?: Template;
   paperColor?: string;
+  /** Page size in units of 1/96 inch. */
+  width?: number;
+  height?: number;
 }
+
+/** Paper sizes in units of 1/96 inch (portrait). */
+export const PAPER_SIZES: { id: string; label: string; w: number; h: number }[] = [
+  { id: "a4", label: "A4", w: 794, h: 1123 },
+  { id: "a5", label: "A5", w: 559, h: 794 },
+  { id: "letter", label: "US Letter", w: 816, h: 1056 },
+  { id: "legal", label: "US Legal", w: 816, h: 1344 },
+  { id: "square", label: "Square", w: 900, h: 900 },
+];
+
+export const PAPER_COLORS: { color: string; label: string }[] = [
+  { color: "#ffffff", label: "White" },
+  { color: "#fffdf7", label: "Cream" },
+  { color: "#fdf3c8", label: "Yellow" },
+  { color: "#eef1f4", label: "Grey" },
+  { color: "#22262d", label: "Dark" },
+];
 
 export type P2 = [number, number];
 export type RecognizedShape =
