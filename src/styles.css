@@ -446,12 +446,11 @@ button {
   color: var(--muted);
 }
 .dialog-form input,
-.dialog-form select,
-.template-select {
+.dialog-form select {
   padding: 8px 10px;
   border-radius: 8px;
   border: 1px solid var(--border);
-  background: var(--surface-2);
+  background-color: var(--surface-2);
 }
 .dialog-actions {
   display: flex;
@@ -1067,4 +1066,118 @@ button {
   padding: 0 12px;
   font-size: 13px;
   font-weight: 600;
+}
+
+/* ------------------------------------------- dropdowns (native <select>) */
+
+/* Replace the platform look (GTK on Linux) with one that matches the app. */
+select {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 36px !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a919c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 14px 14px;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+select:hover {
+  border-color: var(--muted);
+}
+select:focus {
+  outline: none;
+}
+select:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+select option {
+  background: var(--surface);
+  color: var(--text);
+}
+
+/* ---------------------------------------------------- paper picker */
+
+.template-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 500;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.template-picker:hover {
+  background: var(--surface-2);
+}
+.template-picker[aria-expanded="true"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.template-picker > .icon,
+.template-picker > .icon svg {
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+}
+.template-thumb {
+  display: inline-flex;
+  border-radius: 3px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--border);
+}
+.template-name {
+  white-space: nowrap;
+}
+
+.template-popover {
+  position: fixed;
+  z-index: 60;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22);
+}
+.template-popover-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0 2px 10px;
+}
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 108px);
+  gap: 10px;
+}
+.template-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 6px 8px;
+  border: 1.5px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+}
+.template-card canvas {
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px var(--border), 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+.template-card:hover {
+  background: var(--surface-2);
+}
+.template-card[aria-checked="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.template-card-label {
+  font-size: 12px;
 }

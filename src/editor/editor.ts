@@ -31,7 +31,7 @@ import { inkToTextDialog } from "./inkToText";
 import { beautify, detectBrace, recognizeShape } from "./beautify";
 import { anchorsAsTargets, paperTargets, snapMove, type Anchor, type Guide, type Target } from "./snap";
 import { fromStored, newId, nextZ, PEN_STYLES, toStored, type El, type PenStyle, type Pt, type ShapeEl, type StickyEl, type StrokeEl, type TextEl } from "./model";
-import { drawElement, drawGuides, drawHandles, drawLasso, drawSelection, drawStroke, drawTemplate, fitTextToBox, paperLayout, preloadImages, renderPage, textAnchors, type ImageCache } from "./render";
+import { drawElement, drawGuides, drawHandles, drawLasso, drawSelection, drawStroke, drawTemplate, fitTextToBox, paperLayout, preloadImages, renderPage, templatePreview, textAnchors, type ImageCache } from "./render";
 
 type Tool = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "sticky" | "hand";
 
@@ -295,16 +295,14 @@ export class EditorScreen {
   }
 
   private headerRight(): HTMLElement {
-    const template = h("select", { class: "template-select", "aria-label": "Page template", title: "Page template" }, ...TEMPLATES.map((t) => h("option", { value: t.id }, t.label)));
-    template.addEventListener("change", () => this.setTemplate(template.value as Template));
-    this.templateSelect = template;
+    this.templateBtn.addEventListener("click", () => this.toggleTemplatePicker());
     return h(
       "div",
       { class: "header-right" },
       h("button", { class: "icon-btn", "aria-label": "Undo", title: "Undo (Ctrl+Z)", onclick: () => this.undo() }, icon("undo")),
       h("button", { class: "icon-btn", "aria-label": "Redo", title: "Redo (Ctrl+Shift+Z)", onclick: () => this.redo() }, icon("redo")),
       h("span", { class: "divider" }),
-      template,
+      this.templateBtn,
       h("button", { class: "icon-btn", "aria-label": "Insert image", title: "Insert image", onclick: () => this.fileInput.click() }, icon("image")),
       this.exportButton(),
       h("span", { class: "divider" }),
@@ -312,7 +310,79 @@ export class EditorScreen {
     );
   }
 
-  private templateSelect!: HTMLSelectElement;
+  private templateBtn = h("button", { class: "template-picker", "aria-haspopup": "dialog", "aria-expanded": "false", title: "Page paper" });
+
+  /** Shows the current paper as a small preview plus its name. */
+  private renderTemplateButton() {
+    if (!this.page) return;
+    const label = TEMPLATES.find((t) => t.id === this.page.template)?.label ?? this.page.template;
+    this.templateBtn.setAttribute("aria-label", `Page paper: ${label}`);
+    this.templateBtn.replaceChildren(
+      h("span", { class: "template-thumb" }, templatePreview(this.page.template, this.page.paperColor, 22, 28)),
+      h("span", { class: "template-name" }, label),
+      icon("down"),
+    );
+  }
+
+  /** Opens a panel of paper styles with live previews. */
+  private toggleTemplatePicker() {
+    const existing = document.querySelector(".template-popover");
+    if (existing) {
+      existing.remove();
+      this.templateBtn.setAttribute("aria-expanded", "false");
+      return;
+    }
+    const current = this.page.template;
+    const close = () => {
+      panel.remove();
+      this.templateBtn.setAttribute("aria-expanded", "false");
+      document.removeEventListener("pointerdown", onOutside, true);
+      document.removeEventListener("keydown", onKey, true);
+    };
+    const cards = TEMPLATES.map((t) =>
+      h(
+        "button",
+        {
+          class: "template-card",
+          role: "radio",
+          "aria-checked": String(t.id === current),
+          onclick: () => {
+            close();
+            if (t.id !== this.page.template) void this.setTemplate(t.id);
+          },
+        },
+        templatePreview(t.id, this.page.paperColor, 96, 120),
+        h("span", { class: "template-card-label" }, t.label),
+      ),
+    );
+    const panel = h(
+      "div",
+      { class: "template-popover", role: "dialog", "aria-label": "Page paper" },
+      h("div", { class: "template-popover-title" }, "Paper for this page"),
+      h("div", { class: "template-grid", role: "radiogroup", "aria-label": "Paper style" }, ...cards),
+    );
+    const onOutside = (e: Event) => {
+      const t = e.target as Node;
+      if (!panel.contains(t) && !this.templateBtn.contains(t)) close();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        close();
+        this.templateBtn.focus();
+      }
+    };
+    document.body.append(panel);
+    const r = this.templateBtn.getBoundingClientRect();
+    panel.style.top = `${r.bottom + 8}px`;
+    panel.style.left = `${Math.max(8, Math.min(r.right - panel.offsetWidth, window.innerWidth - panel.offsetWidth - 8))}px`;
+    this.templateBtn.setAttribute("aria-expanded", "true");
+    setTimeout(() => {
+      document.addEventListener("pointerdown", onOutside, true);
+      document.addEventListener("keydown", onKey, true);
+    });
+    (panel.querySelector('[aria-checked="true"]') as HTMLElement | null)?.focus();
+  }
 
   private exportButton(): HTMLButtonElement {
     const btn = h("button", { class: "icon-btn", "aria-label": "Export", title: "Export", "aria-haspopup": "menu" }, icon("download"));
@@ -543,7 +613,7 @@ export class EditorScreen {
       h("button", { class: "icon-btn small", "aria-label": "Zoom in", onclick: () => this.setZoom(this.zoom * 1.2) }, icon("zoomIn")),
       h("button", { class: "icon-btn small", "aria-label": "Fit width", title: "Fit width (Ctrl+0)", onclick: () => this.fitWidth() }, icon("fit")),
     );
-    if (this.templateSelect && this.page) this.templateSelect.value = this.page.template;
+    this.renderTemplateButton();
   }
 
   // ----------------------------------------------------------- page sidebar
@@ -646,6 +716,7 @@ export class EditorScreen {
     try {
       await api.setPageTemplate(this.page.id, template, null);
       this.page.template = template;
+      this.renderTemplateButton();
       this.rebuildCache();
       this.draw();
       this.scheduleSave();

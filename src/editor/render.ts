@@ -533,3 +533,24 @@ export async function preloadImages(elements: El[], images: ImageCache): Promise
       }),
   );
 }
+
+/**
+ * A small preview of a paper template. Shows the page's top-left corner
+ * (the full page would make lines too faint at thumbnail size).
+ */
+export function templatePreview(template: Template, paper: string, cssW: number, cssH: number): HTMLCanvasElement {
+  const dpr = Math.max(2, window.devicePixelRatio || 1);
+  const region = 300; // page units shown across
+  const scale = cssW / region;
+  const c = document.createElement("canvas");
+  c.width = Math.round(cssW * dpr);
+  c.height = Math.round(cssH * dpr);
+  c.style.width = `${cssW}px`;
+  c.style.height = `${cssH}px`;
+  const ctx = c.getContext("2d")!;
+  ctx.scale(scale * dpr, scale * dpr);
+  // Start a little above the first ruled line so lines are visible.
+  ctx.translate(-40, -70);
+  drawTemplate(ctx, template, 794, 1123, paper);
+  return c;
+}
