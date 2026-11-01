@@ -16,7 +16,10 @@ no Goodnotes code, assets or branding.
 - **Paper:** blank, ruled, narrow ruled, grid, dotted and Cornell templates, switchable per page
 - **Pen types:** fountain pen (pressure-sensitive), ballpoint, pencil (grain texture), calligraphy (flat 45° nib) and brush pen (tapered); translucent highlighter, stroke eraser, colour palette and size slider
 - **Pen-only mode:** when a stylus is detected, only the pen writes; finger and mouse scroll, and two fingers pinch-zoom. Touches while the pen is writing or hovering are ignored (palm rejection). Toggle with the pen button in the top-right; the choice is remembered
-- **Shapes:** pick line, arrow, rectangle, ellipse/circle, triangle, diamond or star and drag (Shift for squares, circles and 45° lines; optional fill), or use *Auto* / *draw and hold* with the pen to turn rough strokes into clean shapes (recognizer in Rust)
+- **Shapes:** pick line, arrow, rectangle, ellipse/circle, triangle, diamond or star and drag (Shift for squares, circles and 45° lines; optional fill)
+- **Auto shapes and ink refinement:** with the Shape tool in *Auto* mode, every stroke is cleaned up: basic shapes snap to perfect geometry, curly braces in any orientation are redrawn cleanly, and everything else (graphs, curves, brackets…) is smoothed, with straight runs made straight and sharp corners kept sharp
+- **Hold to refine:** keep the pen (or mouse) down at the end of a stroke and it snaps to its refined form while you're still holding. Keep moving to rotate and resize it; hold still again to switch to moving it (and back). It's placed only when you lift. With the pen tool this applies to shapes and braces only, so handwriting is never altered
+- **Alignment guides:** when moving text, magenta guides appear and the text snaps when its baseline or letter centre lines up with other text, sits on a ruled line or centred between two, or its ink lines up left/right/centre with other text, the margin or the page centre. Guides follow the letters, not the text box. Hold Alt to move freely
 - **Objects:** text boxes, sticky notes, images (insert or paste)
 - **Handwriting fonts:** eight presets for typed text: Clean, Quick notes, Neat print, Casual, Bubbly, Light pencil, Cursive and Architect. Pick one before or while typing, or lasso-select text boxes and sticky notes and change the font or size (A− / A+) from the selection bar. The fonts are bundled, so they work offline (SIL Open Font License; see `public/third-party-licenses.txt`)
 - **Sizes:** each tool shows its exact size in px, with one-tap presets, − / + buttons and a box to type a value. Sizes are remembered
@@ -45,7 +48,7 @@ no Goodnotes code, assets or branding.
 ```
 src-tauri/            Rust backend (Tauri 2)
   src/db.rs           SQLite schema, library/page/element persistence, search (+ tests)
-  src/ink.rs          Stroke simplification and shape recognition (+ tests)
+  src/ink.rs          Stroke simplification (+ tests)
   src/commands.rs     Tauri command layer
   src/export.rs       PDF and PowerPoint writers (+ tests)
   src/handwriting.rs  Handwriting recognition via Windows Ink (Windows only)
@@ -54,7 +57,8 @@ src/                  TypeScript frontend (Vite, no framework)
   api.ts              Typed backend API (Tauri invoke, or an in-browser mock)
   mockBackend.ts      localStorage backend for browser previews and UI tests
   library.ts          Library screen
-  editor/             Canvas editor: model, geometry, rendering, tools
+  editor/             Canvas editor: model, geometry, rendering, tools,
+                      beautify.ts (shape/brace recognition, smoothing), snap.ts (guides)
 docs/reverse-engineering/   Goodnotes web architecture reports
 ```
 

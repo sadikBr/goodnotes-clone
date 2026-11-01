@@ -13,10 +13,13 @@ import {
   hitForSelect,
   hitTest,
   insideLasso,
+  isClosedShape,
   isHeld,
   isResizable,
   rectContains,
   resizeElement,
+  geomBox,
+  transformShape,
   translate,
   unionRects,
   type Handle,
@@ -24,8 +27,10 @@ import {
   type ShapeKind,
 } from "./geometry";
 import { inkToTextDialog } from "./inkToText";
+import { beautify, detectBrace, recognizeShape } from "./beautify";
+import { anchorsAsTargets, paperTargets, snapMove, type Anchor, type Guide, type Target } from "./snap";
 import { fromStored, newId, nextZ, PEN_STYLES, toStored, type El, type PenStyle, type Pt, type ShapeEl, type StickyEl, type StrokeEl, type TextEl } from "./model";
-import { drawElement, drawHandles, drawLasso, drawSelection, drawStroke, drawTemplate, fitTextToBox, preloadImages, renderPage, type ImageCache } from "./render";
+import { drawElement, drawGuides, drawHandles, drawLasso, drawSelection, drawStroke, drawTemplate, fitTextToBox, paperLayout, preloadImages, renderPage, textAnchors, type ImageCache } from "./render";
 
 type Tool = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "sticky" | "hand";
 
@@ -92,13 +97,27 @@ const EXPORT_SCALE: Record<ExportFormat, number> = { pdf: 3, png: 3, pptx: 2 };
 const MAX_UNDO = 100;
 
 type Gesture =
-  | { type: "draw"; tool: "pen" | "highlighter" | "shape"; points: Pt[]; times: number[]; preview: ShapeEl | null; holdTimer: number }
+  | { type: "draw"; tool: "pen" | "highlighter" | "shape"; points: Pt[]; times: number[]; preview: ShapeEl | null; holdTimer: number; held: Held | null }
   | { type: "erase"; changed: boolean }
   | { type: "lasso"; points: P2[] }
-  | { type: "move"; start: P2; original: El[]; dx: number; dy: number }
+  | { type: "move"; start: P2; original: El[]; dx: number; dy: number; snap: { anchors: Anchor[]; targets: Target[] } | null; guides: Guide[] }
   | { type: "pan"; sx: number; sy: number; left: number; top: number }
   | { type: "shape"; start: P2; preview: ShapeEl | null }
   | { type: "handle"; handle: Handle; original: El; preview: El };
+
+/**
+ * After a held stroke snaps to a refined shape, the pen keeps control of it
+ * until it lifts: "transform" rotates and resizes around the pivot so the
+ * grabbed point follows the pen; "move" drags it. Holding still toggles.
+ */
+interface Held {
+  mode: "transform" | "move";
+  base: ShapeEl;
+  anchor: P2;
+  pivot: P2;
+  still: P2;
+  stillTimer: number;
+}
 
 /** Finger / mouse navigation while in pen-only mode. */
 type Nav =
@@ -707,7 +726,10 @@ export class EditorScreen {
     ctx.setTransform(this.pixelScale, 0, 0, this.pixelScale, 0, 0);
     const g = this.gesture;
     if (g?.type === "draw") {
-      if (g.preview) drawElement(ctx, g.preview, this.images, () => {});
+      if (g.preview) {
+        drawElement(ctx, g.preview, this.images, () => {});
+        if (g.held) this.drawHeldHint(ctx, g.preview, g.held.mode);
+      }
       else
         drawStroke(ctx, {
           id: "live",
@@ -725,6 +747,7 @@ export class EditorScreen {
       drawLasso(ctx, g.points, this.zoom);
     } else if (g?.type === "move") {
       for (const el of g.original) drawElement(ctx, translate(el, g.dx, g.dy), this.images, () => {});
+      drawGuides(ctx, g.guides, this.zoom);
     } else if (g?.type === "handle") {
       drawElement(ctx, g.preview, this.images, () => {});
     }
@@ -871,7 +894,7 @@ export class EditorScreen {
           break;
         }
         // Freehand ink; with the shape tool in auto mode it is recognised on lift.
-        this.gesture = { type: "draw", tool, points: [[x, y, this.pressure(e)]], times: [e.timeStamp], preview: null, holdTimer: 0 };
+        this.gesture = { type: "draw", tool, points: [[x, y, this.pressure(e)]], times: [e.timeStamp], preview: null, holdTimer: 0, held: null };
         this.armHold();
         break;
       case "eraser":
@@ -890,7 +913,7 @@ export class EditorScreen {
         const sel = this.selectionBounds();
         if (sel && rectContains({ x: sel.x - 8, y: sel.y - 8, w: sel.w + 16, h: sel.h + 16 }, x, y)) {
           const original = this.elements.filter((el) => this.selection.has(el.id));
-          this.gesture = { type: "move", start: [x, y], original, dx: 0, dy: 0 };
+          this.gesture = { type: "move", start: [x, y], original, dx: 0, dy: 0, snap: this.buildSnap(original), guides: [] };
           for (const el of original) this.hiddenIds.add(el.id);
           this.rebuildCache();
         } else {
@@ -941,7 +964,11 @@ export class EditorScreen {
     const samples = events.length ? events : [e];
     switch (g.type) {
       case "draw": {
-        if (g.preview) return; // shape is locked in until the pen lifts
+        if (g.preview) {
+          // Refined shape stays under the pen: rotate/resize or move it.
+          if (g.held) this.updateHeld(g, this.cursor);
+          break;
+        }
         for (const s of samples) {
           const [x, y] = this.point(s);
           const last = g.points[g.points.length - 1];
@@ -961,6 +988,13 @@ export class EditorScreen {
       case "move":
         g.dx = this.cursor[0] - g.start[0];
         g.dy = this.cursor[1] - g.start[1];
+        g.guides = [];
+        if (g.snap && !e.altKey) {
+          const snapped = snapMove(g.snap.anchors, g.snap.targets, g.dx, g.dy, 7 / this.zoom);
+          g.dx = snapped.dx;
+          g.dy = snapped.dy;
+          g.guides = snapped.guides;
+        }
         break;
       case "handle":
         g.preview = resizeElement(g.original, g.handle, this.cursor, e.shiftKey);
@@ -983,32 +1017,115 @@ export class EditorScreen {
     const g = this.gesture;
     if (g?.type !== "draw") return;
     window.clearTimeout(g.holdTimer);
-    g.holdTimer = window.setTimeout(async () => {
+    g.holdTimer = window.setTimeout(() => {
       if (this.gesture !== g || g.preview || g.points.length < 4) return;
       const now = performance.now();
       const times = [...g.times.slice(0, -1), Math.max(now, g.times[g.times.length - 1])];
       if (!isHeld(times, g.points, HOLD_MS - 50, 4 / this.zoom)) return;
-      const shape = await this.recognize(g);
-      if (shape && this.gesture === g) {
-        g.preview = shape;
-        this.draw();
-      }
+      const shape = this.refine(g);
+      if (!shape) return;
+      g.preview = shape;
+      const last = g.points[g.points.length - 1];
+      const anchor: P2 = [last[0], last[1]];
+      g.held = { mode: "transform", base: shape, anchor, pivot: this.pivotFor(shape), still: anchor, stillTimer: 0 };
+      this.armModeToggle(g);
+      this.draw();
     }, HOLD_MS);
   }
 
-  private async recognize(g: Extract<Gesture, { type: "draw" }>): Promise<ShapeEl | null> {
-    try {
-      const shape = await api.recognizeShape(g.points.map((p) => [p[0], p[1]] as P2));
-      if (!shape) return null;
-      const tool = g.tool === "highlighter" ? "highlighter" : g.tool;
-      const color = this.colors[tool];
-      // A highlighter line stays a translucent stroke (straightened) rather than a shape.
-      if (tool === "highlighter") return shape.kind === "line" ? { id: newId(), z: 0, kind: "shape", shape, color, width: this.widths.highlighter, fill: null } : null;
-      return { id: newId(), z: nextZ(this.elements), kind: "shape", shape, color, width: this.widths[tool], fill: null };
-    } catch (e) {
-      reportError(e);
-      return null;
+  /**
+   * Refines a stroke: the Shape tool's Auto mode always returns something
+   * (shape, brace or smoothed path); the pen only snaps to shapes and braces
+   * so handwriting is never altered; the highlighter only straightens.
+   */
+  private refine(g: Extract<Gesture, { type: "draw" }>): ShapeEl | null {
+    const pts = g.points.map((p) => [p[0], p[1]] as P2);
+    let shape: RecognizedShape | null;
+    if (g.tool === "shape") shape = beautify(pts);
+    else if (g.tool === "highlighter") {
+      const s = recognizeShape(pts);
+      shape = s?.kind === "line" ? s : null;
+    } else shape = recognizeShape(pts) ?? detectBrace(pts);
+    if (!shape) return null;
+    return { id: newId(), z: nextZ(this.elements), kind: "shape", shape, color: this.colors[g.tool], width: this.widths[g.tool], fill: null };
+  }
+
+  /** Lines pivot around their start (the end follows the pen); others around their centre. */
+  private pivotFor(el: ShapeEl): P2 {
+    const s = el.shape;
+    if ((s.kind === "line" || s.kind === "arrow") && s.points.length) return s.points[0];
+    const r = geomBox(el);
+    return [r.x + r.w / 2, r.y + r.h / 2];
+  }
+
+  /** Holding still for a moment switches between rotate/resize and move. */
+  private armModeToggle(g: Extract<Gesture, { type: "draw" }>) {
+    const held = g.held;
+    if (!held) return;
+    window.clearTimeout(held.stillTimer);
+    held.stillTimer = window.setTimeout(() => {
+      if (this.gesture !== g || !g.held || !g.preview) return;
+      held.mode = held.mode === "transform" ? "move" : "transform";
+      held.base = g.preview;
+      held.anchor = held.still;
+      held.pivot = this.pivotFor(g.preview);
+      this.draw();
+    }, HOLD_MS + 150);
+  }
+
+  private updateHeld(g: Extract<Gesture, { type: "draw" }>, p: P2) {
+    const h = g.held!;
+    if (Math.hypot(p[0] - h.still[0], p[1] - h.still[1]) > 4 / this.zoom) {
+      h.still = p;
+      this.armModeToggle(g);
     }
+    let shape: RecognizedShape;
+    if (h.mode === "move") {
+      shape = transformShape(h.base.shape, h.pivot, 0, 1, p[0] - h.anchor[0], p[1] - h.anchor[1]);
+    } else {
+      const v0: P2 = [h.anchor[0] - h.pivot[0], h.anchor[1] - h.pivot[1]];
+      const v1: P2 = [p[0] - h.pivot[0], p[1] - h.pivot[1]];
+      const l0 = Math.hypot(v0[0], v0[1]);
+      if (l0 < 3 / this.zoom) shape = h.base.shape;
+      else {
+        const scale = Math.max(0.05, Math.min(20, Math.hypot(v1[0], v1[1]) / l0));
+        const angle = Math.atan2(v1[1], v1[0]) - Math.atan2(v0[1], v0[0]);
+        shape = transformShape(h.base.shape, h.pivot, angle, scale);
+      }
+    }
+    g.preview = { ...h.base, shape };
+  }
+
+  private drawHeldHint(ctx: CanvasRenderingContext2D, el: ShapeEl, mode: Held["mode"]) {
+    const text = mode === "transform" ? "Rotate & resize · hold still to move" : "Move · hold still to rotate & resize";
+    const r = bounds(el);
+    const z = this.zoom;
+    ctx.save();
+    ctx.font = `${12 / z}px system-ui, sans-serif`;
+    const w = ctx.measureText(text).width + 16 / z;
+    const hgt = 22 / z;
+    const x = Math.max(4 / z, Math.min(this.page.width - w - 4 / z, r.x + r.w / 2 - w / 2));
+    const y = Math.max(4 / z, r.y - hgt - 10 / z);
+    ctx.fillStyle = "rgba(17, 24, 39, 0.85)";
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, hgt, hgt / 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, x + 8 / z, y + hgt / 2);
+    ctx.restore();
+  }
+
+  /** Alignment anchors for moving text, and what they can line up with. */
+  private buildSnap(moving: El[]): { anchors: Anchor[]; targets: Target[] } | null {
+    const texts = moving.filter((el): el is TextEl => el.kind === "text" && el.text.trim().length > 0);
+    if (!texts.length) return null;
+    const ids = new Set(moving.map((el) => el.id));
+    const targets: Target[] = [];
+    for (const el of this.elements) if (!ids.has(el.id) && el.kind === "text" && el.text.trim()) targets.push(...anchorsAsTargets(textAnchors(el)));
+    const paper = paperLayout(this.page.template, this.page.width, this.page.height);
+    targets.push(...paperTargets(paper.rules, paper.ruleSpan, paper.margin, this.page.width, this.page.height));
+    return { anchors: texts.flatMap(textAnchors), targets };
   }
 
   private async onUp(e: PointerEvent) {
@@ -1022,8 +1139,9 @@ export class EditorScreen {
     switch (g.type) {
       case "draw": {
         window.clearTimeout(g.holdTimer);
+        if (g.held) window.clearTimeout(g.held.stillTimer);
         let shape = g.preview;
-        if (!shape && g.tool === "shape") shape = await this.recognize(g);
+        if (!shape && g.tool === "shape") shape = this.refine(g);
         this.gesture = null;
         if (shape && g.tool === "highlighter" && shape.shape.kind === "line") {
           const [a, b] = shape.shape.points;
@@ -1115,7 +1233,7 @@ export class EditorScreen {
 
   private makeShapeEl(shape: RecognizedShape): ShapeEl {
     const color = this.colors.shape;
-    const closed = shape.kind !== "line" && shape.kind !== "arrow";
+    const closed = isClosedShape(shape);
     return { id: newId(), z: 0, kind: "shape", shape, color, width: this.widths.shape, fill: this.shapeFill && closed ? `${color}33` : null };
   }
 
@@ -1170,7 +1288,10 @@ export class EditorScreen {
 
   private cancelGesture() {
     const g = this.gesture;
-    if (g?.type === "draw") window.clearTimeout(g.holdTimer);
+    if (g?.type === "draw") {
+      window.clearTimeout(g.holdTimer);
+      if (g.held) window.clearTimeout(g.held.stillTimer);
+    }
     if (g?.type === "erase" && g.changed) this.changed();
     this.gesture = null;
     this.hiddenIds.clear();
@@ -1349,7 +1470,7 @@ export class EditorScreen {
     const shapeControls: HTMLElement[] = [];
     const single = this.singleResizable();
     if (single?.kind === "shape") {
-      const closed = single.shape.kind !== "line" && single.shape.kind !== "arrow";
+      const closed = isClosedShape(single.shape);
       const kindBtn = h("button", { class: "icon-btn small apply-font", "aria-haspopup": "menu", title: "Change shape" }, icon(SHAPE_KINDS.find((k) => k.id === single.shape.kind)?.icon ?? "shape"), icon("down"));
       kindBtn.addEventListener("click", () =>
         popupMenu(

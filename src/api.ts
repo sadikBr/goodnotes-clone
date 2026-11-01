@@ -86,7 +86,9 @@ export interface NewNotebook {
 export type P2 = [number, number];
 export type RecognizedShape =
   | { kind: "line" | "arrow" | "triangle" | "rectangle" | "polygon"; points: P2[] }
-  | { kind: "ellipse"; cx: number; cy: number; rx: number; ry: number };
+  | { kind: "ellipse"; cx: number; cy: number; rx: number; ry: number }
+  /** A smoothed freehand path (graphs, curves, braces...). */
+  | { kind: "path"; points: P2[]; closed: boolean };
 
 export type ExportFormat = "pdf" | "pptx" | "png";
 
@@ -136,7 +138,6 @@ export interface Backend {
   elements(pageId: string): Promise<StoredElement[]>;
   saveElements(pageId: string, elements: StoredElement[]): Promise<void>;
   search(query: string): Promise<SearchHit[]>;
-  recognizeShape(points: P2[]): Promise<RecognizedShape | null>;
   simplifyStroke(points: [number, number, number][], epsilon: number): Promise<[number, number, number][]>;
   /** Asks where to save; resolves to null when the user cancels. */
   chooseExportPath(fileName: string, format: ExportFormat): Promise<string | null>;
@@ -183,7 +184,6 @@ class TauriBackend implements Backend {
   elements = (pageId: string) => invoke<StoredElement[]>("elements", { pageId });
   saveElements = (pageId: string, elements: StoredElement[]) => invoke<void>("save_elements", { pageId, elements });
   search = (query: string) => invoke<SearchHit[]>("search", { query });
-  recognizeShape = (points: P2[]) => invoke<RecognizedShape | null>("recognize_shape", { points });
   simplifyStroke = (points: [number, number, number][], epsilon: number) =>
     invoke<[number, number, number][]>("simplify_stroke", { points, epsilon });
   chooseExportPath = async (fileName: string, format: ExportFormat) => {

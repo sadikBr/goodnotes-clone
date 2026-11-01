@@ -14,7 +14,6 @@ import type {
   Notebook,
   P2,
   Page,
-  RecognizedShape,
   SearchHit,
   StoredElement,
   Template,
@@ -320,10 +319,6 @@ export class MockBackend implements Backend {
       }
     }
     return hits;
-  }
-
-  async recognizeShape(_points: P2[]): Promise<RecognizedShape | null> {
-    return null;
   }
 
   async simplifyStroke(points: [number, number, number][], _epsilon: number) {

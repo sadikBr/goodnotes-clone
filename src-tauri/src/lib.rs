@@ -48,7 +48,6 @@ pub fn run() {
             commands::elements,
             commands::save_elements,
             commands::search,
-            commands::recognize_shape,
             commands::simplify_stroke,
             commands::default_export_dir,
             commands::export_document,

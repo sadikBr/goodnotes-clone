@@ -1,10 +1,36 @@
 import type { Template } from "../api";
-import { handlesFor, pressureWidth, setLineCounter, textHeight, type Rect } from "./geometry";
+import { handlesFor, isClosedShape, pressureWidth, setLineCounter, textHeight, type Rect } from "./geometry";
 import { fontCss } from "../fonts";
 import type { El, Pt, ShapeEl, StickyEl, StrokeEl, TextEl } from "./model";
+import type { Anchor, Guide } from "./snap";
 
 const LINE_COLOR = "rgba(96, 140, 200, 0.35)";
 const MARGIN_COLOR = "rgba(220, 80, 80, 0.45)";
+
+/** Where the paper's writing lines and margin are (shared with alignment guides). */
+export function paperLayout(template: Template, w: number, h: number): { rules: number[]; ruleSpan: [number, number]; margin: number | null } {
+  const rules: number[] = [];
+  switch (template) {
+    case "ruled":
+    case "narrow-ruled": {
+      const gap = template === "ruled" ? 34 : 26;
+      for (let y = 110; y < h - 30; y += gap) rules.push(y);
+      return { rules, ruleSpan: [0, w], margin: 90 };
+    }
+    case "grid":
+    case "dotted":
+      for (let y = 24; y < h; y += 24) rules.push(y);
+      return { rules, ruleSpan: [0, w], margin: null };
+    case "cornell": {
+      const cue = Math.round(w * 0.28);
+      const summary = h - Math.round(h * 0.2);
+      for (let y = 110; y < summary - 10; y += 34) rules.push(y);
+      return { rules, ruleSpan: [cue, w], margin: cue };
+    }
+    case "blank":
+      return { rules, ruleSpan: [0, w], margin: null };
+  }
+}
 
 export function drawTemplate(ctx: CanvasRenderingContext2D, template: Template, w: number, h: number, paper: string) {
   ctx.fillStyle = paper;
@@ -27,8 +53,7 @@ export function drawTemplate(ctx: CanvasRenderingContext2D, template: Template, 
   switch (template) {
     case "ruled":
     case "narrow-ruled": {
-      const gap = template === "ruled" ? 34 : 26;
-      for (let y = 110; y < h - 30; y += gap) hline(y);
+      for (const y of paperLayout(template, w, h).rules) hline(y);
       ctx.strokeStyle = MARGIN_COLOR;
       vline(90);
       break;
@@ -44,7 +69,7 @@ export function drawTemplate(ctx: CanvasRenderingContext2D, template: Template, 
     case "cornell": {
       const cue = Math.round(w * 0.28);
       const summary = h - Math.round(h * 0.2);
-      for (let y = 110; y < summary - 10; y += 34) hline(y, cue, w);
+      for (const y of paperLayout(template, w, h).rules) hline(y, cue, w);
       ctx.strokeStyle = MARGIN_COLOR;
       vline(cue, 70, summary);
       hline(70);
@@ -235,9 +260,9 @@ function drawShape(ctx: CanvasRenderingContext2D, el: ShapeEl) {
   } else {
     ctx.moveTo(s.points[0][0], s.points[0][1]);
     for (const p of s.points.slice(1)) ctx.lineTo(p[0], p[1]);
-    if (s.kind !== "line" && s.kind !== "arrow") ctx.closePath();
+    if (isClosedShape(s)) ctx.closePath();
   }
-  if (el.fill && s.kind !== "line" && s.kind !== "arrow") {
+  if (el.fill && isClosedShape(s)) {
     ctx.fillStyle = el.fill;
     ctx.fill();
   }
@@ -293,6 +318,73 @@ export function fitTextToBox(text: string, font: string | undefined, box: Rect):
   const byHeight = (box.h / lines) * 1.15;
   const fontSize = Math.round(Math.min(160, Math.max(10, Math.min(byWidth, byHeight * 1.6))));
   return { fontSize, width: Math.ceil(measureText(text, font, fontSize) + fontSize * 0.4) };
+}
+
+/**
+ * Alignment anchors from the rendered glyphs: per line the baseline and the
+ * x-height centre, and for the block the ink's left/right edges and centre.
+ */
+export function textAnchors(el: TextEl): Anchor[] {
+  measureCtx ??= document.createElement("canvas").getContext("2d");
+  const ctx = measureCtx;
+  if (!ctx) return [];
+  ctx.font = fontCss(el.font, el.fontSize);
+  ctx.textBaseline = "top";
+  const lineH = el.fontSize * 1.35;
+  const baseOff = ctx.measureText("H").actualBoundingBoxDescent;
+  const xm = ctx.measureText("x");
+  const midOff = (xm.actualBoundingBoxDescent - xm.actualBoundingBoxAscent) / 2;
+  const out: Anchor[] = [];
+  let left = Infinity, right = -Infinity, top = Infinity, bottom = -Infinity;
+  wrapLines(ctx, el.text, el.w).forEach((line, i) => {
+    if (!line.trim()) return;
+    const m = ctx.measureText(line);
+    const lineTop = el.y + i * lineH;
+    const l = el.x - m.actualBoundingBoxLeft;
+    const r = el.x + m.actualBoundingBoxRight;
+    out.push({ axis: "y", kind: "baseline", value: lineTop + baseOff, span: [l, r] }, { axis: "y", kind: "mid", value: lineTop + midOff, span: [l, r] });
+    left = Math.min(left, l);
+    right = Math.max(right, r);
+    top = Math.min(top, lineTop - m.actualBoundingBoxAscent);
+    bottom = Math.max(bottom, lineTop + m.actualBoundingBoxDescent);
+  });
+  ctx.textBaseline = "alphabetic";
+  if (out.length) {
+    const span: [number, number] = [top, bottom];
+    out.push({ axis: "x", kind: "left", value: left, span }, { axis: "x", kind: "right", value: right, span }, { axis: "x", kind: "center", value: (left + right) / 2, span });
+  }
+  return out;
+}
+
+/** Alignment guides: thin magenta lines with a small label. */
+export function drawGuides(ctx: CanvasRenderingContext2D, guides: Guide[], zoom: number) {
+  if (!guides.length) return;
+  ctx.save();
+  ctx.strokeStyle = "#db2777";
+  ctx.fillStyle = "#db2777";
+  ctx.lineWidth = 1.25 / zoom;
+  ctx.font = `${11 / zoom}px system-ui, sans-serif`;
+  ctx.textBaseline = "bottom";
+  for (const g of guides) {
+    ctx.beginPath();
+    if (g.axis === "y") {
+      ctx.moveTo(g.from - 12 / zoom, g.value);
+      ctx.lineTo(g.to + 12 / zoom, g.value);
+    } else {
+      ctx.moveTo(g.value, g.from - 12 / zoom);
+      ctx.lineTo(g.value, g.to + 12 / zoom);
+    }
+    ctx.stroke();
+    const lx = g.labelAt[0];
+    const ly = g.axis === "y" ? g.labelAt[1] - 3 / zoom : g.labelAt[1];
+    const tw = ctx.measureText(g.label).width;
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.fillRect(lx - 2 / zoom, ly - 13 / zoom, tw + 4 / zoom, 14 / zoom);
+    ctx.restore();
+    ctx.fillText(g.label, lx, ly);
+  }
+  ctx.restore();
 }
 
 function drawText(ctx: CanvasRenderingContext2D, el: TextEl) {

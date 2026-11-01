@@ -14,7 +14,7 @@ Goodnotes code, assets, templates or branding are used.
 | Event log + CRDT sync | **Not implemented.** Inkleaf is single-device; each page's elements are saved atomically as rows. A CRDT layer (e.g. `yrs`, as Goodnotes uses) is the natural next step for sync. |
 | Tombstone / recover for documents and folders | `trashed_at` soft deletes with recover and "delete forever"; a notebook in a trashed folder recovers to the root |
 | Page operations (`movePages`, `copyPages`, `trashPage`, `relabelPage`, …) | Add/insert, duplicate, move up/down, delete (keeps at least one page), bookmark |
-| `ShapeBeautifier` / draw-and-hold shapes | `ink::recognize` in Rust: line, triangle, rectangle (snapped axis-aligned or squared up), polygon, circle/ellipse. Used by the Shape tool and by holding the pen still at the end of a stroke |
+| `ShapeBeautifier`, `HandwritingBeautification` / draw-and-hold shapes | `editor/beautify.ts`: basic shapes (line, triangle, rectangle, polygon, circle/ellipse), curly braces, and corner-preserving smoothing for everything else. Runs live while the pen is held; the held shape can then be rotated, resized and moved before lifting |
 | Stroke processing | `ink::simplify` (Ramer–Douglas–Peucker, keeping pressure) on every pen stroke |
 | `scribbleToErase`, `circleToLasso` gestures | Stroke eraser and lasso selection (move, recolor, duplicate, delete) |
 | Text boxes and sticky notes | Text-box and sticky-note tools, inline editing, word wrap |

@@ -113,7 +113,7 @@ export function hitTest(el: El, x: number, y: number, radius: number): boolean {
         const d = Math.abs(Math.hypot(nx, ny) - 1) * Math.min(s.rx, s.ry);
         return d <= radius + el.width / 2 || (el.fill !== null && Math.hypot(nx, ny) <= 1);
       }
-      const closed = s.kind !== "line" && s.kind !== "arrow";
+      const closed = isClosedShape(s);
       if (distToPolyline(x, y, s.points, closed) <= radius + el.width / 2) return true;
       return closed && el.fill !== null && pointInPolygon(x, y, s.points);
     }
@@ -353,7 +353,7 @@ export function hitForSelect(el: El, x: number, y: number, radius: number): bool
   if (el.kind !== "shape") return false;
   const s = el.shape;
   if (s.kind === "ellipse") return Math.hypot((x - s.cx) / Math.max(s.rx, 1e-6), (y - s.cy) / Math.max(s.ry, 1e-6)) <= 1;
-  if (s.kind === "line" || s.kind === "arrow") return false;
+  if (!isClosedShape(s)) return false;
   return pointInPolygon(x, y, s.points);
 }
 
@@ -368,4 +368,34 @@ export function convertShape(el: El, kind: ShapeKind): El {
   const r = geomBox(el);
   const shape = buildShape(kind, [r.x, r.y], [r.x + r.w, r.y + r.h]);
   return shape ? { ...el, shape } : el;
+}
+
+/** Whether a shape outline is closed (can be filled and tapped inside). */
+export function isClosedShape(s: RecognizedShape): boolean {
+  if (s.kind === "line" || s.kind === "arrow") return false;
+  if (s.kind === "path") return s.closed;
+  return true;
+}
+
+/**
+ * Rotates by `angle` (radians) and scales by `scale` around `pivot`, then
+ * translates by (dx, dy). Rotated non-circular ellipses become polygons so
+ * they stay editable with the box handles.
+ */
+export function transformShape(s: RecognizedShape, pivot: P2, angle: number, scale: number, dx = 0, dy = 0): RecognizedShape {
+  const cos = Math.cos(angle) * scale;
+  const sin = Math.sin(angle) * scale;
+  const map = ([x, y]: P2): P2 => [pivot[0] + (x - pivot[0]) * cos - (y - pivot[1]) * sin + dx, pivot[1] + (x - pivot[0]) * sin + (y - pivot[1]) * cos + dy];
+  if (s.kind === "ellipse") {
+    const [cx, cy] = map([s.cx, s.cy]);
+    const circle = Math.abs(s.rx - s.ry) < 0.5;
+    if (circle || Math.abs(angle) < 0.035) return { ...s, cx, cy, rx: s.rx * scale, ry: s.ry * scale };
+    const points: P2[] = [];
+    for (let i = 0; i < 72; i++) {
+      const t = (i / 72) * Math.PI * 2;
+      points.push(map([s.cx + Math.cos(t) * s.rx, s.cy + Math.sin(t) * s.ry]));
+    }
+    return { kind: "path", points: [...points, points[0]], closed: true };
+  }
+  return { ...s, points: s.points.map(map) } as RecognizedShape;
 }

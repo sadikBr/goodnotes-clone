@@ -11,7 +11,7 @@ use crate::db::{
 use crate::error::{AppError, AppResult};
 use crate::export::{self, ExportPage, Format};
 use crate::handwriting::{self, InkStroke, Recognition};
-use crate::ink::{self, InkPoint, Shape, P2};
+use crate::ink::{self, InkPoint};
 
 #[tauri::command]
 pub fn library(db: State<'_, Db>) -> AppResult<Library> {
@@ -171,11 +171,6 @@ pub fn save_elements(db: State<'_, Db>, page_id: String, elements: Vec<Element>)
 #[tauri::command]
 pub fn search(db: State<'_, Db>, query: String) -> AppResult<Vec<SearchHit>> {
     db.search(&query)
-}
-
-#[tauri::command]
-pub fn recognize_shape(points: Vec<P2>) -> Option<Shape> {
-    ink::recognize(&points)
 }
 
 #[tauri::command]
