@@ -1,5 +1,5 @@
 import type { P2, RecognizedShape } from "../api";
-import type { El, Pt } from "./model";
+import { newId, type El, type Pt } from "./model";
 
 export interface Rect {
   x: number;
@@ -398,4 +398,88 @@ export function transformShape(s: RecognizedShape, pivot: P2, angle: number, sca
     return { kind: "path", points: [...points, points[0]], closed: true };
   }
   return { ...s, points: s.points.map(map) } as RecognizedShape;
+}
+
+// ------------------------------------------------------- partial erasing
+
+/**
+ * Splits a polyline where a circle (cx, cy, reach) touches it. Segments
+ * near the circle are subdivided first so the cut follows the circle's edge.
+ * Returns null when untouched, otherwise the surviving runs (2+ points each).
+ */
+function cutPolyline<T extends number[]>(pts: T[], cx: number, cy: number, reach: number, lerp: (a: T, b: T, t: number) => T): T[][] | null {
+  if (pts.length === 0) return null;
+  const step = Math.max(0.5, reach / 4);
+  const dense: T[] = [pts[0]];
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1];
+    const b = pts[i];
+    if (distToSegment(cx, cy, a[0], a[1], b[0], b[1]) <= reach + step) {
+      const n = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / step);
+      for (let k = 1; k < n; k++) dense.push(lerp(a, b, k / n));
+    }
+    dense.push(b);
+  }
+  const inside = dense.map((p) => Math.hypot(p[0] - cx, p[1] - cy) <= reach);
+  if (!inside.some(Boolean)) return null;
+  const runs: T[][] = [];
+  let cur: T[] = [];
+  dense.forEach((p, i) => {
+    if (inside[i]) {
+      if (cur.length >= 2) runs.push(cur);
+      cur = [];
+    } else cur.push(p);
+  });
+  if (cur.length >= 2) runs.push(cur);
+  return runs;
+}
+
+const lerp2 = (a: P2, b: P2, t: number): P2 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+const lerp3 = (a: Pt, b: Pt, t: number): Pt => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+
+/** A shape's outline as one polyline (closed outlines repeat the first point). */
+function outlineOf(s: RecognizedShape): P2[] {
+  if (s.kind === "ellipse") {
+    const out: P2[] = [];
+    for (let i = 0; i <= 96; i++) {
+      const t = (i / 96) * Math.PI * 2;
+      out.push([s.cx + Math.cos(t) * s.rx, s.cy + Math.sin(t) * s.ry]);
+    }
+    return out;
+  }
+  const closed = isClosedShape(s);
+  return closed && s.points.length ? [...s.points, s.points[0]] : s.points.slice();
+}
+
+/**
+ * Erases only the part of an element under the eraser (x, y, radius).
+ * Returns null when the element isn't touched; otherwise its remaining
+ * pieces (empty when nothing is left). Strokes and shape outlines are cut;
+ * cut shapes become open paths (an arrow keeps its head on the piece that
+ * still ends at the tip). Text, sticky notes and images are not handled here.
+ */
+export function eraseElement(el: El, x: number, y: number, radius: number): El[] | null {
+  if (el.kind === "stroke") {
+    const reach = radius + el.width / 2;
+    const r = bounds(el);
+    if (x < r.x - reach || x > r.x + r.w + reach || y < r.y - reach || y > r.y + r.h + reach) return null;
+    if (el.points.length === 1) return Math.hypot(el.points[0][0] - x, el.points[0][1] - y) <= reach ? [] : null;
+    const runs = cutPolyline(el.points, x, y, reach, lerp3);
+    if (!runs) return null;
+    return runs.map((points, i) => ({ ...el, id: i === 0 ? el.id : newId(), points }));
+  }
+  if (el.kind === "shape") {
+    const reach = radius + el.width / 2;
+    const outline = outlineOf(el.shape);
+    const runs = cutPolyline(outline, x, y, reach, lerp2);
+    if (!runs) return null;
+    const tip = el.shape.kind === "arrow" ? el.shape.points[el.shape.points.length - 1] : null;
+    return runs.map((points, i) => {
+      const last = points[points.length - 1];
+      const keepsTip = tip !== null && Math.hypot(last[0] - tip[0], last[1] - tip[1]) < 1e-6;
+      const shape: RecognizedShape = keepsTip ? { kind: "arrow", points } : { kind: "path", points, closed: false };
+      return { ...el, id: i === 0 ? el.id : newId(), shape, fill: null };
+    });
+  }
+  return null;
 }

@@ -188,3 +188,106 @@ describe("smoothPath on shaky curves", () => {
     expect(maxTurn(points)).toBeLessThan(25);
   });
 });
+
+describe("realistic hand-drawn input", () => {
+  /** A hand-drawn "{": thin, slanted, wobbly, with an off-centre point. */
+  function handBrace(opts: { tipAt?: number; slantDeg?: number; amp?: number; width?: number } = {}): P2[] {
+    const { tipAt = 0.45, slantDeg = 4, amp = 2.5, width = 26 } = opts;
+    const ideal = bracePath(0, 300, 300 * tipAt, 0, width);
+    const pts = resampleIdeal(ideal, 70);
+    const s = Math.sin((slantDeg * Math.PI) / 180);
+    // (u, v) -> (x, y) for a vertical "{": u runs down, v across.
+    return pts.map(([u, v], i) => [100 + v + u * s + wobble(i, amp), 50 + u + wobble(i + 31, amp)] as P2);
+  }
+  function resampleIdeal(path: P2[], n: number): P2[] {
+    const out: P2[] = [];
+    let total = 0;
+    const seg: number[] = [];
+    for (let i = 1; i < path.length; i++) seg.push(Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]));
+    total = seg.reduce((a, b) => a + b, 0);
+    for (let k = 0; k < n; k++) {
+      let d = (total * k) / (n - 1);
+      let i = 0;
+      while (i < seg.length - 1 && d > seg[i]) d -= seg[i++];
+      const t = seg[i] ? Math.min(1, d / seg[i]) : 0;
+      out.push([path[i][0] + (path[i + 1][0] - path[i][0]) * t, path[i][1] + (path[i + 1][1] - path[i][1]) * t]);
+    }
+    return out;
+  }
+
+  it("recognises thin, slanted, lopsided braces in all orientations", () => {
+    for (const opts of [{}, { tipAt: 0.38 }, { tipAt: 0.6, slantDeg: -5 }, { width: 14, amp: 1.5 }, { amp: 3.5 }]) {
+      const brace = handBrace(opts);
+      expect(detectBrace(brace)?.kind, JSON.stringify(opts)).toBe("path");
+      expect(detectBrace(brace.map(([x, y]) => [400 - x, y] as P2))?.kind).toBe("path"); // "}"
+      expect(detectBrace(brace.map(([x, y]) => [y, x] as P2))?.kind).toBe("path"); // sideways
+      expect(detectBrace(brace.slice().reverse())?.kind).toBe("path"); // drawn bottom-up
+    }
+  });
+
+  it("does not call an S-curve or zigzag a brace", () => {
+    const s: P2[] = Array.from({ length: 60 }, (_, i) => [100 + Math.sin((i / 59) * Math.PI * 2) * 15, i * 5]);
+    expect(detectBrace(s)).toBeNull();
+    const zig: P2[] = Array.from({ length: 60 }, (_, i) => [100 + (i % 10 < 5 ? i % 5 : 5 - (i % 5)) * 4, i * 5]);
+    expect(detectBrace(zig)).toBeNull();
+  });
+
+  it("turns a parenthesis into a clean arc", () => {
+    const paren: P2[] = Array.from({ length: 50 }, (_, i) => {
+      const t = -0.9 + (1.8 * i) / 49;
+      return [200 - Math.cos(t) * 120 + wobble(i, 2), 200 + Math.sin(t) * 120 + wobble(i + 4, 2)];
+    });
+    const out = beautify(paren);
+    expect(out?.kind).toBe("path");
+    if (out?.kind !== "path") return;
+    // Every output point lies on one circle.
+    const c = [200, 200];
+    const r = out.points.slice(1, -1).map((p) => Math.hypot(p[0] - c[0], p[1] - c[1]));
+    expect(Math.max(...r) - Math.min(...r)).toBeLessThan(6);
+  });
+
+  it("snaps nearly vertical/horizontal graph axes exactly", () => {
+    const axes = polyline([[100, 50], [104, 300], [400, 296]], 40, false, 2);
+    const { points } = smoothPath(axes);
+    expect(points).toHaveLength(3);
+    expect(points[1][0]).toBeCloseTo(points[0][0], 6); // vertical axis
+    expect(points[2][1]).toBeCloseTo(points[1][1], 6); // horizontal axis
+  });
+
+  it("keeps a smooth curve's shape instead of flattening it", () => {
+    const wave: P2[] = Array.from({ length: 150 }, (_, i) => [i * 3, 200 + Math.sin(i / 15) * 50 + wobble(i, 3)]);
+    const { points } = smoothPath(wave);
+    const ys = points.map((p) => p[1]);
+    expect(Math.max(...ys)).toBeGreaterThan(240); // peaks survive
+    expect(Math.min(...ys)).toBeLessThan(160);
+    expect(maxTurn(points)).toBeLessThan(20);
+  });
+});
+
+describe("smoothing removes slow wobble", () => {
+  it("draws a wobbly S-curve as one clean curve", () => {
+    // Noise at every sample plus a slower 20px wobble, like a shaky mouse.
+    const s: P2[] = Array.from({ length: 61 }, (_, i) => [
+      100 + Math.sin((i / 60) * Math.PI * 2) * 30 + wobble(i, 3) + Math.sin(i * 0.9) * 2.5,
+      100 + i * 4 + wobble(i + 5, 2),
+    ]);
+    const { points } = smoothPath(s);
+    expect(maxTurn(points)).toBeLessThan(12);
+    // Still an S: the curve swings to both sides of its axis.
+    const xs = points.map((p) => p[0]);
+    expect(Math.max(...xs)).toBeGreaterThan(120);
+    expect(Math.min(...xs)).toBeLessThan(80);
+  });
+});
+
+describe("braces vs look-alikes", () => {
+  it("does not mistake an L (graph axes) or a V for a brace", () => {
+    const L = polyline([[100, 50], [104, 300], [400, 296]], 40, false, 2.5);
+    expect(detectBrace(L)).toBeNull();
+    const V = polyline([[0, 0], [60, 150], [0, 300]], 40, false, 2);
+    expect(detectBrace(V)).toBeNull();
+    expect(beautify(L)?.kind).toBe("path");
+    const out = beautify(L);
+    if (out?.kind === "path") expect(out.points).toHaveLength(3); // two straight axes
+  });
+});

@@ -18,6 +18,7 @@ import {
   isResizable,
   rectContains,
   resizeElement,
+  eraseElement,
   geomBox,
   transformShape,
   translate,
@@ -67,6 +68,7 @@ const SHAPE_KINDS: { id: ShapeKind; label: string; icon: Parameters<typeof icon>
 
 const WIDTHS_KEY = "inkleaf-sizes";
 const TEXT_FONT_KEY = "inkleaf-text-font";
+const ERASER_MODE_KEY = "inkleaf-eraser-mode";
 
 /** Size control ranges and one-tap presets per tool. */
 const SIZE_SPECS: Record<string, { label: string; min: number; max: number; step: number; presets: number[]; preview: "dot" | "letter" }> = {
@@ -98,7 +100,7 @@ const MAX_UNDO = 100;
 
 type Gesture =
   | { type: "draw"; tool: "pen" | "highlighter" | "shape"; points: Pt[]; times: number[]; preview: ShapeEl | null; holdTimer: number; held: Held | null }
-  | { type: "erase"; changed: boolean }
+  | { type: "erase"; changed: boolean; last: P2 | null }
   | { type: "lasso"; points: P2[] }
   | { type: "move"; start: P2; original: El[]; dx: number; dy: number; snap: { anchors: Anchor[]; targets: Target[] } | null; guides: Guide[] }
   | { type: "pan"; sx: number; sy: number; left: number; top: number }
@@ -141,6 +143,7 @@ export class EditorScreen {
   private widths: Record<string, number> = loadWidths();
   private textFont: FontId = getPref(TEXT_FONT_KEY, "sans", FONT_PRESETS.map((f) => f.id));
   private selectionBarKey = "";
+  private eraserMode: "precise" | "stroke" = getPref(ERASER_MODE_KEY, "precise", ["precise", "stroke"] as const);
   private zoom = 1;
   private selection = new Set<string>();
   private clipboard: El[] = [];
@@ -428,6 +431,29 @@ export class EditorScreen {
       );
     }
     if (this.tool === "text" || this.tool === "sticky") return this.fontPicker();
+    if (this.tool === "eraser") {
+      const mode = (id: "precise" | "stroke", label: string, title: string) =>
+        h(
+          "button",
+          {
+            class: `tool-btn small text-chip${this.eraserMode === id ? " active" : ""}`,
+            "aria-pressed": String(this.eraserMode === id),
+            title,
+            onclick: () => {
+              this.eraserMode = id;
+              setPref(ERASER_MODE_KEY, id);
+              this.renderToolbar();
+            },
+          },
+          label,
+        );
+      return h(
+        "div",
+        { class: "tool-group options", role: "group", "aria-label": "Eraser mode" },
+        mode("precise", "Precise", "Erase only the parts the eraser touches"),
+        mode("stroke", "Whole stroke", "Erase every stroke the eraser touches"),
+      );
+    }
     if (this.tool === "shape") {
       return h(
         "div",
@@ -898,8 +924,8 @@ export class EditorScreen {
         this.armHold();
         break;
       case "eraser":
-        this.gesture = { type: "erase", changed: false };
-        this.eraseAt(x, y);
+        this.gesture = { type: "erase", changed: false, last: null };
+        this.eraseAlong([x, y]);
         break;
       case "lasso": {
         const single = this.singleResizable();
@@ -980,7 +1006,7 @@ export class EditorScreen {
         break;
       }
       case "erase":
-        for (const s of samples) this.eraseAt(...this.point(s));
+        for (const s of samples) this.eraseAlong(this.point(s));
         break;
       case "lasso":
         g.points.push(this.point(e));
@@ -1299,16 +1325,49 @@ export class EditorScreen {
     this.draw();
   }
 
+  /** Erases along the path from the previous eraser position, so fast swipes leave no gaps. */
+  private eraseAlong(p: P2) {
+    const g = this.gesture;
+    if (g?.type !== "erase") return;
+    const from = g.last ?? p;
+    const step = Math.max(1, this.widths.eraser / 4);
+    const n = Math.max(1, Math.ceil(Math.hypot(p[0] - from[0], p[1] - from[1]) / step));
+    for (let i = g.last ? 1 : 0; i <= n; i++) this.eraseAt(from[0] + ((p[0] - from[0]) * i) / n, from[1] + ((p[1] - from[1]) * i) / n);
+    g.last = p;
+  }
+
+  /**
+   * Precise mode cuts strokes and shape outlines exactly where the eraser
+   * touches; "whole stroke" mode removes anything touched. Text boxes and
+   * sticky notes are removed whole; images are never erased.
+   */
   private eraseAt(x: number, y: number) {
     const g = this.gesture;
     if (g?.type !== "erase") return;
     const radius = this.widths.eraser / 2;
-    const hits = this.elements.filter((el) => el.kind !== "image" && hitTest(el, x, y, radius));
-    if (hits.length === 0) return;
+    let changed = false;
+    const next: El[] = [];
+    for (const el of this.elements) {
+      if (el.kind === "image") {
+        next.push(el);
+        continue;
+      }
+      if (this.eraserMode === "stroke" || el.kind === "text" || el.kind === "sticky") {
+        if (hitTest(el, x, y, radius)) changed = true;
+        else next.push(el);
+        continue;
+      }
+      const pieces = eraseElement(el, x, y, radius);
+      if (pieces === null) next.push(el);
+      else {
+        changed = true;
+        next.push(...pieces);
+      }
+    }
+    if (!changed) return;
     if (!g.changed) this.snapshot();
     g.changed = true;
-    const gone = new Set(hits.map((el) => el.id));
-    this.elements = this.elements.filter((el) => !gone.has(el.id));
+    this.elements = next;
     this.rebuildCache();
   }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bounds, buildShape, convertShape, geomBox, handleAt, handlesFor, hitForSelect, hitTest, resizeElement, setLineCounter, insideLasso, isHeld, pointInPolygon, pressureWidth, translate, unionRects } from "./geometry";
+import { bounds, buildShape, convertShape, eraseElement, geomBox, handleAt, handlesFor, hitForSelect, hitTest, resizeElement, setLineCounter, insideLasso, isHeld, pointInPolygon, pressureWidth, translate, unionRects } from "./geometry";
 import { fromStored, nextZ, toStored, type El, type StrokeEl } from "./model";
 
 const stroke = (points: [number, number][], width = 4): StrokeEl => ({
@@ -160,5 +160,43 @@ describe("model", () => {
     expect(back[0]).toMatchObject({ id: "s", kind: "stroke", z: 3 });
     expect(nextZ(back)).toBe(4);
     expect(nextZ([])).toBe(0);
+  });
+});
+
+describe("partial erasing", () => {
+  it("cuts a stroke in two where the eraser touches it", () => {
+    const s = stroke([[0, 0], [100, 0]], 2); // only two points: segments are subdivided
+    const pieces = eraseElement(s, 50, 0, 5);
+    expect(pieces).toHaveLength(2);
+    const [left, right] = pieces as StrokeEl[];
+    expect(left.id).toBe("s");
+    expect(right.id).not.toBe("s");
+    expect(Math.max(...left.points.map((p) => p[0]))).toBeLessThan(45);
+    expect(Math.min(...right.points.map((p) => p[0]))).toBeGreaterThan(55);
+    expect(left.points[0]).toEqual([0, 0, 0.5]); // the untouched end stays exactly where it was
+  });
+
+  it("trims an end, removes fully covered strokes, and ignores far-away ones", () => {
+    const s = stroke([[0, 0], [100, 0]], 2);
+    const trimmed = eraseElement(s, 100, 0, 10) as StrokeEl[];
+    expect(trimmed).toHaveLength(1);
+    expect(Math.max(...trimmed[0].points.map((p) => p[0]))).toBeLessThan(90);
+    expect(eraseElement(stroke([[0, 0], [3, 0]], 2), 1, 0, 10)).toEqual([]);
+    expect(eraseElement(s, 50, 40, 5)).toBeNull();
+  });
+
+  it("opens up shape outlines and keeps an arrow's head on the tip piece", () => {
+    const rect: El = { id: "r", z: 0, kind: "shape", color: "#000", width: 2, fill: "#00000033", shape: { kind: "rectangle", points: [[0, 0], [100, 0], [100, 50], [0, 50]] } };
+    const pieces = eraseElement(rect, 50, 0, 4);
+    expect(pieces?.length).toBeGreaterThanOrEqual(1);
+    expect(pieces?.every((p) => p.kind === "shape" && p.shape.kind === "path" && p.fill === null)).toBe(true);
+    const arrow: El = { id: "a", z: 0, kind: "shape", color: "#000", width: 2, fill: null, shape: { kind: "arrow", points: [[0, 0], [100, 0]] } };
+    const cut = eraseElement(arrow, 50, 0, 4) as Extract<El, { kind: "shape" }>[];
+    expect(cut.map((p) => p.shape.kind)).toEqual(["path", "arrow"]);
+  });
+
+  it("leaves text alone (handled as whole objects)", () => {
+    const text: El = { id: "t", z: 0, kind: "text", x: 0, y: 0, w: 100, text: "hi", fontSize: 20, color: "#000" };
+    expect(eraseElement(text, 5, 5, 10)).toBeNull();
   });
 });

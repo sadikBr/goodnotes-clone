@@ -1062,3 +1062,9 @@ button {
   font-weight: 600;
   font-size: 13px;
 }
+.tool-btn.text-chip {
+  width: auto;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
