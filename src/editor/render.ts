@@ -184,6 +184,23 @@ function drawCalligraphy(ctx: CanvasRenderingContext2D, el: StrokeEl) {
   ctx.stroke();
 }
 
+/**
+ * Drops highlighter points that barely move from the previous one, so the
+ * jitter of a pen held still doesn't make the stroke wobble while drawing.
+ */
+export function steadyHighlight(pts: Pt[], width: number): Pt[] {
+  if (pts.length < 3) return pts;
+  const min = Math.max(1.5, width * 0.35);
+  const out: Pt[] = [pts[0]];
+  for (let i = 1; i < pts.length; i++) {
+    const last = out[out.length - 1];
+    if (Math.hypot(pts[i][0] - last[0], pts[i][1] - last[1]) >= min) out.push(pts[i]);
+  }
+  // Keep a lone dab visible.
+  if (out.length === 1) out.push(pts[pts.length - 1]);
+  return out;
+}
+
 export function drawStroke(ctx: CanvasRenderingContext2D, el: StrokeEl) {
   const pts = el.points;
   if (pts.length === 0) return;
@@ -194,9 +211,11 @@ export function drawStroke(ctx: CanvasRenderingContext2D, el: StrokeEl) {
   if (el.tool === "highlighter") {
     ctx.globalAlpha = 0.35;
     ctx.globalCompositeOperation = "multiply";
-    ctx.lineCap = "butt";
+    // Round ends: a flat end turned back inside a tight curve leaves a notch
+    // that flickers while drawing.
+    ctx.lineCap = "round";
     ctx.lineWidth = el.width;
-    strokePath(ctx, pts);
+    strokePath(ctx, steadyHighlight(pts, el.width));
     ctx.stroke();
     ctx.restore();
     return;

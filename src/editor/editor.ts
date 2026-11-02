@@ -41,7 +41,7 @@ import { continueList, currentList, toggleList, type ListKind } from "./textForm
 import { beautify, detectBrace, recognizeShape } from "./beautify";
 import { anchorsAsTargets, paperTargets, snapMove, type Anchor, type Guide, type Target } from "./snap";
 import { fromStored, newId, nextZ, PEN_STYLES, toStored, type El, type PenStyle, type Pt, type ShapeEl, type StickyEl, type StrokeEl, type TextAlign, type TextEl } from "./model";
-import { drawElement, drawGroupHandles, drawGuides, drawHandles, drawLasso, drawTransformedBox, drawSelection, drawStroke, drawTemplate, fitTextToBox, naturalTextWidth, paperLayout, preloadImages, renderPage, templatePreview, textAnchors, type ImageCache } from "./render";
+import { drawElement, drawGroupHandles, drawGuides, drawHandles, drawLasso, drawTransformedBox, drawSelection, drawStroke, drawTemplate, steadyHighlight, fitTextToBox, naturalTextWidth, paperLayout, preloadImages, renderPage, templatePreview, textAnchors, type ImageCache } from "./render";
 
 type Tool = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "sticky" | "hand";
 
@@ -1686,7 +1686,7 @@ export class EditorScreen {
           this.addElement(shape);
         } else {
           const tool = g.tool === "highlighter" ? "highlighter" : "pen";
-          let points = g.points;
+          let points = tool === "highlighter" ? steadyHighlight(g.points, this.widths.highlighter) : g.points;
           try {
             if (points.length > 8) points = await api.simplifyStroke(points, 0.15);
           } catch {
