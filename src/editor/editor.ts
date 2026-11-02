@@ -52,16 +52,17 @@ import { drawElement, drawGroupHandles, drawGuides, drawHandles, drawLasso, draw
 
 type Tool = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "sticky" | "laser" | "hand";
 
-const TOOLS: { id: Tool; label: string; key: string }[] = [
-  { id: "pen", label: "Pen", key: "p" },
-  { id: "highlighter", label: "Highlighter", key: "h" },
-  { id: "eraser", label: "Eraser", key: "e" },
-  { id: "lasso", label: "Lasso select", key: "l" },
-  { id: "shape", label: "Shape", key: "s" },
-  { id: "text", label: "Text box", key: "t" },
-  { id: "sticky", label: "Sticky note", key: "n" },
-  { id: "laser", label: "Laser pointer", key: "k" },
-  { id: "hand", label: "Pan", key: " " },
+/** The tools, in three trays: writing, arranging and presenting. */
+const TOOLS: { id: Tool; label: string; key: string; tray: number }[] = [
+  { id: "pen", label: "Pen", key: "p", tray: 0 },
+  { id: "highlighter", label: "Highlighter", key: "h", tray: 0 },
+  { id: "eraser", label: "Eraser", key: "e", tray: 0 },
+  { id: "lasso", label: "Lasso select", key: "l", tray: 1 },
+  { id: "shape", label: "Shape", key: "s", tray: 1 },
+  { id: "text", label: "Text box", key: "t", tray: 1 },
+  { id: "sticky", label: "Sticky note", key: "n", tray: 1 },
+  { id: "laser", label: "Laser pointer", key: "k", tray: 2 },
+  { id: "hand", label: "Pan", key: " ", tray: 2 },
 ];
 
 const INK_COLORS = ["#111827", "#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2", "#facc15", "#ffffff"];
@@ -91,11 +92,30 @@ const ERASER_MODE_KEY = "inkleaf-eraser-mode";
 const LASER_MODE_KEY = "inkleaf-laser-mode";
 const INSTRUMENT_KEY = "inkleaf-instrument";
 const SIDEBAR_KEY = "inkleaf-page-sidebar";
+const DRAWER_KEY = "inkleaf-tool-drawer";
 const FAV_TOOLS: FavTool[] = ["pen", "highlighter", "shape", "text", "sticky", "laser", "eraser"];
 const isFavTool = (t: string): t is FavTool => (FAV_TOOLS as string[]).includes(t);
 
+/** True for colours light enough to need a dark icon on top. */
+function isLightColor(hex: string): boolean {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return false;
+  const n = parseInt(m[1], 16);
+  const lin = (v: number) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+  const l = 0.2126 * lin(n >> 16) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+  return l > 0.45;
+}
+
+/** An ink colour that shows on the drawer (very dark ink on a dark drawer, white on light). */
+function sampleInk(color: string): string {
+  const dark = isDark();
+  if (!dark && isLightColor(color) && /^#f{6}$/i.test(color)) return "#111827";
+  if (dark && !isLightColor(color) && /^#[0-3][0-9a-f][0-3][0-9a-f][0-3][0-9a-f]$/i.test(color)) return "#e7e5e4";
+  return color;
+}
+
 /** A short stroke drawn with a pen nib, for the nib menu. */
-function nibSample(style: PenStyle, color: string): HTMLElement {
+function nibSample(style: PenStyle, color: string, size = 3): HTMLElement {
   const w = 56;
   const hgt = 22;
   const dpr = Math.max(2, window.devicePixelRatio || 1);
@@ -112,7 +132,7 @@ function nibSample(style: PenStyle, color: string): HTMLElement {
     const t = i / 24;
     points.push([4 + t * (w - 8), hgt / 2 + Math.sin(t * Math.PI * 2) * 6, 0.35 + 0.5 * Math.sin(t * Math.PI)]);
   }
-  drawStroke(ctx, { id: "sample", z: 0, kind: "stroke", tool: "pen", style, color: color === "#ffffff" ? "#111827" : color, width: 2.6, points });
+  drawStroke(ctx, { id: "sample", z: 0, kind: "stroke", tool: "pen", style, color: sampleInk(color), width: Math.min(6.5, Math.max(1.4, size * 0.9)), points });
   return c;
 }
 
@@ -315,6 +335,7 @@ export class EditorScreen {
     window.addEventListener("resize", () => {
       if (!this.root.isConnected) return;
       this.layout();
+      this.placeDrawer();
       if (!this.selectionBar.hidden) this.positionSelectionBar();
     });
   }
@@ -663,15 +684,21 @@ export class EditorScreen {
     return h(
       "div",
       { class: "header-right" },
-      h("button", { class: "icon-btn", "aria-label": "Undo", title: "Undo (Ctrl+Z)", onclick: () => this.undo() }, icon("undo")),
-      h("button", { class: "icon-btn", "aria-label": "Redo", title: "Redo (Ctrl+Shift+Z)", onclick: () => this.redo() }, icon("redo")),
-      h("span", { class: "divider" }),
-      this.templateBtn,
-      h("button", { class: "icon-btn", "aria-label": "Insert image", title: "Insert image", onclick: () => this.fileInput.click() }, icon("image")),
+      h(
+        "div",
+        { class: "header-pill", role: "group", "aria-label": "History" },
+        h("button", { class: "icon-btn", "aria-label": "Undo", title: "Undo (Ctrl+Z)", onclick: () => this.undo() }, icon("undo")),
+        h("button", { class: "icon-btn", "aria-label": "Redo", title: "Redo (Ctrl+Shift+Z)", onclick: () => this.redo() }, icon("redo")),
+      ),
+      h(
+        "div",
+        { class: "header-pill", role: "group", "aria-label": "Page" },
+        this.templateBtn,
+        h("button", { class: "icon-btn", "aria-label": "Insert image", title: "Insert image", onclick: () => this.fileInput.click() }, icon("image")),
+        this.rulerBtn,
+        this.penOnlyBtn,
+      ),
       this.exportButton(),
-      h("span", { class: "divider" }),
-      this.rulerBtn,
-      this.penOnlyBtn,
       this.moreButton(),
     );
   }
@@ -707,7 +734,12 @@ export class EditorScreen {
   /** Re-lays out the page once the sidebar or header has finished moving. */
   private afterChromeChange() {
     this.layout();
-    window.setTimeout(() => this.root.isConnected && this.layout(), 260);
+    this.placeDrawer();
+    window.setTimeout(() => {
+      if (!this.root.isConnected) return;
+      this.layout();
+      this.placeDrawer();
+    }, 260);
   }
 
   private templateBtn = h("button", { class: "template-picker", "aria-haspopup": "dialog", "aria-expanded": "false", title: "Page paper" });
@@ -851,7 +883,7 @@ export class EditorScreen {
   }
 
   private exportButton(): HTMLButtonElement {
-    const btn = h("button", { class: "icon-btn", "aria-label": "Export", title: "Export", "aria-haspopup": "menu" }, icon("download"));
+    const btn = h("button", { class: "export-btn", "aria-label": "Export", title: "Export as PDF, PowerPoint or image", "aria-haspopup": "menu" }, icon("download"), h("span", { class: "export-label" }, "Export"));
     btn.addEventListener("click", () =>
       popupMenu(btn, [
         { label: "PDF — whole notebook", action: () => this.exportAs("pdf", "all") },
@@ -931,19 +963,21 @@ export class EditorScreen {
   }
 
   private renderToolbar() {
-    const tools = TOOLS.map((t) =>
-      h(
+    const tools = TOOLS.map((t) => {
+      const active = this.tool === t.id;
+      return h(
         "button",
         {
-          class: `tool-btn${this.tool === t.id ? " active" : ""}`,
-          "aria-pressed": String(this.tool === t.id),
+          class: `tool-btn${active ? " active" : ""}`,
+          "aria-pressed": String(active),
           "aria-label": t.label,
-          title: `${t.label}${t.key.trim() ? ` (${t.key.toUpperCase()})` : ""}`,
-          onclick: () => this.setTool(t.id),
+          "data-tool": t.id,
+          title: active ? `${t.label} — tap again to ${this.drawerOpen ? "hide" : "show"} its options` : `${t.label}${t.key.trim() ? ` (${t.key.toUpperCase()})` : ""}`,
+          onclick: () => (active ? this.toggleDrawer() : this.setTool(t.id)),
         },
         icon(t.id === "highlighter" ? "highlighter" : t.id === "sticky" ? "sticky" : t.id),
-      ),
-    );
+      );
+    });
     // Favourite colours and sizes for the tool (the full choice is one tap away).
     const tool = this.tool;
     const fav = isFavTool(tool) ? this.favs.get(tool) : null;
@@ -987,9 +1021,12 @@ export class EditorScreen {
       if (c) {
         tools[i].dataset.ink = "";
         tools[i].style.setProperty("--ink", c);
+        // The active tool is dipped in its ink: pick an icon colour that reads on it.
+        if (this.tool === t.id) tools[i].dataset.inkTone = isLightColor(c) ? "light" : "dark";
       }
     });
-    this.toolbar.replaceChildren(h("div", { class: "tool-group" }, ...tools));
+    const trays = [0, 1, 2].map((n) => h("div", { class: "tool-tray" }, ...tools.filter((_, i) => TOOLS[i].tray === n)));
+    this.toolbar.replaceChildren(h("div", { class: "tool-group tool-trays" }, ...trays));
     const options = [this.toolOptions(), swatches, width].filter((x): x is HTMLElement => x !== null);
     const hints: Partial<Record<Tool, string>> = {
       lasso: "Draw around items to select them, then drag to move",
@@ -997,8 +1034,43 @@ export class EditorScreen {
     };
     if (options.length === 0) options.push(h("span", { class: "options-hint" }, hints[this.tool] ?? ""));
     this.optionsBar.replaceChildren(...options);
+    this.optionsBar.hidden = !this.drawerOpen;
+    this.optionsBar.dataset.tool = this.tool;
+    this.placeDrawer();
     this.renderPenOnlyButton();
     this.canvas.dataset.tool = this.tool;
+  }
+
+  private drawerOpen = getPref(DRAWER_KEY, "open", ["open", "closed"]) === "open";
+
+  /** Folds the tool drawer away (or brings it back); tapping the active tool does this. */
+  private toggleDrawer() {
+    this.drawerOpen = !this.drawerOpen;
+    setPref(DRAWER_KEY, this.drawerOpen ? "open" : "closed");
+    this.renderToolbar();
+    if (!this.selectionBar.hidden) this.positionSelectionBar();
+  }
+
+  /**
+   * Hangs the tool drawer under the active tool: centred on it where there's
+   * room, with its pointer aimed at the tool. It glides when the tool changes.
+   */
+  private placeDrawer() {
+    const bar = this.optionsBar;
+    const area = bar.parentElement;
+    const btn = this.toolbar.querySelector<HTMLElement>(".tool-btn.active");
+    if (bar.hidden || !area || !btn || !this.root.isConnected) return;
+    const a = area.getBoundingClientRect();
+    const b = btn.getBoundingClientRect();
+    if (!a.width) return;
+    const margin = 12;
+    const bw = Math.min(bar.offsetWidth, a.width - margin * 2);
+    const centre = b.left + b.width / 2 - a.left;
+    const left = Math.max(margin, Math.min(centre - bw / 2, a.width - bw - margin));
+    bar.style.left = `${left}px`;
+    bar.style.setProperty("--caret-x", `${Math.max(22, Math.min(bw - 22, centre - left))}px`);
+    // Only glide once it has a place (not from the corner on first show).
+    requestAnimationFrame(() => bar.classList.add("placed"));
   }
 
   /**
@@ -1034,7 +1106,7 @@ export class EditorScreen {
         label: "Pen",
         title: "Pen type",
         current: this.penStyle,
-        items: PEN_STYLES.map((p) => ({ id: p.id, label: p.label, art: () => nibSample(p.id, this.colors.pen) })),
+        items: PEN_STYLES.map((p) => ({ id: p.id, label: p.label, art: () => nibSample(p.id, this.colors.pen, this.widths.pen) })),
         onPick: (id) => {
           this.penStyle = id as PenStyle;
           setPref(PEN_STYLE_KEY, id);

@@ -1530,11 +1530,10 @@ kbd {
 
 .options-bar {
   position: absolute;
-  top: 12px;
+  top: 14px;
   left: 12px;
-  right: 12px;
-  margin-inline: auto;
-  width: fit-content;
+  width: max-content;
+  max-width: calc(100% - 24px);
   z-index: 9;
   display: flex;
   align-items: center;
@@ -1545,10 +1544,29 @@ kbd {
   padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: 18px;
-  background: var(--glass);
-  backdrop-filter: blur(14px) saturate(1.2);
+  background: var(--surface);
   box-shadow: var(--shadow-lg);
   animation: pill-in 0.2s var(--ease);
+}
+/* The drawer's pointer, aimed at the active tool. */
+.options-bar::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: calc(var(--caret-x, 50%) - 6px);
+  width: 12px;
+  height: 12px;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+  border-top-left-radius: 3px;
+  transform: rotate(45deg);
+}
+.options-bar.placed {
+  transition: left 0.3s var(--ease), opacity 0.2s ease;
+}
+.options-bar.placed::before {
+  transition: left 0.3s var(--ease);
 }
 @keyframes pill-in {
   from {
@@ -2558,3 +2576,143 @@ select option {
 .para-pop { display: grid; gap: 6px; min-width: 150px; }
 .para-row { display: flex; gap: 4px; }
 .choice-chip > svg + svg { margin-left: -2px; }
+
+
+/* ------------------------------------------------ top bar: trays & drawer */
+
+.editor-header {
+  height: 58px;
+  gap: 16px;
+}
+.tool-trays {
+  gap: 10px;
+  padding: 0;
+  background: none;
+}
+.tool-tray {
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.tool-trays .tool-btn {
+  width: 40px;
+  height: 38px;
+  border-radius: 11px;
+  transition: background 0.18s ease, color 0.18s ease, transform 0.22s var(--ease), box-shadow 0.22s ease;
+}
+/* Inactive tools show their ink as a small drop. */
+.tool-trays .tool-btn[data-ink]::after {
+  left: calc(50% - 3px);
+  right: auto;
+  width: 6px;
+  height: 6px;
+  bottom: 2px;
+  border-radius: 50%;
+  transition: opacity 0.18s ease;
+}
+/* The active tool lifts out of its tray, dipped in its ink (or the accent). */
+.tool-trays .tool-btn.active {
+  --dip: var(--accent);
+  background: var(--dip);
+  color: #fff;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px -4px color-mix(in srgb, var(--dip) 70%, transparent), 0 0 0 1px color-mix(in srgb, #000 12%, var(--dip)) inset;
+}
+.tool-trays .tool-btn.active[data-ink] {
+  --dip: var(--ink);
+}
+.tool-trays .tool-btn.active[data-ink-tone="light"] {
+  color: #1c1917;
+}
+.tool-trays .tool-btn.active::after {
+  opacity: 0;
+}
+.tool-trays .tool-btn.active:active {
+  transform: translateY(-1px) scale(0.95);
+}
+
+/* Right side: grouped pills. */
+.header-pill {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 13px;
+  background: var(--surface-2);
+}
+.header-pill .icon-btn {
+  width: 34px;
+  height: 34px;
+}
+.header-pill .template-picker {
+  height: 34px;
+  border: none;
+  background: transparent;
+  padding: 0 6px 0 4px;
+}
+.header-pill .template-picker:hover {
+  background: var(--surface);
+}
+.header-right {
+  gap: 8px;
+}
+.export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px 0 11px;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--accent) 70%, transparent);
+  transition: filter 0.15s ease, transform 0.15s var(--ease);
+}
+.export-btn:hover {
+  filter: brightness(1.08);
+}
+.export-btn:active {
+  transform: scale(0.96);
+}
+.export-btn .icon,
+.export-btn svg {
+  width: 16px;
+  height: 16px;
+}
+:root[data-theme="dark"] .export-btn {
+  color: #0d1f17;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .export-btn {
+    color: #0d1f17;
+  }
+}
+/* Narrower windows: drop labels before anything wraps. */
+@media (max-width: 1320px) {
+  .header-pill .template-name,
+  .export-btn .export-label {
+    display: none;
+  }
+  .export-btn {
+    padding: 0 10px;
+  }
+}
+@media (max-width: 1100px) {
+  .page-chip {
+    display: none;
+  }
+}
+:root[data-theme="dark"] .tool-trays .tool-btn.active:not([data-ink]) {
+  color: #0d1f17;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .tool-trays .tool-btn.active:not([data-ink]) {
+    color: #0d1f17;
+  }
+}
