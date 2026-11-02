@@ -2754,3 +2754,10 @@ select option {
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), 0 3px 8px -2px rgba(0, 0, 0, 0.5);
   }
 }
+.template-grid.cover-grid {
+  grid-template-columns: repeat(4, 100px);
+}
+.template-popover .popover-note {
+  max-width: 400px;
+  margin: 12px 0 0;
+}

@@ -7,7 +7,7 @@ import { customColorButton } from "../colorPicker";
 import { isDark, toggleTheme } from "../theme";
 import { shortcutsSheet } from "./shortcuts";
 import { choiceChip, colorFavourites, Favourites, paletteFor, popover, sizeFavourites, type FavTool } from "./toolkit";
-import { confirmDialog, formDialog, h, icon, popupMenu, reportError, sizeControl, toast } from "../ui";
+import { confirmDialog, COVER_COLORS, formDialog, h, icon, popupMenu, reportError, sizeControl, toast } from "../ui";
 import {
   bounds,
   buildShape,
@@ -41,7 +41,8 @@ import { inkToTextDialog } from "./inkToText";
 import { cachedBackground, renderBackground } from "./pdfRender";
 import { INSTRUMENTS, MM, Ruler, type Guide as EdgeGuide, type InstrumentKind } from "./ruler";
 import { SpeedInk, speedSensitive } from "./ink";
-import { isCoverTemplate } from "./covers";
+import { COVER_DESIGNS, coverDesignOf, isCoverTemplate, type CoverDesign } from "./covers";
+import { applyCover, coverPreview } from "../cover";
 import { Laser, LASER_CORE_FADE_MS, LASER_HOLD_MS, type LaserLayers, type LaserMode } from "./laser";
 import { buildVectorPdf, type PdfPageInput } from "./pdfExport";
 import { continueList, currentList, toggleList, type ListKind } from "./textFormat";
@@ -753,12 +754,116 @@ export class EditorScreen {
   private renderTemplateButton() {
     if (!this.page) return;
     const label = TEMPLATES.find((t) => t.id === this.page.template)?.label ?? (isCoverTemplate(this.page.template) ? "Cover" : this.page.template);
-    this.templateBtn.setAttribute("aria-label", `Page paper: ${label}`);
+    this.templateBtn.setAttribute("aria-label", isCoverTemplate(this.page.template) ? "Cover design and colour" : `Page paper: ${label}`);
+    this.templateBtn.title = isCoverTemplate(this.page.template) ? "Cover design and colour" : "Page paper";
     this.templateBtn.replaceChildren(
       h("span", { class: "template-thumb" }, templatePreview(this.page.template, this.page.paperColor, 22, 28)),
       h("span", { class: "template-name" }, label),
       icon("down"),
     );
+  }
+
+  /** On a cover page the paper button opens this: cover designs and colours. */
+  private openCoverPicker() {
+    const btn = this.templateBtn;
+    const design = coverDesignOf(this.page.template);
+    const color = this.page.paperColor;
+    const close = () => {
+      panel.remove();
+      btn.setAttribute("aria-expanded", "false");
+      document.removeEventListener("pointerdown", onOutside, true);
+      document.removeEventListener("keydown", onKey, true);
+    };
+    const pick = (d: CoverDesign, c: string) => {
+      close();
+      if (d !== design || c.toLowerCase() !== color.toLowerCase()) void this.changeCover(d, c);
+    };
+    const grid = h(
+      "div",
+      { class: "template-grid cover-grid", role: "radiogroup", "aria-label": "Cover design" },
+      ...COVER_DESIGNS.map((d) =>
+        h(
+          "button",
+          { class: "template-card", role: "radio", title: d.label, "aria-checked": String(d.id === design), onclick: () => pick(d.id, color) },
+          coverPreview(d.id, color, this.notebook.title, 88, this.page.width > this.page.height),
+          h("span", { class: "template-card-label" }, d.label),
+        ),
+      ),
+    );
+    const colours = h(
+      "div",
+      { class: "swatches paper-colours", role: "radiogroup", "aria-label": "Cover colour" },
+      ...COVER_COLORS.map((c) =>
+        h("button", {
+          class: "swatch",
+          role: "radio",
+          title: c,
+          "aria-label": `Cover colour ${c}`,
+          "aria-checked": String(c.toLowerCase() === color.toLowerCase()),
+          style: { background: c },
+          onclick: () => pick(design, c),
+        }),
+      ),
+      customColorButton({ value: color, presets: COVER_COLORS, onPick: (c) => pick(design, c) }),
+    );
+    const panel = h(
+      "div",
+      { class: "template-popover", role: "dialog", "aria-label": "Cover" },
+      h("div", { class: "template-popover-title" }, "Cover design"),
+      grid,
+      h("div", { class: "template-popover-title spaced" }, "Cover colour"),
+      colours,
+      h("p", { class: "popover-note" }, "The title and date move into place. Pick paper for your notes from any other page."),
+    );
+    const onOutside = (e: Event) => {
+      const t = e.target as Node;
+      if (!panel.contains(t) && !btn.contains(t) && !(t as Element).closest?.(".color-popover")) close();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        close();
+        btn.focus();
+      }
+    };
+    document.body.append(panel);
+    const r = btn.getBoundingClientRect();
+    panel.style.top = `${r.bottom + 8}px`;
+    panel.style.left = `${Math.max(8, Math.min(window.innerWidth - panel.offsetWidth - 8, r.right - panel.offsetWidth))}px`;
+    btn.setAttribute("aria-expanded", "true");
+    setTimeout(() => {
+      document.addEventListener("pointerdown", onOutside, true);
+      document.addEventListener("keydown", onKey, true);
+    });
+  }
+
+  /** Switches the cover's design or colour (moving its title and date into place). */
+  private async changeCover(design: CoverDesign, color: string) {
+    try {
+      this.finishTextEdit();
+      await this.flush();
+      await applyCover(this.notebook, design, color);
+      this.notebook.coverColor = color;
+      const cover = (await api.pages(this.notebook.id))[0];
+      const page = this.pages.find((p) => p.id === cover.id);
+      if (page) Object.assign(page, cover);
+      const els = fromStored(await api.elements(cover.id));
+      this.elementCache.set(cover.id, els);
+      this.history.delete(cover.id);
+      if (this.activeId === cover.id) {
+        this.elements = els;
+        this.undoStack = [];
+        this.redoStack = [];
+        this.selection.clear();
+      }
+      this.renderTemplateButton();
+      this.rebuildCache();
+      this.draw();
+      this.sizeSlots();
+      this.renderPageList();
+    } catch (e) {
+      reportError(e);
+    }
   }
 
   /** Opens a panel of paper styles with live previews. */
@@ -770,6 +875,7 @@ export class EditorScreen {
       return;
     }
     const current = this.page.template;
+    if (isCoverTemplate(current)) return this.openCoverPicker();
     const close = () => {
       panel.remove();
       this.templateBtn.setAttribute("aria-expanded", "false");
