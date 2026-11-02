@@ -218,7 +218,11 @@ export class EditorScreen {
     this.fileInput.addEventListener("change", () => this.insertImageFile(this.fileInput.files?.[0]));
     this.scroller.addEventListener("wheel", (e) => this.onWheel(e), { passive: false });
     this.scroller.addEventListener("scroll", () => this.onScroll(), { passive: true });
-    window.addEventListener("resize", () => this.root.isConnected && this.layout());
+    window.addEventListener("resize", () => {
+      if (!this.root.isConnected) return;
+      this.layout();
+      if (!this.selectionBar.hidden) this.positionSelectionBar();
+    });
   }
 
   // ------------------------------------------------------------- lifecycle
@@ -512,6 +516,7 @@ export class EditorScreen {
 
   /** After scrolling settles, the page in view becomes the current page. */
   private onScroll() {
+    if (!this.selectionBar.hidden) this.positionSelectionBar();
     window.clearTimeout(this.scrollTimer);
     this.scrollTimer = window.setTimeout(() => {
       if (this.gesture || this.editing || this.nav || performance.now() < this.ignoreScrollUntil) return;
@@ -1927,8 +1932,26 @@ export class EditorScreen {
       this.renderSelectionBar();
     }
     bar.hidden = false;
-    const top = Math.max(4, sel.y * this.zoom - 52);
-    bar.style.left = `${Math.max(4, sel.x * this.zoom)}px`;
+    // Keep the bar inside the visible part of the page area: above the
+    // selection if there's room, else below it (clear of the rotation
+    // knob), else pinned to the top of the view.
+    const wrap = this.pageWrap.getBoundingClientRect();
+    const view = this.scroller.getBoundingClientRect();
+    const pad = 8;
+    const visL = view.left - wrap.left + pad;
+    const visR = view.right - wrap.left - pad;
+    const visT = view.top - wrap.top + pad;
+    const visB = view.bottom - wrap.top - pad;
+    bar.style.maxWidth = `${Math.max(160, visR - visL)}px`;
+    const bw = bar.offsetWidth;
+    const bh = bar.offsetHeight;
+    const selL = sel.x * this.zoom;
+    const selT = sel.y * this.zoom;
+    const selB = (sel.y + sel.h) * this.zoom;
+    let top = selT - bh - 18;
+    if (top < visT) top = selB + 44 + bh <= visB ? selB + 44 : visT;
+    const left = Math.max(visL, Math.min(selL, visR - bw));
+    bar.style.left = `${left}px`;
     bar.style.top = `${top}px`;
   }
 
