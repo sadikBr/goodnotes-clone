@@ -36,7 +36,7 @@ import {
 } from "./geometry";
 import { inkToTextDialog } from "./inkToText";
 import { cachedBackground, renderBackground } from "./pdfRender";
-import { Laser, type LaserMode } from "./laser";
+import { Laser, LASER_FADE_MS, LASER_HOLD_MS, type LaserMode } from "./laser";
 import { buildVectorPdf, type PdfPageInput } from "./pdfExport";
 import { continueList, currentList, toggleList, type ListKind } from "./textFormat";
 import { beautify, detectBrace, recognizeShape } from "./beautify";
@@ -158,7 +158,11 @@ export class EditorScreen {
   private colors: Record<string, string> = { pen: INK_COLORS[0], highlighter: "#facc15", shape: INK_COLORS[0], text: INK_COLORS[0], sticky: STICKY_COLORS[0], laser: LASER_COLORS[0] };
   /** Presentation laser: never part of the page. */
   private laser = Object.assign(new Laser(), { mode: getPref<LaserMode>(LASER_MODE_KEY, "trail", ["trail", "dot"]) });
+  /** The laser has its own layer over the visible area, so the page is never redrawn for it. */
+  private laserCanvas = h("canvas", { class: "laser-layer", "aria-hidden": "true" });
+  private laserDot = h("div", { class: "laser-dot", "aria-hidden": "true", hidden: true });
   private laserFrame = 0;
+  private laserFadeTimer = 0;
   private widths: Record<string, number> = loadWidths();
   private textFont: FontId = getPref(TEXT_FONT_KEY, "sans", FONT_PRESETS.map((f) => f.id));
   private selectionBarKey = "";
@@ -218,7 +222,7 @@ export class EditorScreen {
     this.root.append(
       h("header", { class: "editor-header" }, this.headerLeft(), this.toolbar, this.headerRight()),
       this.optionsBar,
-      h("div", { class: "editor-body" }, h("aside", { class: "page-sidebar" }, this.pageList, h("button", { class: "btn add-page", onclick: () => this.addPage(this.pages.length) }, icon("plus"), "Add page")), h("div", { class: "canvas-area" }, this.scroller, this.statusBar)),
+      h("div", { class: "editor-body" }, h("aside", { class: "page-sidebar" }, this.pageList, h("button", { class: "btn add-page", onclick: () => this.addPage(this.pages.length) }, icon("plus"), "Add page")), h("div", { class: "canvas-area" }, this.scroller, this.statusBar, this.laserCanvas, this.laserDot)),
       this.fileInput,
     );
     this.pageWrap.append(this.selectionBar);
@@ -377,6 +381,11 @@ export class EditorScreen {
     if (i === this.index && this.activeId === this.pages[i]?.id && this.slots[i]?.contains(this.pageWrap)) return;
     this.finishTextEdit();
     if (this.dirty) void this.saveNow();
+    // Laser drawings belong to the page they were drawn on.
+    if (!this.laser.drawing) {
+      this.laser.clear();
+      this.renderLaser();
+    }
     const prevIndex = this.index;
     if (this.activeId) {
       this.elementCache.set(this.activeId, this.elements);
@@ -525,6 +534,7 @@ export class EditorScreen {
   /** After scrolling settles, the page in view becomes the current page. */
   private onScroll() {
     if (!this.selectionBar.hidden) this.positionSelectionBar();
+    if (this.tool === "laser") this.renderLaser();
     window.clearTimeout(this.scrollTimer);
     this.scrollTimer = window.setTimeout(() => {
       if (this.gesture || this.editing || this.nav || performance.now() < this.ignoreScrollUntil) return;
@@ -1003,7 +1013,10 @@ export class EditorScreen {
 
   private setTool(tool: Tool) {
     this.finishTextEdit();
-    if (tool !== "laser") this.laser.clear();
+    if (tool !== "laser") {
+      this.laser.clear();
+      this.renderLaser();
+    }
     if (tool !== "lasso") this.clearSelection();
     this.tool = tool;
     this.renderToolbar();
@@ -1251,6 +1264,7 @@ export class EditorScreen {
     this.draw();
     this.updateStatus();
     if (this.editing) this.positionEditor();
+    if (this.tool === "laser") this.renderLaser();
   }
 
   private get pixelScale() {
@@ -1334,7 +1348,6 @@ export class EditorScreen {
       const box = this.transformBox();
       if (box) drawGroupHandles(ctx, box, this.zoom);
     }
-    this.drawLaser(ctx);
     if (this.tool === "eraser" && this.cursor) {
       ctx.save();
       ctx.strokeStyle = "rgba(100,100,100,0.8)";
@@ -1347,17 +1360,82 @@ export class EditorScreen {
     this.positionSelectionBar();
   }
 
-  /** The laser overlay; keeps animating while a trail is fading. */
-  private drawLaser(ctx: CanvasRenderingContext2D) {
-    if (this.tool !== "laser") return;
-    const now = performance.now();
-    this.laser.draw(ctx, this.zoom, this.pixelScale / this.zoom, now);
-    if (this.laser.animating(now) && !this.laserFrame) {
-      this.laserFrame = requestAnimationFrame(() => {
-        this.laserFrame = 0;
-        if (this.root.isConnected) this.draw();
-      });
+  /** Redraws the laser layer on the next frame (at most once per frame). */
+  private renderLaser() {
+    if (this.laserFrame) return;
+    this.laserFrame = requestAnimationFrame(() => {
+      this.laserFrame = 0;
+      if (this.root.isConnected) this.paintLaser();
+    });
+  }
+
+  private paintLaser() {
+    const lc = this.laserCanvas;
+    const area = lc.parentElement!.getBoundingClientRect();
+    const view = this.scroller.getBoundingClientRect();
+    const page = this.canvas.getBoundingClientRect();
+    // Cover only the visible part of the scroller (scrollbars excluded).
+    const w = this.scroller.clientWidth;
+    const hgt = this.scroller.clientHeight;
+    const dpr = window.devicePixelRatio || 1;
+    lc.style.left = `${view.left - area.left}px`;
+    lc.style.top = `${view.top - area.top}px`;
+    lc.style.width = `${w}px`;
+    lc.style.height = `${hgt}px`;
+    if (lc.width !== Math.round(w * dpr) || lc.height !== Math.round(hgt * dpr)) {
+      lc.width = Math.round(w * dpr);
+      lc.height = Math.round(hgt * dpr);
     }
+    const ctx = lc.getContext("2d")!;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, lc.width, lc.height);
+    const z = page.width / this.page.width;
+    const ox = page.left - view.left;
+    const oy = page.top - view.top;
+    ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * ox, dpr * oy);
+    this.laser.draw(ctx, z);
+    this.positionLaserDot();
+  }
+
+  /** The pointer dot is a small element moved by the browser: no drawing at all. */
+  private positionLaserDot() {
+    const d = this.laser.dot;
+    const dot = this.laserDot;
+    if (!d || this.tool !== "laser") {
+      dot.hidden = true;
+      return;
+    }
+    const area = dot.parentElement!.getBoundingClientRect();
+    const page = this.canvas.getBoundingClientRect();
+    const z = page.width / this.page.width;
+    dot.hidden = false;
+    dot.style.setProperty("--laser", this.colors.laser);
+    dot.style.transform = `translate(${page.left - area.left + d[0] * z}px, ${page.top - area.top + d[1] * z}px)`;
+  }
+
+  /** Shows the laser drawing at full strength (new stroke, or drawing again mid-fade). */
+  private laserWake() {
+    window.clearTimeout(this.laserFadeTimer);
+    const lc = this.laserCanvas;
+    lc.style.transition = "none";
+    lc.style.opacity = "1";
+  }
+
+  /** About a second after the pen lifts, fade the whole drawing out, then clear it. */
+  private laserScheduleFade() {
+    window.clearTimeout(this.laserFadeTimer);
+    this.laserFadeTimer = window.setTimeout(() => {
+      const lc = this.laserCanvas;
+      lc.style.transition = `opacity ${LASER_FADE_MS}ms ease-out`;
+      lc.style.opacity = "0";
+      this.laserFadeTimer = window.setTimeout(() => {
+        if (this.laser.drawing) return;
+        this.laser.clearStrokes();
+        this.paintLaser();
+        lc.style.transition = "none";
+        lc.style.opacity = "1";
+      }, LASER_FADE_MS + 30);
+    }, LASER_HOLD_MS);
   }
 
   // ------------------------------------------------------- state mutations
@@ -1444,6 +1522,7 @@ export class EditorScreen {
     c.addEventListener("pointerleave", () => {
       this.cursor = null;
       this.laser.pointAt(null);
+      this.positionLaserDot();
       if (!this.gesture) this.draw();
     });
     c.addEventListener("dblclick", (e) => {
@@ -1482,9 +1561,10 @@ export class EditorScreen {
       case "laser":
         this.gesture = { type: "laser" };
         this.laser.color = this.colors.laser;
-        this.laser.begin([x, y], performance.now());
-        this.draw();
-        break;
+        this.laserWake();
+        this.laser.begin([x, y]);
+        this.renderLaser();
+        return; // no page redraw for the laser
       case "pen":
       case "highlighter":
       case "shape":
@@ -1569,9 +1649,8 @@ export class EditorScreen {
     this.cursor = this.point(e);
     if (!g) {
       if (this.tool === "laser" && e.pointerType !== "touch") {
-        this.laser.color = this.colors.laser;
         this.laser.pointAt(this.cursor);
-        this.draw();
+        this.positionLaserDot();
       }
       if (this.tool === "eraser") this.draw();
       if (this.tool === "lasso") this.updateHoverCursor();
@@ -1580,10 +1659,13 @@ export class EditorScreen {
     const events = typeof e.getCoalescedEvents === "function" ? e.getCoalescedEvents() : [];
     const samples = events.length ? events : [e];
     switch (g.type) {
-      case "laser":
-        for (const s of samples) this.laser.extend(this.point(s), performance.now(), 0.75 / this.zoom);
-        this.draw();
-        break;
+      case "laser": {
+        let changed = false;
+        for (const s of samples) changed = this.laser.extend(this.point(s), 0.75 / this.zoom) || changed;
+        if (changed) this.renderLaser();
+        else this.positionLaserDot();
+        return; // the page itself doesn't change: skip the page redraw
+      }
       case "draw": {
         if (g.preview) {
           // Refined shape stays under the pen: rotate/resize or move it.
@@ -1778,10 +1860,11 @@ export class EditorScreen {
     switch (g.type) {
       case "laser":
         this.gesture = null;
-        this.laser.end(performance.now());
+        this.laser.end();
         // A touch has no hover: hide the dot once the finger lifts.
         if (e.pointerType === "touch") this.laser.pointAt(null);
-        this.draw();
+        this.positionLaserDot();
+        if (this.laser.strokeCount) this.laserScheduleFade();
         break;
       case "draw": {
         window.clearTimeout(g.holdTimer);

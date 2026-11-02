@@ -1,7 +1,8 @@
 // Laser pointer for presenting and explaining. In trail mode everything
 // drawn stays visible while you keep going; about a second after the pen
-// lifts with nothing new drawn, it all fades away together. Dot mode just
-// shows a glowing pointer. Nothing is ever added to the page.
+// lifts with nothing new drawn, it all fades away together (the editor fades
+// the laser layer with a CSS transition, so fading costs nothing). Dot mode
+// just shows a glowing pointer. Nothing is ever added to the page.
 
 export type LaserMode = "trail" | "dot";
 
@@ -16,36 +17,42 @@ export class Laser {
   color = "#ef4444";
   private strokes: P[][] = [];
   private current: P[] | null = null;
-  private dot: P | null = null;
-  private lastActivity = 0;
+  /** Pointer position in page units, or null when it isn't over the page. */
+  dot: P | null = null;
 
-  /** Where the pointer is (or null when it leaves the page). */
   pointAt(p: P | null) {
     this.dot = p ? [p[0], p[1]] : null;
   }
 
-  begin(p: P, now: number) {
+  begin(p: P) {
     this.dot = [p[0], p[1]];
     if (this.mode !== "trail") return;
-    // Drawing again before the fade ends brings everything back.
-    if (this.opacity(now) <= 0) this.strokes = [];
     this.current = [[p[0], p[1]]];
     this.strokes.push(this.current);
-    this.lastActivity = now;
   }
 
-  extend(p: P, now: number, minStep: number) {
+  /** Adds a point; returns true if the drawing changed. */
+  extend(p: P, minStep: number): boolean {
     this.dot = [p[0], p[1]];
     const cur = this.current;
-    if (!cur) return;
+    if (!cur) return false;
     const last = cur[cur.length - 1];
-    if (Math.hypot(p[0] - last[0], p[1] - last[1]) >= minStep) cur.push([p[0], p[1]]);
-    this.lastActivity = now;
+    if (Math.hypot(p[0] - last[0], p[1] - last[1]) < minStep) return false;
+    cur.push([p[0], p[1]]);
+    return true;
   }
 
-  end(now: number) {
-    if (this.current) this.lastActivity = now;
+  end() {
     this.current = null;
+  }
+
+  get drawing(): boolean {
+    return this.current !== null;
+  }
+
+  /** Removes the drawing (after it has faded out). */
+  clearStrokes() {
+    this.strokes = this.current ? [this.current] : [];
   }
 
   clear() {
@@ -54,58 +61,33 @@ export class Laser {
     this.dot = null;
   }
 
-  /** Opacity of the drawing: 1 while writing and for a moment after, then fading to 0. */
-  opacity(now: number): number {
-    if (this.current) return 1;
-    const idle = now - this.lastActivity;
-    if (idle <= LASER_HOLD_MS) return 1;
-    return Math.max(0, 1 - (idle - LASER_HOLD_MS) / LASER_FADE_MS);
-  }
-
-  /** True while the drawing is waiting to fade or fading, so the editor keeps animating. */
-  animating(now: number): boolean {
-    if (!this.strokes.length || this.current) return false;
-    if (this.opacity(now) <= 0) {
-      this.strokes = [];
-      return false;
-    }
-    return true;
-  }
-
-  /** Number of strokes currently shown (for tests). */
   get strokeCount(): number {
     return this.strokes.length;
   }
 
   /**
-   * Draws the laser on a context set up in page units. Sizes are in screen
-   * pixels (divided by `zoom`); `dpr` converts the glow to canvas pixels.
+   * Draws the strokes on a context set up in page units; sizes are screen
+   * pixels divided by `zoom`. The glow is a wide faint line under the solid
+   * one (canvas shadow blur is far too slow for live drawing).
    */
-  draw(ctx: CanvasRenderingContext2D, zoom: number, dpr: number, now: number) {
-    const alpha = this.opacity(now);
+  draw(ctx: CanvasRenderingContext2D, zoom: number) {
+    if (!this.strokes.length) return;
     ctx.save();
-    if (this.strokes.length && alpha > 0) {
-      // All strokes in one path: one stroke() paints overlaps only once.
-      ctx.beginPath();
-      for (const s of this.strokes) smoothPath(ctx, s);
-      ctx.globalAlpha = alpha;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.strokeStyle = this.color;
-      ctx.lineWidth = 4.5 / zoom;
-      ctx.shadowColor = this.color;
-      ctx.shadowBlur = 10 * dpr;
-      ctx.stroke();
-    }
-    if (this.dot) {
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = this.color;
-      ctx.shadowColor = this.color;
-      ctx.shadowBlur = 12 * dpr;
-      ctx.beginPath();
-      ctx.arc(this.dot[0], this.dot[1], 5.5 / zoom, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    ctx.beginPath();
+    for (const s of this.strokes) smoothPath(ctx, s);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = this.color;
+    // Two faint bands give a soft falloff.
+    ctx.globalAlpha = 0.08;
+    ctx.lineWidth = 16 / zoom;
+    ctx.stroke();
+    ctx.globalAlpha = 0.14;
+    ctx.lineWidth = 10 / zoom;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = 4.5 / zoom;
+    ctx.stroke();
     ctx.restore();
   }
 }

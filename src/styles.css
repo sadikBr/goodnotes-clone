@@ -746,6 +746,29 @@ button {
 .page-canvas[data-tool="laser"] {
   cursor: none;
 }
+/* Laser pointer: its own layer over the visible area, and a dot element. */
+.laser-layer {
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;
+}
+.laser-dot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 7;
+  width: 11px;
+  height: 11px;
+  margin: -5.5px 0 0 -5.5px;
+  border-radius: 50%;
+  background: var(--laser, #ef4444);
+  box-shadow: 0 0 8px 2px color-mix(in srgb, var(--laser, #ef4444) 55%, transparent);
+  pointer-events: none;
+  will-change: transform;
+}
+.laser-dot[hidden] {
+  display: none;
+}
 .page-canvas[data-tool="eraser"] {
   cursor: none;
 }
