@@ -1236,32 +1236,19 @@ select option {
 /* Custom colour swatch and picker */
 .swatch-custom {
   position: relative;
-  background: conic-gradient(#ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ec4899, #ef4444);
-  box-shadow: none;
+  -webkit-appearance: none;
+  appearance: none;
+  background: conic-gradient(from 0deg, #ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ec4899, #ef4444);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
 }
-.swatch-custom::after {
-  content: "";
-  position: absolute;
-  inset: 4px;
-  border-radius: 50%;
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
-}
-.swatch-custom::before {
-  /* "+" when no custom colour is in use */
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background:
-    linear-gradient(var(--muted), var(--muted)) center / 8px 1.5px no-repeat,
-    linear-gradient(var(--muted), var(--muted)) center / 1.5px 8px no-repeat;
-}
+/* With a custom colour in use: rainbow ring around that colour. */
 .swatch-custom.has-colour::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
   background: var(--custom);
-}
-.swatch-custom.has-colour::before {
-  display: none;
+  box-shadow: 0 0 0 1.5px var(--surface);
 }
 .swatch-custom[aria-checked="true"] {
   border-color: var(--surface);

@@ -293,5 +293,7 @@ export function openColorPicker(anchor: HTMLElement, initial: string, onPick: (h
     document.addEventListener("pointerdown", onOutside, true);
     document.addEventListener("keydown", onKey, true);
   });
-  sv.focus();
+  // Ready to type a hex code straight away.
+  hex.focus();
+  hex.select();
 }

@@ -246,7 +246,7 @@ export class EditorScreen {
 
   handleKey(e: KeyboardEvent): boolean {
     const target = e.target as HTMLElement;
-    if (target.closest("input, textarea, select, .modal")) return false;
+    if (target.closest("input, textarea, select, .modal, .color-popover, .template-popover")) return false;
     const mod = e.ctrlKey || e.metaKey;
     const key = e.key.toLowerCase();
     if (mod && key === "z") return this.consume(e, () => (e.shiftKey ? this.redo() : this.undo()));
