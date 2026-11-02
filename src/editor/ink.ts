@@ -142,17 +142,3 @@ export function outlinePath(ctx: CanvasRenderingContext2D, outline: [number, num
   }
   ctx.closePath();
 }
-
-/** Light smoothing for calligraphy input (a moving average that keeps the ends). */
-export function smoothPoints(pts: Pt[]): Pt[] {
-  if (pts.length < 4) return pts;
-  const out: Pt[] = [pts[0]];
-  for (let i = 1; i < pts.length - 1; i++) {
-    const a = pts[i - 1];
-    const b = pts[i];
-    const c = pts[i + 1];
-    out.push([(a[0] + 2 * b[0] + c[0]) / 4, (a[1] + 2 * b[1] + c[1]) / 4, b[2]]);
-  }
-  out.push(pts[pts.length - 1]);
-  return out;
-}

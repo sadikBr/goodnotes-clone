@@ -1,30 +1,13 @@
 import type { P2, Template } from "../api";
 import { boxOf, groupHandles, handlesFor, isClosedShape, setLineCounter, textHeight, type Rect, type TextStyle } from "./geometry";
 import { LIST_MARKER } from "./textFormat";
-import { outlinePath, smoothPoints, strokeOutline } from "./ink";
+import { outlinePath, strokeOutline } from "./ink";
 import { fontCss } from "../fonts";
 import type { El, Pt, ShapeEl, StickyEl, StrokeEl, TextEl } from "./model";
 import type { Anchor, Guide } from "./snap";
 
 export { drawTemplate, isDarkPaper, paperLayout } from "./papers";
 import { drawTemplate } from "./papers";
-
-function strokePath(ctx: CanvasRenderingContext2D, pts: Pt[]) {
-  ctx.beginPath();
-  ctx.moveTo(pts[0][0], pts[0][1]);
-  if (pts.length === 1) {
-    ctx.lineTo(pts[0][0] + 0.01, pts[0][1]);
-    return;
-  }
-  // Quadratic smoothing through segment midpoints.
-  for (let i = 1; i < pts.length - 1; i++) {
-    const mx = (pts[i][0] + pts[i + 1][0]) / 2;
-    const my = (pts[i][1] + pts[i + 1][1]) / 2;
-    ctx.quadraticCurveTo(pts[i][0], pts[i][1], mx, my);
-  }
-  const last = pts[pts.length - 1];
-  ctx.lineTo(last[0], last[1]);
-}
 
 // Pencil grain: a small tile of per-pixel alpha noise, tinted per colour.
 const grainCache = new Map<string, HTMLCanvasElement>();
@@ -47,36 +30,109 @@ function grainTile(color: string): HTMLCanvasElement {
   return tile;
 }
 
-/** Calligraphy: a flat nib held at 45°, swept along the path. */
+/** Calligraphy nib angle (from the horizontal, rising to the right). */
+const NIB_ANGLE = -Math.PI / 4;
+
+/**
+ * Evenly spaced, smoothed points along a calligraphy stroke: hand jitter
+ * would otherwise show as ragged edges on the wide parts of the stroke.
+ */
+function calligraphyPath(pts: Pt[], step: number, smoothing: number): Pt[] {
+  if (pts.length < 2) return pts;
+  // Resample to an even spacing (pressure interpolated).
+  const even: Pt[] = [pts[0]];
+  let carry = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1];
+    const b = pts[i];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    let t = step - carry;
+    while (t <= len) {
+      const k = t / len;
+      even.push([a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k]);
+      t += step;
+    }
+    carry = len - (t - step);
+  }
+  const last = pts[pts.length - 1];
+  if (Math.hypot(last[0] - even[even.length - 1][0], last[1] - even[even.length - 1][1]) > step * 0.3) even.push(last);
+  return smoothAlong(smoothAlong(even, smoothing), smoothing);
+}
+
+/**
+ * A moving average over `radius` points of an evenly spaced path (the window
+ * shrinks near the ends, which stay put). Irons out hand tremor over a few
+ * millimetres without rounding off real shapes.
+ */
+function smoothAlong(pts: Pt[], radius: number): Pt[] {
+  const n = pts.length;
+  if (n < 3 || radius < 1) return pts;
+  const out: Pt[] = [];
+  for (let i = 0; i < n; i++) {
+    const r = Math.min(radius, i, n - 1 - i);
+    let x = 0;
+    let y = 0;
+    for (let k = i - r; k <= i + r; k++) {
+      x += pts[k][0];
+      y += pts[k][1];
+    }
+    out.push([x / (2 * r + 1), y / (2 * r + 1), pts[i][2]]);
+  }
+  return out;
+}
+
+/**
+ * Calligraphy: a flat nib held at a fixed angle, swept along the path, like
+ * a broad-edged pen or qalam. The ink is the area the nib sweeps: one small
+ * four-sided piece between each pair of nib positions, all traced the same
+ * way round and filled together, so the stroke has no holes or slivers
+ * however it turns or crosses itself, and its ends are cut flat at the nib
+ * angle. A hairline the nib's thickness keeps strokes along the nib visible.
+ */
 function drawCalligraphy(ctx: CanvasRenderingContext2D, el: StrokeEl) {
-  const pts = el.points;
-  const angle = -Math.PI / 4;
+  const ux = Math.cos(NIB_ANGLE);
+  const uy = Math.sin(NIB_ANGLE);
+  const half = (p: Pt) => (el.width * 1.4 * (0.55 + 0.6 * Math.min(1, Math.max(0.05, p[2])))) / 2;
+  // Even spacing, smoothed over about a nib width (at least ~1 mm).
+  const step = Math.max(0.6, el.width * 0.25);
+  const pts = calligraphyPath(el.points, step, Math.round(Math.max(4, el.width * 0.9) / step));
   ctx.fillStyle = el.color;
   ctx.strokeStyle = el.color;
-  ctx.lineWidth = Math.max(0.6, el.width * 0.18);
-  const nib = (p: Pt): [number, number] => {
-    const half = (el.width * 1.4 * (0.55 + 0.6 * Math.min(1, Math.max(0.05, p[2])))) / 2;
-    return [Math.cos(angle) * half, Math.sin(angle) * half];
-  };
+  ctx.lineCap = "butt";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = Math.max(0.6, el.width * 0.16);
+  ctx.beginPath();
   if (pts.length === 1) {
-    const [nx, ny] = nib(pts[0]);
-    ctx.beginPath();
-    ctx.moveTo(pts[0][0] - nx, pts[0][1] - ny);
-    ctx.lineTo(pts[0][0] + nx, pts[0][1] + ny);
+    const h = half(pts[0]);
+    ctx.moveTo(pts[0][0] - ux * h, pts[0][1] - uy * h);
+    ctx.lineTo(pts[0][0] + ux * h, pts[0][1] + uy * h);
     ctx.stroke();
     return;
   }
-  // One ribbon outline (one nib edge out, the other back). Non-zero filling
-  // keeps twisted sections solid and avoids seams between segments.
-  const offs = pts.map(nib);
-  ctx.beginPath();
-  ctx.moveTo(pts[0][0] + offs[0][0], pts[0][1] + offs[0][1]);
-  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0] + offs[i][0], pts[i][1] + offs[i][1]);
-  for (let i = pts.length - 1; i >= 0; i--) ctx.lineTo(pts[i][0] - offs[i][0], pts[i][1] - offs[i][1]);
-  ctx.closePath();
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1];
+    const b = pts[i];
+    const ha = half(a);
+    const hb = half(b);
+    const quad: [number, number][] = [
+      [a[0] + ux * ha, a[1] + uy * ha],
+      [b[0] + ux * hb, b[1] + uy * hb],
+      [b[0] - ux * hb, b[1] - uy * hb],
+      [a[0] - ux * ha, a[1] - uy * ha],
+    ];
+    // Same winding for every piece, so the non-zero fill unites them.
+    let area = 0;
+    for (let k = 0; k < 4; k++) area += quad[k][0] * quad[(k + 1) % 4][1] - quad[(k + 1) % 4][0] * quad[k][1];
+    if (area < 0) quad.reverse();
+    ctx.moveTo(quad[0][0], quad[0][1]);
+    for (let k = 1; k < 4; k++) ctx.lineTo(quad[k][0], quad[k][1]);
+    ctx.closePath();
+  }
   ctx.fill("nonzero");
-  // Thin centre line keeps strokes parallel to the nib visible.
-  strokePath(ctx, pts);
+  // The nib's own thickness: strokes drawn along the nib stay a crisp hairline.
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (const p of pts.slice(1)) ctx.lineTo(p[0], p[1]);
   ctx.stroke();
 }
 
@@ -175,7 +231,7 @@ export function drawStroke(ctx: CanvasRenderingContext2D, el: StrokeEl, live = f
   }
   const style = el.style ?? "fountain";
   if (style === "calligraphy") {
-    drawCalligraphy(ctx, { ...el, points: smoothPoints(pts) });
+    drawCalligraphy(ctx, el);
     ctx.restore();
     return;
   }
