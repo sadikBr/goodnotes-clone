@@ -40,7 +40,7 @@ import {
 import { inkToTextDialog } from "./inkToText";
 import { cachedBackground, renderBackground } from "./pdfRender";
 import { INSTRUMENTS, MM, Ruler, type Guide as EdgeGuide, type InstrumentKind } from "./ruler";
-import { SpeedInk, speedSensitive } from "./ink";
+import { smoothPoints, SpeedInk, speedSensitive } from "./ink";
 import { COVER_DESIGNS, coverDesignOf, isCoverTemplate, type CoverDesign } from "./covers";
 import { applyCover, coverPreview } from "../cover";
 import { Laser, LASER_CORE_FADE_MS, LASER_HOLD_MS, type LaserLayers, type LaserMode } from "./laser";
@@ -172,7 +172,7 @@ const EXPORT_SCALE: Record<ExportFormat, number> = { pdf: 3, png: 3, pptx: 2 };
 const MAX_UNDO = 100;
 
 type Gesture =
-  | { type: "draw"; tool: "pen" | "highlighter" | "shape"; points: Pt[]; times: number[]; preview: ShapeEl | null; holdTimer: number; held: Held | null; ruler?: { edge: EdgeGuide; offset: number }; ink?: SpeedInk | null }
+  | { type: "draw"; tool: "pen" | "highlighter" | "shape"; points: Pt[]; times: number[]; preview: ShapeEl | null; holdTimer: number; held: Held | null; ruler?: { edge: EdgeGuide; offset: number }; ink?: SpeedInk | null; frozen?: number; smooth?: Pt[] }
   | { type: "erase"; changed: boolean; last: P2 | null }
   | { type: "lasso"; points: P2[] }
   | { type: "laser" }
@@ -1162,6 +1162,9 @@ export class EditorScreen {
     this.placeDrawer();
     this.renderPenOnlyButton();
     this.canvas.dataset.tool = this.tool;
+    // The laser's three window-sized layers only exist while it's in use, so
+    // the compositor doesn't blend empty layers on every frame otherwise.
+    this.laserLayer.style.display = this.tool === "laser" ? "" : "none";
   }
 
   /** A pinned drawer stays open; otherwise it opens on demand and tucks away when you write. */
@@ -1794,7 +1797,9 @@ export class EditorScreen {
     if (g) {
       if (g.type !== "draw" || g.preview || this.selection.size) return null;
       const pad = this.widths[g.tool] * 2 + 4 / this.zoom;
-      for (const p of g.points) add(p[0], p[1], pad);
+      // Only the unfrozen tail changes (see freezeLiveStroke).
+      const pts = g.points;
+      for (let i = Math.max(0, (g.frozen ?? 0) - 2); i < pts.length; i++) add(pts[i][0], pts[i][1], pad);
     } else if (this.selection.size) return null;
     if (this.tool === "eraser" && this.cursor) add(this.cursor[0], this.cursor[1], this.widths.eraser / 2 + 3 / this.zoom);
     const k = this.pixelScale;
@@ -1807,6 +1812,37 @@ export class EditorScreen {
     };
   }
 
+  /**
+   * Long strokes are drawn incrementally: once the stroke being written has
+   * grown, its older part is drawn into the page cache for good and only the
+   * last few points are redrawn each frame, so writing a long line costs the
+   * same per frame as a short one. Opaque pens only (where pieces join
+   * invisibly); the whole stroke is redrawn properly when it's finished.
+   */
+  private freezeLiveStroke() {
+    const g = this.gesture;
+    if (g?.type !== "draw" || g.preview || g.tool !== "pen") return;
+    if (!["fountain", "ballpoint", "brush"].includes(this.penStyle)) return;
+    const CHUNK = 32;
+    const KEEP = 12;
+    if (g.points.length - (g.frozen ?? 0) <= CHUNK + KEEP) return;
+    // Pieces are drawn from the smoothed points so they line up exactly.
+    const smooth = (g.smooth = smoothPoints(g.points, g.smooth));
+    const c = this.cache.getContext("2d")!;
+    while (g.points.length - (g.frozen ?? 0) > CHUNK + KEEP) {
+      const from = g.frozen ?? 0;
+      const to = g.points.length - KEEP;
+      c.setTransform(this.pixelScale, 0, 0, this.pixelScale, 0, 0);
+      drawStroke(
+        c,
+        { id: "live", z: 0, kind: "stroke", tool: "pen", style: this.penStyle, color: this.colors.pen, width: this.widths.pen, points: smooth.slice(from, to + 1) },
+        false,
+        { first: from === 0, last: false },
+      );
+      g.frozen = to;
+    }
+  }
+
   private draw() {
     if (!this.page) return;
     if (this.drawFrame) {
@@ -1814,6 +1850,7 @@ export class EditorScreen {
       this.drawFrame = 0;
     }
     const ctx = this.ctx;
+    this.freezeLiveStroke();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     const live = this.liveOverlayRect();
     const prev = this.overlayRect;
@@ -1860,8 +1897,8 @@ export class EditorScreen {
           style: g.tool === "pen" ? this.penStyle : undefined,
           color: this.colors[g.tool],
           width: this.widths[g.tool],
-          points: g.points,
-        }, true);
+          points: g.frozen ? smoothPoints(g.points, g.smooth).slice(g.frozen) : g.points,
+        }, true, g.frozen ? { first: false, last: true } : undefined);
     } else if (g?.type === "shape") {
       if (g.preview) drawElement(ctx, g.preview, this.images, () => {});
     } else if (g?.type === "lasso") {
@@ -2337,6 +2374,7 @@ export class EditorScreen {
       const shape = this.refine(g);
       if (!shape) return;
       g.preview = shape;
+      if (g.frozen) this.rebuildCache(); // drop the stroke pieces drawn so far
       const last = g.points[g.points.length - 1];
       const anchor: P2 = [last[0], last[1]];
       g.held = { mode: "transform", base: shape, anchor, pivot: this.pivotFor(shape), still: anchor, stillTimer: 0 };
@@ -2511,6 +2549,12 @@ export class EditorScreen {
       case "draw": {
         window.clearTimeout(g.holdTimer);
         if (g.held) window.clearTimeout(g.held.stillTimer);
+        // Keep the stroke on screen as drawn until it's added (a queued frame
+        // would otherwise briefly show the page without it).
+        if (this.drawFrame) {
+          cancelAnimationFrame(this.drawFrame);
+          this.drawFrame = 0;
+        }
         let shape = g.preview;
         if (g.ruler) {
           this.ruler.setReadout(null);

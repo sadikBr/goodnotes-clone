@@ -108,8 +108,45 @@ export function sharpCorners(points: Pt[], width: number): number[] {
  * corners so each part gets a clean outline (one outline around a sharp
  * reversal bulges and hooks); fill them together with the non-zero rule.
  */
-export function strokeOutline(points: Pt[], style: PenStyle | undefined, width: number, last = true): [number, number][][] {
+/** How far each point moves toward the pen (perfect-freehand's streamline 0.38). */
+const STREAMLINE_T = 0.15 + (1 - 0.38) * 0.85;
+
+/**
+ * The stroke's points after streamline smoothing (each point eases toward
+ * the pen from the previous one). Pass `into` to extend an earlier result
+ * as points are added, for a stroke being drawn.
+ */
+export function smoothPoints(points: Pt[], into: Pt[] = []): Pt[] {
+  for (let i = into.length; i < points.length; i++) {
+    const r = points[i];
+    if (i === 0) {
+      into.push(r);
+      continue;
+    }
+    const p = into[i - 1];
+    into.push([p[0] + (r[0] - p[0]) * STREAMLINE_T, p[1] + (r[1] - p[1]) * STREAMLINE_T, r[2]]);
+  }
+  return into;
+}
+
+/**
+ * `part` draws a piece of a longer stroke: a piece that isn't the stroke's
+ * real start or end gets a plain round cap there instead of a taper, so
+ * pieces join seamlessly (used to draw a long stroke incrementally).
+ */
+export function strokeOutline(points: Pt[], style: PenStyle | undefined, width: number, last = true, part?: { first: boolean; last: boolean }): [number, number][][] {
   const opts = options(style, width, last);
+  if (part && !part.first) opts.start = { cap: true, taper: 0 };
+  if (part && !part.last) opts.end = { cap: true, taper: 0 };
+  // Smoothing ("streamline") is applied here, over the whole stroke, rather
+  // than inside perfect-freehand: then a piece of a stroke (`part`, given
+  // already-smoothed points) lines up exactly with the rest of it.
+  if (!part) {
+    const raw = points;
+    points = smoothPoints(raw);
+    if (last && raw.length > 1) points[points.length - 1] = raw[raw.length - 1];
+  }
+  opts.streamline = 0;
   const corners = points.length > 6 ? sharpCorners(points, width) : [];
   if (!corners.length) return [getStroke(points, opts) as [number, number][]];
   const out: [number, number][][] = [];
