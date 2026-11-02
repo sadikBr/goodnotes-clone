@@ -127,7 +127,6 @@ export function coverPickerField(initial: CoverDesign | "none", allowNone = fals
               type: "button",
               class: "cover-design",
               role: "radio",
-              title: d.label,
               "aria-label": `${d.label} cover`,
               "aria-checked": String(v.design === d.id),
               onclick: () => {
@@ -151,4 +150,30 @@ export function coverPickerField(initial: CoverDesign | "none", allowNone = fals
       return row;
     },
   };
+}
+
+/**
+ * A large live preview of the notebook being created: its cover (design,
+ * colour, title, orientation) and, peeking out behind it, its first paper page.
+ */
+export function coverPreviewPanel(ctx: { values: Record<string, string>; onChange(fn: () => void): void }): HTMLElement {
+  const stage = h("div", { class: "nb-preview-stage" });
+  const caption = h("div", { class: "nb-preview-caption" });
+  const draw = () => {
+    const v = ctx.values;
+    const landscape = v.orientation === "landscape";
+    const design = (v.design && v.design !== "none" ? v.design : "classic") as CoverDesign;
+    const cover = coverPreview(design, v.cover || "#2563eb", v.title ?? "", landscape ? 250 : 200, landscape);
+    cover.classList.add("nb-preview-cover");
+    stage.replaceChildren(cover);
+    caption.textContent = `${COVER_DESIGNS.find((d) => d.id === design)?.label ?? ""} cover`;
+  };
+  let pending = 0;
+  ctx.onChange(() => {
+    cancelAnimationFrame(pending);
+    pending = requestAnimationFrame(draw);
+  });
+  void ensureFonts(["sans", "caveat", "kalam"]).then(draw);
+  draw();
+  return h("div", { class: "nb-preview" }, stage, caption);
 }

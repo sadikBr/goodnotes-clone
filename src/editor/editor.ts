@@ -4,6 +4,8 @@ import { api, PAPER_COLORS, TEMPLATE_CATEGORIES, TEMPLATES, type ExportFormat, t
 import { ensureFonts, FONT_PRESETS, fontPreset, type FontId } from "../fonts";
 import { getPref, hasPref, setPref } from "../prefs";
 import { customColorButton } from "../colorPicker";
+import { isDark, toggleTheme } from "../theme";
+import { shortcutsSheet } from "./shortcuts";
 import { confirmDialog, formDialog, h, icon, popupMenu, reportError, sizeControl, toast } from "../ui";
 import {
   bounds,
@@ -87,6 +89,7 @@ const TEXT_FONT_KEY = "inkleaf-text-font";
 const ERASER_MODE_KEY = "inkleaf-eraser-mode";
 const LASER_MODE_KEY = "inkleaf-laser-mode";
 const INSTRUMENT_KEY = "inkleaf-instrument";
+const SIDEBAR_KEY = "inkleaf-page-sidebar";
 
 /** Size control ranges and one-tap presets per tool. */
 const SIZE_SPECS: Record<string, { label: string; min: number; max: number; step: number; presets: number[]; preview: "dot" | "letter" }> = {
@@ -244,15 +247,30 @@ export class EditorScreen {
   private optionsBar = h("div", { class: "options-bar", role: "toolbar", "aria-label": "Tool options" });
   private selectionBar = h("div", { class: "selection-bar", hidden: true });
   private titleBtn = h("button", { class: "title-btn", title: "Rename notebook" });
+  private pageChip = h("span", { class: "page-chip" });
+  private pageCount = h("span", { class: "page-count" });
+  private focusExit = h("button", { class: "focus-exit", title: "Leave focus mode (F)", onclick: () => this.toggleFocus() }, icon("focus"), "Exit focus");
   private fileInput = h("input", { type: "file", accept: "image/png,image/jpeg,image/gif,image/webp", hidden: true });
 
   constructor(private cb: EditorCallbacks) {
     this.root.append(
       h("header", { class: "editor-header" }, this.headerLeft(), this.toolbar, this.headerRight()),
-      this.optionsBar,
-      h("div", { class: "editor-body" }, h("aside", { class: "page-sidebar" }, this.pageList, h("button", { class: "btn add-page", onclick: () => this.addPage(this.pages.length) }, icon("plus"), "Add page")), h("div", { class: "canvas-area" }, this.scroller, this.statusBar, this.rulerLayer, this.laserLayer, this.laserDot)),
+      h(
+        "div",
+        { class: "editor-body" },
+        h(
+          "aside",
+          { class: "page-sidebar", "aria-label": "Pages" },
+          h("div", { class: "page-sidebar-head" }, h("span", {}, "Pages"), this.pageCount),
+          this.pageList,
+          h("button", { class: "add-page", title: "Add a page at the end", onclick: () => this.addPage(this.pages.length) }, icon("plus"), "Add page"),
+        ),
+        // The tool options and the page/zoom controls float over the canvas.
+        h("div", { class: "canvas-area" }, this.scroller, this.optionsBar, this.statusBar, this.rulerLayer, this.laserLayer, this.laserDot, this.focusExit),
+      ),
       this.fileInput,
     );
+    this.root.classList.toggle("no-sidebar", getPref(SIDEBAR_KEY, "shown", ["shown", "hidden"]) === "hidden");
     this.pageWrap.append(this.selectionBar);
     this.rulerLayer.append(this.ruler.el);
     this.ruler.setKind(getPref<InstrumentKind>(INSTRUMENT_KEY, "ruler", INSTRUMENTS.map((i) => i.id)));
@@ -310,6 +328,9 @@ export class EditorScreen {
     if (key === "pagedown" || key === "arrowright") return this.consume(e, () => this.goTo(this.index + 1));
     if (key === "pageup" || key === "arrowleft") return this.consume(e, () => this.goTo(this.index - 1));
     if (key === "r") return this.consume(e, () => this.toggleRuler());
+    if (key === "f") return this.consume(e, () => this.toggleFocus());
+    if (key === "?" || (key === "/" && e.shiftKey)) return this.consume(e, () => shortcutsSheet());
+    if (key === "[") return this.consume(e, () => this.toggleSidebar());
     const tool = TOOLS.find((t) => t.key === key && t.key !== " ");
     if (tool) return this.consume(e, () => this.setTool(tool.id));
     return false;
@@ -597,7 +618,9 @@ export class EditorScreen {
       "div",
       { class: "header-left" },
       h("button", { class: "icon-btn", "aria-label": "Back to library", title: "Library", onclick: () => this.cb.close() }, icon("back")),
+      h("button", { class: "icon-btn sidebar-btn", "aria-label": "Show or hide pages", title: "Pages sidebar", onclick: () => this.toggleSidebar() }, icon("sidebar")),
       this.titleBtn,
+      this.pageChip,
     );
   }
 
@@ -615,7 +638,42 @@ export class EditorScreen {
       h("span", { class: "divider" }),
       this.rulerBtn,
       this.penOnlyBtn,
+      this.moreButton(),
     );
+  }
+
+  /** The ⋯ menu: focus mode, keyboard shortcuts and the theme. */
+  private moreButton(): HTMLButtonElement {
+    const btn = h("button", { class: "icon-btn", "aria-label": "More", title: "More", "aria-haspopup": "menu" }, icon("more"));
+    btn.addEventListener("click", () =>
+      popupMenu(btn, [
+        { label: "Focus mode", shortcut: "F", action: () => this.toggleFocus() },
+        { label: this.root.classList.contains("no-sidebar") ? "Show pages" : "Hide pages", shortcut: "[", action: () => this.toggleSidebar() },
+        { label: "Keyboard shortcuts", shortcut: "?", action: () => shortcutsSheet() },
+        { label: isDark() ? "Light mode" : "Dark mode", action: () => toggleTheme() },
+      ]),
+    );
+    return btn;
+  }
+
+  /** Shows or hides the page thumbnails (remembered). */
+  private toggleSidebar() {
+    const hidden = this.root.classList.toggle("no-sidebar");
+    setPref(SIDEBAR_KEY, hidden ? "hidden" : "shown");
+    this.afterChromeChange();
+  }
+
+  /** Focus mode: only the page; the top bar slides in when the pointer reaches the top. */
+  private toggleFocus() {
+    const on = this.root.classList.toggle("focus");
+    if (on) toast("Focus mode — move to the top edge for the toolbar, press F to leave");
+    this.afterChromeChange();
+  }
+
+  /** Re-lays out the page once the sidebar or header has finished moving. */
+  private afterChromeChange() {
+    this.layout();
+    window.setTimeout(() => this.root.isConnected && this.layout(), 260);
   }
 
   private templateBtn = h("button", { class: "template-picker", "aria-haspopup": "dialog", "aria-expanded": "false", title: "Page paper" });
@@ -897,6 +955,14 @@ export class EditorScreen {
         },
       });
     }
+    // A colour bar under tools that draw in a colour shows their current ink.
+    TOOLS.forEach((t, i) => {
+      const c = t.id === "sticky" ? null : this.colors[t.id];
+      if (c) {
+        tools[i].dataset.ink = "";
+        tools[i].style.setProperty("--ink", c);
+      }
+    });
     this.toolbar.replaceChildren(h("div", { class: "tool-group" }, ...tools));
     const options = [this.toolOptions(), swatches, width].filter((x): x is HTMLElement => x !== null);
     const hints: Partial<Record<Tool, string>> = {
@@ -1104,7 +1170,7 @@ export class EditorScreen {
     const zoom = Math.round(this.zoom * 100);
     this.statusBar.replaceChildren(
       h("button", { class: "icon-btn small", "aria-label": "Previous page", onclick: () => this.goTo(this.index - 1), disabled: this.index === 0 }, icon("up")),
-      h("span", {}, `Page ${this.index + 1} of ${this.pages.length}`),
+      h("span", { class: "status-page" }, `${this.index + 1} / ${this.pages.length}`),
       h("button", { class: "icon-btn small", "aria-label": "Next page", onclick: () => this.goTo(this.index + 1), disabled: this.index >= this.pages.length - 1 }, icon("down")),
       h("span", { class: "divider" }),
       h("button", { class: "icon-btn small", "aria-label": "Zoom out", onclick: () => this.setZoom(this.zoom / 1.2) }, icon("zoomOut")),
@@ -1113,6 +1179,8 @@ export class EditorScreen {
       h("button", { class: "icon-btn small", "aria-label": "Fit width", title: "Fit width (Ctrl+0)", onclick: () => this.fitWidth() }, icon("fit")),
     );
     this.renderTemplateButton();
+    this.pageChip.textContent = `Page ${this.index + 1} of ${this.pages.length}`;
+    this.pageCount.textContent = String(this.pages.length);
   }
 
   // ----------------------------------------------------------- page sidebar
@@ -1620,7 +1688,14 @@ export class EditorScreen {
 
   private bindCanvas() {
     const c = this.canvas;
-    c.addEventListener("pointerdown", (e) => this.onDown(e));
+    c.addEventListener("pointerdown", (e) => {
+      this.onDown(e);
+      // While writing, the floating pills fade so they never get in the way.
+      if (this.gesture) this.root.classList.add("drawing");
+    });
+    const endDrawing = () => !this.gesture && this.root.classList.remove("drawing");
+    window.addEventListener("pointerup", () => queueMicrotask(endDrawing));
+    window.addEventListener("pointercancel", () => queueMicrotask(endDrawing));
     c.addEventListener("pointermove", (e) => this.onMove(e));
     c.addEventListener("pointerup", (e) => this.onUp(e));
     c.addEventListener("pointercancel", (e) => {
@@ -2308,7 +2383,9 @@ export class EditorScreen {
     const pad = 8;
     const visL = view.left - wrap.left + pad;
     const visR = view.right - wrap.left - pad;
-    const visT = view.top - wrap.top + pad;
+    // Below the floating tool-options pill.
+    const pill = this.optionsBar.getBoundingClientRect();
+    const visT = Math.max(view.top, pill.height ? pill.bottom : 0) - wrap.top + pad;
     const visB = view.bottom - wrap.top - pad;
     bar.style.maxWidth = `${Math.max(160, visR - visL)}px`;
     const bw = bar.offsetWidth;

@@ -1,37 +1,13 @@
 import "./styles.css";
 import { EditorScreen } from "./editor/editor";
 import { LibraryScreen } from "./library";
-import { h, icon } from "./ui";
+import { installTooltips } from "./ui";
+import { applyStoredTheme } from "./theme";
 
 const app = document.getElementById("app")!;
 
-const THEME_KEY = "inkleaf-theme";
-function applyTheme(theme: string | null) {
-  if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
-  else delete document.documentElement.dataset.theme;
-}
-function storedTheme(): string | null {
-  try {
-    return localStorage.getItem(THEME_KEY);
-  } catch {
-    return null;
-  }
-}
-applyTheme(storedTheme());
-
-const themeBtn = h("button", { class: "icon-btn theme-toggle", "aria-label": "Toggle dark mode", title: "Toggle dark mode" }, icon("moon"));
-themeBtn.addEventListener("click", () => {
-  const dark = document.documentElement.dataset.theme
-    ? document.documentElement.dataset.theme === "dark"
-    : window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const next = dark ? "light" : "dark";
-  applyTheme(next);
-  try {
-    localStorage.setItem(THEME_KEY, next);
-  } catch {
-    /* preference is per session only */
-  }
-});
+applyStoredTheme();
+installTooltips();
 
 let editor: EditorScreen | null = null;
 
@@ -44,7 +20,7 @@ async function showLibrary() {
     await editor.flush();
     editor = null;
   }
-  app.replaceChildren(library.root, themeBtn);
+  app.replaceChildren(library.root);
   await library.show();
 }
 
@@ -56,6 +32,7 @@ async function openEditor(id: string, pageId: string | null) {
 
 document.addEventListener("keydown", (e) => {
   if (editor) editor.handleKey(e);
+  else library.handleKey(e);
 });
 document.addEventListener("paste", (e) => {
   if (editor) editor.handlePaste(e);

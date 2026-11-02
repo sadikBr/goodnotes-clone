@@ -47,6 +47,11 @@ export const ICONS = {
   zoomIn: svg('<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M11 8v6M8 11h6"/>'),
   zoomOut: svg('<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 11h6"/>'),
   fit: svg('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'),
+  sort: svg('<path d="M7 4v16M3.5 16.5L7 20l3.5-3.5"/><path d="M14 6h7M14 11h5M14 16h3"/>'),
+  sidebar: svg('<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9 4v16"/>'),
+  focus: svg('<path d="M4 9V5a1 1 0 011-1h4M15 4h4a1 1 0 011 1v4M20 15v4a1 1 0 01-1 1h-4M9 20H5a1 1 0 01-1-1v-4"/>'),
+  keyboard: svg('<rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M7.5 14h9"/>'),
+  sun: svg('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),
   more: svg('<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>'),
   folder: svg('<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>'),
   book: svg('<path d="M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3z"/><path d="M5 17a3 3 0 013-3h11"/>'),
@@ -125,13 +130,23 @@ export interface Field {
 export const COVER_COLORS = ["#2563eb", "#0d9488", "#16a34a", "#ca8a04", "#ea580c", "#dc2626", "#db2777", "#7c3aed", "#475569", "#111827"];
 
 /** Shows a modal form; resolves with field values or null when cancelled. */
-export function formDialog(title: string, fields: Field[], submitLabel = "Save"): Promise<Record<string, string> | null> {
+export interface FormDialogOptions {
+  /** A side panel (e.g. a live preview) beside the form; it can follow field changes. */
+  aside?: (ctx: { values: Record<string, string>; onChange(fn: () => void): void }) => HTMLElement;
+}
+
+export function formDialog(title: string, fields: Field[], submitLabel = "Save", opts: FormDialogOptions = {}): Promise<Record<string, string> | null> {
   return new Promise((resolve) => {
     const values: Record<string, string> = {};
     const listeners: (() => void)[] = [];
     const changed = () => listeners.forEach((fn) => fn());
     const form = h("form", { class: "dialog-form" });
-    const backdrop = h("div", { class: "modal-backdrop" }, h("div", { class: "modal", role: "dialog", "aria-modal": "true", "aria-label": title }, h("h2", {}, title), form));
+    const body = opts.aside ? h("div", { class: "modal-split" }, h("div", { class: "modal-aside" }), h("div", { class: "modal-main" }, h("h2", {}, title), form)) : null;
+    const backdrop = h(
+      "div",
+      { class: "modal-backdrop" },
+      h("div", { class: `modal${opts.aside ? " wide" : ""}`, role: "dialog", "aria-modal": "true", "aria-label": title }, ...(body ? [body] : [h("h2", {}, title), form])),
+    );
     const close = (result: Record<string, string> | null) => {
       backdrop.remove();
       document.removeEventListener("keydown", onKey, true);
@@ -198,6 +213,7 @@ export function formDialog(title: string, fields: Field[], submitLabel = "Save")
         form.append(h("label", {}, h("span", {}, f.label), input));
       }
     }
+    if (opts.aside && body) body.firstElementChild!.append(opts.aside({ values, onChange: (fn) => listeners.push(fn) }));
     form.append(
       h(
         "div",
@@ -249,6 +265,8 @@ export interface MenuItem {
   /** Optional CSS font-family, e.g. to preview a font in its own face. */
   fontFamily?: string;
   checked?: boolean;
+  /** A keyboard shortcut shown on the right, e.g. "F". */
+  shortcut?: string;
 }
 
 /** Opens a small popup menu anchored to an element. */
@@ -271,6 +289,7 @@ export function popupMenu(anchor: HTMLElement, items: MenuItem[]) {
           },
         },
         item.label,
+        item.shortcut ? h("kbd", { class: "menu-key" }, item.shortcut) : null,
       ),
     );
   }
@@ -376,4 +395,67 @@ export function relativeTime(ms: number): string {
   const hours = Math.round(min / 60);
   if (hours < 24) return `${hours} h ago`;
   return new Date(ms).toLocaleDateString();
+}
+
+// ------------------------------------------------------------------ tooltips
+
+/**
+ * Styled tooltips for every element with a `title`: shown after a short
+ * hover (immediately when moving between controls), with keyboard shortcuts
+ * such as "(Ctrl+Z)" drawn as key caps. The title is taken off while the
+ * tooltip shows, so the browser's own bubble doesn't appear too, and put
+ * back afterwards.
+ */
+export function installTooltips() {
+  let tip: HTMLElement | null = null;
+  let target: HTMLElement | null = null;
+  let timer = 0;
+  let warmUntil = 0;
+  const hide = () => {
+    window.clearTimeout(timer);
+    tip?.remove();
+    tip = null;
+    if (target?.dataset.tip !== undefined) {
+      target.setAttribute("title", target.dataset.tip);
+      delete target.dataset.tip;
+    }
+    if (target) warmUntil = performance.now() + 500;
+    target = null;
+  };
+  const show = (el: HTMLElement, text: string) => {
+    tip?.remove();
+    const m = /^(.*?)\s*\(([^()]{1,24})\)$/.exec(text);
+    const keys = m && /^[\w ,.+?/\-←→↑↓]+$/.test(m[2]) && !/\s{2}/.test(m[2]) ? m[2] : null;
+    tip = h("div", { class: "tip", role: "tooltip" }, keys ? m![1] : text);
+    if (keys) {
+      const k = h("span", { style: { display: "inline-flex", gap: "3px" } });
+      for (const part of keys.split(/\+(?=.)/)) k.append(h("kbd", {}, part.trim()));
+      tip.append(k);
+    }
+    document.body.append(tip);
+    const r = el.getBoundingClientRect();
+    const tw = tip.offsetWidth;
+    const th = tip.offsetHeight;
+    const below = r.bottom + 8 + th < window.innerHeight;
+    tip.style.left = `${Math.max(6, Math.min(window.innerWidth - tw - 6, r.left + r.width / 2 - tw / 2))}px`;
+    tip.style.top = `${below ? r.bottom + 8 : r.top - th - 8}px`;
+  };
+  document.addEventListener("pointerover", (e) => {
+    if (e.pointerType === "touch") return;
+    const el = (e.target as Element).closest?.("[title], [data-tip]") as HTMLElement | null;
+    if (el === target) return;
+    hide();
+    if (!el || el.closest("input, textarea, select")) return;
+    const text = el.getAttribute("title") ?? el.dataset.tip ?? "";
+    if (!text.trim()) return;
+    target = el;
+    el.dataset.tip = text;
+    el.removeAttribute("title");
+    const delay = performance.now() < warmUntil ? 0 : 450;
+    timer = window.setTimeout(() => target === el && el.isConnected && show(el, text), delay);
+  });
+  document.addEventListener("pointerout", (e) => {
+    if (target && !target.contains(e.relatedTarget as Node)) hide();
+  });
+  for (const ev of ["pointerdown", "keydown", "wheel"]) document.addEventListener(ev, hide, { capture: true, passive: true });
 }
