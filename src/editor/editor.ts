@@ -35,6 +35,7 @@ import {
 } from "./geometry";
 import { inkToTextDialog } from "./inkToText";
 import { cachedBackground, renderBackground } from "./pdfRender";
+import { buildVectorPdf, type PdfPageInput } from "./pdfExport";
 import { continueList, currentList, toggleList, type ListKind } from "./textFormat";
 import { beautify, detectBrace, recognizeShape } from "./beautify";
 import { anchorsAsTargets, paperTargets, snapMove, type Anchor, type Guide, type Target } from "./snap";
@@ -2329,6 +2330,19 @@ export class EditorScreen {
     reader.readAsDataURL(file);
   }
 
+  /** Vector PDF: strokes, shapes and text stay sharp; text is selectable. */
+  private async vectorPdf(pages: Page[], title: string): Promise<Uint8Array> {
+    const input: PdfPageInput[] = [];
+    for (const p of pages) {
+      const elements = p.id === this.page.id ? this.elements : fromStored(await api.elements(p.id));
+      await preloadImages(elements, this.images);
+      await ensureFonts(elements.map((el) => (el.kind === "text" || el.kind === "sticky" ? el.font : undefined)));
+      const background = await this.backgroundNow(p, EXPORT_SCALE.pdf);
+      input.push({ page: p, elements, background });
+    }
+    return buildVectorPdf(input, this.images, title);
+  }
+
   private async exportAs(format: ExportFormat, scope: "all" | "current") {
     try {
       this.finishTextEdit();
@@ -2338,6 +2352,16 @@ export class EditorScreen {
       const path = await api.chooseExportPath(name, format);
       if (!path) return;
       toast(`Exporting ${pages.length} page${pages.length > 1 ? "s" : ""}…`);
+      if (format === "pdf") {
+        try {
+          const saved = await api.savePdfExport(path, await this.vectorPdf(pages, name));
+          toast(`Exported to ${saved}`);
+          return;
+        } catch (e) {
+          // Fall back to the image-based PDF rather than failing the export.
+          console.error("vector PDF export failed", e);
+        }
+      }
       const rendered: ExportPage[] = [];
       for (const p of pages) {
         const els = p.id === this.page.id ? this.elements : fromStored(await api.elements(p.id));

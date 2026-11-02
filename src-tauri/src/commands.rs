@@ -241,6 +241,49 @@ pub fn export_document(path: String, format: String, pages: Vec<ExportPage>) -> 
     Ok(path.to_string_lossy().into_owned())
 }
 
+/// Writes a PDF built in the webview (vector export) to `path`, chosen in the
+/// native save dialog. The file is the raw request body; the path travels in
+/// the `x-export-path` header (URI-encoded). Returns the final path.
+#[tauri::command]
+pub fn save_pdf_export(request: tauri::ipc::Request<'_>) -> AppResult<String> {
+    let path = request
+        .headers()
+        .get("x-export-path")
+        .and_then(|v| v.to_str().ok())
+        .and_then(percent_decode)
+        .ok_or_else(|| AppError::Invalid("missing export path".into()))?;
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err(AppError::Invalid("expected the PDF as raw bytes".into()));
+    };
+    if !bytes.starts_with(b"%PDF-") {
+        return Err(AppError::Invalid("export produced an invalid PDF".into()));
+    }
+    let path = with_extension(PathBuf::from(path), "pdf");
+    if path.file_name().is_none() {
+        return Err(AppError::Invalid("choose a file name to export to".into()));
+    }
+    std::fs::write(&path, bytes)?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
+/// Decodes `%XX` escapes (as produced by encodeURIComponent).
+fn percent_decode(s: &str) -> Option<String> {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' {
+            let hex = std::str::from_utf8(b.get(i + 1..i + 3)?).ok()?;
+            out.push(u8::from_str_radix(hex, 16).ok()?);
+            i += 3;
+        } else {
+            out.push(b[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).ok()
+}
+
 /// Ensures the path ends in `.ext` (case-insensitive), appending it otherwise.
 fn with_extension(path: PathBuf, ext: &str) -> PathBuf {
     let matches = path
@@ -282,8 +325,19 @@ fn sanitize_file_name(name: &str, ext: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{sanitize_file_name, with_extension};
+    use super::{percent_decode, sanitize_file_name, with_extension};
     use std::path::PathBuf;
+
+    #[test]
+    fn export_paths_are_uri_decoded() {
+        assert_eq!(
+            percent_decode("%2Fhome%2Fme%2FBiologie%20%C3%A9t%C3%A9.pdf").as_deref(),
+            Some("/home/me/Biologie été.pdf")
+        );
+        assert_eq!(percent_decode("C%3A%5CUsers%5Cx.pdf").as_deref(), Some("C:\\Users\\x.pdf"));
+        assert_eq!(percent_decode("bad%2"), None);
+        assert_eq!(percent_decode("bad%zz"), None);
+    }
 
     #[test]
     fn file_names_cannot_escape_the_export_directory() {

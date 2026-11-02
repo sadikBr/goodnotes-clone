@@ -165,6 +165,8 @@ export interface Backend {
   /** Asks where to save; resolves to null when the user cancels. */
   chooseExportPath(fileName: string, format: ExportFormat): Promise<string | null>;
   exportDocument(path: string, format: ExportFormat, pages: ExportPage[]): Promise<string>;
+  /** Writes a finished PDF (vector export) to `path`; returns the final path. */
+  savePdfExport(path: string, bytes: Uint8Array): Promise<string>;
   recognizeHandwriting(strokes: P2[][]): Promise<HandwritingRecognition>;
   /** Stores PDF bytes; returns an asset id for createPdfNotebook. */
   storePdfAsset(bytes: Uint8Array): Promise<string>;
@@ -228,6 +230,7 @@ class TauriBackend implements Backend {
   };
   exportDocument = (path: string, format: ExportFormat, pages: ExportPage[]) =>
     invoke<string>("export_document", { path, format, pages });
+  savePdfExport = (path: string, bytes: Uint8Array) => invoke<string>("save_pdf_export", bytes, { headers: { "x-export-path": encodeURIComponent(path) } });
   recognizeHandwriting = (strokes: P2[][]) => invoke<HandwritingRecognition>("recognize_handwriting", { strokes });
   // Raw bytes go over IPC as a binary body, not JSON.
   storePdfAsset = (bytes: Uint8Array) => invoke<string>("store_pdf_asset", bytes);

@@ -364,6 +364,15 @@ export class MockBackend implements Backend {
   }
 
   /** Browser preview: PNG downloads directly; PDF/PPTX need the desktop app. */
+  async savePdfExport(path: string, bytes: Uint8Array): Promise<string> {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" }));
+    a.download = path;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+    return path;
+  }
+
   async exportDocument(path: string, format: ExportFormat, pages: ExportPage[]): Promise<string> {
     if (format !== "png") throw new Error("PDF and PowerPoint export are available in the desktop app");
     const a = document.createElement("a");

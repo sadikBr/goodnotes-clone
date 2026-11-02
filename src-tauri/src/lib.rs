@@ -51,6 +51,7 @@ pub fn run() {
             commands::simplify_stroke,
             commands::default_export_dir,
             commands::export_document,
+            commands::save_pdf_export,
             commands::recognize_handwriting,
             commands::store_pdf_asset,
             commands::create_pdf_notebook,

@@ -32,7 +32,7 @@ no Goodnotes code, assets or branding.
 - **Apply a font to handwriting:** lasso-select pen writing (e.g. a title) and choose *Apply font*. On Windows the built-in offline handwriting recognizer (Windows Ink) reads the words and suggests alternatives; you can correct the text, preview it in every handwriting font, and it replaces the ink at the same place and size (optionally keeping the ink). Elsewhere you type what you wrote
 - **Pages:** all pages scroll continuously in one column; write on any page directly (it becomes the current page), and the page in view becomes current when scrolling stops. Sidebar thumbnails, add / insert / duplicate / reorder / delete / bookmark; undo history is kept per page
 - **Editing:** undo/redo, zoom (Ctrl+wheel, pinch, fit width), pan tool
-- **Export:** PDF (whole notebook or one page), PowerPoint .pptx (one slide per page) or PNG, through a native Save dialog that defaults to `Documents/Inkleaf Exports/`. Pages are exported as high-resolution images (PDF/PNG about 290 DPI, PowerPoint about 190 DPI), so text isn't selectable in the export
+- **Export:** PDF (whole notebook or one page), PowerPoint .pptx (one slide per page) or PNG, through a native Save dialog that defaults to `Documents/Inkleaf Exports/`. PDFs are vector: handwriting, shapes and text stay sharp at any zoom and the text can be selected and searched (text is drawn from the bundled fonts' glyph outlines, with an invisible text layer on top). Imported PDF pages and pictures are embedded as images (PDF pages at 288 DPI). PowerPoint and PNG exports are high-resolution images
 - **Themes:** light and dark mode
 
 ### Keyboard shortcuts
