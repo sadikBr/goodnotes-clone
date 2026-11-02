@@ -42,7 +42,7 @@ import { addLessonPage, DAYS, isoDate, lessonEntry, nextFreeRow, parseDaftar, ty
 import { isLessonTemplate, lessonLayout } from "./daftarPapers";
 import { cachedBackground, renderBackground } from "./pdfRender";
 import { INSTRUMENTS, MM, Ruler, type Guide as EdgeGuide, type InstrumentKind } from "./ruler";
-import { smoothPoints, SpeedInk, speedSensitive } from "./ink";
+import { smoothPoints, SMOOTHING, SpeedInk, speedSensitive, type SmoothingLevel } from "./ink";
 import { COVER_DESIGNS, coverDesignOf, isCoverTemplate, type CoverDesign } from "./covers";
 import { applyCover, coverPreview } from "../cover";
 import { Laser, LASER_CORE_FADE_MS, LASER_HOLD_MS, type LaserLayers, type LaserMode } from "./laser";
@@ -96,9 +96,37 @@ const LASER_MODE_KEY = "inkleaf-laser-mode";
 const INSTRUMENT_KEY = "inkleaf-instrument";
 const SIDEBAR_KEY = "inkleaf-page-sidebar";
 const DRAWER_KEY = "inkleaf-tool-drawer";
+const SMOOTHING_KEY = "inkleaf-smoothing";
+const CURSOR_KEY = "inkleaf-pen-cursor";
+type PenCursor = "cross" | "dot" | "none";
+const SMOOTHING_LABELS: Record<SmoothingLevel, string> = { off: "Off", light: "Light", normal: "Normal", strong: "Strong" };
 const DRAWER_TIP_KEY = "inkleaf-tool-drawer-tip";
 const FAV_TOOLS: FavTool[] = ["pen", "highlighter", "shape", "text", "sticky", "laser", "eraser"];
 const isFavTool = (t: string): t is FavTool => (FAV_TOOLS as string[]).includes(t);
+
+/** A shaky test line drawn with a smoothing level, for the smoothing menu. */
+function smoothingSample(streamline: number, color: string): HTMLElement {
+  const w = 56;
+  const hgt = 22;
+  const dpr = Math.max(2, window.devicePixelRatio || 1);
+  const c = document.createElement("canvas");
+  c.width = w * dpr;
+  c.height = hgt * dpr;
+  c.className = "nib-sample";
+  c.style.width = `${w}px`;
+  c.style.height = `${hgt}px`;
+  const ctx = c.getContext("2d")!;
+  ctx.scale(dpr, dpr);
+  // The same deterministic wobble for every level.
+  const points: Pt[] = [];
+  for (let i = 0; i <= 40; i++) {
+    const t = i / 40;
+    const jitter = Math.sin(i * 12.9898) * 43758.5453;
+    points.push([4 + t * (w - 8), hgt / 2 + Math.sin(t * Math.PI * 2) * 5 + ((jitter - Math.floor(jitter)) - 0.5) * 3.2, 0.5]);
+  }
+  drawStroke(ctx, { id: "sample", z: 0, kind: "stroke", tool: "pen", style: "ballpoint", color: sampleInk(color), width: 1.6, points, smooth: streamline });
+  return c;
+}
 
 /** True for colours light enough to need a dark icon on top. */
 function isLightColor(hex: string): boolean {
@@ -723,6 +751,7 @@ export class EditorScreen {
       popupMenu(btn, [
         { label: "Focus mode", shortcut: "F", action: () => this.toggleFocus() },
         { label: this.root.classList.contains("no-sidebar") ? "Show pages" : "Hide pages", shortcut: "[", action: () => this.toggleSidebar() },
+        { label: "Writing settings…", action: () => void this.writingSettings() },
         { label: "Keyboard shortcuts", shortcut: "?", action: () => shortcutsSheet() },
         { label: isDark() ? "Light mode" : "Dark mode", action: () => toggleTheme() },
       ]),
@@ -1169,6 +1198,7 @@ export class EditorScreen {
     this.placeDrawer();
     this.renderPenOnlyButton();
     this.canvas.dataset.tool = this.tool;
+    this.canvas.dataset.cursor = this.penCursor;
     // The laser's three window-sized layers only exist while it's in use, so
     // the compositor doesn't blend empty layers on every frame otherwise.
     this.laserLayer.style.display = this.tool === "laser" ? "" : "none";
@@ -1177,6 +1207,54 @@ export class EditorScreen {
   /** A pinned drawer stays open; otherwise it opens on demand and tucks away when you write. */
   private drawerPinned = getPref(DRAWER_KEY, "auto", ["auto", "pinned"]) === "pinned";
   private drawerOpen = this.drawerPinned;
+
+  // ------------------------------------------------------------- writing settings
+
+  private smoothing: SmoothingLevel = getPref<SmoothingLevel>(SMOOTHING_KEY, "normal", Object.keys(SMOOTHING) as SmoothingLevel[]);
+  private penCursor: PenCursor = getPref<PenCursor>(CURSOR_KEY, "cross", ["cross", "dot", "none"]);
+
+  /** The path smoothing new strokes use. */
+  private get streamline(): number {
+    return SMOOTHING[this.smoothing];
+  }
+
+  private setSmoothing(level: SmoothingLevel) {
+    this.smoothing = level;
+    setPref(SMOOTHING_KEY, level);
+    this.renderToolbar();
+  }
+
+  /** Smoothing and the cursor shown under the pen. */
+  private async writingSettings() {
+    const r = await formDialog(
+      "Writing settings",
+      [
+        {
+          name: "smoothing",
+          label: "Smoothing — evens out shaky lines; Off draws exactly what you write",
+          type: "select",
+          value: this.smoothing,
+          options: (Object.keys(SMOOTHING) as SmoothingLevel[]).map((k) => ({ value: k, label: SMOOTHING_LABELS[k] + (k === "normal" ? " (default)" : "") })),
+        },
+        {
+          name: "cursor",
+          label: "Cursor under the pen (pen, highlighter and shapes)",
+          type: "select",
+          value: this.penCursor,
+          options: [
+            { value: "cross", label: "Cross (+)" },
+            { value: "dot", label: "Small dot" },
+            { value: "none", label: "Hidden" },
+          ],
+        },
+      ],
+      "Save",
+    );
+    if (!r) return;
+    this.penCursor = r.cursor as PenCursor;
+    setPref(CURSOR_KEY, this.penCursor);
+    this.setSmoothing(r.smoothing as SmoothingLevel);
+  }
 
   /** True while a menu, picker or the (unpinned) options drawer is open. */
   private menuOpen(): boolean {
@@ -1252,17 +1330,28 @@ export class EditorScreen {
     const chip = (label: string, ic: Parameters<typeof icon>[0], active: boolean, onclick: () => void) =>
       h("button", { class: `tool-btn small${active ? " active" : ""}`, "aria-pressed": String(active), "aria-label": label, title: label, onclick }, icon(ic));
     if (this.tool === "pen") {
-      return choiceChip({
-        label: "Pen",
-        title: "Pen type",
-        current: this.penStyle,
-        items: PEN_STYLES.map((p) => ({ id: p.id, label: p.label, art: () => nibSample(p.id, this.colors.pen, this.widths.pen) })),
-        onPick: (id) => {
-          this.penStyle = id as PenStyle;
-          setPref(PEN_STYLE_KEY, id);
-          this.renderToolbar();
-        },
-      });
+      return h(
+        "div",
+        { class: "options-row" },
+        choiceChip({
+          label: "Pen",
+          title: "Pen type",
+          current: this.penStyle,
+          items: PEN_STYLES.map((p) => ({ id: p.id, label: p.label, art: () => nibSample(p.id, this.colors.pen, this.widths.pen) })),
+          onPick: (id) => {
+            this.penStyle = id as PenStyle;
+            setPref(PEN_STYLE_KEY, id);
+            this.renderToolbar();
+          },
+        }),
+        choiceChip({
+          label: "Smoothing",
+          title: "Smoothing: evens out shaky lines (Off draws exactly what you write)",
+          current: this.smoothing,
+          items: (Object.keys(SMOOTHING) as SmoothingLevel[]).map((k) => ({ id: k, label: SMOOTHING_LABELS[k], art: () => smoothingSample(SMOOTHING[k], this.colors.pen) })),
+          onPick: (id) => this.setSmoothing(id as SmoothingLevel),
+        }),
+      );
     }
     if (this.tool === "text" || this.tool === "sticky") return h("div", { class: "text-options" }, this.fontPicker(), this.formatControls());
     if (this.tool === "laser") {
@@ -1960,7 +2049,7 @@ export class EditorScreen {
     const KEEP = 12;
     if (g.points.length - (g.frozen ?? 0) <= CHUNK + KEEP) return;
     // Pieces are drawn from the smoothed points so they line up exactly.
-    const smooth = (g.smooth = smoothPoints(g.points, g.smooth));
+    const smooth = (g.smooth = smoothPoints(g.points, g.smooth, this.streamline));
     const c = this.cache.getContext("2d")!;
     while (g.points.length - (g.frozen ?? 0) > CHUNK + KEEP) {
       const from = g.frozen ?? 0;
@@ -2030,7 +2119,8 @@ export class EditorScreen {
           style: g.tool === "pen" ? this.penStyle : undefined,
           color: this.colors[g.tool],
           width: this.widths[g.tool],
-          points: g.frozen ? smoothPoints(g.points, g.smooth).slice(g.frozen) : g.points,
+          points: g.frozen ? smoothPoints(g.points, g.smooth, this.streamline).slice(g.frozen) : g.points,
+          smooth: this.streamline,
         }, true, g.frozen ? { first: false, last: true } : undefined);
     } else if (g?.type === "shape") {
       if (g.preview) drawElement(ctx, g.preview, this.images, () => {});
@@ -2722,6 +2812,8 @@ export class EditorScreen {
             color: this.colors[g.tool],
             width: this.widths[g.tool],
             points,
+            // Remember the smoothing, so changing the setting leaves this stroke as written.
+            ...(tool === "pen" ? { smooth: this.streamline } : {}),
           });
         }
         break;

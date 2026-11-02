@@ -237,7 +237,7 @@ export function drawStroke(ctx: CanvasRenderingContext2D, el: StrokeEl, live = f
   }
   // Every other pen is one smooth filled outline (no beads or steps).
   ctx.beginPath();
-  for (const outline of strokeOutline(pts, style, el.width, !live, part)) outlinePath(ctx, outline);
+  for (const outline of strokeOutline(pts, style, el.width, !live, part, el.smooth)) outlinePath(ctx, outline);
   if (style === "pencil") {
     const avg = pts.reduce((s, p) => s + p[2], 0) / pts.length;
     ctx.fillStyle = el.color; // what vector export uses

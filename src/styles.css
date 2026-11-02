@@ -3112,3 +3112,11 @@ select option {
 .dialog-form.two-col > .half {
   grid-column: auto;
 }
+
+/* The cursor under the pen for drawing tools (Writing settings). */
+.page-canvas[data-cursor="dot"]:is([data-tool="pen"], [data-tool="highlighter"], [data-tool="shape"]) {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8'%3E%3Ccircle cx='4' cy='4' r='2.2' fill='%23111827' stroke='white' stroke-width='1'/%3E%3C/svg%3E") 4 4, crosshair;
+}
+.page-canvas[data-cursor="none"]:is([data-tool="pen"], [data-tool="highlighter"], [data-tool="shape"]) {
+  cursor: none;
+}

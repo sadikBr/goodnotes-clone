@@ -108,15 +108,19 @@ export function sharpCorners(points: Pt[], width: number): number[] {
  * corners so each part gets a clean outline (one outline around a sharp
  * reversal bulges and hooks); fill them together with the non-zero rule.
  */
-/** How far each point moves toward the pen (perfect-freehand's streamline 0.38). */
-const STREAMLINE_T = 0.15 + (1 - 0.38) * 0.85;
+/** Smoothing levels (perfect-freehand "streamline"): how much the path lags behind the pen to even out shakes. */
+export const SMOOTHING = { off: 0, light: 0.2, normal: 0.38, strong: 0.62 } as const;
+export type SmoothingLevel = keyof typeof SMOOTHING;
+export const DEFAULT_STREAMLINE = SMOOTHING.normal;
 
 /**
  * The stroke's points after streamline smoothing (each point eases toward
  * the pen from the previous one). Pass `into` to extend an earlier result
  * as points are added, for a stroke being drawn.
  */
-export function smoothPoints(points: Pt[], into: Pt[] = []): Pt[] {
+export function smoothPoints(points: Pt[], into: Pt[] = [], streamline: number = DEFAULT_STREAMLINE): Pt[] {
+  // How far each point moves toward the pen (1 = all the way: no smoothing).
+  const STREAMLINE_T = 0.15 + (1 - streamline) * 0.85;
   for (let i = into.length; i < points.length; i++) {
     const r = points[i];
     if (i === 0) {
@@ -134,7 +138,7 @@ export function smoothPoints(points: Pt[], into: Pt[] = []): Pt[] {
  * real start or end gets a plain round cap there instead of a taper, so
  * pieces join seamlessly (used to draw a long stroke incrementally).
  */
-export function strokeOutline(points: Pt[], style: PenStyle | undefined, width: number, last = true, part?: { first: boolean; last: boolean }): [number, number][][] {
+export function strokeOutline(points: Pt[], style: PenStyle | undefined, width: number, last = true, part?: { first: boolean; last: boolean }, streamline: number = DEFAULT_STREAMLINE): [number, number][][] {
   const opts = options(style, width, last);
   if (part && !part.first) opts.start = { cap: true, taper: 0 };
   if (part && !part.last) opts.end = { cap: true, taper: 0 };
@@ -143,7 +147,7 @@ export function strokeOutline(points: Pt[], style: PenStyle | undefined, width: 
   // already-smoothed points) lines up exactly with the rest of it.
   if (!part) {
     const raw = points;
-    points = smoothPoints(raw);
+    points = smoothPoints(raw, [], streamline);
     if (last && raw.length > 1) points[points.length - 1] = raw[raw.length - 1];
   }
   opts.streamline = 0;

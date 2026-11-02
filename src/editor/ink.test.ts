@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sharpCorners, SpeedInk, speedSensitive, strokeOutline } from "./ink";
+import { sharpCorners, SMOOTHING, smoothPoints, SpeedInk, speedSensitive, strokeOutline } from "./ink";
 import type { Pt } from "./model";
 
 const last = (a: number[]) => a[a.length - 1];
@@ -68,5 +68,21 @@ describe("speed ink", () => {
     const jitter: Pt[] = Array.from({ length: 60 }, (_, i) => [i * 3, (i % 2) * 0.6, 0.5]);
     expect(sharpCorners(jitter, 3)).toEqual([]);
     expect(strokeOutline(v, "fountain", 3)).toHaveLength(2);
+  });
+});
+
+describe("smoothing levels", () => {
+  const zig: Pt[] = Array.from({ length: 30 }, (_, i) => [i * 3, i % 2 ? 4 : -4, 0.5]);
+  const wobble = (pts: Pt[]) => pts.slice(5).reduce((s, p) => s + Math.abs(p[1]), 0);
+  it("Off keeps the points exactly as written", () => {
+    expect(smoothPoints(zig, [], SMOOTHING.off)).toEqual(zig);
+  });
+  it("stronger smoothing evens out more of the shake", () => {
+    const light = wobble(smoothPoints(zig, [], SMOOTHING.light));
+    const normal = wobble(smoothPoints(zig, [], SMOOTHING.normal));
+    const strong = wobble(smoothPoints(zig, [], SMOOTHING.strong));
+    expect(light).toBeLessThan(wobble(zig));
+    expect(normal).toBeLessThan(light);
+    expect(strong).toBeLessThan(normal);
   });
 });

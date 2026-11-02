@@ -27,6 +27,11 @@ export interface StrokeEl extends Base {
   color: string;
   width: number;
   points: Pt[];
+  /**
+   * Path smoothing it was written with (perfect-freehand "streamline", 0 =
+   * none); missing means 0.38, the default before this was a setting.
+   */
+  smooth?: number;
 }
 
 export interface ShapeEl extends Base {
