@@ -28,6 +28,20 @@ function greeting(): string {
   return hr < 5 ? "Good night" : hr < 12 ? "Good morning" : hr < 18 ? "Good afternoon" : "Good evening";
 }
 
+/** Folder colours: rich enough for white details, distinct from each other. */
+const FOLDER_COLORS = [
+  { color: "#3b82f6", label: "Blue" },
+  { color: "#0ea5e9", label: "Sky" },
+  { color: "#14b8a6", label: "Teal" },
+  { color: "#22c55e", label: "Green" },
+  { color: "#eab308", label: "Yellow" },
+  { color: "#f97316", label: "Orange" },
+  { color: "#ef4444", label: "Red" },
+  { color: "#ec4899", label: "Pink" },
+  { color: "#8b5cf6", label: "Violet" },
+  { color: "#64748b", label: "Slate" },
+];
+
 function folderMeta(f: Folder, data: Library): string {
   const n = data.notebooks.filter((x) => x.folderId === f.id).length;
   const sub = data.folders.filter((x) => x.parentId === f.id).length;
@@ -343,7 +357,7 @@ export class LibraryScreen {
             { label: "Delete forever", danger: true, action: () => this.deleteForever("folder", f.id, f.name) },
           ]
         : [
-            { label: "Rename", action: () => this.renameFolder(f) },
+            { label: "Edit name and colour…", action: () => this.renameFolder(f) },
             { label: f.favourite ? "Remove from favourites" : "Add to favourites", action: () => this.run(() => api.setFolderFavourite(f.id, !f.favourite)) },
             { label: "Move to…", action: () => this.moveFolder(f) },
             { label: "Move to trash", danger: true, action: () => this.run(() => api.setFolderTrashed(f.id, true), "Folder moved to trash") },
@@ -356,11 +370,37 @@ export class LibraryScreen {
       h(
         "button",
         { class: "card-open", onclick: () => !trash && this.show({ kind: "folder", id: f.id }), "aria-label": `Open folder ${f.name}` },
-        h("div", { class: "folder-cover", style: { "--folder": f.color } }, h("span", { class: "folder-tab" }), h("span", { class: "folder-front" }, icon("folder"))),
+        this.folderPicture(f),
         h("div", { class: "card-title" }, f.favourite ? "★ " : "", f.name),
         h("div", { class: "card-meta" }, folderMeta(f, this.data)),
       ),
       more,
+    );
+  }
+
+  /**
+   * A folder drawn in its colour: back panel with a tab, the covers of its
+   * two most recent notebooks peeking out, and the front panel (which tips
+   * forward on hover).
+   */
+  private folderPicture(f: Folder): HTMLElement {
+    const inside = this.data.notebooks.filter((n) => n.folderId === f.id).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 2);
+    const sheets = inside.length
+      ? inside.map((n, i) =>
+          h(
+            "span",
+            { class: `folder-sheet s${i}`, style: { background: n.coverColor } },
+            n.thumbnail ? h("img", { src: n.thumbnail, alt: "", loading: "lazy" }) : null,
+          ),
+        )
+      : [h("span", { class: "folder-sheet s0 blank" })];
+    const count = inside.length ? this.data.notebooks.filter((n) => n.folderId === f.id).length : 0;
+    return h(
+      "div",
+      { class: "folder-cover", style: { "--folder": f.color } },
+      h("span", { class: "folder-back" }),
+      ...sheets.reverse(),
+      h("span", { class: "folder-front" }, count ? h("span", { class: "folder-count" }, String(count)) : null),
     );
   }
 
@@ -561,14 +601,25 @@ export class LibraryScreen {
   private async newFolder(parentId: string | null) {
     const r = await formDialog("New folder", [
       { name: "name", label: "Name", value: "New folder" },
-      { name: "color", label: "Colour", type: "color-swatches" },
+      { name: "color", label: "Colour", type: "color-swatches", colors: FOLDER_COLORS },
     ], "Create");
     if (r) await this.run(() => api.createFolder(r.name, parentId, r.color));
   }
 
   private async renameFolder(f: Folder) {
-    const r = await formDialog("Rename folder", [{ name: "name", label: "Name", value: f.name }]);
-    if (r) await this.run(() => api.renameFolder(f.id, r.name));
+    const r = await formDialog(
+      "Edit folder",
+      [
+        { name: "name", label: "Name", value: f.name },
+        { name: "color", label: "Colour", type: "color-swatches", value: f.color, colors: FOLDER_COLORS },
+      ],
+      "Save",
+    );
+    if (!r) return;
+    await this.run(async () => {
+      if (r.name.trim() !== f.name) await api.renameFolder(f.id, r.name);
+      if (r.color !== f.color) await api.setFolderColor(f.id, r.color);
+    });
   }
 
   private async renameNotebook(n: Notebook) {

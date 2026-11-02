@@ -139,6 +139,12 @@ export class MockBackend implements Backend {
     this.persist();
   }
 
+  async setFolderColor(id: string, color: string) {
+    if (!/^#[0-9a-f]{6}$/i.test(color)) fail("invalid colour");
+    Object.assign(this.folder(id), { color, updatedAt: Date.now() });
+    this.persist();
+  }
+
   async setFolderFavourite(id: string, favourite: boolean) {
     this.folder(id).favourite = favourite;
     this.persist();

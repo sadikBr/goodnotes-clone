@@ -241,6 +241,7 @@ export interface Backend {
   setFolderTrashed(id: string, trashed: boolean): Promise<void>;
   deleteFolder(id: string): Promise<void>;
   setFolderFavourite(id: string, favourite: boolean): Promise<void>;
+  setFolderColor(id: string, color: string): Promise<void>;
   createNotebook(input: NewNotebook): Promise<Notebook>;
   notebook(id: string): Promise<Notebook>;
   renameNotebook(id: string, title: string): Promise<void>;
@@ -302,6 +303,7 @@ class TauriBackend implements Backend {
   setFolderTrashed = (id: string, trashed: boolean) => invoke<void>("set_folder_trashed", { id, trashed });
   deleteFolder = (id: string) => invoke<void>("delete_folder", { id });
   setFolderFavourite = (id: string, favourite: boolean) => invoke<void>("set_folder_favourite", { id, favourite });
+  setFolderColor = (id: string, color: string) => invoke<void>("set_folder_color", { id, color });
   createNotebook = (input: NewNotebook) => invoke<Notebook>("create_notebook", { input });
   notebook = (id: string) => invoke<Notebook>("notebook", { id });
   renameNotebook = (id: string, title: string) => invoke<void>("rename_notebook", { id, title });

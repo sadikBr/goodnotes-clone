@@ -11,7 +11,13 @@ export function h<K extends keyof HTMLElementTagNameMap>(
   for (const [key, value] of Object.entries(props)) {
     if (value === undefined || value === null || value === false) continue;
     if (key === "class") node.className = String(value);
-    else if (key === "style" && typeof value === "object") Object.assign(node.style, value);
+    else if (key === "style" && typeof value === "object") {
+      // Custom properties ("--x") need setProperty; Object.assign drops them.
+      for (const [k, v] of Object.entries(value as Record<string, string>)) {
+        if (k.startsWith("--")) node.style.setProperty(k, v);
+        else (node.style as unknown as Record<string, string>)[k] = v;
+      }
+    }
     else if (key.startsWith("on") && typeof value === "function") node.addEventListener(key.slice(2).toLowerCase(), value as EventListener);
     else if (key === "html") node.innerHTML = String(value);
     else if (value === true) node.setAttribute(key, "");

@@ -484,6 +484,16 @@ impl Db {
         expect_one(n, id)
     }
 
+    pub fn set_folder_color(&self, id: &str, color: &str) -> AppResult<()> {
+        validate_color(color)?;
+        let conn = self.conn();
+        let n = conn.execute(
+            "UPDATE folders SET color = ?2, updated_at = ?3 WHERE id = ?1",
+            params![id, color, now_ms()],
+        )?;
+        expect_one(n, id)
+    }
+
     // -------------------------------------------------------------- notebooks
 
     pub fn create_notebook(&self, input: &NewNotebook) -> AppResult<Notebook> {
@@ -1425,6 +1435,16 @@ mod tests {
         // Added pages are plain paper.
         let added = db.add_page(&copy.id, None, None).unwrap();
         assert_eq!(added.background_asset, None);
+    }
+
+    #[test]
+    fn folder_colour_can_change() {
+        let db = db();
+        let f = db.create_folder("Maths", None, Some("#2563eb")).unwrap();
+        db.set_folder_color(&f.id, "#16a34a").unwrap();
+        assert_eq!(db.library().unwrap().folders[0].color, "#16a34a");
+        assert!(db.set_folder_color(&f.id, "green").is_err());
+        assert!(db.set_folder_color("missing", "#16a34a").is_err());
     }
 
     #[test]

@@ -60,6 +60,11 @@ pub fn delete_folder(db: State<'_, Db>, id: String) -> AppResult<()> {
 }
 
 #[tauri::command]
+pub fn set_folder_color(db: State<'_, Db>, id: String, color: String) -> AppResult<()> {
+    db.set_folder_color(&id, &color)
+}
+
+#[tauri::command]
 pub fn set_folder_favourite(db: State<'_, Db>, id: String, favourite: bool) -> AppResult<()> {
     db.set_folder_favourite(&id, favourite)
 }

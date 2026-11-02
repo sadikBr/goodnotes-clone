@@ -28,6 +28,7 @@ pub fn run() {
             commands::set_folder_trashed,
             commands::delete_folder,
             commands::set_folder_favourite,
+            commands::set_folder_color,
             commands::create_notebook,
             commands::notebook,
             commands::rename_notebook,
