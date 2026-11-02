@@ -2,7 +2,7 @@ import type { P2, Template } from "../api";
 import { boxOf, groupHandles, handlesFor, isClosedShape, setLineCounter, textHeight, type Rect, type TextStyle } from "./geometry";
 import { LIST_MARKER } from "./textFormat";
 import { outlinePath, strokeOutline } from "./ink";
-import { fontCss } from "../fonts";
+import { fontCss, isRtl } from "../fonts";
 import type { El, Pt, ShapeEl, StickyEl, StrokeEl, TextEl } from "./model";
 import type { Anchor, Guide } from "./snap";
 
@@ -318,6 +318,8 @@ export interface LaidLine {
   x: number;
   y: number;
   width: number;
+  /** The line belongs to a right-to-left (Arabic) paragraph. */
+  rtl: boolean;
 }
 
 /**
@@ -333,13 +335,17 @@ export function layoutText(ctx: CanvasRenderingContext2D, text: string, x: numbe
     const m = LIST_MARKER.exec(para);
     const indent = m ? ctx.measureText(m[0]).width : 0;
     const body = m ? para.slice(m[0].length) : para;
+    // Alignment is logical: "left" is the paragraph's start, which is the
+    // right edge in Arabic. List indents go on the start side too.
+    const rtl = isRtl(para);
+    const align = rtl ? (style.align === "right" ? "left" : style.align === "center" ? "center" : "right") : (style.align ?? "left");
     wrapLines(ctx, body, Math.max(10, w - indent)).forEach((line, i) => {
       const t = i === 0 && m ? m[0] + line : line;
       const lw = ctx.measureText(t).width;
-      const baseX = i === 0 ? x : x + indent;
+      const baseX = i === 0 || rtl ? x : x + indent;
       const avail = i === 0 ? w : w - indent;
-      const lx = style.align === "center" ? baseX + (avail - lw) / 2 : style.align === "right" ? baseX + avail - lw : baseX;
-      out.push({ text: t, x: lx, y: y + row * lineH, width: lw });
+      const lx = align === "center" ? baseX + (avail - lw) / 2 : align === "right" ? baseX + avail - lw : baseX;
+      out.push({ text: t, x: lx, y: y + row * lineH, width: lw, rtl });
       row++;
     });
   }
@@ -439,11 +445,18 @@ export function drawGuides(ctx: CanvasRenderingContext2D, guides: Guide[], zoom:
   ctx.restore();
 }
 
+/** Draws a laid-out line, right to left for Arabic (x is always its left edge). */
+function fillLine(ctx: CanvasRenderingContext2D, line: LaidLine) {
+  ctx.direction = line.rtl ? "rtl" : "ltr";
+  ctx.textAlign = "left";
+  ctx.fillText(line.text, line.x, line.y);
+}
+
 function drawText(ctx: CanvasRenderingContext2D, el: TextEl) {
   ctx.save();
   ctx.fillStyle = el.color;
   ctx.textBaseline = "top";
-  for (const line of layoutText(ctx, el.text, el.x, el.y, el.w, el.fontSize, el.fontSize * 1.35, el)) ctx.fillText(line.text, line.x, line.y);
+  for (const line of layoutText(ctx, el.text, el.x, el.y, el.w, el.fontSize, el.fontSize * 1.35, el)) fillLine(ctx, line);
   ctx.restore();
 }
 
@@ -460,7 +473,7 @@ function drawSticky(ctx: CanvasRenderingContext2D, el: StickyEl) {
   const lineH = size * 1.33;
   ctx.textBaseline = "top";
   const lines = layoutText(ctx, el.text, el.x + 12, el.y + 12, el.w - 24, size, lineH, el);
-  for (const line of lines.slice(0, Math.max(1, Math.floor((el.h - 24) / lineH)))) ctx.fillText(line.text, line.x, line.y);
+  for (const line of lines.slice(0, Math.max(1, Math.floor((el.h - 24) / lineH)))) fillLine(ctx, line);
   ctx.restore();
 }
 

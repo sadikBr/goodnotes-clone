@@ -12,6 +12,10 @@ import "@fontsource/indie-flower/400.css";
 import "@fontsource/shadows-into-light/400.css";
 import "@fontsource/dancing-script/400.css";
 import "@fontsource/architects-daughter/400.css";
+// Arabic: every preset falls back to Noto Naskh Arabic for Arabic letters
+// (only its Arabic subset, so Latin text keeps each preset's own look).
+import "@fontsource/noto-naskh-arabic/arabic-400.css";
+import "@fontsource/noto-naskh-arabic/arabic-700.css";
 
 export type FontId = "sans" | "caveat" | "patrick-hand" | "kalam" | "indie-flower" | "shadows" | "dancing" | "architect";
 
@@ -24,19 +28,22 @@ export interface FontPreset {
   face: string | null;
 }
 
-const SANS = '"Inter", "Segoe UI", system-ui, -apple-system, sans-serif';
+/** Arabic fallback face, listed after each preset's own face. */
+export const ARABIC_FACE = "Noto Naskh Arabic";
+const AR = `"${ARABIC_FACE}"`;
+const SANS = `"Inter", ${AR}, "Segoe UI", system-ui, -apple-system, sans-serif`;
 /** Faces of Inter that are bundled (handwriting fonts only have a regular face). */
 const INTER_STYLES = ["", "bold ", "italic ", "italic bold "];
 
 export const FONT_PRESETS: FontPreset[] = [
   { id: "sans", label: "Clean", family: SANS, face: "Inter" },
-  { id: "caveat", label: "Quick notes", family: `"Caveat", cursive`, face: "Caveat" },
-  { id: "patrick-hand", label: "Neat print", family: `"Patrick Hand", cursive`, face: "Patrick Hand" },
-  { id: "kalam", label: "Casual", family: `"Kalam", cursive`, face: "Kalam" },
-  { id: "indie-flower", label: "Bubbly", family: `"Indie Flower", cursive`, face: "Indie Flower" },
-  { id: "shadows", label: "Light pencil", family: `"Shadows Into Light", cursive`, face: "Shadows Into Light" },
-  { id: "dancing", label: "Cursive", family: `"Dancing Script", cursive`, face: "Dancing Script" },
-  { id: "architect", label: "Architect", family: `"Architects Daughter", cursive`, face: "Architects Daughter" },
+  { id: "caveat", label: "Quick notes", family: `"Caveat", ${AR}, cursive`, face: "Caveat" },
+  { id: "patrick-hand", label: "Neat print", family: `"Patrick Hand", ${AR}, cursive`, face: "Patrick Hand" },
+  { id: "kalam", label: "Casual", family: `"Kalam", ${AR}, cursive`, face: "Kalam" },
+  { id: "indie-flower", label: "Bubbly", family: `"Indie Flower", ${AR}, cursive`, face: "Indie Flower" },
+  { id: "shadows", label: "Light pencil", family: `"Shadows Into Light", ${AR}, cursive`, face: "Shadows Into Light" },
+  { id: "dancing", label: "Cursive", family: `"Dancing Script", ${AR}, cursive`, face: "Dancing Script" },
+  { id: "architect", label: "Architect", family: `"Architects Daughter", ${AR}, cursive`, face: "Architects Daughter" },
 ];
 
 export function fontPreset(id: string | undefined): FontPreset {
@@ -57,6 +64,13 @@ const loaded = new Set<string>();
 export async function ensureFonts(ids: Iterable<string | undefined>): Promise<boolean> {
   if (typeof document === "undefined" || !("fonts" in document)) return false;
   const pending: Promise<unknown>[] = [];
+  if (!loaded.has(ARABIC_FACE)) {
+    pending.push(
+      Promise.all(["", "bold "].map((st) => document.fonts.load(`${st}24px "${ARABIC_FACE}"`, "بسم")))
+        .then(() => loaded.add(ARABIC_FACE))
+        .catch(() => loaded.add(ARABIC_FACE)),
+    );
+  }
   for (const id of new Set(ids)) {
     const face = fontPreset(id).face;
     if (!face || loaded.has(face)) continue;
@@ -70,4 +84,13 @@ export async function ensureFonts(ids: Iterable<string | undefined>): Promise<bo
   if (pending.length === 0) return false;
   await Promise.all(pending);
   return true;
+}
+
+const RTL_CHAR = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/;
+const STRONG = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFFA-Za-z\u00C0-\u024F\u0370-\u03FF\u0400-\u04FF]/;
+
+/** True when a paragraph reads right to left: its first strong letter is Arabic (or Hebrew). */
+export function isRtl(text: string): boolean {
+  const m = STRONG.exec(text);
+  return !!m && RTL_CHAR.test(m[0]);
 }

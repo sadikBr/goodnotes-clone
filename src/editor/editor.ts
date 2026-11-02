@@ -1,7 +1,7 @@
 // Notebook editor: page canvas, tools, page sidebar, undo/redo and autosave.
 
 import { api, PAPER_COLORS, TEMPLATE_CATEGORIES, TEMPLATES, type ExportFormat, type ExportPage, type Notebook, type P2, type Page, type RecognizedShape, type Template } from "../api";
-import { ensureFonts, FONT_PRESETS, fontPreset, type FontId } from "../fonts";
+import { ensureFonts, FONT_PRESETS, fontPreset, isRtl, type FontId } from "../fonts";
 import { getPref, hasPref, setPref } from "../prefs";
 import { customColorButton } from "../colorPicker";
 import { isDark, toggleTheme } from "../theme";
@@ -3147,7 +3147,7 @@ export class EditorScreen {
     } else {
       this.snapshot();
     }
-    const input = h("textarea", { class: `text-editor ${el.kind}`, "aria-label": el.kind === "text" ? "Text box" : "Sticky note", spellcheck: "true" });
+    const input = h("textarea", { class: `text-editor ${el.kind}`, "aria-label": el.kind === "text" ? "Text box" : "Sticky note", spellcheck: "true", dir: "auto" });
     input.value = el.text;
     this.editing = { el, input };
     this.hiddenIds.add(el.id);
@@ -3199,7 +3199,9 @@ export class EditorScreen {
     input.style.fontFamily = fontPreset(el.font).family;
     input.style.fontWeight = el.bold ? "bold" : "normal";
     input.style.fontStyle = el.italic ? "italic" : "normal";
-    input.style.textAlign = el.align ?? "left";
+    // Logical alignment, like the drawn text: "left" means the start side,
+    // which is the right for Arabic (the box picks its direction from the text).
+    input.style.textAlign = el.align === "center" ? "center" : el.align === "right" ? "end" : "start";
     input.style.transformOrigin = "center";
     input.style.transform = el.rotation ? `rotate(${el.rotation}rad)` : "";
     if (el.kind === "text") {
@@ -3234,8 +3236,11 @@ export class EditorScreen {
       const natural = Math.ceil(naturalTextWidth(el) + 4);
       if (natural < el.w) {
         const shrunk = { ...el, w: Math.max(24, natural) };
+        // Keep the edge the text is aligned to (alignment is logical: the
+        // start side of Arabic text is the right).
+        const rightAligned = isRtl(el.text) ? el.align !== "right" && el.align !== "center" : el.align === "right";
         if (el.align === "center") shrunk.x = el.x + (el.w - shrunk.w) / 2;
-        else if (el.align === "right") shrunk.x = el.x + el.w - shrunk.w;
+        else if (rightAligned) shrunk.x = el.x + el.w - shrunk.w;
         this.elements = this.elements.map((x) => (x.id === el.id ? shrunk : x));
       }
     }

@@ -90,6 +90,7 @@ interface State {
   composite: string;
   font: string;
   textBaseline: CanvasTextBaseline;
+  direction: CanvasDirection;
   dash: number[];
   /** Stroke alpha factor standing in for the pencil grain texture. */
   grain: number;
@@ -150,6 +151,7 @@ export class PdfPainter {
     composite: "source-over",
     font: "10px sans-serif",
     textBaseline: "alphabetic",
+    direction: "ltr",
     dash: [],
     grain: 1,
     grainFill: 1,
@@ -200,6 +202,10 @@ export class PdfPainter {
   set font(v: string) { this.st.font = v; }
   get textBaseline(): CanvasTextBaseline { return this.st.textBaseline; }
   set textBaseline(v: CanvasTextBaseline) { this.st.textBaseline = v; }
+  get direction(): CanvasDirection { return this.st.direction; }
+  set direction(v: CanvasDirection) { this.st.direction = v; }
+  /** Text is always placed by its left edge (see fillLine in render.ts). */
+  textAlign: CanvasTextAlign = "left";
   setLineDash(d: number[]) { this.st.dash = d.slice(); }
   getLineDash(): number[] { return this.st.dash.slice(); }
   /** Patterns (pencil grain) become a marker; see the strokeStyle setter. */
@@ -477,6 +483,8 @@ export class PdfPainter {
     ctx.scale(k, k);
     ctx.font = this.st.font;
     ctx.fillStyle = this.st.fillStyle;
+    ctx.direction = this.st.direction;
+    ctx.textAlign = "left";
     ctx.fillText(text, left, asc);
     this.drawImage(c, x - left, baseY - asc, w, h);
   }
