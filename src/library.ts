@@ -157,7 +157,7 @@ export class LibraryScreen {
       h(
         "nav",
         { "aria-label": "Library" },
-        item("All notebooks", "book", { kind: "all" }, count(all?.notebooks.length)),
+        item("Documents", "docs", { kind: "all" }, count(all ? all.notebooks.length + all.folders.length : undefined)),
         item("Favourites", "star", { kind: "favourites" }, count(all ? all.notebooks.filter((n) => n.favourite).length + all.folders.filter((f) => f.favourite).length : undefined)),
       ),
       h(
@@ -175,7 +175,7 @@ export class LibraryScreen {
   private title(): string {
     switch (this.view.kind) {
       case "all":
-        return "All notebooks";
+        return "Documents";
       case "favourites":
         return "Favourites";
       case "trash":
@@ -191,7 +191,7 @@ export class LibraryScreen {
     const search = h("input", {
       type: "search",
       class: "search",
-      placeholder: "Search notebooks and text…",
+      placeholder: "Search documents and text…",
       "aria-label": "Search",
       value: this.query,
     });
