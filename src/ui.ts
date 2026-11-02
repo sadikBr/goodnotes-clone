@@ -127,6 +127,8 @@ export interface Field {
   options?: { value: string; label: string; group?: string }[];
   /** Colours for a "color-swatches" field (defaults to cover colours). */
   colors?: { color: string; label: string }[];
+  /** Takes half a row (in a two-column dialog). */
+  half?: boolean;
 }
 
 export const COVER_COLORS = ["#2563eb", "#0d9488", "#16a34a", "#ca8a04", "#ea580c", "#dc2626", "#db2777", "#7c3aed", "#475569", "#111827"];
@@ -139,6 +141,8 @@ export interface FormDialogOptions {
   validate?: (values: Record<string, string>) => string | null;
   /** Dialog width in px (default 420; 860 with an aside). */
   width?: number;
+  /** Lays fields out in two columns (fields marked `half` share a row). */
+  twoColumns?: boolean;
 }
 
 export function formDialog(title: string, fields: Field[], submitLabel = "Save", opts: FormDialogOptions = {}): Promise<Record<string, string> | null> {
@@ -146,7 +150,7 @@ export function formDialog(title: string, fields: Field[], submitLabel = "Save",
     const values: Record<string, string> = {};
     const listeners: (() => void)[] = [];
     const changed = () => listeners.forEach((fn) => fn());
-    const form = h("form", { class: "dialog-form" });
+    const form = h("form", { class: `dialog-form${opts.twoColumns ? " two-col" : ""}` });
     const body = opts.aside ? h("div", { class: "modal-split" }, h("div", { class: "modal-aside" }), h("div", { class: "modal-main" }, h("h2", {}, title), form)) : null;
     const backdrop = h(
       "div",
@@ -216,7 +220,7 @@ export function formDialog(title: string, fields: Field[], submitLabel = "Save",
           values[f.name] = input.value;
           changed();
         });
-        form.append(h("label", {}, h("span", {}, f.label), input));
+        form.append(h("label", { class: f.half ? "half" : undefined }, h("span", {}, f.label), input));
       }
     }
     if (opts.aside && body) body.firstElementChild!.append(opts.aside({ values, onChange: (fn) => listeners.push(fn) }));

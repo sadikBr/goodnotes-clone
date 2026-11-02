@@ -4,8 +4,9 @@
 // draws the screen, thumbnails and (through the PDF painter) vector exports.
 
 import type { Template } from "../api";
-import { fontCss, isRtl } from "../fonts";
+import { fontCss } from "../fonts";
 import { drawCoverDesign, isCoverTemplate } from "./covers";
+import { drawDaftarPage, isDaftarTemplate } from "./daftarPapers";
 
 /** Inkleaf units per millimetre (units are 1/96 inch). */
 const MM = 96 / 25.4;
@@ -387,181 +388,6 @@ function drawWeeklyPlanner(ctx: Ctx, w: number, h: number, ink: Inks) {
   strong.stroke(ctx, ink.line, 1.2);
 }
 
-// --- daftar annossous (دفتر النصوص / cahier de textes) ------------------------
-
-export interface DaftarLayout {
-  /** Page margin. */
-  m: number;
-  /** Baselines of the header fields (class, subject, teacher). */
-  fieldsY: number;
-  /** Header fields, right to left: label, and the x range where its value goes. */
-  fields: { key: "class" | "subject" | "teacher"; ar: string; fr: string; x0: number; x1: number }[];
-  /** Columns, right to left. */
-  cols: { key: "date" | "lesson" | "notes"; ar: string; fr: string; x0: number; x1: number }[];
-  /** Top of the column headings and of the first row. */
-  headTop: number;
-  bodyTop: number;
-  /** Row top edges (one more than rows: the last is the table's bottom). */
-  rows: number[];
-}
-
-/**
- * Geometry of a daftar page, shared by the drawing and by whatever fills it
- * in (dates from the timetable, the class name). The table reads right to
- * left: date and session, lesson title and content, notes and visa.
- */
-export function daftarLayout(w: number, h: number): DaftarLayout {
-  const m = 40;
-  const fieldsY = m + 78;
-  const tw = w - 2 * m;
-  // Class names are short; teachers' names are the longest.
-  const classW = Math.round(tw * 0.26);
-  const subjectW = Math.round(tw * 0.33);
-  const fields: DaftarLayout["fields"] = [
-    { key: "class", ar: "القسم", fr: "Classe", x0: w - m - classW, x1: w - m },
-    { key: "subject", ar: "المادة", fr: "Matière", x0: w - m - classW - subjectW, x1: w - m - classW },
-    { key: "teacher", ar: "الأستاذ(ة)", fr: "Enseignant(e)", x0: m, x1: w - m - classW - subjectW },
-  ];
-  const dateW = Math.round(tw * 0.19);
-  const notesW = Math.round(tw * 0.24);
-  const cols: DaftarLayout["cols"] = [
-    { key: "date", ar: "التاريخ والحصة", fr: "Date et séance", x0: w - m - dateW, x1: w - m },
-    { key: "lesson", ar: "عنوان الدرس والمضامين", fr: "Leçon et contenu", x0: m + notesW, x1: w - m - dateW },
-    { key: "notes", ar: "ملاحظات وتأشيرة المفتش", fr: "Observations et visa", x0: m, x1: m + notesW },
-  ];
-  const headTop = fieldsY + 22;
-  const bodyTop = headTop + 48;
-  const bottom = h - m;
-  const n = Math.max(3, Math.round((bottom - bodyTop) / 118));
-  const rowH = (bottom - bodyTop) / n;
-  const rows = Array.from({ length: n + 1 }, (_, i) => bodyTop + i * rowH);
-  return { m, fieldsY, fields, cols, headTop, bodyTop, rows };
-}
-
-/** A label placed by its right edge, its left edge or its centre; Arabic is drawn right to left. */
-function labelAligned(ctx: Ctx, text: string, x: number, y: number, ink: Inks, size: number, bold: boolean, align: "left" | "right" | "center", color = ink.text) {
-  ctx.save();
-  ctx.font = fontCss("sans", size, { bold });
-  ctx.fillStyle = color;
-  ctx.textBaseline = "alphabetic";
-  ctx.direction = isRtl(text) ? "rtl" : "ltr";
-  ctx.textAlign = "left";
-  const tw = ctx.measureText(text).width;
-  ctx.fillText(text, align === "right" ? x - tw : align === "center" ? x - tw / 2 : x, y);
-  ctx.restore();
-  return tw;
-}
-
-function drawDaftar(ctx: Ctx, w: number, h: number, ink: Inks) {
-  const L = daftarLayout(w, h);
-  const { m } = L;
-  const strong = new Lines();
-  const line = new Lines();
-  const faint = new Lines();
-  // Title: Arabic on the right, French on the left.
-  labelAligned(ctx, "دفتر النصوص", w - m, m + 30, ink, 24, true, "right", ink.strong);
-  labelAligned(ctx, "Cahier de textes", m, m + 28, ink, 19, true, "left", ink.strong);
-  strong.h(m + 44, m, w - m);
-  // Class, subject and teacher: "label / Label" then a dotted line for the value.
-  for (const f of L.fields) {
-    // Drawn in pieces (Arabic, slash, French) so mixed-direction text with
-    // parentheses can't get reordered.
-    let x = f.x1;
-    x -= labelAligned(ctx, f.ar, x, L.fieldsY, ink, 12, true, "right");
-    x -= labelAligned(ctx, " / ", x, L.fieldsY, ink, 11.5, false, "right");
-    x -= labelAligned(ctx, f.fr, x, L.fieldsY, ink, 11.5, true, "right");
-    for (let dx = x - 8; dx > f.x0 + 10; dx -= 5) faint.h(L.fieldsY + 2, dx - 2, dx);
-  }
-  // The table.
-  const top = L.headTop;
-  const bottom = L.rows[L.rows.length - 1];
-  strong.rect(m, top, w - 2 * m, bottom - top);
-  strong.h(L.bodyTop, m, w - m);
-  for (const c of L.cols.slice(1)) strong.v(c.x1, top, bottom);
-  for (const c of L.cols) {
-    const cx = (c.x0 + c.x1) / 2;
-    labelAligned(ctx, c.ar, cx, top + 20, ink, 12, true, "center");
-    labelAligned(ctx, c.fr, cx, top + 38, ink, 10.5, false, "center");
-  }
-  const date = L.cols[0];
-  const lesson = L.cols[1];
-  L.rows.slice(1, -1).forEach((y) => line.h(y, m, w - m));
-  for (let i = 0; i < L.rows.length - 1; i++) {
-    const y0 = L.rows[i];
-    const y1 = L.rows[i + 1];
-    // Date above, session time below.
-    faint.h(y0 + (y1 - y0) * 0.5, date.x0 + 8, date.x1 - 8);
-    // Writing lines in the lesson column.
-    for (let y = y0 + 27; y < y1 - 8; y += 27) faint.h(y, lesson.x0 + 8, lesson.x1 - 8);
-  }
-  faint.stroke(ctx, ink.faint, 1);
-  line.stroke(ctx, ink.line, 1);
-  strong.stroke(ctx, ink.strong, 1.3);
-}
-
-// --- weekly timetable (استعمال الزمن / emploi du temps) ------------------------------
-
-export const TIMETABLE_HOURS = { from: 8, to: 18 };
-const TT_DAYS: { day: number; ar: string; fr: string }[] = [
-  { day: 1, ar: "الإثنين", fr: "Lundi" },
-  { day: 2, ar: "الثلاثاء", fr: "Mardi" },
-  { day: 3, ar: "الأربعاء", fr: "Mercredi" },
-  { day: 4, ar: "الخميس", fr: "Jeudi" },
-  { day: 5, ar: "الجمعة", fr: "Vendredi" },
-  { day: 6, ar: "السبت", fr: "Samedi" },
-];
-
-/**
- * Geometry of the timetable page: day columns right to left (Monday next to
- * the hours on the right), and the y of any time of day.
- */
-export function timetableLayout(w: number, h: number) {
-  const m = 40;
-  const top = m + 110;
-  const bottom = h - m;
-  const timeW = 58;
-  const right = w - m - timeW;
-  const colW = (right - m) / TT_DAYS.length;
-  const days = TT_DAYS.map((d, i) => ({ ...d, x0: right - (i + 1) * colW, x1: right - i * colW }));
-  const headH = 44;
-  const bodyTop = top + headH;
-  const hours = TIMETABLE_HOURS.to - TIMETABLE_HOURS.from;
-  const yOf = (hhmm: string) => {
-    const [hh, mm] = hhmm.split(":").map(Number);
-    const t = Math.min(TIMETABLE_HOURS.to, Math.max(TIMETABLE_HOURS.from, hh + (mm || 0) / 60));
-    return bodyTop + ((t - TIMETABLE_HOURS.from) / hours) * (bottom - bodyTop);
-  };
-  return { m, top, bottom, timeX0: right, timeX1: w - m, days, headH, bodyTop, yOf };
-}
-
-function drawTimetable(ctx: Ctx, w: number, h: number, ink: Inks) {
-  const L = timetableLayout(w, h);
-  const strong = new Lines();
-  const line = new Lines();
-  const faint = new Lines();
-  labelAligned(ctx, "استعمال الزمن", w - L.m, L.m + 30, ink, 24, true, "right", ink.strong);
-  labelAligned(ctx, "Emploi du temps", L.m, L.m + 28, ink, 19, true, "left", ink.strong);
-  strong.h(L.m + 44, L.m, w - L.m);
-  strong.rect(L.m, L.top, w - 2 * L.m, L.bottom - L.top);
-  strong.h(L.bodyTop, L.m, w - L.m);
-  strong.v(L.timeX0, L.top, L.bottom);
-  for (const d of L.days) {
-    if (d.x0 > L.m + 1) line.v(d.x0, L.top, L.bottom);
-    const cx = (d.x0 + d.x1) / 2;
-    labelAligned(ctx, d.ar, cx, L.top + 19, ink, 12, true, "center");
-    labelAligned(ctx, d.fr, cx, L.top + 36, ink, 10.5, false, "center");
-  }
-  for (let hr = TIMETABLE_HOURS.from; hr <= TIMETABLE_HOURS.to; hr++) {
-    const y = L.yOf(`${hr}:00`);
-    if (hr > TIMETABLE_HOURS.from && hr < TIMETABLE_HOURS.to) line.h(y, L.m, w - L.m);
-    if (hr < TIMETABLE_HOURS.to) faint.h(L.yOf(`${hr}:30`), L.m, L.timeX0);
-    labelAligned(ctx, `${String(hr).padStart(2, "0")}:00`, (L.timeX0 + L.timeX1) / 2, Math.min(L.bottom - 4, y + 14), ink, 11, false, "center");
-  }
-  faint.stroke(ctx, ink.faint, 1);
-  line.stroke(ctx, ink.line, 1);
-  strong.stroke(ctx, ink.strong, 1.3);
-}
-
 /** Draws the paper colour and the template's lines. */
 export function drawTemplate(ctx: Ctx, template: Template, w: number, h: number, paper: string) {
   ctx.fillStyle = paper;
@@ -644,14 +470,9 @@ export function drawTemplate(ctx: Ctx, template: Template, w: number, h: number,
     case "planner-week":
       drawWeeklyPlanner(ctx, w, h, ink);
       break;
-    case "daftar":
-      drawDaftar(ctx, w, h, ink);
-      break;
-    case "daftar-timetable":
-      drawTimetable(ctx, w, h, ink);
-      break;
     default:
       if (isCoverTemplate(template)) drawCoverDesign(ctx, template, w, h, paper);
+      else if (isDaftarTemplate(template)) drawDaftarPage(ctx, template, w, h, paper);
       break;
     case "blank":
       break;
@@ -660,5 +481,5 @@ export function drawTemplate(ctx: Ctx, template: Template, w: number, h: number,
 
 /** Templates whose labels use the bundled sans font (PDF export loads it). */
 export function templateUsesText(template: Template): boolean {
-  return template === "planner-day" || template === "planner-week" || template === "daftar" || template === "daftar-timetable";
+  return template === "planner-day" || template === "planner-week" || isDaftarTemplate(template);
 }

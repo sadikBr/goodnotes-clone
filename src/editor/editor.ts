@@ -38,7 +38,8 @@ import {
   type ShapeKind,
 } from "./geometry";
 import { inkToTextDialog } from "./inkToText";
-import { DAYS, extendSection, isoDate, parseDaftar, type DaftarMeta } from "../daftar";
+import { addLessonPage, DAYS, isoDate, lessonEntry, nextFreeRow, parseDaftar, type DaftarMeta } from "../daftar";
+import { isLessonTemplate, lessonLayout } from "./daftarPapers";
 import { cachedBackground, renderBackground } from "./pdfRender";
 import { INSTRUMENTS, MM, Ruler, type Guide as EdgeGuide, type InstrumentKind } from "./ruler";
 import { smoothPoints, SpeedInk, speedSensitive } from "./ink";
@@ -935,7 +936,7 @@ export class EditorScreen {
         tabs[i].setAttribute("aria-selected", String(c.id === category));
         tabs[i].classList.toggle("has-current", TEMPLATES.some((t) => t.id === current && t.category === c.id));
       });
-      grid.replaceChildren(...TEMPLATES.filter((t) => t.category === category).map(card));
+      grid.replaceChildren(...TEMPLATES.filter((t) => t.category === category && !t.hidden).map(card));
     };
     showCategory();
     const colours = h(
@@ -1553,83 +1554,114 @@ export class EditorScreen {
     return s && d.classes.includes(s) ? s : (d.classes[0] ?? null);
   }
 
-  /** Header controls for a daftar: the class (switches section) and "Today". */
+  /** Header controls for a daftar: the class (switches section) and "New lesson". */
   private renderDaftarBar() {
     const d = this.daftar;
     this.daftarBar.hidden = !d;
     this.root.classList.toggle("is-daftar", !!d);
     if (!d) return;
     const cls = this.currentClass();
-    const chip = h("button", { class: "daftar-class", "aria-haspopup": "menu", title: "Switch class" }, icon("book"), h("span", {}, cls ?? "—"), icon("down"));
+    const chip = h("button", { class: "daftar-class", "aria-haspopup": "menu", title: "Switch class · القسم" }, icon("book"), h("span", {}, cls ?? "—"), icon("down"));
     chip.addEventListener("click", () =>
       popupMenu(
         chip,
-        d.classes.map((c) => ({ label: c, checked: c === cls, action: () => void this.goToToday(c) })),
+        d.classes.map((c) => ({ label: c, checked: c === cls, action: () => void this.goToClass(c) })),
       ),
     );
-    const today = h("button", { class: "daftar-today", title: "Go to today's lesson for this class" }, "Today · اليوم");
-    today.addEventListener("click", () => void this.goToToday(this.currentClass()));
-    this.daftarBar.replaceChildren(chip, today);
+    const lesson = h("button", { class: "daftar-today", title: "Write today's date, the class and the lesson time on the next free line" }, icon("plus"), "حصة جديدة · New lesson");
+    lesson.addEventListener("click", () => void this.newLesson());
+    this.daftarBar.replaceChildren(chip, lesson);
   }
 
-  /** Saves the daftar settings changed by extendSection and refreshes the page list. */
-  private async afterDaftarChange(selectId?: string) {
-    this.notebook = await api.notebook(this.notebook.id);
-    this.daftar = parseDaftar(this.notebook);
-    const pages = await api.pages(this.notebook.id);
-    const at = selectId ? pages.findIndex((p) => p.id === selectId) : this.index;
-    await this.reloadPages(Math.max(0, at));
+  /** Elements of a page (the live ones for the page being edited). */
+  private async pageEls(p: Page): Promise<El[]> {
+    if (p.id === this.activeId) return this.elements;
+    return this.elementCache.get(p.id) ?? fromStored(await api.elements(p.id));
+  }
+
+  /** A class's lesson pages, and the one in use: the last with writing on it (else the first). */
+  private async classPages(cls: string): Promise<{ pages: { p: Page; i: number }[]; current: number | null }> {
+    const pages = this.pages.map((p, i) => ({ p, i })).filter(({ p }) => p.section === cls && isLessonTemplate(p.template));
+    let current: number | null = pages[0]?.i ?? null;
+    for (const { p, i } of pages) if ((await this.pageEls(p)).some((e) => !(e.kind === "text" && e.role === "daftar-field"))) current = i;
+    return { pages, current };
+  }
+
+  /** Opens a class's current lesson page. */
+  private async goToClass(cls: string) {
+    const { current } = await this.classPages(cls);
+    if (current !== null) this.goTo(current);
   }
 
   /**
-   * Goes to today's row for a class: extends its dated pages when the
-   * year has moved past them, then opens the page with the latest session
-   * on or before today (the first page before the year starts).
+   * A new lesson: today's date, the class and (from the timetable) the
+   * lesson's time, written on the next free line of the class's current
+   * lesson page — on a new page when that one is full. Undo removes it.
    */
-  private async goToToday(cls: string | null) {
+  private async newLesson() {
     const d = this.daftar;
+    const cls = this.currentClass();
     if (!d || !cls) return;
     try {
       await this.flush();
+      const here = this.page;
+      let { current } = await this.classPages(cls);
+      if (here && here.section === cls && isLessonTemplate(here.template)) current = this.index;
+      let target = current !== null ? this.pages[current] : null;
+      let row: number | null = null;
+      if (target) {
+        const els = await this.pageEls(target);
+        const ink = els.filter((e) => !(e.kind === "text" && e.role === "daftar-field")).map((e) => {
+          const b = bounds(e);
+          return { x0: b.x, y0: b.y, x1: b.x + b.w, y1: b.y + b.h };
+        });
+        row = nextFreeRow(ink, target.width, target.height);
+      }
+      if (!target || row === null) {
+        const page = await addLessonPage(this.notebook, d, cls);
+        await this.reloadPages(this.index);
+        target = this.pages.find((p) => p.id === page.id) ?? null;
+        row = 0;
+      }
+      if (!target) return;
+      const i = this.pages.findIndex((p) => p.id === target!.id);
+      if (i !== this.index || this.activeId !== target.id) await this.loadPage(i, false, false);
+      // Today's lessons already logged on this page, so a second entry takes the next one.
       const today = isoDate(new Date());
-      if (d.timetable.some((l) => l.cls === cls) && (d.dated[cls] ?? "") < today) {
-        const ahead = new Date();
-        ahead.setDate(ahead.getDate() + 7);
-        await extendSection(this.notebook, d, cls, { through: isoDate(ahead) });
-        await this.afterDaftarChange();
+      const logged = new Set(
+        this.elements.flatMap((e) => (e.kind === "text" && e.role === "daftar-session" && e.session?.startsWith(today) ? [e.session.slice(11)] : [])),
+      );
+      const entry = lessonEntry(d, cls, row, target.width, target.height, new Date(), logged);
+      this.snapshot();
+      let z = nextZ(this.elements);
+      for (const el of entry) this.elements.push({ ...el, z: z++ });
+      this.changed();
+      // Bring the new line into view.
+      const L = lessonLayout(target.width, target.height);
+      const slot = this.slots[i];
+      if (slot) {
+        this.ignoreScrollUntil = performance.now() + 500;
+        this.scroller.scrollTop = slot.offsetTop + (L.bodyTop + row * L.step) * this.zoom - this.scroller.clientHeight * 0.35;
       }
-      const inClass = this.pages.map((p, i) => ({ p, i })).filter(({ p }) => p.section === cls);
-      if (!inClass.length) return;
-      let best: { i: number; key: string } | null = null;
-      for (const { p, i } of inClass) {
-        const els = this.elementCache.get(p.id) ?? fromStored(await api.elements(p.id));
-        for (const el of els) {
-          if (el.kind !== "text" || el.role !== "daftar-session" || !el.session) continue;
-          if (el.session.slice(0, 10) <= today && (!best || el.session > best.key)) best = { i, key: el.session };
-        }
-      }
-      const target = best ? best.i : d.timetable.some((l) => l.cls === cls) ? inClass[0].i : inClass[inClass.length - 1].i;
-      this.goTo(target);
-      if (best) {
-        const day = DAYS[new Date(best.key.slice(0, 10) + "T12:00").getDay()];
-        toast(`${cls}: ${day.fr} ${best.key.slice(8, 10)}/${best.key.slice(5, 7)} · ${best.key.slice(11)}`);
-      }
+      const now = new Date();
+      const day = DAYS[now.getDay()];
+      const time = entry[2]?.text; // date, class, then time when the timetable has one
+      toast(`${cls} · ${day.ar} ${entry[0].text}${time ? ` · ${time}` : ""}`);
     } catch (e) {
       reportError(e);
     }
   }
 
-  /** Adds a page at the end of a class's section, continuing its dates. */
+  /** Adds a lesson page at the end of a class's section. */
   private async addDaftarPage(section: string | null) {
     const d = this.daftar;
-    const cls = section && d?.classes.includes(section) ? section : this.currentClass();
+    const cls = section && d?.classes.includes(section) ? section : null;
     if (!d || !cls) return this.addPage(this.pages.length);
     try {
       await this.flush();
-      await extendSection(this.notebook, d, cls, { oneMore: true });
+      const page = await addLessonPage(this.notebook, d, cls);
       const pages = await api.pages(this.notebook.id);
-      const last = pages.filter((p) => p.section === cls).pop();
-      await this.afterDaftarChange(last?.id);
+      await this.reloadPages(Math.max(0, pages.findIndex((p) => p.id === page.id)));
     } catch (e) {
       reportError(e);
     }

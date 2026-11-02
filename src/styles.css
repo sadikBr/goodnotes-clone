@@ -2966,3 +2966,14 @@ select option {
   transform: translateY(-2px);
   box-shadow: var(--shadow);
 }
+.dialog-form.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 14px;
+}
+.dialog-form.two-col > * {
+  grid-column: 1 / -1;
+}
+.dialog-form.two-col > .half {
+  grid-column: auto;
+}

@@ -1,7 +1,7 @@
 // The "New daftar" dialog: school details, classes, and an optional weekly
 // timetable that pre-dates each class's rows.
 
-import { createDaftar, DAYS, finishDaftarCover, isoDate, schoolYear, type DaftarMeta, type Lesson } from "./daftar";
+import { createDaftar, DAYS, finishDaftarCover, schoolYear, type DaftarMeta, type Lesson } from "./daftar";
 import { type Notebook } from "./api";
 import { formDialog, h, icon, reportError, toast, type CustomFieldContext } from "./ui";
 import { refreshCoverThumbnail, setUpCover } from "./cover";
@@ -78,33 +78,29 @@ function timetableField(ctx: CustomFieldContext): HTMLElement {
   return h("div", { class: "tt" }, list, empty, add);
 }
 
-function dateField(ctx: CustomFieldContext): HTMLElement {
-  const input = h("input", { type: "date", value: ctx.values.start, "aria-label": "First day of lessons" });
-  input.addEventListener("change", () => ctx.set(input.value));
-  return input;
-}
-
 /** Asks for the daftar's details and creates it. */
 export async function newDaftarDialog(folderId: string | null): Promise<Notebook | null> {
   const r = await formDialog(
     "New daftar annossous · دفتر النصوص",
     [
-      { name: "title", label: "Title", value: "دفتر النصوص" },
-      { name: "year", label: "School year · السنة الدراسية", value: schoolYear() },
-      { name: "school", label: "School · المؤسسة", value: "" },
-      { name: "teacher", label: "Teacher · الأستاذ(ة)", value: "" },
-      { name: "subject", label: "Subject · المادة", value: "" },
-      { name: "classes", label: "Classes · الأقسام (separate with commas, e.g. 1AC-2, TC-3)", value: "" },
-      { name: "start", label: "First day of lessons", type: "custom", value: isoDate(new Date()), render: dateField },
-      { name: "timetable", label: "Weekly timetable (optional) · استعمال الزمن", type: "custom", value: "[]", render: timetableField },
-      { name: "cover", label: "Cover colour", type: "color-swatches", value: "#16a34a" },
+      { name: "teacher", label: "الأستاذ(ة) · Teacher", value: "", half: true },
+      { name: "subject", label: "المادة · Subject", value: "", half: true },
+      { name: "school", label: "المؤسسة · School", value: "", half: true },
+      { name: "year", label: "الموسم الدراسي · School year", value: schoolYear(), half: true },
+      { name: "region", label: "الجهة / الأكاديمية · Region", value: "", half: true },
+      { name: "directorate", label: "المديرية الإقليمية · Directorate", value: "", half: true },
+      { name: "payroll", label: "رقم التأجير · Payroll number (optional)", value: "", half: true },
+      { name: "title", label: "Title", value: "دفتر النصوص", half: true },
+      { name: "classes", label: "الأقسام · Classes — separate with commas, e.g. 3/6, 3/7, 2/1", value: "" },
+      { name: "timetable", label: "استعمال الزمن · Weekly timetable (optional: gives each new lesson its time)", type: "custom", value: "[]", render: timetableField },
+      { name: "cover", label: "Cover colour", type: "color-swatches", value: "#5b2a5e", colors: [ { color: "#5b2a5e", label: "Plum" }, { color: "#1f7a4a", label: "Green" }, { color: "#1f6fd1", label: "Blue" }, { color: "#2d2f72", label: "Navy" }, { color: "#d1245f", label: "Raspberry" }, { color: "#e0612a", label: "Orange" }, { color: "#0d9488", label: "Teal" }, { color: "#475569", label: "Slate" } ] },
     ],
     "Create daftar",
     {
-      width: 600,
+      width: 640,
+      twoColumns: true,
       validate: (v) => {
         if (!parseClasses(v.classes ?? "").length) return "Add at least one class.";
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(v.start ?? "")) return "Choose the first day of lessons.";
         const bad = (JSON.parse(v.timetable || "[]") as Lesson[]).find((l) => !(l.start < l.end));
         if (bad) return `A ${DAYS[bad.day].fr} lesson ends before it starts.`;
         return null;
@@ -117,13 +113,14 @@ export async function newDaftarDialog(folderId: string | null): Promise<Notebook
     const meta: DaftarMeta = {
       kind: "daftar",
       year: r.year.trim(),
+      region: r.region.trim(),
+      directorate: r.directorate.trim(),
       school: r.school.trim(),
       teacher: r.teacher.trim(),
+      payroll: r.payroll.trim(),
       subject: r.subject.trim(),
       classes,
       timetable: (JSON.parse(r.timetable || "[]") as Lesson[]).filter((l) => classes.includes(l.cls)),
-      start: r.start,
-      dated: {},
     };
     toast("Preparing your daftar…");
     const nb = await createDaftar({ title: r.title.trim() || "دفتر النصوص", folderId, coverColor: r.cover, meta });

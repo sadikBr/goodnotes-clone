@@ -30,6 +30,20 @@ export type Template =
   | "daftar"
   /** A weekly timetable grid (استعمال الزمن / emploi du temps). */
   | "daftar-timetable"
+  /** The other daftar pages; the colour variants are lesson pages. */
+  | "daftar-blue"
+  | "daftar-green"
+  | "daftar-pink"
+  | "daftar-navy"
+  | "daftar-orange"
+  | "daftar-title"
+  | "daftar-profile"
+  | "daftar-profile-2"
+  | "daftar-holidays"
+  | "daftar-diagnostic"
+  | "daftar-students"
+  | "daftar-memos"
+  | "daftar-absence"
   /** Notebook cover designs (page 1 of new notebooks); not offered in the paper picker. */
   | "cover"
   | "cover-minimal"
@@ -57,7 +71,7 @@ export const TEMPLATE_CATEGORIES: { id: TemplateCategory; label: string; short: 
  * Paper styles. `preview: "page"` shows the whole page in the picker (for
  * structured layouts); otherwise a close-up of the top-left corner.
  */
-export const TEMPLATES: { id: Template; label: string; category: TemplateCategory; preview?: "page" }[] = [
+export const TEMPLATES: { id: Template; label: string; category: TemplateCategory; preview?: "page"; hidden?: boolean }[] = [
   { id: "blank", label: "Blank", category: "basic" },
   { id: "ruled", label: "Ruled", category: "basic" },
   { id: "narrow-ruled", label: "Narrow ruled", category: "basic" },
@@ -77,8 +91,21 @@ export const TEMPLATES: { id: Template; label: string; category: TemplateCategor
   { id: "storyboard", label: "Storyboard", category: "writing", preview: "page" },
   { id: "planner-day", label: "Daily plan", category: "planner", preview: "page" },
   { id: "planner-week", label: "Weekly plan", category: "planner", preview: "page" },
-  { id: "daftar", label: "Daftar annossous", category: "teacher", preview: "page" },
+  { id: "daftar", label: "Lesson log", category: "teacher", preview: "page" },
+  { id: "daftar-blue", label: "Lesson log (blue)", category: "teacher", preview: "page", hidden: true },
+  { id: "daftar-green", label: "Lesson log (green)", category: "teacher", preview: "page", hidden: true },
+  { id: "daftar-pink", label: "Lesson log (pink)", category: "teacher", preview: "page", hidden: true },
+  { id: "daftar-navy", label: "Lesson log (navy)", category: "teacher", preview: "page", hidden: true },
+  { id: "daftar-orange", label: "Lesson log (orange)", category: "teacher", preview: "page", hidden: true },
   { id: "daftar-timetable", label: "Timetable", category: "teacher", preview: "page" },
+  { id: "daftar-students", label: "Student list", category: "teacher", preview: "page" },
+  { id: "daftar-diagnostic", label: "Diagnostic report", category: "teacher", preview: "page" },
+  { id: "daftar-holidays", label: "School holidays", category: "teacher", preview: "page" },
+  { id: "daftar-memos", label: "Memos", category: "teacher", preview: "page" },
+  { id: "daftar-absence", label: "Absences", category: "teacher", preview: "page" },
+  { id: "daftar-title", label: "Daftar title page", category: "teacher", preview: "page" },
+  { id: "daftar-profile", label: "Teacher's card", category: "teacher", preview: "page" },
+  { id: "daftar-profile-2", label: "Teacher's card (2)", category: "teacher", preview: "page" },
 ];
 
 export interface Folder {

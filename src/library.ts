@@ -434,7 +434,7 @@ export class LibraryScreen {
       "New notebook",
       [
         { name: "title", label: "Title", value: "Untitled notebook" },
-        { name: "template", label: "Paper", type: "select", value: "ruled", options: TEMPLATES.map((t) => ({ value: t.id, label: t.label, group: TEMPLATE_CATEGORIES.find((c) => c.id === t.category)?.label })) },
+        { name: "template", label: "Paper", type: "select", value: "ruled", options: TEMPLATES.filter((t) => !t.hidden).map((t) => ({ value: t.id, label: t.label, group: TEMPLATE_CATEGORIES.find((c) => c.id === t.category)?.label })) },
         { name: "size", label: "Page size", type: "select", value: "a4", options: PAPER_SIZES.map((p) => ({ value: p.id, label: p.label })) },
         { name: "orientation", label: "Orientation", type: "select", value: "portrait", options: [{ value: "portrait", label: "Portrait" }, { value: "landscape", label: "Landscape" }] },
         { name: "paper", label: "Paper colour", type: "color-swatches", value: "#fffdf7", colors: PAPER_COLORS },
