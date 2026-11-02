@@ -1,6 +1,7 @@
 import type { P2, Template } from "../api";
-import { boxOf, groupHandles, handlesFor, isClosedShape, pressureWidth, setLineCounter, textHeight, type Rect, type TextStyle } from "./geometry";
+import { boxOf, groupHandles, handlesFor, isClosedShape, setLineCounter, textHeight, type Rect, type TextStyle } from "./geometry";
 import { LIST_MARKER } from "./textFormat";
+import { outlinePath, smoothPoints, strokeOutline } from "./ink";
 import { fontCss } from "../fonts";
 import type { El, Pt, ShapeEl, StickyEl, StrokeEl, TextEl } from "./model";
 import type { Anchor, Guide } from "./snap";
@@ -23,28 +24,6 @@ function strokePath(ctx: CanvasRenderingContext2D, pts: Pt[]) {
   }
   const last = pts[pts.length - 1];
   ctx.lineTo(last[0], last[1]);
-}
-
-/** Draws smoothed segments, each with its own width (for pressure/taper). */
-function strokeSegments(ctx: CanvasRenderingContext2D, pts: Pt[], widthAt: (i: number) => number) {
-  if (pts.length === 1) {
-    ctx.lineWidth = widthAt(0);
-    strokePath(ctx, pts);
-    ctx.stroke();
-    return;
-  }
-  for (let i = 1; i < pts.length; i++) {
-    const a = pts[i - 1];
-    const b = pts[i];
-    const prevMid: [number, number] = i > 1 ? [(pts[i - 2][0] + a[0]) / 2, (pts[i - 2][1] + a[1]) / 2] : [a[0], a[1]];
-    const mid: [number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-    ctx.lineWidth = (widthAt(i - 1) + widthAt(i)) / 2;
-    ctx.beginPath();
-    ctx.moveTo(prevMid[0], prevMid[1]);
-    ctx.quadraticCurveTo(a[0], a[1], mid[0], mid[1]);
-    if (i === pts.length - 1) ctx.lineTo(b[0], b[1]);
-    ctx.stroke();
-  }
 }
 
 // Pencil grain: a small tile of per-pixel alpha noise, tinted per colour.
@@ -168,7 +147,7 @@ function flatEndFillers(ctx: CanvasRenderingContext2D, pts: [number, number][], 
   piece(pts[pts.length - 1], pts[pts.length - 2]);
 }
 
-export function drawStroke(ctx: CanvasRenderingContext2D, el: StrokeEl) {
+export function drawStroke(ctx: CanvasRenderingContext2D, el: StrokeEl, live = false) {
   const pts = el.points;
   if (pts.length === 0) return;
   ctx.save();
@@ -194,46 +173,24 @@ export function drawStroke(ctx: CanvasRenderingContext2D, el: StrokeEl) {
     ctx.restore();
     return;
   }
-  const n = pts.length;
-  switch (el.style ?? "fountain") {
-    case "ballpoint":
-      // Even line regardless of pressure.
-      ctx.lineWidth = Math.max(0.8, el.width * 0.8);
-      strokePath(ctx, pts);
-      ctx.stroke();
-      break;
-    case "pencil": {
-      const avg = pts.reduce((s, p) => s + p[2], 0) / n;
-      ctx.strokeStyle = ctx.createPattern(grainTile(el.color), "repeat") ?? el.color;
-      ctx.globalAlpha = 0.55 + 0.4 * Math.min(1, avg * 1.4);
-      ctx.lineWidth = Math.max(0.8, el.width * (0.55 + 0.45 * avg));
-      strokePath(ctx, pts);
-      ctx.stroke();
-      break;
-    }
-    case "calligraphy":
-      drawCalligraphy(ctx, el);
-      break;
-    case "brush": {
-      const ramp = Math.min(8, Math.max(2, Math.floor(n / 4)));
-      strokeSegments(ctx, pts, (i) => {
-        const taper = Math.min(1, (i + 1) / ramp, (n - i) / ramp);
-        return el.width * 1.7 * (0.3 + 0.8 * Math.min(1, pts[i][2])) * (0.2 + 0.8 * taper);
-      });
-      break;
-    }
-    case "fountain": {
-      const uniform = pts.every((p) => Math.abs(p[2] - pts[0][2]) < 0.02);
-      if (uniform) {
-        ctx.lineWidth = pressureWidth(el.width, pts[0][2]);
-        strokePath(ctx, pts);
-        ctx.stroke();
-      } else {
-        strokeSegments(ctx, pts, (i) => pressureWidth(el.width, pts[i][2]));
-      }
-      break;
-    }
+  const style = el.style ?? "fountain";
+  if (style === "calligraphy") {
+    drawCalligraphy(ctx, { ...el, points: smoothPoints(pts) });
+    ctx.restore();
+    return;
   }
+  // Every other pen is one smooth filled outline (no beads or steps).
+  ctx.beginPath();
+  for (const outline of strokeOutline(pts, style, el.width, !live)) outlinePath(ctx, outline);
+  if (style === "pencil") {
+    const avg = pts.reduce((s, p) => s + p[2], 0) / pts.length;
+    ctx.fillStyle = el.color; // what vector export uses
+    ctx.fillStyle = ctx.createPattern(grainTile(el.color), "repeat") ?? el.color;
+    ctx.globalAlpha = 0.55 + 0.4 * Math.min(1, avg * 1.4);
+  } else {
+    ctx.fillStyle = el.color;
+  }
+  ctx.fill("nonzero");
   ctx.restore();
 }
 

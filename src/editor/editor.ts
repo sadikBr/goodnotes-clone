@@ -37,6 +37,7 @@ import {
 import { inkToTextDialog } from "./inkToText";
 import { cachedBackground, renderBackground } from "./pdfRender";
 import { INSTRUMENTS, MM, Ruler, type Guide as EdgeGuide, type InstrumentKind } from "./ruler";
+import { SpeedInk, speedSensitive } from "./ink";
 import { Laser, LASER_CORE_FADE_MS, LASER_HOLD_MS, type LaserLayers, type LaserMode } from "./laser";
 import { buildVectorPdf, type PdfPageInput } from "./pdfExport";
 import { continueList, currentList, toggleList, type ListKind } from "./textFormat";
@@ -115,7 +116,7 @@ const EXPORT_SCALE: Record<ExportFormat, number> = { pdf: 3, png: 3, pptx: 2 };
 const MAX_UNDO = 100;
 
 type Gesture =
-  | { type: "draw"; tool: "pen" | "highlighter" | "shape"; points: Pt[]; times: number[]; preview: ShapeEl | null; holdTimer: number; held: Held | null; ruler?: { edge: EdgeGuide; offset: number } }
+  | { type: "draw"; tool: "pen" | "highlighter" | "shape"; points: Pt[]; times: number[]; preview: ShapeEl | null; holdTimer: number; held: Held | null; ruler?: { edge: EdgeGuide; offset: number }; ink?: SpeedInk | null }
   | { type: "erase"; changed: boolean; last: P2 | null }
   | { type: "lasso"; points: P2[] }
   | { type: "laser" }
@@ -1401,7 +1402,7 @@ export class EditorScreen {
           color: this.colors[g.tool],
           width: this.widths[g.tool],
           points: g.points,
-        });
+        }, true);
     } else if (g?.type === "shape") {
       if (g.preview) drawElement(ctx, g.preview, this.images, () => {});
     } else if (g?.type === "lasso") {
@@ -1633,6 +1634,17 @@ export class EditorScreen {
     return [(e.clientX - r.left) / this.zoom, (e.clientY - r.top) / this.zoom];
   }
 
+  /** A speed tracker for pens whose width follows drawing speed (fountain, brush). */
+  private newInk(tool: "pen" | "highlighter" | "shape"): SpeedInk | null {
+    return tool === "pen" && speedSensitive(this.penStyle) ? new SpeedInk() : null;
+  }
+
+  /** The pressure value stored for a point: stylus pressure, shaped by speed where it applies. */
+  private inkPressure(ink: SpeedInk | null, x: number, y: number, e: PointerEvent): number {
+    if (!ink) return this.pressure(e);
+    return ink.next(x, y, e.timeStamp, e.pointerType === "pen" && e.pressure > 0 ? e.pressure : null);
+  }
+
   private pressure(e: PointerEvent): number {
     if (e.pointerType === "pen") return e.pressure > 0 ? e.pressure : 0.5;
     return 0.5;
@@ -1670,12 +1682,14 @@ export class EditorScreen {
           // Ink sits against the edge (a line shape is centred on it too).
           const offset = this.widths[tool] / 2 + 0.5 / this.zoom;
           const [px, py] = Ruler.project(edge, [x, y], offset);
-          this.gesture = { type: "draw", tool, points: [[px, py, this.pressure(e)]], times: [e.timeStamp], preview: null, holdTimer: 0, held: null, ruler: { edge, offset } };
+          const ink = this.newInk(tool);
+          this.gesture = { type: "draw", tool, points: [[px, py, this.inkPressure(ink, px, py, e)]], times: [e.timeStamp], preview: null, holdTimer: 0, held: null, ruler: { edge, offset }, ink };
         } else if (tool === "shape" && this.shapeKind !== "auto") {
           this.gesture = { type: "shape", start: [x, y], preview: null };
         } else {
           // Freehand ink; with the shape tool in auto mode it is recognised on lift.
-          this.gesture = { type: "draw", tool, points: [[x, y, this.pressure(e)]], times: [e.timeStamp], preview: null, holdTimer: 0, held: null };
+          const ink = this.newInk(tool);
+          this.gesture = { type: "draw", tool, points: [[x, y, this.inkPressure(ink, x, y, e)]], times: [e.timeStamp], preview: null, holdTimer: 0, held: null, ink };
           this.armHold();
         }
         break;
@@ -1765,7 +1779,7 @@ export class EditorScreen {
     switch (g.type) {
       case "laser": {
         let changed = false;
-        for (const s of samples) changed = this.laser.extend(this.point(s), 0.75 / this.zoom) || changed;
+        for (const s of samples) changed = this.laser.extend(this.point(s), 0.75 / this.zoom, s.timeStamp, this.zoom) || changed;
         if (changed) this.renderLaser();
         else this.positionLaserDot();
         return; // the page itself doesn't change: skip the page redraw
@@ -1781,7 +1795,7 @@ export class EditorScreen {
           if (g.ruler) [x, y] = Ruler.project(g.ruler.edge, [x, y], g.ruler.offset);
           const last = g.points[g.points.length - 1];
           if (Math.hypot(x - last[0], y - last[1]) < 0.4 / this.zoom) continue;
-          g.points.push([x, y, this.pressure(s)]);
+          g.points.push([x, y, this.inkPressure(g.ink ?? null, x, y, s)]);
           g.times.push(s.timeStamp);
         }
         if (g.ruler) this.ruler.setReadout(this.rulerReadout(g));

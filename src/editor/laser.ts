@@ -25,9 +25,11 @@ const TUBE_PX = 6;
 const CORE_PX = 1.8;
 
 type P = [number, number];
+/** x, y and the width factor at that point (from drawing speed). */
+type LP = [number, number, number];
 
 interface Stroke {
-  pts: P[];
+  pts: LP[];
   /** Curve segments already drawn (segment i is controlled by pts[i]). */
   drawn: number;
   /** The last bit, to the final point, is drawn once the stroke ends. */
@@ -49,6 +51,9 @@ export class Laser {
   private current: Stroke | null = null;
   /** Pointer position in page units, or null when it isn't over the page. */
   dot: P | null = null;
+  /** Width factor from speed: about 1.15 when slow, 0.6 when fast. */
+  private widthLevel = 1;
+  private lastT = 0;
 
   pointAt(p: P | null) {
     this.dot = p ? [p[0], p[1]] : null;
@@ -57,18 +62,31 @@ export class Laser {
   begin(p: P) {
     this.dot = [p[0], p[1]];
     if (this.mode !== "trail") return;
-    this.current = { pts: [[p[0], p[1]]], drawn: 0, finished: false, tailDrawn: false };
+    this.widthLevel = 1;
+    this.lastT = performance.now();
+    this.current = { pts: [[p[0], p[1], this.widthLevel]], drawn: 0, finished: false, tailDrawn: false };
     this.strokes.push(this.current);
   }
 
-  /** Adds a point; returns true if there is something new to draw. */
-  extend(p: P, minStep: number): boolean {
+  /**
+   * Adds a point; returns true if there is something new to draw. `t` is the
+   * event time and `zoom` turns page distances into screen speed.
+   */
+  extend(p: P, minStep: number, t = performance.now(), zoom = 1): boolean {
     this.dot = [p[0], p[1]];
     const cur = this.current;
     if (!cur) return false;
     const last = cur.pts[cur.pts.length - 1];
-    if (Math.hypot(p[0] - last[0], p[1] - last[1]) < minStep) return false;
-    cur.pts.push([p[0], p[1]]);
+    const dist = Math.hypot(p[0] - last[0], p[1] - last[1]);
+    if (dist < minStep) return false;
+    // Screen speed (px/ms) → width: slow is fuller, fast is slimmer.
+    const dt = Math.max(1, t - this.lastT);
+    const v = (dist * zoom) / dt;
+    const k = Math.min(1, v / 2.2);
+    const target = 1.15 - 0.55 * k * k * (3 - 2 * k);
+    this.widthLevel += (target - this.widthLevel) * Math.min(1, 0.1 * dt ** 0.5);
+    this.lastT = t;
+    cur.pts.push([p[0], p[1], this.widthLevel]);
     return true;
   }
 
@@ -98,74 +116,104 @@ export class Laser {
 
   /** Draws only what is new since the last call. */
   drawNew(layers: LaserLayers, zoom: number) {
-    const path = new Path2D();
-    let any = false;
-    for (const s of this.strokes) any = addSegments(path, s, false) || any;
-    if (any) paint(layers, path, zoom, this.color);
+    const pieces: Piece[] = [];
+    for (const st of this.strokes) collect(pieces, st, false);
+    if (pieces.length) paint(layers, pieces, zoom, this.color);
   }
 
   /** Redraws everything (after scrolling or zooming); the layers must be cleared first. */
   drawAll(layers: LaserLayers, zoom: number) {
-    const path = new Path2D();
-    let any = false;
-    for (const s of this.strokes) any = addSegments(path, s, true) || any;
-    if (any) paint(layers, path, zoom, this.color);
+    const pieces: Piece[] = [];
+    for (const st of this.strokes) collect(pieces, st, true);
+    if (pieces.length) paint(layers, pieces, zoom, this.color);
   }
 }
 
-const mid = (a: P, b: P): P => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+/** A run of points (x, y, width factor) along the smoothed curve. */
+type Piece = LP[];
+
+const mid = (a: LP, b: LP): LP => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
+
+/** Points along the quadratic from `a` to `b` with control `c` (dense enough to look smooth). */
+function flatten(a: LP, c: LP, b: LP): LP[] {
+  const len = Math.hypot(c[0] - a[0], c[1] - a[1]) + Math.hypot(b[0] - c[0], b[1] - c[1]);
+  const n = Math.max(1, Math.min(24, Math.ceil(len / 1.5)));
+  const out: LP[] = [];
+  for (let k = 1; k <= n; k++) {
+    const t = k / n;
+    const u = 1 - t;
+    out.push([u * u * a[0] + 2 * u * t * c[0] + t * t * b[0], u * u * a[1] + 2 * u * t * c[1] + t * t * b[1], u * u * a[2] + 2 * u * t * c[2] + t * t * b[2]]);
+  }
+  return out;
+}
 
 /**
- * Adds a stroke's undrawn curve segments to `path` (all of them when
- * `restart`). The curve is the usual smooth one: quadratics through the
- * midpoints of consecutive points, then a straight bit to the last point.
+ * Adds a stroke's undrawn bits (all of them when `restart`) as pieces. The
+ * curve is the usual smooth one: quadratics through the midpoints of
+ * consecutive points, then a straight bit to the last point.
  */
-function addSegments(path: Path2D, s: Stroke, restart: boolean): boolean {
+function collect(out: Piece[], s: Stroke, restart: boolean) {
   if (restart) {
     s.drawn = 0;
     s.tailDrawn = false;
   }
   const pts = s.pts;
   const n = pts.length;
-  let added = false;
-  // A tap: a dot.
   if (n === 1) {
     if (s.finished && !s.tailDrawn) {
-      path.moveTo(pts[0][0], pts[0][1]);
-      path.lineTo(pts[0][0] + 0.01, pts[0][1]);
+      out.push([pts[0]]);
       s.tailDrawn = true;
-      return true;
     }
-    return false;
+    return;
   }
-  // Segment i (1..n-2) runs from the previous midpoint to mid(i, i+1).
   for (let i = s.drawn + 1; i <= n - 2; i++) {
     const start = i === 1 ? pts[0] : mid(pts[i - 1], pts[i]);
-    const end = mid(pts[i], pts[i + 1]);
-    path.moveTo(start[0], start[1]);
-    path.quadraticCurveTo(pts[i][0], pts[i][1], end[0], end[1]);
+    out.push([start, ...flatten(start, pts[i], mid(pts[i], pts[i + 1]))]);
     s.drawn = i;
-    added = true;
   }
   if (s.finished && !s.tailDrawn) {
-    const from = n === 2 ? pts[0] : mid(pts[n - 2], pts[n - 1]);
-    path.moveTo(from[0], from[1]);
-    path.lineTo(pts[n - 1][0], pts[n - 1][1]);
+    out.push([n === 2 ? pts[0] : mid(pts[n - 2], pts[n - 1]), pts[n - 1]]);
     s.tailDrawn = true;
-    added = true;
   }
-  return added;
 }
 
-function paint(layers: LaserLayers, path: Path2D, zoom: number, color: string) {
-  const stroke = (ctx: CanvasRenderingContext2D, style: string, px: number) => {
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.strokeStyle = style;
-    ctx.lineWidth = px / zoom;
-    ctx.stroke(path);
+/**
+ * Adds round-ended capsules along a piece: a circle at each point and the
+ * band between neighbours, so the width can change smoothly.
+ */
+function capsules(path: Path2D, piece: Piece, radius: (w: number) => number) {
+  for (let i = 0; i < piece.length; i++) {
+    const p = piece[i];
+    const r = radius(p[2]);
+    path.moveTo(p[0] + r, p[1]);
+    path.arc(p[0], p[1], r, 0, Math.PI * 2);
+    if (i === 0) continue;
+    const q = piece[i - 1];
+    const rq = radius(q[2]);
+    const dx = p[0] - q[0];
+    const dy = p[1] - q[1];
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) continue;
+    const nx = -dy / len;
+    const ny = dx / len;
+    // Traced in the same direction as the circles (clockwise on screen), so
+    // the non-zero fill unites them instead of cutting holes where they overlap.
+    path.moveTo(q[0] - nx * rq, q[1] - ny * rq);
+    path.lineTo(p[0] - nx * r, p[1] - ny * r);
+    path.lineTo(p[0] + nx * r, p[1] + ny * r);
+    path.lineTo(q[0] + nx * rq, q[1] + ny * rq);
+    path.closePath();
+  }
+}
+
+function paint(layers: LaserLayers, pieces: Piece[], zoom: number, color: string) {
+  const fill = (ctx: CanvasRenderingContext2D, style: string, px: number, min: number) => {
+    const path = new Path2D();
+    for (const piece of pieces) capsules(path, piece, (w) => Math.max(min, (px * w) / 2) / zoom);
+    ctx.fillStyle = style;
+    ctx.fill(path, "nonzero");
   };
-  stroke(layers.glow, color, GLOW_PX);
-  stroke(layers.tube, color, TUBE_PX);
-  stroke(layers.core, "#ffffff", CORE_PX);
+  fill(layers.glow, color, GLOW_PX, 3);
+  fill(layers.tube, color, TUBE_PX, 1.5);
+  fill(layers.core, "#ffffff", CORE_PX, 0.55);
 }

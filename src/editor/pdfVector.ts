@@ -93,6 +93,8 @@ interface State {
   dash: number[];
   /** Stroke alpha factor standing in for the pencil grain texture. */
   grain: number;
+  /** The same for fills (pencil strokes are filled outlines). */
+  grainFill: number;
 }
 
 const GRAIN = {} as CanvasPattern;
@@ -150,6 +152,7 @@ export class PdfPainter {
     textBaseline: "alphabetic",
     dash: [],
     grain: 1,
+    grainFill: 1,
   };
   private stack: State[] = [];
   private path: string[] = [];
@@ -172,7 +175,10 @@ export class PdfPainter {
 
   // --- state -------------------------------------------------------------
   get fillStyle(): string { return this.st.fillStyle; }
-  set fillStyle(v: string | CanvasGradient | CanvasPattern) { if (typeof v === "string") this.st.fillStyle = v; }
+  set fillStyle(v: string | CanvasGradient | CanvasPattern) {
+    if (typeof v === "string") [this.st.fillStyle, this.st.grainFill] = [v, 1];
+    else if (v === GRAIN) this.st.grainFill = GRAIN_ALPHA;
+  }
   get strokeStyle(): string { return this.st.strokeStyle; }
   set strokeStyle(v: string | CanvasGradient | CanvasPattern) {
     // A pattern is the pencil grain over the colour set just before: keep the
@@ -302,7 +308,7 @@ export class PdfPainter {
   /** Colour and transparency operators; null if nothing would show. */
   private paintState(color: string, stroke: boolean): string | null {
     const c = parseColor(color);
-    const alpha = c.a * this.st.globalAlpha * (stroke ? this.st.grain : 1);
+    const alpha = c.a * this.st.globalAlpha * (stroke ? this.st.grain : this.st.grainFill);
     if (alpha <= 0.001) return null;
     let s = `${num(c.r)} ${num(c.g)} ${num(c.b)} ${stroke ? "RG" : "rg"}`;
     const blend = this.blend();
