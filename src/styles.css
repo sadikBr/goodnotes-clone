@@ -743,6 +743,9 @@ button {
 .page-canvas[data-tool="lasso"] {
   cursor: default;
 }
+.page-canvas[data-tool="laser"] {
+  cursor: none;
+}
 .page-canvas[data-tool="eraser"] {
   cursor: none;
 }

@@ -31,6 +31,7 @@ const svg = (body: string) =>
 export const ICONS = {
   pen: svg('<path d="M4 20l4-1 11-11-3-3L5 16l-1 4z"/><path d="M14 6l3 3"/>'),
   highlighter: svg('<path d="M9 15l-3 5h6l1-2"/><path d="M8 14l8-10 4 4-10 8z"/>'),
+  laser: svg('<circle cx="7" cy="17" r="2.6" fill="currentColor"/><path d="M9 15l9-9"/><path d="M14.5 4.5l1-2M19.5 9.5l2-1M18 3.5l1.5-1.5M20.5 6l1.5-.5"/>'),
   eraser: svg('<path d="M7 20h12"/><path d="M4 15l9-9 6 6-7 7H8z"/><path d="M9 10l6 6"/>'),
   lasso: svg('<ellipse cx="12" cy="9" rx="8" ry="5" stroke-dasharray="3 3"/><path d="M8 13c-1 3 1 5 3 4s0 3-2 4"/>'),
   shape: svg('<rect x="3" y="11" width="9" height="9"/><circle cx="16.5" cy="7.5" r="4.5"/>'),

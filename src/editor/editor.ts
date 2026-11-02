@@ -36,6 +36,7 @@ import {
 } from "./geometry";
 import { inkToTextDialog } from "./inkToText";
 import { cachedBackground, renderBackground } from "./pdfRender";
+import { Laser, type LaserMode } from "./laser";
 import { buildVectorPdf, type PdfPageInput } from "./pdfExport";
 import { continueList, currentList, toggleList, type ListKind } from "./textFormat";
 import { beautify, detectBrace, recognizeShape } from "./beautify";
@@ -43,7 +44,7 @@ import { anchorsAsTargets, paperTargets, snapMove, type Anchor, type Guide, type
 import { fromStored, newId, nextZ, PEN_STYLES, toStored, type El, type PenStyle, type Pt, type ShapeEl, type StickyEl, type StrokeEl, type TextAlign, type TextEl } from "./model";
 import { drawElement, drawGroupHandles, drawGuides, drawHandles, drawLasso, drawTransformedBox, drawSelection, drawStroke, drawTemplate, steadyHighlight, fitTextToBox, naturalTextWidth, paperLayout, preloadImages, renderPage, templatePreview, textAnchors, type ImageCache } from "./render";
 
-type Tool = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "sticky" | "hand";
+type Tool = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "sticky" | "laser" | "hand";
 
 const TOOLS: { id: Tool; label: string; key: string }[] = [
   { id: "pen", label: "Pen", key: "p" },
@@ -53,10 +54,12 @@ const TOOLS: { id: Tool; label: string; key: string }[] = [
   { id: "shape", label: "Shape", key: "s" },
   { id: "text", label: "Text box", key: "t" },
   { id: "sticky", label: "Sticky note", key: "n" },
+  { id: "laser", label: "Laser pointer", key: "k" },
   { id: "hand", label: "Pan", key: " " },
 ];
 
 const INK_COLORS = ["#111827", "#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2", "#facc15", "#ffffff"];
+const LASER_COLORS = ["#ef4444", "#22c55e", "#3b82f6", "#a855f7", "#f97316"];
 const STICKY_COLORS = ["#fef08a", "#bbf7d0", "#bfdbfe", "#fbcfe8", "#fed7aa"];
 const HOLD_MS = 550;
 /** Touches this soon after pen activity are treated as a resting palm. */
@@ -79,6 +82,7 @@ const SHAPE_KINDS: { id: ShapeKind; label: string; icon: Parameters<typeof icon>
 const WIDTHS_KEY = "inkleaf-sizes";
 const TEXT_FONT_KEY = "inkleaf-text-font";
 const ERASER_MODE_KEY = "inkleaf-eraser-mode";
+const LASER_MODE_KEY = "inkleaf-laser-mode";
 
 /** Size control ranges and one-tap presets per tool. */
 const SIZE_SPECS: Record<string, { label: string; min: number; max: number; step: number; presets: number[]; preview: "dot" | "letter" }> = {
@@ -112,6 +116,7 @@ type Gesture =
   | { type: "draw"; tool: "pen" | "highlighter" | "shape"; points: Pt[]; times: number[]; preview: ShapeEl | null; holdTimer: number; held: Held | null }
   | { type: "erase"; changed: boolean; last: P2 | null }
   | { type: "lasso"; points: P2[] }
+  | { type: "laser" }
   | { type: "move"; start: P2; original: El[]; dx: number; dy: number; snap: { anchors: Anchor[]; targets: Target[] } | null; guides: Guide[] }
   | { type: "pan"; sx: number; sy: number; left: number; top: number }
   | { type: "shape"; start: P2; preview: ShapeEl | null }
@@ -150,7 +155,10 @@ export class EditorScreen {
   private undoStack: string[] = [];
   private redoStack: string[] = [];
   private tool: Tool = "pen";
-  private colors: Record<string, string> = { pen: INK_COLORS[0], highlighter: "#facc15", shape: INK_COLORS[0], text: INK_COLORS[0], sticky: STICKY_COLORS[0] };
+  private colors: Record<string, string> = { pen: INK_COLORS[0], highlighter: "#facc15", shape: INK_COLORS[0], text: INK_COLORS[0], sticky: STICKY_COLORS[0], laser: LASER_COLORS[0] };
+  /** Presentation laser: never part of the page. */
+  private laser = Object.assign(new Laser(), { mode: getPref<LaserMode>(LASER_MODE_KEY, "trail", ["trail", "dot"]) });
+  private laserFrame = 0;
   private widths: Record<string, number> = loadWidths();
   private textFont: FontId = getPref(TEXT_FONT_KEY, "sans", FONT_PRESETS.map((f) => f.id));
   private selectionBarKey = "";
@@ -758,7 +766,7 @@ export class EditorScreen {
       ),
     );
     const colorKey = this.tool === "sticky" ? "sticky" : this.tool === "lasso" ? null : this.colors[this.tool] ? this.tool : null;
-    const palette = colorKey === "sticky" ? STICKY_COLORS : INK_COLORS;
+    const palette = colorKey === "sticky" ? STICKY_COLORS : colorKey === "laser" ? LASER_COLORS : INK_COLORS;
     const swatches = colorKey
       ? h(
           "div",
@@ -832,6 +840,29 @@ export class EditorScreen {
       );
     }
     if (this.tool === "text" || this.tool === "sticky") return h("div", { class: "text-options" }, this.fontPicker(), this.formatControls());
+    if (this.tool === "laser") {
+      const mode = (id: LaserMode, label: string, title: string) =>
+        h(
+          "button",
+          {
+            class: `tool-btn small text-chip${this.laser.mode === id ? " active" : ""}`,
+            "aria-pressed": String(this.laser.mode === id),
+            title,
+            onclick: () => {
+              this.laser.mode = id;
+              setPref(LASER_MODE_KEY, id);
+              this.renderToolbar();
+            },
+          },
+          label,
+        );
+      return h(
+        "div",
+        { class: "tool-group options", role: "group", "aria-label": "Laser mode" },
+        mode("trail", "Trail", "Draw a glowing line that fades away"),
+        mode("dot", "Dot", "Just point with a glowing dot"),
+      );
+    }
     if (this.tool === "eraser") {
       const mode = (id: "precise" | "stroke", label: string, title: string) =>
         h(
@@ -972,6 +1003,7 @@ export class EditorScreen {
 
   private setTool(tool: Tool) {
     this.finishTextEdit();
+    if (tool !== "laser") this.laser.clear();
     if (tool !== "lasso") this.clearSelection();
     this.tool = tool;
     this.renderToolbar();
@@ -1302,6 +1334,7 @@ export class EditorScreen {
       const box = this.transformBox();
       if (box) drawGroupHandles(ctx, box, this.zoom);
     }
+    this.drawLaser(ctx);
     if (this.tool === "eraser" && this.cursor) {
       ctx.save();
       ctx.strokeStyle = "rgba(100,100,100,0.8)";
@@ -1312,6 +1345,19 @@ export class EditorScreen {
       ctx.restore();
     }
     this.positionSelectionBar();
+  }
+
+  /** The laser overlay; keeps animating while a trail is fading. */
+  private drawLaser(ctx: CanvasRenderingContext2D) {
+    if (this.tool !== "laser") return;
+    const now = performance.now();
+    this.laser.draw(ctx, this.zoom, this.pixelScale / this.zoom, now);
+    if (this.laser.animating(now) && !this.laserFrame) {
+      this.laserFrame = requestAnimationFrame(() => {
+        this.laserFrame = 0;
+        if (this.root.isConnected) this.draw();
+      });
+    }
   }
 
   // ------------------------------------------------------- state mutations
@@ -1397,6 +1443,7 @@ export class EditorScreen {
     });
     c.addEventListener("pointerleave", () => {
       this.cursor = null;
+      this.laser.pointAt(null);
       if (!this.gesture) this.draw();
     });
     c.addEventListener("dblclick", (e) => {
@@ -1419,7 +1466,8 @@ export class EditorScreen {
   private onDown(e: PointerEvent) {
     if (e.pointerType === "pen") this.notePen();
     // Pen-only mode: anything that isn't the pen navigates instead of writing.
-    if (this.penOnly && e.pointerType !== "pen") {
+    // (A mouse can still present with the laser.)
+    if (this.penOnly && e.pointerType !== "pen" && !(this.tool === "laser" && e.pointerType === "mouse")) {
       this.navDown(e);
       return;
     }
@@ -1431,6 +1479,12 @@ export class EditorScreen {
     this.canvas.setPointerCapture(e.pointerId);
 
     switch (tool) {
+      case "laser":
+        this.gesture = { type: "laser" };
+        this.laser.color = this.colors.laser;
+        this.laser.begin([x, y], performance.now());
+        this.draw();
+        break;
       case "pen":
       case "highlighter":
       case "shape":
@@ -1514,6 +1568,11 @@ export class EditorScreen {
     const g = this.gesture;
     this.cursor = this.point(e);
     if (!g) {
+      if (this.tool === "laser" && e.pointerType !== "touch") {
+        this.laser.color = this.colors.laser;
+        this.laser.pointAt(this.cursor);
+        this.draw();
+      }
       if (this.tool === "eraser") this.draw();
       if (this.tool === "lasso") this.updateHoverCursor();
       return;
@@ -1521,6 +1580,10 @@ export class EditorScreen {
     const events = typeof e.getCoalescedEvents === "function" ? e.getCoalescedEvents() : [];
     const samples = events.length ? events : [e];
     switch (g.type) {
+      case "laser":
+        for (const s of samples) this.laser.extend(this.point(s), performance.now());
+        this.draw();
+        break;
       case "draw": {
         if (g.preview) {
           // Refined shape stays under the pen: rotate/resize or move it.
@@ -1713,6 +1776,13 @@ export class EditorScreen {
     if (!g) return;
     if (this.canvas.hasPointerCapture(e.pointerId)) this.canvas.releasePointerCapture(e.pointerId);
     switch (g.type) {
+      case "laser":
+        this.gesture = null;
+        this.laser.end();
+        // A touch has no hover: hide the dot once the finger lifts.
+        if (e.pointerType === "touch") this.laser.pointAt(null);
+        this.draw();
+        break;
       case "draw": {
         window.clearTimeout(g.holdTimer);
         if (g.held) window.clearTimeout(g.held.stillTimer);
