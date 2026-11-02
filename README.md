@@ -21,6 +21,7 @@ no Goodnotes code, assets or branding.
 - **Auto shapes and ink refinement:** with the Shape tool in *Auto* mode, every stroke is cleaned up: basic shapes snap to perfect geometry; curly braces (any orientation, slanted or lopsided) are matched against a clean brace template and redrawn; near-circular runs such as parentheses become true arcs; everything else (graphs, curves, brackets…) is de-jittered and fitted with smooth curves, with straight runs made straight (snapped to horizontal/vertical when nearly so) and sharp corners kept sharp
 - **Hold to refine:** keep the pen (or mouse) down at the end of a stroke and it snaps to its refined form while you're still holding. Keep moving to rotate and resize it; hold still again to switch to moving it (and back). It's placed only when you lift. With the pen tool this applies to shapes and braces only, so handwriting is never altered
 - **Alignment guides:** when moving text, magenta guides appear and the text snaps when its baseline or letter centre lines up with other text, sits on a ruled line or centred between two, or its ink lines up left/right/centre with other text, the margin or the page centre. Guides follow the letters, not the text box. Hold Alt to move freely
+- **PDF import and annotation:** *Import PDF* in the library turns a PDF (lecture slides, papers, worksheets…) into a notebook with one page per PDF page, at the PDF's own page size. The PDF is stored inside Inkleaf and rendered as each page's background, sharp at any zoom, so you can write, highlight, add text and shapes on top. Exports include the PDF content under your notes. Rendering uses the bundled pdf.js, so it works offline
 - **Objects:** text boxes, sticky notes, images (insert or paste)
 - **Text formatting:** bold, italic, bulleted and numbered lists (Enter continues the list, wrapped lines indent under the text) and left/centre/right alignment, per text box or sticky note; Ctrl+B / Ctrl+I while typing
 - **Handwriting fonts:** eight presets for typed text: Clean, Quick notes, Neat print, Casual, Bubbly, Light pencil, Cursive and Architect. Pick one before or while typing, or lasso-select text boxes and sticky notes and change the font or size (A− / A+) from the selection bar. The fonts are bundled, so they work offline (SIL Open Font License; see `public/third-party-licenses.txt`)
@@ -108,6 +109,6 @@ on Linux, `~/Library/Application Support/app.inkleaf.desktop/` on macOS).
 
 ## Not implemented yet
 
-Cloud sync and collaboration, handwriting recognition outside Windows, and PDF import/annotation.
+Cloud sync and collaboration, handwriting recognition outside Windows, and password-protected PDFs.
 [Report 05](docs/reverse-engineering/05-inkleaf-mapping.md) explains how each
 could be added.

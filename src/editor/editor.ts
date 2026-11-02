@@ -34,6 +34,7 @@ import {
   type ShapeKind,
 } from "./geometry";
 import { inkToTextDialog } from "./inkToText";
+import { cachedBackground, renderBackground } from "./pdfRender";
 import { continueList, currentList, toggleList, type ListKind } from "./textFormat";
 import { beautify, detectBrace, recognizeShape } from "./beautify";
 import { anchorsAsTargets, paperTargets, snapMove, type Anchor, type Guide, type Target } from "./snap";
@@ -302,6 +303,8 @@ export class EditorScreen {
     if (this.slots.length !== this.pages.length) this.buildColumn();
     this.activate(i);
     void this.loadFontsFor(this.elements);
+    void this.ensureThumbnail(this.page);
+    void this.prefetchThumbnails();
     if (fit) this.fitWidth();
     if (scroll) this.scrollToPage(i);
   }
@@ -384,6 +387,58 @@ export class EditorScreen {
     this.updateStatus();
   }
 
+  /**
+   * The imported-PDF background for a page: the best render available now
+   * (or null), asking for a sharper one if needed and calling `onSharper`
+   * when it arrives.
+   */
+  private background(page: Page, scale: number, onSharper: () => void): HTMLCanvasElement | null {
+    if (!page.backgroundAsset || page.backgroundPage === null) return null;
+    const have = cachedBackground(page.backgroundAsset, page.backgroundPage);
+    if (!have || have.requested < scale * 0.95) {
+      renderBackground(page.backgroundAsset, page.backgroundPage, scale).then(onSharper, (e) => reportError(e));
+    }
+    return have?.canvas ?? null;
+  }
+
+  /** Gives a PDF page a stored thumbnail the first time it is shown. */
+  private async ensureThumbnail(page: Page) {
+    if (page.thumbnail || !page.backgroundAsset) return;
+    const els = this.elementCache.get(page.id) ?? [];
+    const bg = await this.backgroundNow(page, 200 / page.width).catch(() => null);
+    if (page.thumbnail) return;
+    const thumb = renderPage(page.template, page.paperColor, page.width, page.height, els, 200 / page.width, this.images, bg).toDataURL("image/jpeg", 0.82);
+    page.thumbnail = thumb;
+    await api.setPageThumbnail(page.id, thumb).catch(() => {});
+    const i = this.pages.indexOf(page);
+    this.pageList.children[i]?.querySelector(".page-thumb")?.replaceChildren(h("img", { src: thumb, alt: "", style: { aspectRatio: `${page.width} / ${page.height}` } }));
+  }
+
+  private prefetching = false;
+  /** Fills in missing PDF page thumbnails in the background, one at a time. */
+  private async prefetchThumbnails() {
+    if (this.prefetching) return;
+    this.prefetching = true;
+    try {
+      for (const page of [...this.pages]) {
+        if (page.thumbnail || !page.backgroundAsset || !this.pages.includes(page)) continue;
+        if (!this.elementCache.has(page.id)) {
+          const els = fromStored(await api.elements(page.id).catch(() => []));
+          if (!this.elementCache.has(page.id)) this.elementCache.set(page.id, els);
+        }
+        await this.ensureThumbnail(page);
+      }
+    } finally {
+      this.prefetching = false;
+    }
+  }
+
+  /** Waits for a page's PDF background at the given sharpness (for exports). */
+  private async backgroundNow(page: Page, scale: number): Promise<HTMLCanvasElement | null> {
+    if (!page.backgroundAsset || page.backgroundPage === null) return null;
+    return renderBackground(page.backgroundAsset, page.backgroundPage, scale);
+  }
+
   /** Loads a visible page's elements (once) and shows a render of it. */
   private async ensureStatic(i: number) {
     const page = this.pages[i];
@@ -399,7 +454,10 @@ export class EditorScreen {
     const els = this.elementCache.get(page.id)!;
     await ensureFonts(els.map((el) => (el.kind === "text" || el.kind === "sticky" ? el.font : undefined)));
     await preloadImages(els, this.images);
+    const dpr = window.devicePixelRatio || 1;
+    await this.backgroundNow(page, Math.min(this.zoom * dpr, 4096 / Math.max(page.width, page.height))).catch(() => null);
     if (this.visibleSlots.has(i) && i !== this.index && this.pages[i] === page) this.renderStatic(i);
+    void this.ensureThumbnail(page);
   }
 
   private renderStatic(i: number) {
@@ -409,7 +467,10 @@ export class EditorScreen {
     if (!els || !slot || i === this.index) return;
     const dpr = window.devicePixelRatio || 1;
     const scale = Math.min(this.zoom * dpr, 4096 / Math.max(page.width, page.height));
-    const canvas = renderPage(page.template, page.paperColor, page.width, page.height, els, scale, this.images);
+    const bg = this.background(page, scale, () => {
+      if (this.visibleSlots.has(i) && this.pages[i] === page) this.renderStatic(i);
+    });
+    const canvas = renderPage(page.template, page.paperColor, page.width, page.height, els, scale, this.images, bg);
     canvas.className = "page-static";
     slot.replaceChildren(canvas);
   }
@@ -1017,7 +1078,8 @@ export class EditorScreen {
     for (const p of pages) {
       const els = fromStored(await api.elements(p.id));
       await preloadImages(els, this.images);
-      const thumb = renderPage(p.template, p.paperColor, p.width, p.height, els, 200 / p.width, this.images).toDataURL("image/jpeg", 0.82);
+      const bg = await this.backgroundNow(p, 200 / p.width);
+      const thumb = renderPage(p.template, p.paperColor, p.width, p.height, els, 200 / p.width, this.images, bg).toDataURL("image/jpeg", 0.82);
       await api.setPageThumbnail(p.id, thumb);
       p.thumbnail = thumb;
     }
@@ -1120,6 +1182,14 @@ export class EditorScreen {
     c.clearRect(0, 0, this.cache.width, this.cache.height);
     c.setTransform(this.pixelScale, 0, 0, this.pixelScale, 0, 0);
     drawTemplate(c, this.page.template, this.page.width, this.page.height, this.page.paperColor);
+    const page = this.page;
+    const bg = this.background(page, this.pixelScale, () => {
+      if (this.page === page) {
+        this.rebuildCache();
+        this.draw();
+      }
+    });
+    if (bg) c.drawImage(bg, 0, 0, page.width, page.height);
     for (const el of this.elements) {
       if (this.hiddenIds.has(el.id)) continue;
       drawElement(c, el, this.images, () => {
@@ -1244,7 +1314,8 @@ export class EditorScreen {
     const page = this.page;
     const elements = this.elements.map(toStored);
     const thumbScale = 200 / page.width;
-    const thumb = renderPage(page.template, page.paperColor, page.width, page.height, this.elements, thumbScale, this.images).toDataURL("image/jpeg", 0.82);
+    const bg = page.backgroundAsset && page.backgroundPage !== null ? cachedBackground(page.backgroundAsset, page.backgroundPage)?.canvas ?? null : null;
+    const thumb = renderPage(page.template, page.paperColor, page.width, page.height, this.elements, thumbScale, this.images, bg).toDataURL("image/jpeg", 0.82);
     this.saving = this.saving
       .then(async () => {
         await api.saveElements(page.id, elements);
@@ -2272,7 +2343,8 @@ export class EditorScreen {
         const els = p.id === this.page.id ? this.elements : fromStored(await api.elements(p.id));
         await preloadImages(els, this.images);
         await ensureFonts(els.map((el) => (el.kind === "text" || el.kind === "sticky" ? el.font : undefined)));
-        const canvas = renderPage(p.template, p.paperColor, p.width, p.height, els, EXPORT_SCALE[format], this.images);
+        const bg = await this.backgroundNow(p, EXPORT_SCALE[format]);
+        const canvas = renderPage(p.template, p.paperColor, p.width, p.height, els, EXPORT_SCALE[format], this.images, bg);
         rendered.push({
           dataUrl: format === "png" ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", 0.9),
           widthPx: canvas.width,

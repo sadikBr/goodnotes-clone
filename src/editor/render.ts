@@ -594,6 +594,7 @@ export function renderPage(
   elements: El[],
   scale: number,
   images: ImageCache,
+  background: CanvasImageSource | null = null,
 ): HTMLCanvasElement {
   const c = document.createElement("canvas");
   c.width = Math.max(1, Math.round(w * scale));
@@ -601,6 +602,7 @@ export function renderPage(
   const ctx = c.getContext("2d")!;
   ctx.scale(scale, scale);
   drawTemplate(ctx, template, w, h, paper);
+  if (background) ctx.drawImage(background, 0, 0, w, h);
   for (const el of elements) drawElement(ctx, el, images, () => {});
   return c;
 }

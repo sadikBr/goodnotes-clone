@@ -6,7 +6,8 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Manager, State};
 
 use crate::db::{
-    Db, Element, Folder, Library, NewNotebook, Notebook, Page, SearchHit, TrashContents,
+    Db, Element, Folder, Library, NewNotebook, NewPdfNotebook, Notebook, Page, SearchHit,
+    TrashContents,
 };
 use crate::error::{AppError, AppResult};
 use crate::export::{self, ExportPage, Format};
@@ -176,6 +177,27 @@ pub fn search(db: State<'_, Db>, query: String) -> AppResult<Vec<SearchHit>> {
 #[tauri::command]
 pub fn simplify_stroke(points: Vec<InkPoint>, epsilon: f64) -> Vec<InkPoint> {
     ink::simplify(&points, epsilon)
+}
+
+/// Stores an imported PDF. The bytes arrive as the raw request body (not
+/// JSON) so large files stay fast. Returns the stored asset's id.
+#[tauri::command]
+pub fn store_pdf_asset(db: State<'_, Db>, request: tauri::ipc::Request<'_>) -> AppResult<String> {
+    match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => db.store_pdf_asset(bytes),
+        _ => Err(AppError::Invalid("expected the PDF as raw bytes".into())),
+    }
+}
+
+#[tauri::command]
+pub fn create_pdf_notebook(db: State<'_, Db>, input: NewPdfNotebook) -> AppResult<Notebook> {
+    db.create_pdf_notebook(&input)
+}
+
+/// Returns a stored PDF as raw bytes (an ArrayBuffer in the webview).
+#[tauri::command]
+pub fn asset_bytes(db: State<'_, Db>, id: String) -> AppResult<tauri::ipc::Response> {
+    Ok(tauri::ipc::Response::new(db.asset_bytes(&id)?))
 }
 
 /// Recognises handwritten strokes as text using the OS recognizer (Windows).

@@ -8,6 +8,7 @@ import type {
   ExportFormat,
   ExportPage,
   HandwritingRecognition,
+  NewPdfNotebook,
   Folder,
   Library,
   NewNotebook,
@@ -166,7 +167,7 @@ export class MockBackend implements Backend {
 
   private newPage(notebookId: string, position: number, template: Template, paperColor: string, width: number, height: number): Page {
     const now = Date.now();
-    return { id: uid(), notebookId, position, template, paperColor, width, height, favourite: false, thumbnail: null, createdAt: now, updatedAt: now };
+    return { id: uid(), notebookId, position, template, paperColor, width, height, favourite: false, thumbnail: null, createdAt: now, updatedAt: now, backgroundAsset: null, backgroundPage: null };
   }
 
   private raw(id: string) {
@@ -327,6 +328,35 @@ export class MockBackend implements Backend {
 
   async chooseExportPath(fileName: string, format: ExportFormat): Promise<string | null> {
     return `${fileName}.${format}`;
+  }
+
+  /** PDFs are kept in memory only (too large for localStorage). */
+  private assets = new Map<string, Uint8Array>();
+
+  async storePdfAsset(bytes: Uint8Array): Promise<string> {
+    const head = String.fromCharCode(...bytes.slice(0, 4));
+    if (head !== "%PDF") fail("that file isn't a PDF");
+    const id = uid();
+    this.assets.set(id, bytes.slice());
+    return id;
+  }
+
+  async createPdfNotebook(input: NewPdfNotebook): Promise<Notebook> {
+    if (!this.assets.has(input.assetId)) fail(`not found: ${input.assetId}`);
+    const nb = await this.createNotebook({ title: input.title, folderId: input.folderId, coverColor: input.coverColor ?? "#dc2626", template: "blank", paperColor: "#ffffff" });
+    this.s.pages = this.s.pages.filter((p) => p.notebookId !== nb.id);
+    input.pages.forEach((size, i) => {
+      const p = this.newPage(nb.id, i, "blank", "#ffffff", size.width, size.height);
+      p.backgroundAsset = input.assetId;
+      p.backgroundPage = i;
+      this.s.pages.push(p);
+    });
+    this.persist();
+    return this.nb(nb.id);
+  }
+
+  async assetBytes(id: string): Promise<Uint8Array> {
+    return this.assets.get(id) ?? fail(`not found: ${id}`);
   }
 
   async recognizeHandwriting(_strokes: P2[][]): Promise<HandwritingRecognition> {

@@ -52,6 +52,9 @@ pub fn run() {
             commands::default_export_dir,
             commands::export_document,
             commands::recognize_handwriting,
+            commands::store_pdf_asset,
+            commands::create_pdf_notebook,
+            commands::asset_bytes,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Inkleaf");

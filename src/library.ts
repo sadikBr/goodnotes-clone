@@ -14,8 +14,12 @@ export class LibraryScreen {
   private data: Library = { folders: [], notebooks: [] };
   private query = "";
   readonly root = h("div", { class: "library" });
+  private pdfInput = h("input", { type: "file", accept: "application/pdf,.pdf", hidden: true });
 
-  constructor(private cb: LibraryCallbacks) {}
+  constructor(private cb: LibraryCallbacks) {
+    document.body.append(this.pdfInput);
+    this.pdfInput.addEventListener("change", () => void this.importPdf(this.pdfInput.files?.[0]));
+  }
 
   async show(view?: LibraryView) {
     if (view) this.view = view;
@@ -114,6 +118,7 @@ export class LibraryScreen {
     } else {
       const folderId = this.view.kind === "folder" ? this.view.id : null;
       actions.append(
+        h("button", { class: "btn", onclick: () => this.pdfInput.click(), title: "Open a PDF as a notebook you can write on" }, icon("page"), "Import PDF"),
         h("button", { class: "btn", onclick: () => this.newFolder(folderId) }, icon("folder"), "New folder"),
         h("button", { class: "btn primary", onclick: () => this.newNotebook(folderId) }, icon("plus"), "New notebook"),
       );
@@ -309,6 +314,30 @@ export class LibraryScreen {
       this.cb.openNotebook(nb.id);
     } catch (e) {
       reportError(e);
+    }
+  }
+
+  /** Imports a PDF as a notebook: one page per PDF page, ready to annotate. */
+  private async importPdf(file: File | undefined) {
+    this.pdfInput.value = "";
+    if (!file) return;
+    if (file.size > 300 * 1024 * 1024) return toast("PDFs larger than 300 MB aren't supported", "error");
+    const folderId = this.view.kind === "folder" ? this.view.id : null;
+    toast(`Importing ${file.name}…`);
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const { pdfPageSizes } = await import("./editor/pdfRender");
+      const pages = await pdfPageSizes(bytes);
+      const assetId = await api.storePdfAsset(bytes);
+      const title = file.name.replace(/\.pdf$/i, "").trim() || "Imported PDF";
+      const nb = await api.createPdfNotebook({ title: title.slice(0, 200), folderId, assetId, pages });
+      toast(`Imported ${pages.length} page${pages.length === 1 ? "" : "s"}`);
+      this.cb.openNotebook(nb.id);
+    } catch (e) {
+      const name = (e as { name?: string })?.name;
+      if (name === "PasswordException") toast("This PDF is password-protected, so it can't be imported", "error");
+      else if (name === "InvalidPDFException") toast("That file isn't a valid PDF", "error");
+      else reportError(e);
     }
   }
 

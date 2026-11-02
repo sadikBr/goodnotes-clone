@@ -681,3 +681,12 @@ INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
 DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
+
+
+========================================================================
+pdf.js (pdfjs-dist)
+========================================================================
+PDF rendering uses Mozilla's pdf.js, licensed under the Apache License 2.0.
+Its licence, and the licences of the bundled fonts and WebAssembly decoders
+(JBIG2, OpenJPEG, QCMS, Foxit and Liberation fonts), are shipped next to
+the files in the pdfjs/ folder of the app.

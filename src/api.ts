@@ -53,6 +53,9 @@ export interface Page {
   thumbnail: string | null;
   createdAt: number;
   updatedAt: number;
+  /** Imported PDF shown behind this page, and which page of it (0-based). */
+  backgroundAsset: string | null;
+  backgroundPage: number | null;
 }
 
 export interface StoredElement {
@@ -163,6 +166,19 @@ export interface Backend {
   chooseExportPath(fileName: string, format: ExportFormat): Promise<string | null>;
   exportDocument(path: string, format: ExportFormat, pages: ExportPage[]): Promise<string>;
   recognizeHandwriting(strokes: P2[][]): Promise<HandwritingRecognition>;
+  /** Stores PDF bytes; returns an asset id for createPdfNotebook. */
+  storePdfAsset(bytes: Uint8Array): Promise<string>;
+  createPdfNotebook(input: NewPdfNotebook): Promise<Notebook>;
+  assetBytes(id: string): Promise<Uint8Array>;
+}
+
+export interface NewPdfNotebook {
+  title: string;
+  folderId: string | null;
+  coverColor?: string;
+  assetId: string;
+  /** Page sizes in units of 1/96 inch. */
+  pages: { width: number; height: number }[];
 }
 
 const FORMAT_FILTERS: Record<ExportFormat, { name: string; extensions: string[] }> = {
@@ -213,6 +229,10 @@ class TauriBackend implements Backend {
   exportDocument = (path: string, format: ExportFormat, pages: ExportPage[]) =>
     invoke<string>("export_document", { path, format, pages });
   recognizeHandwriting = (strokes: P2[][]) => invoke<HandwritingRecognition>("recognize_handwriting", { strokes });
+  // Raw bytes go over IPC as a binary body, not JSON.
+  storePdfAsset = (bytes: Uint8Array) => invoke<string>("store_pdf_asset", bytes);
+  createPdfNotebook = (input: NewPdfNotebook) => invoke<Notebook>("create_pdf_notebook", { input });
+  assetBytes = async (id: string) => new Uint8Array(await invoke<ArrayBuffer>("asset_bytes", { id }));
 }
 
 export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;

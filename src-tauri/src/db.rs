@@ -14,7 +14,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::error::{AppError, AppResult};
 
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 
 pub fn now_ms() -> i64 {
     SystemTime::now()
@@ -70,6 +70,9 @@ pub struct Page {
     pub thumbnail: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
+    /// Imported PDF this page shows as its background, and which page of it.
+    pub background_asset: Option<String>,
+    pub background_page: Option<i64>,
 }
 
 /// One element on a page. `data` is an opaque JSON payload owned by the
@@ -118,6 +121,25 @@ pub struct NewNotebook {
     pub width: Option<f64>,
     pub height: Option<f64>,
 }
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PdfPageSize {
+    pub width: f64,
+    pub height: f64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewPdfNotebook {
+    pub title: String,
+    pub folder_id: Option<String>,
+    pub cover_color: Option<String>,
+    pub asset_id: String,
+    pub pages: Vec<PdfPageSize>,
+}
+
+pub const MAX_PDF_BYTES: usize = 300 * 1024 * 1024;
 
 /// Default page size: A4 at 96 DPI-ish logical units.
 pub const DEFAULT_PAGE_WIDTH: f64 = 794.0;
@@ -248,8 +270,29 @@ impl Db {
                 );
                 CREATE INDEX IF NOT EXISTS elements_by_page ON elements(page_id, z);",
             )?;
+            conn.pragma_update(None, "user_version", 1)?;
+        }
+        if version < 2 {
+            // v2: imported PDFs (stored once per notebook) as page backgrounds.
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS assets (
+                    id TEXT PRIMARY KEY,
+                    notebook_id TEXT REFERENCES notebooks(id) ON DELETE CASCADE,
+                    kind TEXT NOT NULL,
+                    data BLOB NOT NULL,
+                    created_at INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS assets_by_notebook ON assets(notebook_id);
+                ALTER TABLE pages ADD COLUMN background_asset TEXT;
+                ALTER TABLE pages ADD COLUMN background_page INTEGER;",
+            )?;
             conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         }
+        // PDFs stored for an import that never finished.
+        conn.execute(
+            "DELETE FROM assets WHERE notebook_id IS NULL AND created_at < ?1",
+            [now_ms() - 3_600_000],
+        )?;
         Ok(())
     }
 
@@ -540,14 +583,104 @@ impl Db {
         for old_page in page_ids {
             let new_page = new_id();
             tx.execute(
-                "INSERT INTO pages (id, notebook_id, position, template, paper_color, width, height, favourite, thumbnail, created_at, updated_at)
-                 SELECT ?1, ?2, position, template, paper_color, width, height, favourite, thumbnail, ?3, ?3 FROM pages WHERE id = ?4",
+                "INSERT INTO pages (id, notebook_id, position, template, paper_color, width, height, favourite, thumbnail, created_at, updated_at, background_asset, background_page)
+                 SELECT ?1, ?2, position, template, paper_color, width, height, favourite, thumbnail, ?3, ?3, background_asset, background_page FROM pages WHERE id = ?4",
                 params![new_page, new_nb, now, old_page],
             )?;
             copy_elements(&tx, &old_page, &new_page)?;
         }
+        // Give the copy its own copies of any imported PDFs.
+        let assets: Vec<String> = {
+            let mut stmt = tx.prepare("SELECT id FROM assets WHERE notebook_id = ?1")?;
+            let rows = stmt.query_map([id], |r| r.get(0))?;
+            rows.collect::<Result<_, _>>()?
+        };
+        for old in assets {
+            let new = new_id();
+            tx.execute(
+                "INSERT INTO assets (id, notebook_id, kind, data, created_at) SELECT ?1, ?2, kind, data, ?3 FROM assets WHERE id = ?4",
+                params![new, new_nb, now, old],
+            )?;
+            tx.execute(
+                "UPDATE pages SET background_asset = ?1 WHERE notebook_id = ?2 AND background_asset = ?3",
+                params![new, new_nb, old],
+            )?;
+        }
         tx.commit()?;
         get_notebook(&conn, &new_nb)
+    }
+
+    // ------------------------------------------------------------ imported PDFs
+
+    /// Stores PDF bytes, not yet attached to a notebook. Returns the asset id.
+    pub fn store_pdf_asset(&self, bytes: &[u8]) -> AppResult<String> {
+        if !bytes.starts_with(b"%PDF") {
+            return Err(AppError::Invalid("that file isn't a PDF".into()));
+        }
+        if bytes.len() > MAX_PDF_BYTES {
+            return Err(AppError::Invalid(
+                "PDFs larger than 300 MB aren't supported".into(),
+            ));
+        }
+        let id = new_id();
+        self.conn().execute(
+            "INSERT INTO assets (id, notebook_id, kind, data, created_at) VALUES (?1, NULL, 'pdf', ?2, ?3)",
+            params![id, bytes, now_ms()],
+        )?;
+        Ok(id)
+    }
+
+    /// Creates a notebook whose pages show the pages of a stored PDF.
+    pub fn create_pdf_notebook(&self, input: &NewPdfNotebook) -> AppResult<Notebook> {
+        let title = validate_name(&input.title)?;
+        if input.pages.is_empty() || input.pages.len() > 5000 {
+            return Err(AppError::Invalid(
+                "a PDF needs between 1 and 5000 pages".into(),
+            ));
+        }
+        if input
+            .pages
+            .iter()
+            .any(|p| !(20.0..=20000.0).contains(&p.width) || !(20.0..=20000.0).contains(&p.height))
+        {
+            return Err(AppError::Invalid("unsupported PDF page size".into()));
+        }
+        let mut conn = self.conn();
+        if let Some(folder) = &input.folder_id {
+            ensure_exists(&conn, "folders", folder)?;
+        }
+        let now = now_ms();
+        let id = new_id();
+        let tx = conn.transaction()?;
+        tx.execute(
+            "INSERT INTO notebooks (id, title, folder_id, cover_color, default_template, favourite, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, 'blank', 0, ?5, ?5)",
+            params![id, title, input.folder_id, input.cover_color.clone().unwrap_or_else(|| "#dc2626".into()), now],
+        )?;
+        // Claim the stored PDF now that the notebook exists (foreign key).
+        if tx.execute(
+            "UPDATE assets SET notebook_id = ?1 WHERE id = ?2 AND notebook_id IS NULL",
+            params![id, input.asset_id],
+        )? != 1
+        {
+            return Err(AppError::NotFound(input.asset_id.clone()));
+        }
+        for (i, p) in input.pages.iter().enumerate() {
+            tx.execute(
+                "INSERT INTO pages (id, notebook_id, position, template, paper_color, width, height, created_at, updated_at, background_asset, background_page)
+                 VALUES (?1, ?2, ?3, 'blank', '#ffffff', ?4, ?5, ?6, ?6, ?7, ?3)",
+                params![new_id(), id, i as i64, p.width, p.height, now, input.asset_id],
+            )?;
+        }
+        tx.commit()?;
+        get_notebook(&conn, &id)
+    }
+
+    pub fn asset_bytes(&self, id: &str) -> AppResult<Vec<u8>> {
+        self.conn()
+            .query_row("SELECT data FROM assets WHERE id = ?1", [id], |r| r.get(0))
+            .optional()?
+            .ok_or_else(|| AppError::NotFound(id.to_string()))
     }
 
     // ------------------------------------------------------------------ pages
@@ -556,7 +689,7 @@ impl Db {
         let conn = self.conn();
         ensure_exists(&conn, "notebooks", notebook_id)?;
         let mut stmt = conn.prepare(
-            "SELECT id, notebook_id, position, template, paper_color, width, height, favourite, thumbnail, created_at, updated_at
+            "SELECT id, notebook_id, position, template, paper_color, width, height, favourite, thumbnail, created_at, updated_at, background_asset, background_page
              FROM pages WHERE notebook_id = ?1 ORDER BY position",
         )?;
         let rows = stmt.query_map([notebook_id], page_from_row)?;
@@ -623,8 +756,8 @@ impl Db {
         let id = new_id();
         let now = now_ms();
         tx.execute(
-            "INSERT INTO pages (id, notebook_id, position, template, paper_color, width, height, favourite, thumbnail, created_at, updated_at)
-             SELECT ?1, notebook_id, position + 1, template, paper_color, width, height, 0, thumbnail, ?2, ?2 FROM pages WHERE id = ?3",
+            "INSERT INTO pages (id, notebook_id, position, template, paper_color, width, height, favourite, thumbnail, created_at, updated_at, background_asset, background_page)
+             SELECT ?1, notebook_id, position + 1, template, paper_color, width, height, 0, thumbnail, ?2, ?2, background_asset, background_page FROM pages WHERE id = ?3",
             params![id, now, page_id],
         )?;
         copy_elements(&tx, page_id, &id)?;
@@ -1006,12 +1139,14 @@ fn page_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Page> {
         thumbnail: r.get(8)?,
         created_at: r.get(9)?,
         updated_at: r.get(10)?,
+        background_asset: r.get(11)?,
+        background_page: r.get(12)?,
     })
 }
 
 fn get_page(conn: &Connection, id: &str) -> AppResult<Page> {
     conn.query_row(
-        "SELECT id, notebook_id, position, template, paper_color, width, height, favourite, thumbnail, created_at, updated_at
+        "SELECT id, notebook_id, position, template, paper_color, width, height, favourite, thumbnail, created_at, updated_at, background_asset, background_page
          FROM pages WHERE id = ?1",
         [id],
         page_from_row,
@@ -1126,6 +1261,62 @@ mod tests {
             ..Default::default()
         };
         assert!(db.create_notebook(&bad).is_err());
+    }
+
+    #[test]
+    fn pdf_notebooks_have_one_page_per_pdf_page_and_copy_with_their_pdf() {
+        let db = db();
+        let asset = db.store_pdf_asset(b"%PDF-1.7 fake").unwrap();
+        assert!(db.store_pdf_asset(b"not a pdf").is_err());
+        let nb = db
+            .create_pdf_notebook(&NewPdfNotebook {
+                title: "Lecture 3".into(),
+                folder_id: None,
+                cover_color: None,
+                asset_id: asset.clone(),
+                pages: vec![
+                    PdfPageSize {
+                        width: 794.0,
+                        height: 1123.0,
+                    },
+                    PdfPageSize {
+                        width: 1123.0,
+                        height: 794.0,
+                    },
+                ],
+            })
+            .unwrap();
+        let pages = db.pages(&nb.id).unwrap();
+        assert_eq!(pages.len(), 2);
+        assert_eq!(pages[1].background_asset.as_deref(), Some(asset.as_str()));
+        assert_eq!(pages[1].background_page, Some(1));
+        assert_eq!((pages[1].width, pages[1].height), (1123.0, 794.0));
+        assert_eq!(db.asset_bytes(&asset).unwrap(), b"%PDF-1.7 fake");
+        // The same stored PDF can't be claimed twice.
+        let again = NewPdfNotebook {
+            title: "x".into(),
+            folder_id: None,
+            cover_color: None,
+            asset_id: asset.clone(),
+            pages: vec![PdfPageSize {
+                width: 100.0,
+                height: 100.0,
+            }],
+        };
+        assert!(db.create_pdf_notebook(&again).is_err());
+        // Duplicates get their own PDF copy; deleting the original keeps it.
+        let copy = db.duplicate_notebook(&nb.id).unwrap();
+        let copy_asset = db.pages(&copy.id).unwrap()[0]
+            .background_asset
+            .clone()
+            .unwrap();
+        assert_ne!(copy_asset, asset);
+        db.delete_notebook(&nb.id).unwrap();
+        assert!(db.asset_bytes(&asset).is_err());
+        assert_eq!(db.asset_bytes(&copy_asset).unwrap(), b"%PDF-1.7 fake");
+        // Added pages are plain paper.
+        let added = db.add_page(&copy.id, None, None).unwrap();
+        assert_eq!(added.background_asset, None);
     }
 
     #[test]
