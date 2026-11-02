@@ -113,14 +113,21 @@ export class Favourites {
 // --- popovers -------------------------------------------------------------------------
 
 /** A small panel under (or above) `anchor`; closes on outside click or Escape. */
+let openPopover: { anchor: HTMLElement; close(): void } | null = null;
+
 export function popover(anchor: HTMLElement, content: HTMLElement, cls = ""): () => void {
+  // Clicking the button of an open popover closes it.
+  const wasOpen = openPopover?.anchor === anchor && openPopover;
+  openPopover?.close();
   document.querySelectorAll(".tool-popover").forEach((p) => p.remove());
+  if (wasOpen) return () => {};
   const panel = h("div", { class: `tool-popover ${cls}`.trim(), role: "dialog" }, content);
   const close = () => {
     panel.remove();
     anchor.setAttribute("aria-expanded", "false");
     document.removeEventListener("pointerdown", onOutside, true);
     document.removeEventListener("keydown", onKey, true);
+    if (openPopover?.anchor === anchor) openPopover = null;
   };
   const onOutside = (e: Event) => {
     const t = e.target as Node;
@@ -139,6 +146,7 @@ export function popover(anchor: HTMLElement, content: HTMLElement, cls = ""): ()
   panel.style.top = `${below ? r.bottom + 10 : r.top - 10 - panel.offsetHeight}px`;
   panel.style.left = `${Math.max(8, Math.min(window.innerWidth - panel.offsetWidth - 8, r.left + r.width / 2 - panel.offsetWidth / 2))}px`;
   anchor.setAttribute("aria-expanded", "true");
+  openPopover = { anchor, close };
   setTimeout(() => {
     document.addEventListener("pointerdown", onOutside, true);
     document.addEventListener("keydown", onKey, true);

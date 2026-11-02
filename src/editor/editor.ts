@@ -93,6 +93,7 @@ const LASER_MODE_KEY = "inkleaf-laser-mode";
 const INSTRUMENT_KEY = "inkleaf-instrument";
 const SIDEBAR_KEY = "inkleaf-page-sidebar";
 const DRAWER_KEY = "inkleaf-tool-drawer";
+const DRAWER_TIP_KEY = "inkleaf-tool-drawer-tip";
 const FAV_TOOLS: FavTool[] = ["pen", "highlighter", "shape", "text", "sticky", "laser", "eraser"];
 const isFavTool = (t: string): t is FavTool => (FAV_TOOLS as string[]).includes(t);
 
@@ -350,6 +351,10 @@ export class EditorScreen {
       this.titleBtn.textContent = this.notebook.title;
       this.renderToolbar();
       await this.loadPage(Math.max(0, i), true);
+      if (!this.drawerPinned && getPref<string>(DRAWER_TIP_KEY, "") !== "seen") {
+        setPref(DRAWER_TIP_KEY, "seen");
+        toast("Tip: tap the selected tool again for its colours and sizes");
+      }
     } catch (e) {
       reportError(e);
       this.cb.close();
@@ -972,6 +977,7 @@ export class EditorScreen {
           "aria-pressed": String(active),
           "aria-label": t.label,
           "data-tool": t.id,
+          "aria-expanded": active ? String(this.drawerOpen) : undefined,
           title: active ? `${t.label} — tap again to ${this.drawerOpen ? "hide" : "show"} its options` : `${t.label}${t.key.trim() ? ` (${t.key.toUpperCase()})` : ""}`,
           onclick: () => (active ? this.toggleDrawer() : this.setTool(t.id)),
         },
@@ -1033,7 +1039,18 @@ export class EditorScreen {
       hand: "Drag to scroll · Ctrl + scroll or pinch to zoom",
     };
     if (options.length === 0) options.push(h("span", { class: "options-hint" }, hints[this.tool] ?? ""));
-    this.optionsBar.replaceChildren(...options);
+    const pin = h(
+      "button",
+      {
+        class: `drawer-pin${this.drawerPinned ? " active" : ""}`,
+        "aria-pressed": String(this.drawerPinned),
+        "aria-label": "Keep options open",
+        title: this.drawerPinned ? "Pinned open — unpin to tuck options away while you write" : "Keep options open",
+        onclick: () => this.togglePin(),
+      },
+      icon("pin"),
+    );
+    this.optionsBar.replaceChildren(...options, pin);
     this.optionsBar.hidden = !this.drawerOpen;
     this.optionsBar.dataset.tool = this.tool;
     this.placeDrawer();
@@ -1041,14 +1058,25 @@ export class EditorScreen {
     this.canvas.dataset.tool = this.tool;
   }
 
-  private drawerOpen = getPref(DRAWER_KEY, "open", ["open", "closed"]) === "open";
+  /** A pinned drawer stays open; otherwise it opens on demand and tucks away when you write. */
+  private drawerPinned = getPref(DRAWER_KEY, "auto", ["auto", "pinned"]) === "pinned";
+  private drawerOpen = this.drawerPinned;
 
-  /** Folds the tool drawer away (or brings it back); tapping the active tool does this. */
-  private toggleDrawer() {
-    this.drawerOpen = !this.drawerOpen;
-    setPref(DRAWER_KEY, this.drawerOpen ? "open" : "closed");
+  /** Opens or closes the tool drawer; tapping the active tool does this. */
+  private toggleDrawer(open = !this.drawerOpen) {
+    if (open === this.drawerOpen) return;
+    this.drawerOpen = open;
+    if (!open) document.querySelectorAll(".tool-popover").forEach((p) => p.remove());
     this.renderToolbar();
     if (!this.selectionBar.hidden) this.positionSelectionBar();
+  }
+
+  /** Keeps the drawer open (or lets it tuck away again). */
+  private togglePin() {
+    this.drawerPinned = !this.drawerPinned;
+    setPref(DRAWER_KEY, this.drawerPinned ? "pinned" : "auto");
+    if (this.drawerPinned) this.drawerOpen = true;
+    this.renderToolbar();
   }
 
   /**
@@ -1852,6 +1880,8 @@ export class EditorScreen {
   private bindCanvas() {
     const c = this.canvas;
     c.addEventListener("pointerdown", (e) => {
+      // An unpinned drawer tucks away as soon as you touch the page.
+      if (this.drawerOpen && !this.drawerPinned) this.toggleDrawer(false);
       this.onDown(e);
       // While writing, the floating pills fade so they never get in the way.
       if (this.gesture) this.root.classList.add("drawing");

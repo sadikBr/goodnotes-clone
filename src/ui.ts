@@ -65,6 +65,7 @@ export const ICONS = {
   down: svg('<path d="M6 9l6 6 6-6"/>'),
   moon: svg('<path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/>'),
   close: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
+  pin: svg('<path d="M9 4h6l-1 6 3 3v2H7v-2l3-3z"/><path d="M12 15v6"/>'),
   stylus: svg('<path d="M15 4l5 5-9.5 9.5-6 1.5 1.5-6z"/><path d="M13 6l5 5"/><path d="M3 21l2-2"/>'),
   fountain: svg('<path d="M12 3l5 7-5 11-5-11z"/><path d="M12 10v5"/><circle cx="12" cy="9" r="1"/>'),
   ballpoint: svg('<path d="M9 3h6v12l-3 5-3-5z"/><path d="M9 15h6"/>'),
@@ -270,9 +271,16 @@ export interface MenuItem {
 }
 
 /** Opens a small popup menu anchored to an element. */
+let openMenu: { anchor: HTMLElement; close(): void } | null = null;
+
 export function popupMenu(anchor: HTMLElement, items: MenuItem[]) {
+  // Clicking the button of an open menu closes it.
+  const wasOpen = openMenu?.anchor === anchor && openMenu;
+  openMenu?.close();
   document.querySelectorAll(".popup-menu").forEach((m) => m.remove());
+  if (wasOpen) return;
   const menu = h("div", { class: "popup-menu", role: "menu" });
+  let close = () => {};
   for (const item of items) {
     menu.append(
       h(
@@ -284,7 +292,7 @@ export function popupMenu(anchor: HTMLElement, items: MenuItem[]) {
           class: item.danger ? "danger" : "",
           onclick: (e: Event) => {
             e.stopPropagation();
-            menu.remove();
+            close();
             item.action();
           },
         },
@@ -299,12 +307,28 @@ export function popupMenu(anchor: HTMLElement, items: MenuItem[]) {
   const mh = menu.offsetHeight;
   menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - mw - 8))}px`;
   menu.style.top = `${r.bottom + mh + 8 > window.innerHeight ? Math.max(8, r.top - mh - 4) : r.bottom + 4}px`;
+  close = () => {
+    menu.remove();
+    anchor.setAttribute("aria-expanded", "false");
+    document.removeEventListener("pointerdown", dismiss, true);
+    document.removeEventListener("keydown", onKey, true);
+    if (openMenu?.anchor === anchor) openMenu = null;
+  };
+  // Outside presses close it; the menu's own button toggles it on click instead.
   const dismiss = (e: Event) => {
-    if (!menu.contains(e.target as Node)) {
-      menu.remove();
-      document.removeEventListener("pointerdown", dismiss, true);
+    const t = e.target as Node;
+    if (!menu.contains(t) && !anchor.contains(t)) close();
+  };
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      close();
+      anchor.focus();
     }
   };
+  openMenu = { anchor, close };
+  anchor.setAttribute("aria-expanded", "true");
+  document.addEventListener("keydown", onKey, true);
   setTimeout(() => document.addEventListener("pointerdown", dismiss, true));
   (menu.querySelector("button") as HTMLButtonElement | null)?.focus();
 }
