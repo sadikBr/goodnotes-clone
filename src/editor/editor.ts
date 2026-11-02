@@ -1581,7 +1581,7 @@ export class EditorScreen {
     const samples = events.length ? events : [e];
     switch (g.type) {
       case "laser":
-        for (const s of samples) this.laser.extend(this.point(s), performance.now());
+        for (const s of samples) this.laser.extend(this.point(s), performance.now(), 0.75 / this.zoom);
         this.draw();
         break;
       case "draw": {
@@ -1778,7 +1778,7 @@ export class EditorScreen {
     switch (g.type) {
       case "laser":
         this.gesture = null;
-        this.laser.end();
+        this.laser.end(performance.now());
         // A touch has no hover: hide the dot once the finger lifts.
         if (e.pointerType === "touch") this.laser.pointAt(null);
         this.draw();

@@ -1,153 +1,125 @@
-// Laser pointer for presenting: a glowing dot that follows the pen or mouse,
-// and (in trail mode) a glowing line that fades away by itself. Nothing is
-// ever added to the page.
+// Laser pointer for presenting and explaining. In trail mode everything
+// drawn stays visible while you keep going; about a second after the pen
+// lifts with nothing new drawn, it all fades away together. Dot mode just
+// shows a glowing pointer. Nothing is ever added to the page.
 
 export type LaserMode = "trail" | "dot";
 
-/** How long a bit of trail stays fully visible, then how long it takes to fade (ms). */
-const HOLD_MS = 900;
-const FADE_MS = 450;
-/** Alpha steps used when drawing a fading trail (each step is one path, so no beading). */
-const STEPS = 16;
+/** How long the drawing stays after the last stroke ends, then the fade (ms). */
+export const LASER_HOLD_MS = 1000;
+export const LASER_FADE_MS = 500;
 
-interface TrailPoint {
-  x: number;
-  y: number;
-  t: number;
-}
+type P = [number, number];
 
 export class Laser {
   mode: LaserMode = "trail";
   color = "#ef4444";
-  private trails: TrailPoint[][] = [];
-  private current: TrailPoint[] | null = null;
-  private dot: { x: number; y: number } | null = null;
+  private strokes: P[][] = [];
+  private current: P[] | null = null;
+  private dot: P | null = null;
+  private lastActivity = 0;
 
   /** Where the pointer is (or null when it leaves the page). */
-  pointAt(p: [number, number] | null) {
-    this.dot = p ? { x: p[0], y: p[1] } : null;
+  pointAt(p: P | null) {
+    this.dot = p ? [p[0], p[1]] : null;
   }
 
-  begin(p: [number, number], now: number) {
-    this.dot = { x: p[0], y: p[1] };
+  begin(p: P, now: number) {
+    this.dot = [p[0], p[1]];
     if (this.mode !== "trail") return;
-    this.current = [{ x: p[0], y: p[1], t: now }];
-    this.trails.push(this.current);
+    // Drawing again before the fade ends brings everything back.
+    if (this.opacity(now) <= 0) this.strokes = [];
+    this.current = [[p[0], p[1]]];
+    this.strokes.push(this.current);
+    this.lastActivity = now;
   }
 
-  extend(p: [number, number], now: number) {
-    this.dot = { x: p[0], y: p[1] };
+  extend(p: P, now: number, minStep: number) {
+    this.dot = [p[0], p[1]];
     const cur = this.current;
     if (!cur) return;
     const last = cur[cur.length - 1];
-    if (Math.hypot(p[0] - last.x, p[1] - last.y) < 0.5) {
-      last.t = now; // still pen: keep the tip alive
-      return;
-    }
-    cur.push({ x: p[0], y: p[1], t: now });
+    if (Math.hypot(p[0] - last[0], p[1] - last[1]) >= minStep) cur.push([p[0], p[1]]);
+    this.lastActivity = now;
   }
 
-  end() {
+  end(now: number) {
+    if (this.current) this.lastActivity = now;
     this.current = null;
   }
 
   clear() {
-    this.trails = [];
+    this.strokes = [];
     this.current = null;
     this.dot = null;
   }
 
-  /** True while something is fading, so the editor keeps animating. */
-  animating(now: number): boolean {
-    this.prune(now);
-    return this.trails.length > 0;
+  /** Opacity of the drawing: 1 while writing and for a moment after, then fading to 0. */
+  opacity(now: number): number {
+    if (this.current) return 1;
+    const idle = now - this.lastActivity;
+    if (idle <= LASER_HOLD_MS) return 1;
+    return Math.max(0, 1 - (idle - LASER_HOLD_MS) / LASER_FADE_MS);
   }
 
-  private prune(now: number) {
-    for (const tr of this.trails) {
-      // The pen tip of a trail being drawn stays alive.
-      const keepFrom = tr === this.current ? tr.length - 1 : tr.length;
-      let cut = 0;
-      while (cut < keepFrom - 1 && now - tr[cut + 1].t > HOLD_MS + FADE_MS) cut++;
-      if (cut) tr.splice(0, cut);
+  /** True while the drawing is waiting to fade or fading, so the editor keeps animating. */
+  animating(now: number): boolean {
+    if (!this.strokes.length || this.current) return false;
+    if (this.opacity(now) <= 0) {
+      this.strokes = [];
+      return false;
     }
-    this.trails = this.trails.filter((tr) => tr === this.current || (tr.length && now - tr[tr.length - 1].t < HOLD_MS + FADE_MS));
+    return true;
+  }
+
+  /** Number of strokes currently shown (for tests). */
+  get strokeCount(): number {
+    return this.strokes.length;
   }
 
   /**
-   * Draws the laser on a context set up in page units. `zoom` converts the
-   * sizes so they look the same at any zoom; `dpr` is canvas pixels per CSS
-   * pixel (shadow blur is in canvas pixels, unaffected by the transform).
+   * Draws the laser on a context set up in page units. Sizes are in screen
+   * pixels (divided by `zoom`); `dpr` converts the glow to canvas pixels.
    */
   draw(ctx: CanvasRenderingContext2D, zoom: number, dpr: number, now: number) {
-    this.prune(now);
-    const alphaOf = (t: number) => {
-      const age = now - t;
-      return age <= HOLD_MS ? 1 : Math.max(0, 1 - (age - HOLD_MS) / FADE_MS);
-    };
-    const width = 6 / zoom;
+    const alpha = this.opacity(now);
     ctx.save();
-    // Flat ends between fade steps, so neighbouring steps don't overlap.
-    ctx.lineCap = "butt";
-    ctx.lineJoin = "round";
-    for (const tr of this.trails) {
-      if (tr.length < 2) continue;
-      // Group consecutive segments by fade step and draw each group as one path.
-      let i = 1;
-      while (i < tr.length) {
-        const step = Math.ceil(alphaOf(tr[i].t) * STEPS);
-        const start = i - 1;
-        while (i < tr.length && Math.ceil(alphaOf(tr[i].t) * STEPS) === step) i++;
-        if (step === 0) continue;
-        const pts = tr.slice(start, i);
-        this.glowPath(ctx, pts, width, step / STEPS, dpr);
-      }
+    if (this.strokes.length && alpha > 0) {
+      // All strokes in one path: one stroke() paints overlaps only once.
+      ctx.beginPath();
+      for (const s of this.strokes) smoothPath(ctx, s);
+      ctx.globalAlpha = alpha;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = this.color;
+      ctx.lineWidth = 4.5 / zoom;
+      ctx.shadowColor = this.color;
+      ctx.shadowBlur = 10 * dpr;
+      ctx.stroke();
     }
-    if (this.dot) this.glowDot(ctx, this.dot.x, this.dot.y, 7 / zoom, dpr);
+    if (this.dot) {
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = this.color;
+      ctx.shadowColor = this.color;
+      ctx.shadowBlur = 12 * dpr;
+      ctx.beginPath();
+      ctx.arc(this.dot[0], this.dot[1], 5.5 / zoom, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
   }
+}
 
-  private glowPath(ctx: CanvasRenderingContext2D, pts: TrailPoint[], width: number, alpha: number, dpr: number) {
-    const path = () => {
-      ctx.beginPath();
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k].x, pts[k].y);
-    };
-    ctx.globalAlpha = alpha;
-    // Coloured glow, then a bright core.
-    ctx.shadowColor = this.color;
-    ctx.shadowBlur = 14 * dpr;
-    ctx.strokeStyle = this.color;
-    ctx.lineWidth = width;
-    path();
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = this.core();
-    ctx.lineWidth = width * 0.4;
-    path();
-    ctx.stroke();
+/** Adds a smooth curve through the points (quadratics through midpoints). */
+function smoothPath(ctx: CanvasRenderingContext2D, pts: P[]) {
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  if (pts.length === 1) {
+    ctx.lineTo(pts[0][0] + 0.01, pts[0][1]);
+    return;
   }
-
-  /** The hot centre of the beam: the laser colour mixed with white. */
-  private core(): string {
-    const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(this.color);
-    if (!m) return "rgba(255, 255, 255, 0.85)";
-    const mix = (hex: string) => Math.round(parseInt(hex, 16) * 0.35 + 255 * 0.65);
-    return `rgb(${mix(m[1])}, ${mix(m[2])}, ${mix(m[3])})`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    ctx.quadraticCurveTo(pts[i][0], pts[i][1], (pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2);
   }
-
-  private glowDot(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, dpr: number) {
-    ctx.globalAlpha = 1;
-    ctx.shadowColor = this.color;
-    ctx.shadowBlur = 18 * dpr;
-    ctx.fillStyle = this.color;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = this.core();
-    ctx.beginPath();
-    ctx.arc(x, y, r * 0.45, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  const last = pts[pts.length - 1];
+  ctx.lineTo(last[0], last[1]);
 }
