@@ -36,7 +36,7 @@ import {
 } from "./geometry";
 import { inkToTextDialog } from "./inkToText";
 import { cachedBackground, renderBackground } from "./pdfRender";
-import { MM, Ruler, type RulerEdge } from "./ruler";
+import { INSTRUMENTS, MM, Ruler, type Guide as EdgeGuide, type InstrumentKind } from "./ruler";
 import { Laser, LASER_CORE_FADE_MS, LASER_HOLD_MS, type LaserLayers, type LaserMode } from "./laser";
 import { buildVectorPdf, type PdfPageInput } from "./pdfExport";
 import { continueList, currentList, toggleList, type ListKind } from "./textFormat";
@@ -84,6 +84,7 @@ const WIDTHS_KEY = "inkleaf-sizes";
 const TEXT_FONT_KEY = "inkleaf-text-font";
 const ERASER_MODE_KEY = "inkleaf-eraser-mode";
 const LASER_MODE_KEY = "inkleaf-laser-mode";
+const INSTRUMENT_KEY = "inkleaf-instrument";
 
 /** Size control ranges and one-tap presets per tool. */
 const SIZE_SPECS: Record<string, { label: string; min: number; max: number; step: number; presets: number[]; preview: "dot" | "letter" }> = {
@@ -114,7 +115,7 @@ const EXPORT_SCALE: Record<ExportFormat, number> = { pdf: 3, png: 3, pptx: 2 };
 const MAX_UNDO = 100;
 
 type Gesture =
-  | { type: "draw"; tool: "pen" | "highlighter" | "shape"; points: Pt[]; times: number[]; preview: ShapeEl | null; holdTimer: number; held: Held | null; ruler?: { edge: RulerEdge; offset: number } }
+  | { type: "draw"; tool: "pen" | "highlighter" | "shape"; points: Pt[]; times: number[]; preview: ShapeEl | null; holdTimer: number; held: Held | null; ruler?: { edge: EdgeGuide; offset: number } }
   | { type: "erase"; changed: boolean; last: P2 | null }
   | { type: "lasso"; points: P2[] }
   | { type: "laser" }
@@ -200,7 +201,7 @@ export class EditorScreen {
   });
   /** The ruler floats in its own layer over the visible area, so it never changes scrolling. */
   private rulerLayer = h("div", { class: "ruler-layer" });
-  private rulerBtn = h("button", { class: "icon-btn ruler-btn", "aria-label": "Ruler", title: "Ruler (R)", "aria-pressed": "false", onclick: () => this.toggleRuler() }, icon("ruler"));
+  private rulerBtn = h("button", { class: "icon-btn ruler-btn", "aria-label": "Ruler and drawing instruments", title: "Ruler, protractor, set squares (R)", "aria-haspopup": "menu", "aria-pressed": "false", onclick: () => this.instrumentMenu() }, icon("ruler"));
   private penOnlyBtn = h("button", { class: "icon-btn pen-only-btn", "aria-label": "Pen-only mode", onclick: () => this.setPenOnly(!this.penOnly, true) }, icon("stylus"));
   private hiddenIds = new Set<string>();
   private images: ImageCache = new Map();
@@ -247,6 +248,7 @@ export class EditorScreen {
     );
     this.pageWrap.append(this.selectionBar);
     this.rulerLayer.append(this.ruler.el);
+    this.ruler.setKind(getPref<InstrumentKind>(INSTRUMENT_KEY, "ruler", INSTRUMENTS.map((i) => i.id)));
     this.bindCanvas();
     this.fileInput.addEventListener("change", () => this.insertImageFile(this.fileInput.files?.[0]));
     this.scroller.addEventListener("wheel", (e) => this.onWheel(e), { passive: false });
@@ -774,7 +776,27 @@ export class EditorScreen {
     s.height = `${this.scroller.clientHeight}px`;
   }
 
-  /** Shows the ruler in the middle of the view, or hides it. */
+  /** Picks an instrument (or hides the one showing). */
+  private instrumentMenu() {
+    popupMenu(this.rulerBtn, [
+      ...INSTRUMENTS.map((i) => ({
+        label: i.label,
+        checked: this.ruler.visible && this.ruler.kind === i.id,
+        action: () => this.showInstrument(i.id),
+      })),
+      ...(this.ruler.visible ? [{ label: "Hide", action: () => this.toggleRuler() }] : []),
+    ]);
+  }
+
+  private showInstrument(kind: InstrumentKind) {
+    this.ruler.setKind(kind);
+    setPref(INSTRUMENT_KEY, kind);
+    // (Re)show it centred in the view.
+    if (this.ruler.visible) this.ruler.hide();
+    this.toggleRuler();
+  }
+
+  /** Shows the last-used instrument in the middle of the view, or hides it (R). */
   private toggleRuler() {
     if (this.ruler.visible) this.ruler.hide();
     else {
@@ -1762,10 +1784,8 @@ export class EditorScreen {
           g.points.push([x, y, this.pressure(s)]);
           g.times.push(s.timeStamp);
         }
-        if (g.ruler) {
-          const [a, b] = this.rulerExtent(g);
-          this.ruler.setReadout(`${(Math.hypot(b[0] - a[0], b[1] - a[1]) / (10 * MM)).toFixed(1)} cm`);
-        } else this.armHold();
+        if (g.ruler) this.ruler.setReadout(this.rulerReadout(g));
+        else this.armHold();
         break;
       }
       case "erase":
@@ -1847,9 +1867,35 @@ export class EditorScreen {
     return { id: newId(), z: nextZ(this.elements), kind: "shape", shape, color: this.colors[g.tool], width: this.widths[g.tool], fill: null };
   }
 
-  /** The two furthest points of a stroke drawn along the ruler. */
+  /** Length (straight edge) or swept angle (protractor arc) of a guided stroke. */
+  private rulerReadout(g: Extract<Gesture, { type: "draw" }>): string {
+    const edge = g.ruler!.edge;
+    if (edge.kind === "line") {
+      const [a, b] = this.rulerExtent(g);
+      return `${(Math.hypot(b[0] - a[0], b[1] - a[1]) / (10 * MM)).toFixed(1)} cm`;
+    }
+    // Unwrap the angle around the centre as the stroke goes.
+    let prev = Math.atan2(g.points[0][1] - edge.c[1], g.points[0][0] - edge.c[0]);
+    let acc = 0;
+    let lo = 0;
+    let hi = 0;
+    for (const p of g.points.slice(1)) {
+      const a = Math.atan2(p[1] - edge.c[1], p[0] - edge.c[0]);
+      let d = a - prev;
+      if (d > Math.PI) d -= 2 * Math.PI;
+      if (d < -Math.PI) d += 2 * Math.PI;
+      acc += d;
+      lo = Math.min(lo, acc);
+      hi = Math.max(hi, acc);
+      prev = a;
+    }
+    return `${Math.round(((hi - lo) * 180) / Math.PI)}°`;
+  }
+
+  /** The two furthest points of a stroke drawn along a straight edge. */
   private rulerExtent(g: Extract<Gesture, { type: "draw" }>): [P2, P2] {
-    const dir = g.ruler!.edge.dir;
+    const edge = g.ruler!.edge;
+    const dir = edge.kind === "line" ? edge.dir : [1, 0];
     let lo = g.points[0];
     let hi = g.points[0];
     const t = (p: Pt) => p[0] * dir[0] + p[1] * dir[1];
@@ -1971,10 +2017,12 @@ export class EditorScreen {
         let shape = g.preview;
         if (g.ruler) {
           this.ruler.setReadout(null);
-          // Along the ruler the shape tool makes a clean line between the extremes.
+          // Along a straight edge the shape tool makes a clean line between
+          // the extremes; along the protractor's arc, the arc itself.
           if (g.tool === "shape") {
-            const [a, b] = this.rulerExtent(g);
-            shape = { id: newId(), z: 0, kind: "shape", shape: { kind: "line", points: [a, b] }, color: this.colors.shape, width: this.widths.shape, fill: null };
+            const geom: RecognizedShape =
+              g.ruler.edge.kind === "line" ? { kind: "line", points: this.rulerExtent(g) } : { kind: "path", points: g.points.map((p) => [p[0], p[1]] as P2), closed: false };
+            shape = { id: newId(), z: 0, kind: "shape", shape: geom, color: this.colors.shape, width: this.widths.shape, fill: null };
           }
         } else if (!shape && g.tool === "shape") shape = this.refine(g);
         this.gesture = null;

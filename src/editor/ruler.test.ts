@@ -12,12 +12,18 @@ describe("ruler", () => {
   });
 
   it("projects onto an edge, offset so the ink sits against it", () => {
-    const e = { a: [0, 100] as [number, number], dir: [1, 0] as [number, number], normal: [0, -1] as [number, number] };
+    const e = { kind: "line" as const, a: [0, 100] as [number, number], dir: [1, 0] as [number, number], normal: [0, -1] as [number, number] };
     expect(Ruler.project(e, [50, 87], 2)).toEqual([50, 98]);
     const d = Math.SQRT1_2;
-    const diag = { a: [0, 0] as [number, number], dir: [d, d] as [number, number], normal: [d, -d] as [number, number] };
+    const diag = { kind: "line" as const, a: [0, 0] as [number, number], dir: [d, d] as [number, number], normal: [d, -d] as [number, number] };
     const [x, y] = Ruler.project(diag, [10, 0], 0);
     expect(x).toBeCloseTo(5);
     expect(y).toBeCloseTo(5);
+  });
+
+  it("projects onto the protractor's arc, outside it", () => {
+    const [x, y] = Ruler.project({ kind: "arc", c: [0, 0], r: 100 }, [0, -50], 3);
+    expect(x).toBeCloseTo(0);
+    expect(y).toBeCloseTo(-103);
   });
 });
