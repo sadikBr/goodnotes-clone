@@ -5,8 +5,9 @@
 
 import { api, type Notebook, type Page } from "./api";
 import { measureText } from "./editor/render";
-import { daftarLayout } from "./editor/papers";
-import { newId, toStored, type TextEl } from "./editor/model";
+import { daftarLayout, timetableLayout } from "./editor/papers";
+import { fromStored, newId, toStored, type El, type StickyEl, type TextEl } from "./editor/model";
+import { zelligePanel } from "./editor/covers";
 
 /** One weekly lesson: day (1 = Monday … 6 = Saturday, 0 = Sunday), times "HH:MM", class. */
 export interface Lesson {
@@ -132,6 +133,60 @@ export function pageElements(meta: DaftarMeta, cls: string, sessions: Session[],
   return out;
 }
 
+/** Pastel note colours for the timetable, one per class. */
+const CLASS_COLORS = ["#bbf7d0", "#bfdbfe", "#fde68a", "#fbcfe8", "#ddd6fe", "#fed7aa", "#a5f3fc", "#e5e7eb"];
+
+/** A sticky note per lesson on the timetable page, coloured by class. */
+export function timetableElements(meta: DaftarMeta, w: number, h: number): StickyEl[] {
+  const L = timetableLayout(w, h);
+  return meta.timetable
+    .map((l, i): StickyEl | null => {
+      const col = L.days.find((d) => d.day === l.day);
+      if (!col) return null;
+      const y0 = L.yOf(l.start);
+      const y1 = Math.max(y0 + 30, L.yOf(l.end));
+      const color = CLASS_COLORS[Math.max(0, meta.classes.indexOf(l.cls)) % CLASS_COLORS.length];
+      return { id: newId(), z: i, kind: "sticky", x: col.x0 + 4, y: y0 + 3, w: col.x1 - col.x0 - 8, h: y1 - y0 - 6, text: `${l.cls}\n${l.start}–${l.end}`, color, fontSize: 12, bold: true, align: "center" };
+    })
+    .filter((x): x is StickyEl => x !== null);
+}
+
+/**
+ * The cover's details under its title: "Cahier de textes", then school,
+ * subject, teacher and classes — each with its Arabic label on the right,
+ * French on the left and the value in the middle.
+ */
+export function coverElements(meta: DaftarMeta, w: number, h: number): TextEl[] {
+  const p = zelligePanel(w, h);
+  const out: TextEl[] = [];
+  let z = 10;
+  const base = { kind: "text" as const, role: "daftar-field" as const, font: "sans" as const };
+  out.push({ ...base, id: newId(), z: z++, x: p.x + 30, y: p.y + 186, w: p.w - 60, text: "Cahier de textes", fontSize: 20, color: "#6b7280", align: "center" });
+  const rows = [
+    { ar: "المؤسسة", fr: "Établissement", value: meta.school },
+    { ar: "المادة", fr: "Matière", value: meta.subject },
+    { ar: "الأستاذ(ة)", fr: "Enseignant(e)", value: meta.teacher },
+    { ar: "الأقسام", fr: "Classes", value: meta.classes.join("  ·  ") },
+  ].filter((r) => r.value);
+  const x = p.x + 44;
+  const rw = p.w - 88;
+  const top = p.y + Math.max(250, p.h * 0.36);
+  const step = Math.min(78, (p.y + p.h - 100 - top) / Math.max(1, rows.length));
+  rows.forEach((r, i) => {
+    const y = top + i * step;
+    out.push({ ...base, id: newId(), z: z++, x, y, w: rw, text: r.ar, fontSize: 13, color: "#6b7280" });
+    out.push({ ...base, id: newId(), z: z++, x, y, w: rw, text: r.fr, fontSize: 12, color: "#6b7280", align: "left" });
+    out.push({ ...base, id: newId(), z: z++, x, y: y + 22, w: rw, text: r.value, fontSize: 19, color: "#1f2937", bold: true, align: "center" });
+  });
+  return out;
+}
+
+/** Puts the school year and the details on a daftar's cover page. */
+async function fillCover(cover: Page, meta: DaftarMeta) {
+  const els: El[] = fromStored(await api.elements(cover.id)).map((e) => (e.kind === "text" && e.role === "cover-date" && meta.year ? { ...e, text: meta.year } : e));
+  await api.saveElements(cover.id, [...els, ...coverElements(meta, cover.width, cover.height)].map(toStored));
+}
+
 /** Rows per daftar page at a page size. */
 export const rowsPerPage = (w: number, h: number) => daftarLayout(w, h).rows.length - 1;
 
@@ -179,7 +234,17 @@ export async function extendSection(nb: Notebook, meta: DaftarMeta, cls: string,
 export async function createDaftar(input: { title: string; folderId: string | null; coverColor: string; meta: DaftarMeta }): Promise<Notebook> {
   const meta = input.meta;
   const nb = await api.createNotebook({ title: input.title, folderId: input.folderId, coverColor: input.coverColor, template: "daftar", coverPage: true });
-  const pages = await api.pages(nb.id);
+  let pages = await api.pages(nb.id);
+  // The zellige cover, and a timetable page after it when there is one.
+  await api.setPageTemplate(pages[0].id, "cover-zellige", input.coverColor);
+  if (meta.timetable.length) {
+    const tt = await api.addPage(nb.id, 1, "daftar-timetable");
+    // New pages copy their neighbour's paper, which here is the cover's colour.
+    await api.setPageTemplate(tt.id, "daftar-timetable", "#fffdf7");
+    await api.setPageSection(tt.id, null);
+    await api.saveElements(tt.id, timetableElements(meta, tt.width, tt.height).map(toStored));
+  }
+  pages = await api.pages(nb.id);
   // The notebook's first paper page becomes the first class's first page.
   const firstPaper = pages.find((p) => p.template === "daftar")!;
   const per = rowsPerPage(firstPaper.width, firstPaper.height);
@@ -198,4 +263,10 @@ export async function createDaftar(input: { title: string; folderId: string | nu
   }
   await api.setNotebookMeta(nb.id, JSON.stringify(meta));
   return api.notebook(nb.id);
+}
+
+/** Fills in the cover once its title and date are placed (after setUpCover). */
+export async function finishDaftarCover(nb: Notebook, meta: DaftarMeta) {
+  const [cover] = await api.pages(nb.id);
+  if (cover) await fillCover(cover, meta);
 }

@@ -499,6 +499,69 @@ function drawDaftar(ctx: Ctx, w: number, h: number, ink: Inks) {
   strong.stroke(ctx, ink.strong, 1.3);
 }
 
+// --- weekly timetable (استعمال الزمن / emploi du temps) ------------------------------
+
+export const TIMETABLE_HOURS = { from: 8, to: 18 };
+const TT_DAYS: { day: number; ar: string; fr: string }[] = [
+  { day: 1, ar: "الإثنين", fr: "Lundi" },
+  { day: 2, ar: "الثلاثاء", fr: "Mardi" },
+  { day: 3, ar: "الأربعاء", fr: "Mercredi" },
+  { day: 4, ar: "الخميس", fr: "Jeudi" },
+  { day: 5, ar: "الجمعة", fr: "Vendredi" },
+  { day: 6, ar: "السبت", fr: "Samedi" },
+];
+
+/**
+ * Geometry of the timetable page: day columns right to left (Monday next to
+ * the hours on the right), and the y of any time of day.
+ */
+export function timetableLayout(w: number, h: number) {
+  const m = 40;
+  const top = m + 110;
+  const bottom = h - m;
+  const timeW = 58;
+  const right = w - m - timeW;
+  const colW = (right - m) / TT_DAYS.length;
+  const days = TT_DAYS.map((d, i) => ({ ...d, x0: right - (i + 1) * colW, x1: right - i * colW }));
+  const headH = 44;
+  const bodyTop = top + headH;
+  const hours = TIMETABLE_HOURS.to - TIMETABLE_HOURS.from;
+  const yOf = (hhmm: string) => {
+    const [hh, mm] = hhmm.split(":").map(Number);
+    const t = Math.min(TIMETABLE_HOURS.to, Math.max(TIMETABLE_HOURS.from, hh + (mm || 0) / 60));
+    return bodyTop + ((t - TIMETABLE_HOURS.from) / hours) * (bottom - bodyTop);
+  };
+  return { m, top, bottom, timeX0: right, timeX1: w - m, days, headH, bodyTop, yOf };
+}
+
+function drawTimetable(ctx: Ctx, w: number, h: number, ink: Inks) {
+  const L = timetableLayout(w, h);
+  const strong = new Lines();
+  const line = new Lines();
+  const faint = new Lines();
+  labelAligned(ctx, "استعمال الزمن", w - L.m, L.m + 30, ink, 24, true, "right", ink.strong);
+  labelAligned(ctx, "Emploi du temps", L.m, L.m + 28, ink, 19, true, "left", ink.strong);
+  strong.h(L.m + 44, L.m, w - L.m);
+  strong.rect(L.m, L.top, w - 2 * L.m, L.bottom - L.top);
+  strong.h(L.bodyTop, L.m, w - L.m);
+  strong.v(L.timeX0, L.top, L.bottom);
+  for (const d of L.days) {
+    if (d.x0 > L.m + 1) line.v(d.x0, L.top, L.bottom);
+    const cx = (d.x0 + d.x1) / 2;
+    labelAligned(ctx, d.ar, cx, L.top + 19, ink, 12, true, "center");
+    labelAligned(ctx, d.fr, cx, L.top + 36, ink, 10.5, false, "center");
+  }
+  for (let hr = TIMETABLE_HOURS.from; hr <= TIMETABLE_HOURS.to; hr++) {
+    const y = L.yOf(`${hr}:00`);
+    if (hr > TIMETABLE_HOURS.from && hr < TIMETABLE_HOURS.to) line.h(y, L.m, w - L.m);
+    if (hr < TIMETABLE_HOURS.to) faint.h(L.yOf(`${hr}:30`), L.m, L.timeX0);
+    labelAligned(ctx, `${String(hr).padStart(2, "0")}:00`, (L.timeX0 + L.timeX1) / 2, Math.min(L.bottom - 4, y + 14), ink, 11, false, "center");
+  }
+  faint.stroke(ctx, ink.faint, 1);
+  line.stroke(ctx, ink.line, 1);
+  strong.stroke(ctx, ink.strong, 1.3);
+}
+
 /** Draws the paper colour and the template's lines. */
 export function drawTemplate(ctx: Ctx, template: Template, w: number, h: number, paper: string) {
   ctx.fillStyle = paper;
@@ -584,6 +647,9 @@ export function drawTemplate(ctx: Ctx, template: Template, w: number, h: number,
     case "daftar":
       drawDaftar(ctx, w, h, ink);
       break;
+    case "daftar-timetable":
+      drawTimetable(ctx, w, h, ink);
+      break;
     default:
       if (isCoverTemplate(template)) drawCoverDesign(ctx, template, w, h, paper);
       break;
@@ -594,5 +660,5 @@ export function drawTemplate(ctx: Ctx, template: Template, w: number, h: number,
 
 /** Templates whose labels use the bundled sans font (PDF export loads it). */
 export function templateUsesText(template: Template): boolean {
-  return template === "planner-day" || template === "planner-week" || template === "daftar";
+  return template === "planner-day" || template === "planner-week" || template === "daftar" || template === "daftar-timetable";
 }

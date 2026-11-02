@@ -7,7 +7,7 @@
 import type { Template } from "../api";
 import type { FontId } from "../fonts";
 
-export type CoverDesign = "classic" | "minimal" | "geometric" | "waves" | "marble" | "leather" | "kraft" | "dots";
+export type CoverDesign = "classic" | "minimal" | "geometric" | "waves" | "marble" | "leather" | "kraft" | "dots" | "zellige";
 
 export const COVER_DESIGNS: { id: CoverDesign; label: string; template: Template }[] = [
   { id: "classic", label: "Classic", template: "cover" },
@@ -18,6 +18,7 @@ export const COVER_DESIGNS: { id: CoverDesign; label: string; template: Template
   { id: "leather", label: "Leather", template: "cover-leather" },
   { id: "kraft", label: "Kraft", template: "cover-kraft" },
   { id: "dots", label: "Dots", template: "cover-dots" },
+  { id: "zellige", label: "Zellige", template: "cover-zellige" },
 ];
 
 export function isCoverTemplate(t: string): boolean {
@@ -216,6 +217,10 @@ export function coverText(design: CoverDesign, w: number, h: number): CoverText 
       const p = kraftLabel(w, h);
       return { title: { x: p.x + 22, y: p.y + 22, w: p.w - 44, h: p.h * 0.62 - 22 }, date: { x: p.x + 22, y: p.y + p.h * 0.66, w: p.w - 44 }, align: "center", titleColor: "#3f2d1c", dateColor: "#7a6047", font: "kalam", maxSize: 38, dateSize: 17 };
     }
+    case "zellige": {
+      const p = zelligePanel(w, h);
+      return { title: { x: p.x + 30, y: p.y + 56, w: p.w - 60, h: Math.min(120, p.h * 0.17) }, date: { x: p.x + 30, y: p.y + p.h - 58, w: p.w - 60 }, align: "center", ...dark, font: "sans", maxSize: 44, dateSize: 16 };
+    }
     case "dots": {
       const c = dotsLabel(w, h);
       const tw = c.r * 1.5;
@@ -235,6 +240,13 @@ function kraftLabel(w: number, h: number): Box {
   const pw = Math.min(440, (w - band) * 0.66);
   const ph = Math.max(150, Math.min(200, h * 0.16));
   return { x: band + (w - band - pw) / 2, y: h * 0.2, w: pw, h: ph };
+}
+
+/** The cream panel in the middle of the zellige cover. */
+export function zelligePanel(w: number, h: number): Box {
+  const pw = Math.min(w * 0.76, 620);
+  const ph = Math.min(h * 0.64, 760);
+  return { x: (w - pw) / 2, y: (h - ph) / 2, w: pw, h: ph };
 }
 
 function dotsLabel(w: number, h: number) {
@@ -611,6 +623,79 @@ export function drawCoverDesign(ctx: Ctx, template: string, w: number, h: number
     case "dots":
       drawDots(ctx, w, h, color);
       break;
+    case "zellige":
+      drawZellige(ctx, w, h, color);
+      break;
   }
   ctx.restore();
+}
+
+/** An eight-pointed star (two overlapping squares), as one closed path. */
+function star8(ctx: Ctx, cx: number, cy: number, r: number, turn = 0) {
+  const inner = r * 0.7654; // the two squares' crossing points
+  for (let i = 0; i < 16; i++) {
+    const a = turn + (i * Math.PI) / 8;
+    const rr = i % 2 ? inner : r;
+    const x = cx + Math.cos(a) * rr;
+    const y = cy + Math.sin(a) * rr;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+}
+
+/**
+ * Zellige: Moroccan tilework — a field of eight-pointed stars with small
+ * diamonds between them, in tints of the cover colour, around a cream panel
+ * with a double border.
+ */
+function drawZellige(ctx: Ctx, w: number, h: number, color: string) {
+  const g = Math.max(56, w * 0.12);
+  const ox = (w % g) / 2;
+  const oy = (h % g) / 2;
+  ctx.beginPath();
+  for (let y = oy; y <= h + g; y += g) for (let x = ox; x <= w + g; x += g) star8(ctx, x, y, g * 0.4, Math.PI / 8);
+  ctx.fillStyle = shade(color, 0.18);
+  ctx.fill();
+  ctx.beginPath();
+  for (let y = oy; y <= h + g; y += g) for (let x = ox; x <= w + g; x += g) star8(ctx, x, y, g * 0.22, 0);
+  ctx.fillStyle = shade(color, -0.12);
+  ctx.fill();
+  ctx.beginPath();
+  for (let y = oy + g / 2; y <= h + g; y += g)
+    for (let x = ox + g / 2; x <= w + g; x += g) {
+      const d = g * 0.13;
+      ctx.moveTo(x, y - d);
+      ctx.lineTo(x + d, y);
+      ctx.lineTo(x, y + d);
+      ctx.lineTo(x - d, y);
+      ctx.closePath();
+    }
+  ctx.fillStyle = shade(color, 0.42);
+  ctx.fill();
+  // The panel: soft drop, cream face, double border in the cover colour.
+  const p = zelligePanel(w, h);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.16)";
+  ctx.fillRect(p.x + 3, p.y + 5, p.w, p.h);
+  ctx.fillStyle = "#fffaf0";
+  ctx.fillRect(p.x, p.y, p.w, p.h);
+  ctx.strokeStyle = shade(color, -0.2);
+  ctx.lineWidth = 3;
+  ctx.strokeRect(p.x + 10, p.y + 10, p.w - 20, p.h - 20);
+  ctx.lineWidth = 1;
+  ctx.strokeRect(p.x + 16, p.y + 16, p.w - 32, p.h - 32);
+  // A star at the top of the panel, and one at the bottom.
+  for (const cy of [p.y + 10, p.y + p.h - 10]) {
+    ctx.beginPath();
+    star8(ctx, p.x + p.w / 2, cy, 15, Math.PI / 8);
+    ctx.fillStyle = "#fffaf0";
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = shade(color, -0.2);
+    ctx.stroke();
+    ctx.beginPath();
+    star8(ctx, p.x + p.w / 2, cy, 7, 0);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
 }

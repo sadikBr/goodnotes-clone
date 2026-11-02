@@ -175,6 +175,7 @@ pub const TEMPLATES: &[&str] = &[
     "planner-day",
     "planner-week",
     "daftar",
+    "daftar-timetable",
     "cover",
     "cover-minimal",
     "cover-geometric",
@@ -183,6 +184,7 @@ pub const TEMPLATES: &[&str] = &[
     "cover-leather",
     "cover-kraft",
     "cover-dots",
+    "cover-zellige",
 ];
 
 fn validate_template(t: &str) -> AppResult<()> {

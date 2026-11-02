@@ -28,6 +28,8 @@ export type Template =
   | "planner-week"
   /** Teacher's lesson log (دفتر النصوص / cahier de textes). */
   | "daftar"
+  /** A weekly timetable grid (استعمال الزمن / emploi du temps). */
+  | "daftar-timetable"
   /** Notebook cover designs (page 1 of new notebooks); not offered in the paper picker. */
   | "cover"
   | "cover-minimal"
@@ -36,7 +38,8 @@ export type Template =
   | "cover-marble"
   | "cover-leather"
   | "cover-kraft"
-  | "cover-dots";
+  | "cover-dots"
+  | "cover-zellige";
 
 export type TemplateCategory = "basic" | "notes" | "science" | "writing" | "planner" | "teacher";
 
@@ -75,6 +78,7 @@ export const TEMPLATES: { id: Template; label: string; category: TemplateCategor
   { id: "planner-day", label: "Daily plan", category: "planner", preview: "page" },
   { id: "planner-week", label: "Weekly plan", category: "planner", preview: "page" },
   { id: "daftar", label: "Daftar annossous", category: "teacher", preview: "page" },
+  { id: "daftar-timetable", label: "Timetable", category: "teacher", preview: "page" },
 ];
 
 export interface Folder {

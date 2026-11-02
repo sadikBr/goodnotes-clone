@@ -1,7 +1,7 @@
 // The "New daftar" dialog: school details, classes, and an optional weekly
 // timetable that pre-dates each class's rows.
 
-import { createDaftar, DAYS, isoDate, schoolYear, type DaftarMeta, type Lesson } from "./daftar";
+import { createDaftar, DAYS, finishDaftarCover, isoDate, schoolYear, type DaftarMeta, type Lesson } from "./daftar";
 import { type Notebook } from "./api";
 import { formDialog, h, icon, reportError, toast, type CustomFieldContext } from "./ui";
 import { refreshCoverThumbnail, setUpCover } from "./cover";
@@ -128,6 +128,7 @@ export async function newDaftarDialog(folderId: string | null): Promise<Notebook
     toast("Preparing your daftar…");
     const nb = await createDaftar({ title: r.title.trim() || "دفتر النصوص", folderId, coverColor: r.cover, meta });
     await setUpCover(nb).catch(reportError);
+    await finishDaftarCover(nb, meta);
     const [cover] = await api.pages(nb.id);
     if (cover) await refreshCoverThumbnail(cover).catch(() => {});
     return nb;
