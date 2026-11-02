@@ -1714,6 +1714,7 @@ export class EditorScreen {
     this.pageWrap.style.height = `${hgt}px`;
     // Cap the backing store so very high zoom levels stay within canvas limits.
     const scale = Math.min(this.zoom * dpr, 8192 / Math.max(this.page.width, this.page.height));
+    this.overlayRect = null;
     this.canvas.width = Math.round(this.page.width * scale);
     this.canvas.height = Math.round(this.page.height * scale);
     this.cache.width = this.canvas.width;
@@ -1735,6 +1736,7 @@ export class EditorScreen {
 
   /** Re-renders the committed content (paper + elements) into the cache. */
   private rebuildCache() {
+    this.overlayRect = null; // the page underneath changed: repaint it all
     const c = this.cache.getContext("2d")!;
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.clearRect(0, 0, this.cache.width, this.cache.height);
@@ -1758,13 +1760,88 @@ export class EditorScreen {
   }
 
   /** Composites the cache with transient overlays (live ink, lasso, selection). */
+  /**
+   * The part of the canvas (device pixels) that differs from the cache, or
+   * null when that is unknown (then the next draw repaints everything).
+   */
+  private overlayRect: { x0: number; y0: number; x1: number; y1: number } | null = null;
+  private drawFrame = 0;
+
+  /** Draws on the next frame (at most once per frame, however many pen events arrive). */
+  private requestDraw() {
+    if (this.drawFrame) return;
+    this.drawFrame = requestAnimationFrame(() => {
+      this.drawFrame = 0;
+      if (this.root.isConnected) this.draw();
+    });
+  }
+
+  /**
+   * When the only thing over the page is the stroke being written (or the
+   * eraser ring), its bounds in device pixels: then a redraw repaints just
+   * that area instead of the whole page, which is what keeps writing fast
+   * on big HiDPI canvases. Null when anything else is drawn on top.
+   */
+  private liveOverlayRect(): { x0: number; y0: number; x1: number; y1: number } | null {
+    const g = this.gesture;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    const add = (x: number, y: number, pad: number) => {
+      x0 = Math.min(x0, x - pad);
+      y0 = Math.min(y0, y - pad);
+      x1 = Math.max(x1, x + pad);
+      y1 = Math.max(y1, y + pad);
+    };
+    if (g) {
+      if (g.type !== "draw" || g.preview || this.selection.size) return null;
+      const pad = this.widths[g.tool] * 2 + 4 / this.zoom;
+      for (const p of g.points) add(p[0], p[1], pad);
+    } else if (this.selection.size) return null;
+    if (this.tool === "eraser" && this.cursor) add(this.cursor[0], this.cursor[1], this.widths.eraser / 2 + 3 / this.zoom);
+    const k = this.pixelScale;
+    if (x1 < x0) return { x0: 0, y0: 0, x1: 0, y1: 0 }; // nothing over the page
+    return {
+      x0: Math.max(0, Math.floor(x0 * k)),
+      y0: Math.max(0, Math.floor(y0 * k)),
+      x1: Math.min(this.canvas.width, Math.ceil(x1 * k)),
+      y1: Math.min(this.canvas.height, Math.ceil(y1 * k)),
+    };
+  }
+
   private draw() {
     if (!this.page) return;
+    if (this.drawFrame) {
+      cancelAnimationFrame(this.drawFrame);
+      this.drawFrame = 0;
+    }
     const ctx = this.ctx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const live = this.liveOverlayRect();
+    const prev = this.overlayRect;
+    this.overlayRect = live;
+    if (live && prev) {
+      // Repaint only what changed: where the overlay was and where it is now.
+      const x0 = Math.min(live.x0, prev.x0), y0 = Math.min(live.y0, prev.y0);
+      const x1 = Math.max(live.x1, prev.x1), y1 = Math.max(live.y1, prev.y1);
+      if (x1 <= x0 || y1 <= y0) return;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x0, y0, x1 - x0, y1 - y0);
+      ctx.clip();
+      ctx.clearRect(x0, y0, x1 - x0, y1 - y0);
+      ctx.drawImage(this.cache, x0, y0, x1 - x0, y1 - y0, x0, y0, x1 - x0, y1 - y0);
+      ctx.setTransform(this.pixelScale, 0, 0, this.pixelScale, 0, 0);
+      this.drawOverlay(ctx);
+      ctx.restore();
+      return;
+    }
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     ctx.drawImage(this.cache, 0, 0);
     ctx.setTransform(this.pixelScale, 0, 0, this.pixelScale, 0, 0);
+    this.drawOverlay(ctx);
+  }
+
+  /** Everything drawn over the cached page: the gesture in progress, selection, handles, eraser ring. */
+  private drawOverlay(ctx: CanvasRenderingContext2D) {
     const g = this.gesture;
     if (g?.type === "draw") {
       if (g.preview && g.tool === "highlighter" && g.preview.shape.kind === "line") {
@@ -2176,7 +2253,7 @@ export class EditorScreen {
         this.laser.pointAt(this.cursor);
         this.positionLaserDot();
       }
-      if (this.tool === "eraser") this.draw();
+      if (this.tool === "eraser") this.requestDraw();
       if (this.tool === "lasso") this.updateHoverCursor();
       return;
     }
@@ -2244,7 +2321,7 @@ export class EditorScreen {
         this.scroller.scrollTop = g.top - (e.clientY - g.sy);
         return;
     }
-    this.draw();
+    this.requestDraw();
   }
 
   /** Draw-and-hold: keeping the pen still at the end of a stroke snaps it to a shape. */
