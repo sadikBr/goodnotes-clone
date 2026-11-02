@@ -153,7 +153,11 @@ export class LibraryScreen {
       "aside",
       { class: "sidebar" },
       h("div", { class: "brand" }, h("span", { class: "brand-mark", html: BRAND_MARK }), h("span", { class: "brand-name" }, "Inkleaf")),
-      h("button", { class: "btn primary new-btn", title: "New notebook (N)", onclick: () => this.newNotebook(folderId) }, icon("plus"), h("span", { class: "new-label" }, "New notebook")),
+      (() => {
+        const b = h("button", { class: "btn primary new-btn", title: "Create a notebook, daftar, PDF or folder", "aria-haspopup": "menu" }, icon("plus"), h("span", { class: "new-label" }, "New"), h("span", { class: "new-caret" }, icon("down")));
+        b.addEventListener("click", () => this.createMenu(b, folderId));
+        return b;
+      })(),
       h(
         "nav",
         { "aria-label": "Library" },
@@ -206,7 +210,6 @@ export class LibraryScreen {
     if (this.view.kind === "trash") {
       actions.append(h("button", { class: "btn danger", onclick: () => this.emptyTrash() }, icon("trash"), "Empty trash"));
     } else {
-      const folderId = this.view.kind === "folder" ? this.view.id : null;
       const sortBtn = h("button", { class: "btn ghost", title: "Sort notebooks", "aria-haspopup": "menu" }, icon("sort"), SORTS.find((x) => x.id === this.sort)!.label);
       sortBtn.addEventListener("click", () =>
         popupMenu(
@@ -224,9 +227,6 @@ export class LibraryScreen {
       );
       actions.append(
         sortBtn,
-        h("button", { class: "btn ghost", onclick: () => this.newDaftar(folderId), title: "A teacher's lesson log (cahier de textes): a section per class, dated from your timetable" }, icon("book"), "New daftar"),
-        h("button", { class: "btn ghost", onclick: () => this.pdfInput.click(), title: "Open a PDF as a notebook you can write on" }, icon("page"), "Import PDF"),
-        h("button", { class: "btn ghost", onclick: () => this.newFolder(folderId) }, icon("folder"), "New folder"),
       );
     }
     const results = h("section", { class: "content", "aria-live": "polite" });
@@ -306,7 +306,7 @@ export class LibraryScreen {
             ? ["No favourites yet", "Star a notebook or folder from its ⋯ menu to keep it close at hand."]
             : v.kind === "folder"
               ? ["This folder is empty", "Create a notebook here, or move one in from its ⋯ menu."]
-              : ["Your shelf is empty", "Create your first notebook — pick a cover, choose your paper and start writing."];
+              : ["Your shelf is empty", "Start a notebook, a daftar annossous, or write on a PDF."];
       return [
         h(
           "div",
@@ -314,23 +314,16 @@ export class LibraryScreen {
           h("div", { class: "empty-art", html: EMPTY_ART }),
           h("h2", {}, title),
           h("p", {}, text),
-          canCreate
-            ? h(
-                "div",
-                { class: "empty-actions" },
-                h("button", { class: "btn primary", onclick: () => this.newNotebook(folderId) }, icon("plus"), "New notebook"),
-                h("button", { class: "btn", onclick: () => this.pdfInput.click() }, icon("page"), "Import a PDF"),
-              )
-            : null,
+          canCreate ? h("div", { class: "create-cards" }, ...this.createOptions(folderId).map((o) => this.createItem(o, "create-card"))) : null,
         ),
       ];
     }
     const tile = canCreate
       ? h(
           "button",
-          { class: "new-tile", onclick: () => this.newNotebook(v.kind === "folder" ? v.id : null), "aria-label": "New notebook" },
+          { class: "new-tile", "aria-label": "New…", "aria-haspopup": "menu", onclick: (e: Event) => this.createMenu(e.currentTarget as HTMLElement, v.kind === "folder" ? v.id : null) },
           h("span", { class: "new-tile-plus" }, icon("plus")),
-          h("span", {}, "New notebook"),
+          h("span", {}, "New…"),
         )
       : null;
     return [h("div", { class: "grid" }, tile, ...folders.map((f) => this.folderCard(f)), ...notebooks.map((n) => this.notebookCard(n)))];
@@ -476,6 +469,60 @@ export class LibraryScreen {
     } catch (e) {
       reportError(e);
     }
+  }
+
+  /** Everything the library can create, for the "New" menu and the empty library. */
+  private createOptions(folderId: string | null): { id: string; icon: Parameters<typeof icon>[0]; title: string; sub: string; key?: string; action: () => void }[] {
+    return [
+      { id: "notebook", icon: "book", title: "Notebook", sub: "Choose a cover, paper and page size", key: "N", action: () => void this.newNotebook(folderId) },
+      { id: "daftar", icon: "docs", title: "Daftar annossous", sub: "دفتر النصوص · your lesson log by class", action: () => void this.newDaftar(folderId) },
+      { id: "pdf", icon: "page", title: "Import a PDF", sub: "Open any PDF and write on it", action: () => this.pdfInput.click() },
+      { id: "folder", icon: "folder", title: "Folder", sub: "Group your documents", action: () => void this.newFolder(folderId) },
+    ];
+  }
+
+  private createItem(o: ReturnType<LibraryScreen["createOptions"]>[number], cls: string, after?: () => void): HTMLElement {
+    return h(
+      "button",
+      { class: `${cls} create-${o.id}`, role: cls === "create-item" ? "menuitem" : undefined, onclick: () => (after?.(), o.action()) },
+      h("span", { class: "create-icon" }, icon(o.icon)),
+      h("span", { class: "create-text" }, h("span", { class: "create-title" }, o.title), h("span", { class: "create-sub" }, o.sub)),
+      o.key ? h("kbd", { class: "menu-key" }, o.key) : null,
+    );
+  }
+
+  /** The "New" menu: a short list of what can be created, each with a line saying what it is. */
+  private createMenu(anchor: HTMLElement, folderId: string | null) {
+    const open = document.querySelector(".create-menu");
+    open?.remove();
+    if (open && anchor.getAttribute("aria-expanded") === "true") {
+      anchor.setAttribute("aria-expanded", "false");
+      return;
+    }
+    const close = () => {
+      menu.remove();
+      anchor.setAttribute("aria-expanded", "false");
+      document.removeEventListener("pointerdown", outside, true);
+      document.removeEventListener("keydown", onKey, true);
+    };
+    const menu = h("div", { class: "create-menu", role: "menu", "aria-label": "Create" }, ...this.createOptions(folderId).map((o) => this.createItem(o, "create-item", close)));
+    const outside = (e: Event) => !menu.contains(e.target as Node) && !anchor.contains(e.target as Node) && close();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        close();
+        anchor.focus();
+      }
+    };
+    document.body.append(menu);
+    const r = anchor.getBoundingClientRect();
+    const below = r.bottom + 8 + menu.offsetHeight < window.innerHeight;
+    menu.style.top = `${below ? r.bottom + 8 : Math.max(8, r.top - 8 - menu.offsetHeight)}px`;
+    menu.style.left = `${Math.max(8, Math.min(window.innerWidth - menu.offsetWidth - 8, r.left))}px`;
+    anchor.setAttribute("aria-expanded", "true");
+    document.addEventListener("pointerdown", outside, true);
+    document.addEventListener("keydown", onKey, true);
+    (menu.querySelector("button") as HTMLElement | null)?.focus();
   }
 
   private async newDaftar(folderId: string | null) {

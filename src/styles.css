@@ -2867,3 +2867,102 @@ select option {
 .header-left {
   overflow: hidden;
 }
+
+/* ------------------------------------------------ library: create menu */
+.new-btn {
+  justify-content: center;
+}
+.new-caret .icon,
+.new-caret svg {
+  width: 14px;
+  height: 14px;
+  opacity: 0.8;
+}
+.create-menu {
+  position: fixed;
+  z-index: 70;
+  width: 340px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  animation: pop-in 0.15s var(--ease);
+}
+.create-item,
+.create-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text);
+  text-align: start;
+}
+.create-item:hover,
+.create-item:focus-visible {
+  background: var(--surface-2);
+  outline: none;
+}
+.create-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.create-icon .icon,
+.create-icon svg {
+  width: 19px;
+  height: 19px;
+}
+.create-daftar .create-icon {
+  background: color-mix(in srgb, #7c3aed 14%, transparent);
+  color: #7c3aed;
+}
+.create-pdf .create-icon {
+  background: color-mix(in srgb, #dc2626 13%, transparent);
+  color: #dc2626;
+}
+.create-folder .create-icon {
+  background: color-mix(in srgb, #ca8a04 15%, transparent);
+  color: #b45309;
+}
+.create-text {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.create-title {
+  font-weight: 650;
+  font-size: 14px;
+}
+.create-sub {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.create-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 260px));
+  gap: 10px;
+  justify-content: center;
+  margin-top: 8px;
+}
+.create-card {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 14px;
+  transition: border-color 0.15s ease, transform 0.2s var(--ease), box-shadow 0.2s ease;
+}
+.create-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
