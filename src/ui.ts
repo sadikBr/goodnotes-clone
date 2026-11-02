@@ -329,7 +329,8 @@ export function popupMenu(anchor: HTMLElement, items: MenuItem[]) {
   openMenu = { anchor, close };
   anchor.setAttribute("aria-expanded", "true");
   document.addEventListener("keydown", onKey, true);
-  setTimeout(() => document.addEventListener("pointerdown", dismiss, true));
+  // The press that opened the menu is over (menus open on click), so listen right away.
+  document.addEventListener("pointerdown", dismiss, true);
   (menu.querySelector("button") as HTMLButtonElement | null)?.focus();
 }
 

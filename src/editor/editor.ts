@@ -1168,6 +1168,12 @@ export class EditorScreen {
   private drawerPinned = getPref(DRAWER_KEY, "auto", ["auto", "pinned"]) === "pinned";
   private drawerOpen = this.drawerPinned;
 
+  /** True while a menu, picker or the (unpinned) options drawer is open. */
+  private menuOpen(): boolean {
+    if (this.drawerOpen && !this.drawerPinned) return true;
+    return !!document.querySelector(".popup-menu, .tool-popover, .template-popover, .color-popover");
+  }
+
   /** Opens or closes the tool drawer; tapping the active tool does this. */
   private toggleDrawer(open = !this.drawerOpen) {
     if (open === this.drawerOpen) return;
@@ -1985,9 +1991,24 @@ export class EditorScreen {
 
   private bindCanvas() {
     const c = this.canvas;
+    // A tap on the page while a menu or the options drawer is open only
+    // closes it: nothing is drawn. This runs before the menus close
+    // themselves, so it can still see them.
+    let dismissTap = false;
+    window.addEventListener(
+      "pointerdown",
+      (e) => {
+        dismissTap = this.root.isConnected && this.scroller.contains(e.target as Node) && this.menuOpen();
+      },
+      true,
+    );
     c.addEventListener("pointerdown", (e) => {
-      // An unpinned drawer tucks away as soon as you touch the page.
-      if (this.drawerOpen && !this.drawerPinned) this.toggleDrawer(false);
+      if (dismissTap) {
+        dismissTap = false;
+        e.preventDefault();
+        if (this.drawerOpen && !this.drawerPinned) this.toggleDrawer(false);
+        return;
+      }
       this.onDown(e);
       // While writing, the floating pills fade so they never get in the way.
       if (this.gesture) this.root.classList.add("drawing");

@@ -147,10 +147,8 @@ export function popover(anchor: HTMLElement, content: HTMLElement, cls = ""): ()
   panel.style.left = `${Math.max(8, Math.min(window.innerWidth - panel.offsetWidth - 8, r.left + r.width / 2 - panel.offsetWidth / 2))}px`;
   anchor.setAttribute("aria-expanded", "true");
   openPopover = { anchor, close };
-  setTimeout(() => {
-    document.addEventListener("pointerdown", onOutside, true);
-    document.addEventListener("keydown", onKey, true);
-  });
+  document.addEventListener("pointerdown", onOutside, true);
+  document.addEventListener("keydown", onKey, true);
   return close;
 }
 
