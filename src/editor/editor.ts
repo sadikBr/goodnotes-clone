@@ -36,6 +36,7 @@ import {
 } from "./geometry";
 import { inkToTextDialog } from "./inkToText";
 import { cachedBackground, renderBackground } from "./pdfRender";
+import { MM, Ruler, type RulerEdge } from "./ruler";
 import { Laser, LASER_CORE_FADE_MS, LASER_HOLD_MS, type LaserLayers, type LaserMode } from "./laser";
 import { buildVectorPdf, type PdfPageInput } from "./pdfExport";
 import { continueList, currentList, toggleList, type ListKind } from "./textFormat";
@@ -113,7 +114,7 @@ const EXPORT_SCALE: Record<ExportFormat, number> = { pdf: 3, png: 3, pptx: 2 };
 const MAX_UNDO = 100;
 
 type Gesture =
-  | { type: "draw"; tool: "pen" | "highlighter" | "shape"; points: Pt[]; times: number[]; preview: ShapeEl | null; holdTimer: number; held: Held | null }
+  | { type: "draw"; tool: "pen" | "highlighter" | "shape"; points: Pt[]; times: number[]; preview: ShapeEl | null; holdTimer: number; held: Held | null; ruler?: { edge: RulerEdge; offset: number } }
   | { type: "erase"; changed: boolean; last: P2 | null }
   | { type: "lasso"; points: P2[] }
   | { type: "laser" }
@@ -186,6 +187,20 @@ export class EditorScreen {
   private penStyle: PenStyle = getPref(PEN_STYLE_KEY, "fountain", PEN_STYLES.map((p) => p.id));
   private shapeKind: ShapeKind = getPref(SHAPE_KIND_KEY, "auto", SHAPE_KINDS.map((k) => k.id));
   private shapeFill = false;
+  /** On-page ruler (an overlay, never part of the page). */
+  private ruler = new Ruler({
+    toPage: (x, y) => this.point({ clientX: x, clientY: y }),
+    zoom: () => this.zoom,
+    viewWidth: () => this.scroller.clientWidth,
+    pageOrigin: () => {
+      const layer = this.rulerLayer.getBoundingClientRect();
+      const page = this.canvas.getBoundingClientRect();
+      return [page.left - layer.left, page.top - layer.top];
+    },
+  });
+  /** The ruler floats in its own layer over the visible area, so it never changes scrolling. */
+  private rulerLayer = h("div", { class: "ruler-layer" });
+  private rulerBtn = h("button", { class: "icon-btn ruler-btn", "aria-label": "Ruler", title: "Ruler (R)", "aria-pressed": "false", onclick: () => this.toggleRuler() }, icon("ruler"));
   private penOnlyBtn = h("button", { class: "icon-btn pen-only-btn", "aria-label": "Pen-only mode", onclick: () => this.setPenOnly(!this.penOnly, true) }, icon("stylus"));
   private hiddenIds = new Set<string>();
   private images: ImageCache = new Map();
@@ -227,10 +242,11 @@ export class EditorScreen {
     this.root.append(
       h("header", { class: "editor-header" }, this.headerLeft(), this.toolbar, this.headerRight()),
       this.optionsBar,
-      h("div", { class: "editor-body" }, h("aside", { class: "page-sidebar" }, this.pageList, h("button", { class: "btn add-page", onclick: () => this.addPage(this.pages.length) }, icon("plus"), "Add page")), h("div", { class: "canvas-area" }, this.scroller, this.statusBar, this.laserLayer, this.laserDot)),
+      h("div", { class: "editor-body" }, h("aside", { class: "page-sidebar" }, this.pageList, h("button", { class: "btn add-page", onclick: () => this.addPage(this.pages.length) }, icon("plus"), "Add page")), h("div", { class: "canvas-area" }, this.scroller, this.statusBar, this.rulerLayer, this.laserLayer, this.laserDot)),
       this.fileInput,
     );
     this.pageWrap.append(this.selectionBar);
+    this.rulerLayer.append(this.ruler.el);
     this.bindCanvas();
     this.fileInput.addEventListener("change", () => this.insertImageFile(this.fileInput.files?.[0]));
     this.scroller.addEventListener("wheel", (e) => this.onWheel(e), { passive: false });
@@ -284,6 +300,7 @@ export class EditorScreen {
     if (key === "escape") return this.consume(e, () => this.clearSelection());
     if (key === "pagedown" || key === "arrowright") return this.consume(e, () => this.goTo(this.index + 1));
     if (key === "pageup" || key === "arrowleft") return this.consume(e, () => this.goTo(this.index - 1));
+    if (key === "r") return this.consume(e, () => this.toggleRuler());
     const tool = TOOLS.find((t) => t.key === key && t.key !== " ");
     if (tool) return this.consume(e, () => this.setTool(tool.id));
     return false;
@@ -540,6 +557,7 @@ export class EditorScreen {
   private onScroll() {
     if (!this.selectionBar.hidden) this.positionSelectionBar();
     if (this.tool === "laser") this.renderLaser();
+    if (this.ruler.visible) this.ruler.layout();
     window.clearTimeout(this.scrollTimer);
     this.scrollTimer = window.setTimeout(() => {
       if (this.gesture || this.editing || this.nav || performance.now() < this.ignoreScrollUntil) return;
@@ -586,6 +604,7 @@ export class EditorScreen {
       h("button", { class: "icon-btn", "aria-label": "Insert image", title: "Insert image", onclick: () => this.fileInput.click() }, icon("image")),
       this.exportButton(),
       h("span", { class: "divider" }),
+      this.rulerBtn,
       this.penOnlyBtn,
     );
   }
@@ -742,6 +761,30 @@ export class EditorScreen {
       ]),
     );
     return btn;
+  }
+
+  /** Keeps the ruler layer over the visible page area. */
+  private placeRulerLayer() {
+    const area = this.rulerLayer.parentElement!.getBoundingClientRect();
+    const view = this.scroller.getBoundingClientRect();
+    const s = this.rulerLayer.style;
+    s.left = `${view.left - area.left}px`;
+    s.top = `${view.top - area.top}px`;
+    s.width = `${this.scroller.clientWidth}px`;
+    s.height = `${this.scroller.clientHeight}px`;
+  }
+
+  /** Shows the ruler in the middle of the view, or hides it. */
+  private toggleRuler() {
+    if (this.ruler.visible) this.ruler.hide();
+    else {
+      this.placeRulerLayer();
+      const v = this.scroller.getBoundingClientRect();
+      const [x, y] = this.point({ clientX: v.left + v.width / 2, clientY: v.top + v.height / 2 });
+      this.ruler.show([Math.min(Math.max(x, 0), this.page.width), Math.min(Math.max(y, 0), this.page.height)]);
+    }
+    this.rulerBtn.classList.toggle("active", this.ruler.visible);
+    this.rulerBtn.setAttribute("aria-pressed", String(this.ruler.visible));
   }
 
   private renderPenOnlyButton() {
@@ -1233,6 +1276,11 @@ export class EditorScreen {
   }
 
   private onWheel(e: WheelEvent) {
+    if (!e.ctrlKey && this.ruler.inWheelSession()) {
+      e.preventDefault();
+      this.ruler.wheelRotate(e);
+      return;
+    }
     if (!(e.ctrlKey || e.metaKey)) return;
     e.preventDefault();
     this.zoomAt(this.zoom * Math.exp(-e.deltaY * 0.0025), { x: e.clientX, y: e.clientY });
@@ -1270,6 +1318,10 @@ export class EditorScreen {
     this.updateStatus();
     if (this.editing) this.positionEditor();
     if (this.tool === "laser") this.renderLaser();
+    if (this.ruler.visible) {
+      this.placeRulerLayer();
+      this.ruler.layout();
+    }
   }
 
   private get pixelScale() {
@@ -1589,15 +1641,23 @@ export class EditorScreen {
         return; // no page redraw for the laser
       case "pen":
       case "highlighter":
-      case "shape":
-        if (tool === "shape" && this.shapeKind !== "auto") {
+      case "shape": {
+        // Starting next to the ruler: the stroke runs along its edge.
+        const edge = this.ruler.edgeNear([x, y], 26 / this.zoom);
+        if (edge) {
+          // Ink sits against the edge (a line shape is centred on it too).
+          const offset = this.widths[tool] / 2 + 0.5 / this.zoom;
+          const [px, py] = Ruler.project(edge, [x, y], offset);
+          this.gesture = { type: "draw", tool, points: [[px, py, this.pressure(e)]], times: [e.timeStamp], preview: null, holdTimer: 0, held: null, ruler: { edge, offset } };
+        } else if (tool === "shape" && this.shapeKind !== "auto") {
           this.gesture = { type: "shape", start: [x, y], preview: null };
-          break;
+        } else {
+          // Freehand ink; with the shape tool in auto mode it is recognised on lift.
+          this.gesture = { type: "draw", tool, points: [[x, y, this.pressure(e)]], times: [e.timeStamp], preview: null, holdTimer: 0, held: null };
+          this.armHold();
         }
-        // Freehand ink; with the shape tool in auto mode it is recognised on lift.
-        this.gesture = { type: "draw", tool, points: [[x, y, this.pressure(e)]], times: [e.timeStamp], preview: null, holdTimer: 0, held: null };
-        this.armHold();
         break;
+      }
       case "eraser":
         this.gesture = { type: "erase", changed: false, last: null };
         this.eraseAlong([x, y]);
@@ -1695,13 +1755,17 @@ export class EditorScreen {
           break;
         }
         for (const s of samples) {
-          const [x, y] = this.point(s);
+          let [x, y] = this.point(s);
+          if (g.ruler) [x, y] = Ruler.project(g.ruler.edge, [x, y], g.ruler.offset);
           const last = g.points[g.points.length - 1];
           if (Math.hypot(x - last[0], y - last[1]) < 0.4 / this.zoom) continue;
           g.points.push([x, y, this.pressure(s)]);
           g.times.push(s.timeStamp);
         }
-        this.armHold();
+        if (g.ruler) {
+          const [a, b] = this.rulerExtent(g);
+          this.ruler.setReadout(`${(Math.hypot(b[0] - a[0], b[1] - a[1]) / (10 * MM)).toFixed(1)} cm`);
+        } else this.armHold();
         break;
       }
       case "erase":
@@ -1781,6 +1845,19 @@ export class EditorScreen {
     } else shape = recognizeShape(pts) ?? detectBrace(pts);
     if (!shape) return null;
     return { id: newId(), z: nextZ(this.elements), kind: "shape", shape, color: this.colors[g.tool], width: this.widths[g.tool], fill: null };
+  }
+
+  /** The two furthest points of a stroke drawn along the ruler. */
+  private rulerExtent(g: Extract<Gesture, { type: "draw" }>): [P2, P2] {
+    const dir = g.ruler!.edge.dir;
+    let lo = g.points[0];
+    let hi = g.points[0];
+    const t = (p: Pt) => p[0] * dir[0] + p[1] * dir[1];
+    for (const p of g.points) {
+      if (t(p) < t(lo)) lo = p;
+      if (t(p) > t(hi)) hi = p;
+    }
+    return [[lo[0], lo[1]], [hi[0], hi[1]]];
   }
 
   /** The straight highlighter stroke for a held highlight's line. */
@@ -1892,7 +1969,14 @@ export class EditorScreen {
         window.clearTimeout(g.holdTimer);
         if (g.held) window.clearTimeout(g.held.stillTimer);
         let shape = g.preview;
-        if (!shape && g.tool === "shape") shape = this.refine(g);
+        if (g.ruler) {
+          this.ruler.setReadout(null);
+          // Along the ruler the shape tool makes a clean line between the extremes.
+          if (g.tool === "shape") {
+            const [a, b] = this.rulerExtent(g);
+            shape = { id: newId(), z: 0, kind: "shape", shape: { kind: "line", points: [a, b] }, color: this.colors.shape, width: this.widths.shape, fill: null };
+          }
+        } else if (!shape && g.tool === "shape") shape = this.refine(g);
         this.gesture = null;
         if (shape && g.tool === "highlighter" && shape.shape.kind === "line") {
           this.addElement({ ...this.straightHighlight(g, shape.shape.points), id: newId(), z: nextZ(this.elements) });
@@ -2052,6 +2136,7 @@ export class EditorScreen {
   }
 
   private cancelGesture() {
+    this.ruler.setReadout(null);
     const g = this.gesture;
     if (g?.type === "draw") {
       window.clearTimeout(g.holdTimer);
