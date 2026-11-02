@@ -2,7 +2,7 @@
 # Installs a prebuilt Inkleaf release binary on Arch Linux.
 # Usage: put this file next to inkleaf-<version>-x86_64.tar.gz and run `makepkg -si`.
 pkgname=inkleaf-bin
-pkgver=0.7.1
+pkgver=0.7.2
 pkgrel=1
 pkgdesc="Handwritten note-taking app: notebooks, pen and shapes, handwriting fonts, PDF/PowerPoint export"
 arch=('x86_64')
