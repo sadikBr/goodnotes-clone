@@ -746,23 +746,42 @@ button {
 .page-canvas[data-tool="laser"] {
   cursor: none;
 }
-/* Laser pointer: its own layer over the visible area, and a dot element. */
+/* Laser pointer: glow, tube and core layers over the visible area, and a
+   pointer dot. The glow's transparency comes from its layer. */
 .laser-layer {
   position: absolute;
   z-index: 6;
   pointer-events: none;
+}
+.laser-layer canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.laser-glow {
+  opacity: 0.28;
+}
+.laser-layer.fading .laser-glow,
+.laser-layer.fading .laser-tube {
+  opacity: 0;
+  transition: opacity 300ms ease-out;
+}
+.laser-layer.fading .laser-core {
+  opacity: 0;
+  transition: opacity 480ms ease-in;
 }
 .laser-dot {
   position: absolute;
   left: 0;
   top: 0;
   z-index: 7;
-  width: 11px;
-  height: 11px;
-  margin: -5.5px 0 0 -5.5px;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
   border-radius: 50%;
-  background: var(--laser, #ef4444);
-  box-shadow: 0 0 8px 2px color-mix(in srgb, var(--laser, #ef4444) 55%, transparent);
+  background: var(--laser, #ff1f1f);
+  box-shadow: 0 0 0 2.5px rgba(120, 120, 120, 0.45), 0 0 0 3.5px rgba(255, 255, 255, 0.5);
   pointer-events: none;
   will-change: transform;
 }
