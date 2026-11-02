@@ -179,7 +179,22 @@ export class EditorScreen {
   private ctx = this.canvas.getContext("2d")!;
   private cache = document.createElement("canvas");
   private pageWrap = h("div", { class: "page-wrap" }, this.canvas);
-  private scroller = h("div", { class: "page-scroller" }, this.pageWrap);
+  /** One slot per page, stacked for continuous scrolling. */
+  private column = h("div", { class: "page-column" });
+  private scroller = h("div", { class: "page-scroller" }, this.column);
+  private slots: HTMLElement[] = [];
+  /** Elements of every loaded page; the active page's live list is `elements`. */
+  private elementCache = new Map<string, El[]>();
+  private history = new Map<string, { undo: string[]; redo: string[] }>();
+  /** Id of the page whose elements are live in `elements`. */
+  private activeId: string | null = null;
+  private visibleSlots = new Set<number>();
+  private observer: IntersectionObserver | null = null;
+  private staticZoom = 0;
+  private staticTimer = 0;
+  private scrollTimer = 0;
+  /** Scrolls we cause ourselves shouldn't change the current page. */
+  private ignoreScrollUntil = 0;
   private pageList = h("ol", { class: "page-list", "aria-label": "Pages" });
   private toolbar = h("div", { class: "toolbar", role: "toolbar", "aria-label": "Tools" });
   private statusBar = h("div", { class: "status-bar" });
@@ -199,6 +214,7 @@ export class EditorScreen {
     this.bindCanvas();
     this.fileInput.addEventListener("change", () => this.insertImageFile(this.fileInput.files?.[0]));
     this.scroller.addEventListener("wheel", (e) => this.onWheel(e), { passive: false });
+    this.scroller.addEventListener("scroll", () => this.onScroll(), { passive: true });
     window.addEventListener("resize", () => this.root.isConnected && this.layout());
   }
 
@@ -267,29 +283,192 @@ export class EditorScreen {
     return this.pages[this.index];
   }
 
-  private async loadPage(i: number, fit = false) {
+  /**
+   * Loads page `i` (if needed), makes it the live page and, by default,
+   * scrolls it into view.
+   */
+  private async loadPage(i: number, fit = false, scroll = true) {
     if (i < 0 || i >= this.pages.length) return;
     await this.flush();
-    this.index = i;
-    try {
-      this.elements = fromStored(await api.elements(this.page.id));
-      void this.loadFontsFor(this.elements);
-    } catch (e) {
-      reportError(e);
-      this.elements = [];
+    const id = this.pages[i].id;
+    if (!this.elementCache.has(id)) {
+      try {
+        this.elementCache.set(id, fromStored(await api.elements(id)));
+      } catch (e) {
+        reportError(e);
+        this.elementCache.set(id, []);
+      }
     }
-    this.undoStack = [];
-    this.redoStack = [];
-    this.selection.clear();
-    this.renderPageList();
+    if (this.slots.length !== this.pages.length) this.buildColumn();
+    this.activate(i);
+    void this.loadFontsFor(this.elements);
     if (fit) this.fitWidth();
-    else this.layout();
-    this.scroller.scrollTop = 0;
-    this.updateStatus();
+    if (scroll) this.scrollToPage(i);
   }
 
   private goTo(i: number) {
-    if (i >= 0 && i < this.pages.length && i !== this.index) this.loadPage(i);
+    if (i < 0 || i >= this.pages.length) return;
+    if (i === this.index && this.activeId) this.scrollToPage(i);
+    else void this.loadPage(i);
+  }
+
+  /** Creates one slot per page and watches which ones are on screen. */
+  private buildColumn() {
+    this.observer?.disconnect();
+    this.visibleSlots.clear();
+    this.slots = this.pages.map((_, i) => {
+      const slot = h("div", { class: "page-slot", "data-index": String(i) });
+      slot.addEventListener("pointerdown", (e) => this.onSlotDown(e, i));
+      return slot;
+    });
+    this.column.replaceChildren(...this.slots);
+    this.sizeSlots();
+    this.observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const i = Number((entry.target as HTMLElement).dataset.index);
+          if (entry.isIntersecting) {
+            this.visibleSlots.add(i);
+            void this.ensureStatic(i);
+          } else {
+            this.visibleSlots.delete(i);
+            // Free the render of pages far off screen.
+            if (i !== this.index) this.slots[i]?.replaceChildren();
+          }
+        }
+      },
+      { root: this.scroller, rootMargin: "60% 0px" },
+    );
+    for (const slot of this.slots) this.observer.observe(slot);
+  }
+
+  private sizeSlots() {
+    this.pages.forEach((p, i) => {
+      const slot = this.slots[i];
+      if (!slot) return;
+      slot.style.width = `${p.width * this.zoom}px`;
+      slot.style.height = `${p.height * this.zoom}px`;
+      slot.style.background = p.paperColor;
+    });
+  }
+
+  /**
+   * Makes page `i` the live, editable page: the previous page keeps its
+   * elements and undo history and is shown as a cached render again.
+   */
+  private activate(i: number) {
+    if (i === this.index && this.activeId === this.pages[i]?.id && this.slots[i]?.contains(this.pageWrap)) return;
+    this.finishTextEdit();
+    if (this.dirty) void this.saveNow();
+    const prevIndex = this.index;
+    if (this.activeId) {
+      this.elementCache.set(this.activeId, this.elements);
+      this.history.set(this.activeId, { undo: this.undoStack, redo: this.redoStack });
+    }
+    this.index = i;
+    const page = this.page;
+    this.activeId = page.id;
+    this.elements = this.elementCache.get(page.id) ?? [];
+    const hist = this.history.get(page.id);
+    this.undoStack = hist?.undo ?? [];
+    this.redoStack = hist?.redo ?? [];
+    this.selection.clear();
+    this.selectionBarKey = "";
+    this.slots[i].replaceChildren(this.pageWrap);
+    if (prevIndex !== i && this.slots[prevIndex] && !this.slots[prevIndex].contains(this.pageWrap)) {
+      if (this.visibleSlots.has(prevIndex)) this.renderStatic(prevIndex);
+      else this.slots[prevIndex].replaceChildren();
+    }
+    this.layout();
+    this.renderPageList();
+    this.updateStatus();
+  }
+
+  /** Loads a visible page's elements (once) and shows a render of it. */
+  private async ensureStatic(i: number) {
+    const page = this.pages[i];
+    if (!page || i === this.index) return;
+    if (!this.elementCache.has(page.id)) {
+      try {
+        const els = fromStored(await api.elements(page.id));
+        if (!this.elementCache.has(page.id)) this.elementCache.set(page.id, els);
+      } catch {
+        return;
+      }
+    }
+    const els = this.elementCache.get(page.id)!;
+    await ensureFonts(els.map((el) => (el.kind === "text" || el.kind === "sticky" ? el.font : undefined)));
+    await preloadImages(els, this.images);
+    if (this.visibleSlots.has(i) && i !== this.index && this.pages[i] === page) this.renderStatic(i);
+  }
+
+  private renderStatic(i: number) {
+    const page = this.pages[i];
+    const els = this.elementCache.get(page.id);
+    const slot = this.slots[i];
+    if (!els || !slot || i === this.index) return;
+    const dpr = window.devicePixelRatio || 1;
+    const scale = Math.min(this.zoom * dpr, 4096 / Math.max(page.width, page.height));
+    const canvas = renderPage(page.template, page.paperColor, page.width, page.height, els, scale, this.images);
+    canvas.className = "page-static";
+    slot.replaceChildren(canvas);
+  }
+
+  /** Re-renders on-screen pages after a zoom change (debounced). */
+  private scheduleStatics() {
+    window.clearTimeout(this.staticTimer);
+    this.staticTimer = window.setTimeout(() => {
+      this.staticZoom = this.zoom;
+      for (const i of this.visibleSlots) if (i !== this.index) this.renderStatic(i);
+    }, 160);
+  }
+
+  private scrollToPage(i: number) {
+    const slot = this.slots[i];
+    if (!slot) return;
+    this.ignoreScrollUntil = performance.now() + 500;
+    this.scroller.scrollTop = slot.offsetTop - 24;
+  }
+
+  /** The page under the middle of the view. */
+  private pageAtViewCentre(): number {
+    const mid = this.scroller.scrollTop + this.scroller.clientHeight / 2;
+    let best = this.index;
+    let bestDist = Infinity;
+    this.slots.forEach((slot, i) => {
+      const top = slot.offsetTop;
+      const bottom = top + slot.offsetHeight;
+      const d = mid < top ? top - mid : mid > bottom ? mid - bottom : 0;
+      if (d < bestDist) {
+        bestDist = d;
+        best = i;
+      }
+    });
+    return best;
+  }
+
+  /** After scrolling settles, the page in view becomes the current page. */
+  private onScroll() {
+    window.clearTimeout(this.scrollTimer);
+    this.scrollTimer = window.setTimeout(() => {
+      if (this.gesture || this.editing || this.nav || performance.now() < this.ignoreScrollUntil) return;
+      const i = this.pageAtViewCentre();
+      if (i === this.index) return;
+      if (this.elementCache.has(this.pages[i].id)) this.activate(i);
+      else void this.loadPage(i, false, false);
+    }, 220);
+  }
+
+  /** Pressing on another page makes it current and continues the gesture there. */
+  private onSlotDown(e: PointerEvent, i: number) {
+    if (this.pageWrap.contains(e.target as Node)) return; // the live page handles itself
+    if ((this.penOnly && e.pointerType !== "pen") || this.tool === "hand") {
+      this.onDown(e);
+      return;
+    }
+    if (!this.elementCache.has(this.pages[i].id)) return;
+    this.activate(i);
+    this.onDown(e);
   }
 
   // ---------------------------------------------------------------- header
@@ -735,7 +914,16 @@ export class EditorScreen {
   }
 
   private async reloadPages(selectIndex: number) {
+    await this.flush();
+    if (this.activeId) {
+      this.elementCache.set(this.activeId, this.elements);
+      this.history.set(this.activeId, { undo: this.undoStack, redo: this.redoStack });
+    }
+    this.activeId = null;
     this.pages = await api.pages(this.notebook.id);
+    const ids = new Set(this.pages.map((p) => p.id));
+    for (const id of [...this.elementCache.keys()]) if (!ids.has(id)) this.elementCache.delete(id);
+    this.buildColumn();
     await this.loadPage(Math.max(0, Math.min(selectIndex, this.pages.length - 1)));
   }
 
@@ -765,10 +953,8 @@ export class EditorScreen {
       await this.flush();
       await api.movePage(p.id, to);
       const currentId = this.page.id;
-      this.pages = await api.pages(this.notebook.id);
-      this.index = this.pages.findIndex((x) => x.id === currentId);
-      this.renderPageList();
-      this.updateStatus();
+      const order = await api.pages(this.notebook.id);
+      await this.reloadPages(order.findIndex((x) => x.id === currentId));
     } catch (e) {
       reportError(e);
     }
@@ -815,7 +1001,9 @@ export class EditorScreen {
       this.rebuildCache();
       this.draw();
       this.scheduleSave(); // refreshes this page's thumbnail
+      this.sizeSlots();
       if (allPages) {
+        for (const i of this.visibleSlots) if (i !== this.index) this.renderStatic(i);
         await this.refreshThumbnails(targets.filter((p) => p.id !== this.page.id));
         toast(`Paper applied to all ${targets.length} pages`);
       }
@@ -875,9 +1063,11 @@ export class EditorScreen {
 
   private fitWidth() {
     if (!this.page) return;
+    const before = this.page;
     const available = Math.max(200, this.scroller.clientWidth - 64);
-    this.zoom = Math.max(0.25, Math.min(2, available / this.page.width));
+    this.zoom = Math.max(0.25, Math.min(2, available / Math.max(...this.pages.map((p) => p.width))));
     this.layout();
+    this.scrollToPage(this.pages.indexOf(before));
   }
 
   private onWheel(e: WheelEvent) {
@@ -898,6 +1088,8 @@ export class EditorScreen {
 
   private layout() {
     if (!this.page) return;
+    this.sizeSlots();
+    if (this.staticZoom !== this.zoom) this.scheduleStatics();
     const dpr = window.devicePixelRatio || 1;
     const w = this.page.width * this.zoom;
     const hgt = this.page.height * this.zoom;
