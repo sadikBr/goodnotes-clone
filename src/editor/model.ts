@@ -52,6 +52,8 @@ export interface TextEl extends Base {
   align?: TextAlign;
   /** Rotation in radians around the box centre. */
   rotation?: number;
+  /** A cover's title or date (re-laid out when the cover design changes). */
+  role?: "cover-title" | "cover-date";
 }
 
 export type TextAlign = "left" | "center" | "right";

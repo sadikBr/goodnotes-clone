@@ -59,7 +59,7 @@ export class MockBackend implements Backend {
   private nb(id: string): Notebook {
     const n = this.s.notebooks.find((x) => x.id === id) ?? fail(`not found: ${id}`);
     const pages = this.s.pages.filter((p) => p.notebookId === id).sort((a, b) => a.position - b.position);
-    return { ...n, pageCount: pages.length, thumbnail: pages[0]?.thumbnail ?? null, hasCover: pages[0]?.template === "cover" };
+    return { ...n, pageCount: pages.length, thumbnail: pages[0]?.thumbnail ?? null, hasCover: !!pages[0] && (pages[0].template === "cover" || pages[0].template.startsWith("cover-")) };
   }
 
   private page(id: string): Page {
@@ -195,7 +195,7 @@ export class MockBackend implements Backend {
   async setNotebookCover(id: string, color: string) {
     this.raw(id).coverColor = color;
     const first = this.s.pages.filter((p) => p.notebookId === id).sort((a, b) => a.position - b.position)[0];
-    if (first?.template === "cover") Object.assign(first, { paperColor: color, thumbnail: null });
+    if (first && (first.template === "cover" || first.template.startsWith("cover-"))) Object.assign(first, { paperColor: color, thumbnail: null });
     this.persist();
   }
 

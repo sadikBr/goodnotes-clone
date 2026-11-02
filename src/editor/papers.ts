@@ -5,6 +5,7 @@
 
 import type { Template } from "../api";
 import { fontCss } from "../fonts";
+import { drawCoverDesign, isCoverTemplate } from "./covers";
 
 /** Inkleaf units per millimetre (units are 1/96 inch). */
 const MM = 96 / 25.4;
@@ -386,160 +387,6 @@ function drawWeeklyPlanner(ctx: Ctx, w: number, h: number, ink: Inks) {
   strong.stroke(ctx, ink.line, 1.2);
 }
 
-// --- cover --------------------------------------------------------------------
-
-/** Mixes a #rrggbb colour with black (amount < 0) or white (amount > 0). */
-function shade(color: string, amount: number): string {
-  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(color.trim());
-  if (!m) return color;
-  const target = amount < 0 ? 0 : 255;
-  const k = Math.abs(amount);
-  const ch = (h: string) => Math.round(parseInt(h, 16) * (1 - k) + target * k);
-  return `rgb(${ch(m[1])}, ${ch(m[2])}, ${ch(m[3])})`;
-}
-
-export interface CoverLayout {
-  spine: number;
-  /** The closure band's left edge and width. */
-  band: { x: number; w: number };
-  /** The label plate. */
-  plate: { x: number; y: number; w: number; h: number };
-  /** Where the title and the date go (text boxes). */
-  title: { x: number; y: number; w: number; h: number };
-  date: { x: number; y: number; w: number };
-  /** The divider between title and date. */
-  divider: number;
-}
-
-/** Layout of a cover page, shared by the drawing and the editable title and date. */
-export function coverLayout(w: number, h: number): CoverLayout {
-  const spine = Math.round(Math.max(30, w * 0.075));
-  const bandW = Math.max(12, w * 0.018);
-  const bandX = w - Math.max(34, w * 0.07) - bandW;
-  // The plate sits in the open area between the spine and the band, in the upper third.
-  const left = spine + 26;
-  const right = bandX - 26;
-  const pw = Math.min(520, (right - left) * 0.84);
-  const ph = Math.max(150, Math.min(220, h * 0.17));
-  const px = left + (right - left - pw) / 2;
-  const py = Math.round(h * (w > h ? 0.26 : 0.22));
-  const pad = 26;
-  const divider = py + ph * 0.66;
-  return {
-    spine,
-    band: { x: bandX, w: bandW },
-    plate: { x: px, y: py, w: pw, h: ph },
-    title: { x: px + pad, y: py + 26, w: pw - 2 * pad, h: divider - py - 34 },
-    date: { x: px + pad, y: divider + 12, w: pw - 2 * pad },
-    divider,
-  };
-}
-
-function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: number) {
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-}
-
-/**
- * A notebook cover in the cover colour: a linen texture, a darker binding
- * spine with stitching, a stitched border, an elastic closure band and a
- * cream label plate for the title (the title and date are editable text).
- */
-function drawCover(ctx: Ctx, w: number, h: number, color: string) {
-  const L = coverLayout(w, h);
-  // Linen: very fine cross threads, light and dark.
-  const light = new Lines();
-  const dark = new Lines();
-  for (let y = 1.5, i = 0; y < h; y += 2.6, i++) (i % 2 ? light : dark).h(y, 0, w);
-  for (let x = 1.5, i = 0; x < w; x += 2.6, i++) (i % 2 ? light : dark).v(x, 0, h);
-  light.stroke(ctx, "rgba(255, 255, 255, 0.025)", 0.8);
-  dark.stroke(ctx, "rgba(0, 0, 0, 0.025)", 0.8);
-  // A soft sheen from the top-left: many very faint layers, so it reads as a
-  // smooth gradient (also in vector PDF export, which has no gradients).
-  ctx.save();
-  const layers = 28;
-  ctx.fillStyle = "rgba(255, 255, 255, 0.0065)";
-  for (let k = 0; k < layers; k++) {
-    const t = 1 - k / layers;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(w * 1.05 * t, 0);
-    ctx.lineTo(0, h * 0.8 * t);
-    ctx.closePath();
-    ctx.fill();
-  }
-  ctx.restore();
-  // Binding spine with a highlight and a crease.
-  ctx.save();
-  ctx.fillStyle = shade(color, -0.28);
-  ctx.fillRect(0, 0, L.spine, h);
-  ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
-  ctx.fillRect(L.spine, 0, 4, h);
-  ctx.fillStyle = "rgba(255, 255, 255, 0.10)";
-  ctx.fillRect(L.spine - 3, 0, 2, h);
-  ctx.restore();
-  // Stitching along the spine and around the cover.
-  const stitch = new Lines();
-  stitch.v(L.spine - 11, 0, h);
-  const inset = 16;
-  stitch.rect(L.spine + inset, inset, w - L.spine - 2 * inset, h - 2 * inset);
-  stitch.stroke(ctx, "rgba(255, 255, 255, 0.42)", 1.2, [5, 4]);
-  // Elastic closure band.
-  ctx.save();
-  ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
-  ctx.fillRect(L.band.x + 3, 0, L.band.w, h);
-  ctx.fillStyle = shade(color, -0.42);
-  ctx.fillRect(L.band.x, 0, L.band.w, h);
-  ctx.fillStyle = "rgba(255, 255, 255, 0.14)";
-  ctx.fillRect(L.band.x + 2, 0, 1.5, h);
-  ctx.restore();
-  // Label plate: a soft shadow, the cream card and an inner border in the cover colour.
-  const p = L.plate;
-  ctx.save();
-  for (let k = 3; k >= 1; k--) {
-    ctx.fillStyle = `rgba(0, 0, 0, ${0.07})`;
-    ctx.beginPath();
-    roundRect(ctx, p.x - k + 2, p.y - k + 4, p.w + 2 * k, p.h + 2 * k, 12 + k);
-    ctx.fill();
-  }
-  ctx.fillStyle = "#fbf8f1";
-  ctx.beginPath();
-  roundRect(ctx, p.x, p.y, p.w, p.h, 12);
-  ctx.fill();
-  ctx.strokeStyle = shade(color, 0.35);
-  ctx.lineWidth = 1.4;
-  ctx.beginPath();
-  roundRect(ctx, p.x + 8, p.y + 8, p.w - 16, p.h - 16, 7);
-  ctx.stroke();
-  // Divider between the title and the date, with a small diamond.
-  ctx.strokeStyle = shade(color, 0.2);
-  ctx.lineWidth = 1;
-  const cx = p.x + p.w / 2;
-  ctx.beginPath();
-  ctx.moveTo(p.x + 40, L.divider);
-  ctx.lineTo(cx - 9, L.divider);
-  ctx.moveTo(cx + 9, L.divider);
-  ctx.lineTo(p.x + p.w - 40, L.divider);
-  ctx.stroke();
-  ctx.fillStyle = shade(color, 0.1);
-  ctx.beginPath();
-  ctx.moveTo(cx, L.divider - 4);
-  ctx.lineTo(cx + 4, L.divider);
-  ctx.lineTo(cx, L.divider + 4);
-  ctx.lineTo(cx - 4, L.divider);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-}
-
 /** Draws the paper colour and the template's lines. */
 export function drawTemplate(ctx: Ctx, template: Template, w: number, h: number, paper: string) {
   ctx.fillStyle = paper;
@@ -622,8 +469,8 @@ export function drawTemplate(ctx: Ctx, template: Template, w: number, h: number,
     case "planner-week":
       drawWeeklyPlanner(ctx, w, h, ink);
       break;
-    case "cover":
-      drawCover(ctx, w, h, paper);
+    default:
+      if (isCoverTemplate(template)) drawCoverDesign(ctx, template, w, h, paper);
       break;
     case "blank":
       break;

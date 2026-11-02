@@ -1,6 +1,7 @@
 // Library screen: folders, notebooks, favourites, trash and search.
 
-import { recolourCover, setUpCover } from "./cover";
+import { applyCover, coverPickerField, setUpCover } from "./cover";
+import { coverDesignOf, coverTemplate, isCoverTemplate, type CoverDesign } from "./editor/covers";
 import { api, PAPER_COLORS, PAPER_SIZES, TEMPLATE_CATEGORIES, TEMPLATES, type Folder, type Library, type Notebook, type Template } from "./api";
 import { confirmDialog, formDialog, h, icon, popupMenu, relativeTime, reportError, toast, type MenuItem } from "./ui";
 
@@ -300,7 +301,8 @@ export class LibraryScreen {
         { name: "size", label: "Page size", type: "select", value: "a4", options: PAPER_SIZES.map((p) => ({ value: p.id, label: p.label })) },
         { name: "orientation", label: "Orientation", type: "select", value: "portrait", options: [{ value: "portrait", label: "Portrait" }, { value: "landscape", label: "Landscape" }] },
         { name: "paper", label: "Paper colour", type: "color-swatches", value: "#fffdf7", colors: PAPER_COLORS },
-        { name: "cover", label: "Cover", type: "color-swatches" },
+        { name: "cover", label: "Cover colour", type: "color-swatches" },
+        coverPickerField("classic"),
       ],
       "Create",
     );
@@ -318,7 +320,12 @@ export class LibraryScreen {
         height: landscape ? size.w : size.h,
         coverPage: true,
       });
-      // The cover's title and date, and its picture for the library.
+      // The chosen cover design, its title and date, and its picture for the library.
+      const design = (r.design || "classic") as CoverDesign;
+      if (design !== "classic") {
+        const [first] = await api.pages(nb.id);
+        await api.setPageTemplate(first.id, coverTemplate(design), r.cover);
+      }
       await setUpCover(nb).catch(reportError);
       this.cb.openNotebook(nb.id);
     } catch (e) {
@@ -368,13 +375,27 @@ export class LibraryScreen {
     if (r) await this.run(() => api.renameNotebook(n.id, r.title));
   }
 
+  /** Pick a cover design and colour (notebooks without a cover can get one). */
   private async changeCover(n: Notebook) {
-    const r = await formDialog("Change cover", [{ name: "cover", label: "Cover", type: "color-swatches", value: n.coverColor }]);
-    if (r)
-      await this.run(async () => {
-        await api.setNotebookCover(n.id, r.cover);
-        await recolourCover(n.id);
-      });
+    let current: CoverDesign | "none" = "none";
+    if (n.hasCover) {
+      const [first] = await api.pages(n.id);
+      if (first && isCoverTemplate(first.template)) current = coverDesignOf(first.template);
+    }
+    const r = await formDialog(
+      "Change cover",
+      [
+        { name: "title", label: "", type: "custom", value: n.title, render: () => h("span", { hidden: true }) },
+        { name: "cover", label: "Cover colour", type: "color-swatches", value: n.coverColor },
+        coverPickerField(current, !n.hasCover),
+      ],
+      "Save",
+    );
+    if (!r) return;
+    await this.run(async () => {
+      if (r.design === "none") await api.setNotebookCover(n.id, r.cover);
+      else await applyCover(n, r.design as CoverDesign, r.cover);
+    });
   }
 
   private async moveNotebook(n: Notebook) {

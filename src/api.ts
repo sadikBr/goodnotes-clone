@@ -26,8 +26,15 @@ export type Template =
   | "storyboard"
   | "planner-day"
   | "planner-week"
-  /** A notebook's cover (page 1 of new notebooks); not offered in the paper picker. */
-  | "cover";
+  /** Notebook cover designs (page 1 of new notebooks); not offered in the paper picker. */
+  | "cover"
+  | "cover-minimal"
+  | "cover-geometric"
+  | "cover-waves"
+  | "cover-marble"
+  | "cover-leather"
+  | "cover-kraft"
+  | "cover-dots";
 
 export type TemplateCategory = "basic" | "notes" | "science" | "writing" | "planner";
 

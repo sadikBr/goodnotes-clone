@@ -171,6 +171,13 @@ pub const TEMPLATES: &[&str] = &[
     "planner-day",
     "planner-week",
     "cover",
+    "cover-minimal",
+    "cover-geometric",
+    "cover-waves",
+    "cover-marble",
+    "cover-leather",
+    "cover-kraft",
+    "cover-dots",
 ];
 
 fn validate_template(t: &str) -> AppResult<()> {
@@ -543,7 +550,7 @@ impl Db {
         // A cover page takes the new colour too (its thumbnail is redrawn by the app).
         conn.execute(
             "UPDATE pages SET paper_color = ?2, thumbnail = NULL, updated_at = ?3
-             WHERE notebook_id = ?1 AND template = 'cover' AND position = 0",
+             WHERE notebook_id = ?1 AND template LIKE 'cover%' AND position = 0",
             params![id, color, now_ms()],
         )?;
         Ok(())
@@ -1122,7 +1129,7 @@ const NOTEBOOK_SELECT: &str =
         (SELECT COUNT(*) FROM pages p WHERE p.notebook_id = n.id),
         (SELECT p.thumbnail FROM pages p WHERE p.notebook_id = n.id ORDER BY p.position LIMIT 1),
         n.created_at, n.updated_at, n.trashed_at,
-        COALESCE((SELECT p.template = 'cover' FROM pages p WHERE p.notebook_id = n.id ORDER BY p.position LIMIT 1), 0)
+        COALESCE((SELECT p.template LIKE 'cover%' FROM pages p WHERE p.notebook_id = n.id ORDER BY p.position LIMIT 1), 0)
      FROM notebooks n LEFT JOIN folders f ON f.id = n.folder_id";
 
 fn notebook_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Notebook> {

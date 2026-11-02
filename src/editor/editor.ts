@@ -38,6 +38,7 @@ import { inkToTextDialog } from "./inkToText";
 import { cachedBackground, renderBackground } from "./pdfRender";
 import { INSTRUMENTS, MM, Ruler, type Guide as EdgeGuide, type InstrumentKind } from "./ruler";
 import { SpeedInk, speedSensitive } from "./ink";
+import { isCoverTemplate } from "./covers";
 import { Laser, LASER_CORE_FADE_MS, LASER_HOLD_MS, type LaserLayers, type LaserMode } from "./laser";
 import { buildVectorPdf, type PdfPageInput } from "./pdfExport";
 import { continueList, currentList, toggleList, type ListKind } from "./textFormat";
@@ -100,7 +101,7 @@ const DEFAULT_WIDTHS: Record<string, number> = { pen: 3, highlighter: 18, eraser
 
 /** Thumbnail scale: covers are drawn sharper, since the library shows them full-size. */
 function thumbScale(page: Page): number {
-  return (page.template === "cover" ? 420 : 200) / page.width;
+  return (isCoverTemplate(page.template) ? 420 : 200) / page.width;
 }
 
 function loadWidths(): Record<string, number> {
@@ -622,7 +623,7 @@ export class EditorScreen {
   /** Shows the current paper as a small preview plus its name. */
   private renderTemplateButton() {
     if (!this.page) return;
-    const label = TEMPLATES.find((t) => t.id === this.page.template)?.label ?? (this.page.template === "cover" ? "Cover" : this.page.template);
+    const label = TEMPLATES.find((t) => t.id === this.page.template)?.label ?? (isCoverTemplate(this.page.template) ? "Cover" : this.page.template);
     this.templateBtn.setAttribute("aria-label", `Page paper: ${label}`);
     this.templateBtn.replaceChildren(
       h("span", { class: "template-thumb" }, templatePreview(this.page.template, this.page.paperColor, 22, 28)),
@@ -1223,11 +1224,11 @@ export class EditorScreen {
     try {
       await this.flush();
       // "All pages" leaves the cover alone, and the cover design isn't a paper for other pages.
-      if (allPages && change.template === "cover") {
+      if (allPages && change.template && isCoverTemplate(change.template)) {
         toast("The cover design stays on the cover — pick a paper on another page to apply it to all pages");
         return;
       }
-      const targets = allPages ? this.pages.filter((p) => p.template !== "cover") : [this.page];
+      const targets = allPages ? this.pages.filter((p) => !isCoverTemplate(p.template)) : [this.page];
       for (const p of targets) {
         const template = change.template ?? p.template;
         await api.setPageTemplate(p.id, template, change.color ?? null);

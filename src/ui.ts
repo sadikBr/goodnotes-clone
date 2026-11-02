@@ -100,10 +100,21 @@ export function reportError(e: unknown) {
   toast(e instanceof Error ? e.message : String(e), "error");
 }
 
-interface Field {
+export interface CustomFieldContext {
+  /** Current values of all fields. */
+  values: Record<string, string>;
+  /** Sets this field's value. */
+  set(value: string): void;
+  /** Called whenever any field changes (e.g. to redraw previews). */
+  onChange(fn: () => void): void;
+}
+
+export interface Field {
   name: string;
   label: string;
-  type?: "text" | "select" | "color-swatches";
+  type?: "text" | "select" | "color-swatches" | "custom";
+  /** Builds a "custom" field. */
+  render?: (ctx: CustomFieldContext) => HTMLElement;
   value?: string;
   /** Options for a "select" field; consecutive options sharing a group go in one <optgroup>. */
   options?: { value: string; label: string; group?: string }[];
@@ -117,6 +128,8 @@ export const COVER_COLORS = ["#2563eb", "#0d9488", "#16a34a", "#ca8a04", "#ea580
 export function formDialog(title: string, fields: Field[], submitLabel = "Save"): Promise<Record<string, string> | null> {
   return new Promise((resolve) => {
     const values: Record<string, string> = {};
+    const listeners: (() => void)[] = [];
+    const changed = () => listeners.forEach((fn) => fn());
     const form = h("form", { class: "dialog-form" });
     const backdrop = h("div", { class: "modal-backdrop" }, h("div", { class: "modal", role: "dialog", "aria-modal": "true", "aria-label": title }, h("h2", {}, title), form));
     const close = (result: Record<string, string> | null) => {
@@ -144,7 +157,10 @@ export function formDialog(title: string, fields: Field[], submitLabel = "Save")
           }
         }
         const select = h("select", { name: f.name }, ...items);
-        select.addEventListener("change", () => (values[f.name] = select.value));
+        select.addEventListener("change", () => {
+          values[f.name] = select.value;
+          changed();
+        });
         if (!f.value && f.options?.length) values[f.name] = f.options[0].value;
         form.append(h("label", {}, h("span", {}, f.label), select));
       } else if (f.type === "color-swatches") {
@@ -157,13 +173,28 @@ export function formDialog(title: string, fields: Field[], submitLabel = "Save")
             values[f.name] = c;
             row.querySelectorAll(".swatch").forEach((s) => s.setAttribute("aria-checked", "false"));
             b.setAttribute("aria-checked", "true");
+            changed();
           });
           row.append(b);
         }
         form.append(h("div", { class: "field" }, h("span", {}, f.label), row));
+      } else if (f.type === "custom" && f.render) {
+        const el = f.render({
+          values,
+          set: (v) => {
+            values[f.name] = v;
+            changed();
+          },
+          onChange: (fn) => listeners.push(fn),
+        });
+        // A custom field without a label only carries a value (or stands alone).
+        form.append(f.label ? h("div", { class: "field" }, h("span", {}, f.label), el) : el);
       } else {
         const input = h("input", { name: f.name, value: f.value ?? "", autocomplete: "off", maxlength: "200" });
-        input.addEventListener("input", () => (values[f.name] = input.value));
+        input.addEventListener("input", () => {
+          values[f.name] = input.value;
+          changed();
+        });
         form.append(h("label", {}, h("span", {}, f.label), input));
       }
     }
