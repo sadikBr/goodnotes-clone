@@ -154,7 +154,7 @@ export class LibraryScreen {
       { class: "sidebar" },
       h("div", { class: "brand" }, h("span", { class: "brand-mark", html: BRAND_MARK }), h("span", { class: "brand-name" }, "Inkleaf")),
       (() => {
-        const b = h("button", { class: "btn primary new-btn", title: "Create a notebook, daftar, PDF or folder", "aria-haspopup": "menu" }, icon("plus"), h("span", { class: "new-label" }, "New"), h("span", { class: "new-caret" }, icon("down")));
+        const b = h("button", { class: "new-btn", title: "Create a notebook, daftar, PDF or folder", "aria-haspopup": "menu" }, h("span", { class: "new-plus" }, icon("plus")), h("span", { class: "new-label" }, "New"), h("span", { class: "new-caret" }, icon("down")));
         b.addEventListener("click", () => this.createMenu(b, folderId));
         return b;
       })(),
@@ -283,8 +283,11 @@ export class LibraryScreen {
     let folders: Folder[] = [];
     let notebooks: Notebook[] = this.data.notebooks;
     if (v.kind === "all") {
-      folders = this.data.folders.filter((f) => f.parentId === null);
-      notebooks = notebooks.filter((n) => n.folderId === null);
+      // Anything whose folder isn't shown (e.g. inside a folder in the trash)
+      // appears at the top level rather than nowhere.
+      const shown = new Set(this.data.folders.map((f) => f.id));
+      folders = this.data.folders.filter((f) => f.parentId === null || !shown.has(f.parentId));
+      notebooks = notebooks.filter((n) => n.folderId === null || !shown.has(n.folderId));
     } else if (v.kind === "favourites") {
       folders = this.data.folders.filter((f) => f.favourite);
       notebooks = notebooks.filter((n) => n.favourite);
@@ -474,9 +477,9 @@ export class LibraryScreen {
   /** Everything the library can create, for the "New" menu and the empty library. */
   private createOptions(folderId: string | null): { id: string; icon: Parameters<typeof icon>[0]; title: string; sub: string; key?: string; action: () => void }[] {
     return [
-      { id: "notebook", icon: "book", title: "Notebook", sub: "Choose a cover, paper and page size", key: "N", action: () => void this.newNotebook(folderId) },
-      { id: "daftar", icon: "docs", title: "Daftar annossous", sub: "دفتر النصوص · your lesson log by class", action: () => void this.newDaftar(folderId) },
-      { id: "pdf", icon: "page", title: "Import a PDF", sub: "Open any PDF and write on it", action: () => this.pdfInput.click() },
+      { id: "notebook", icon: "book", title: "Notebook", sub: "Cover, paper and page size", key: "N", action: () => void this.newNotebook(folderId) },
+      { id: "daftar", icon: "docs", title: "Daftar annossous", sub: "Lesson log for your classes", action: () => void this.newDaftar(folderId) },
+      { id: "pdf", icon: "page", title: "Import a PDF", sub: "Write on any PDF", action: () => this.pdfInput.click() },
       { id: "folder", icon: "folder", title: "Folder", sub: "Group your documents", action: () => void this.newFolder(folderId) },
     ];
   }
@@ -487,7 +490,7 @@ export class LibraryScreen {
       { class: `${cls} create-${o.id}`, role: cls === "create-item" ? "menuitem" : undefined, onclick: () => (after?.(), o.action()) },
       h("span", { class: "create-icon" }, icon(o.icon)),
       h("span", { class: "create-text" }, h("span", { class: "create-title" }, o.title), h("span", { class: "create-sub" }, o.sub)),
-      o.key ? h("kbd", { class: "menu-key" }, o.key) : null,
+      o.key && cls === "create-item" ? h("kbd", { class: "menu-key" }, o.key) : null,
     );
   }
 

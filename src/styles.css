@@ -295,11 +295,6 @@ kbd {
   display: inline-flex;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.12));
 }
-.new-btn {
-  width: 100%;
-  height: 40px;
-  margin-bottom: 14px;
-}
 .nav-item {
   display: flex;
   align-items: center;
@@ -1482,6 +1477,7 @@ kbd {
   .sidebar .sidebar-hint,
   .sidebar .switch,
   .sidebar .new-label,
+  .sidebar .new-caret,
   .sidebar .brand-name,
   .sidebar-section span {
     display: none;
@@ -2869,14 +2865,70 @@ select option {
 }
 
 /* ------------------------------------------------ library: create menu */
+/* The sidebar's New button: a quiet card with a green "+" tile, like a compose button. */
 .new-btn {
-  justify-content: center;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 48px;
+  margin-bottom: 14px;
+  padding: 0 12px 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 650;
+  font-size: 15px;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s ease, box-shadow 0.2s ease, transform 0.15s var(--ease);
+}
+.new-btn:hover,
+.new-btn[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  box-shadow: var(--shadow);
+}
+.new-btn:active {
+  transform: scale(0.98);
+}
+.new-plus {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+}
+:root[data-theme="dark"] .new-plus {
+  color: #0d1f17;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .new-plus {
+    color: #0d1f17;
+  }
+}
+.new-plus .icon,
+.new-plus svg {
+  width: 18px;
+  height: 18px;
+}
+.new-label {
+  flex: 1;
+  text-align: start;
+}
+.new-caret {
+  display: inline-flex;
+  color: var(--muted);
+  transition: transform 0.2s var(--ease);
+}
+.new-btn[aria-expanded="true"] .new-caret {
+  transform: rotate(180deg);
 }
 .new-caret .icon,
 .new-caret svg {
-  width: 14px;
-  height: 14px;
-  opacity: 0.8;
+  width: 15px;
+  height: 15px;
 }
 .create-menu {
   position: fixed;
@@ -2950,16 +3002,23 @@ select option {
 }
 .create-cards {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 260px));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  justify-content: center;
-  margin-top: 8px;
+  width: min(560px, 100%);
+  margin: 10px auto 0;
 }
 .create-card {
+  height: 72px;
   border: 1px solid var(--border);
   background: var(--surface);
-  padding: 14px;
+  padding: 0 14px;
   transition: border-color 0.15s ease, transform 0.2s var(--ease), box-shadow 0.2s ease;
+}
+.create-card .create-title,
+.create-card .create-sub {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .create-card:hover {
   border-color: var(--accent);
