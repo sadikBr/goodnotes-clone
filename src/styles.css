@@ -1439,6 +1439,7 @@ kbd {
 
 .selection-bar {
   position: absolute;
+  width: max-content;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1787,6 +1788,7 @@ kbd {
 }
 .selection-bar .apply-font {
   width: auto;
+  white-space: nowrap;
   gap: 4px;
   padding: 0 8px;
   font-weight: 600;

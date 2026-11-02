@@ -2479,6 +2479,8 @@ export class EditorScreen {
     const visT = Math.max(view.top, pill.height ? pill.bottom : 0) - wrap.top + pad;
     const visB = view.bottom - wrap.top - pad;
     bar.style.maxWidth = `${Math.max(160, visR - visL)}px`;
+    // Measure at the left edge, so the old position doesn't squeeze the bar.
+    bar.style.left = `${visL}px`;
     const bw = bar.offsetWidth;
     const bh = bar.offsetHeight;
     const selL = sel.x * this.zoom;
