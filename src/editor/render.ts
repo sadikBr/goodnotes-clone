@@ -201,6 +201,56 @@ export function steadyHighlight(pts: Pt[], width: number): Pt[] {
   return out;
 }
 
+/**
+ * The curve strokePath draws (quadratics through segment midpoints), as a
+ * polyline of short pieces.
+ */
+export function flattenSmooth(pts: Pt[]): [number, number][] {
+  if (pts.length < 3) return pts.map((p) => [p[0], p[1]]);
+  const out: [number, number][] = [[pts[0][0], pts[0][1]]];
+  let cur: [number, number] = out[0];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const c = pts[i];
+    const end: [number, number] = [(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2];
+    const len = Math.hypot(c[0] - cur[0], c[1] - cur[1]) + Math.hypot(end[0] - c[0], end[1] - c[1]);
+    const n = Math.max(1, Math.min(16, Math.ceil(len / 2)));
+    for (let k = 1; k <= n; k++) {
+      const t = k / n;
+      const u = 1 - t;
+      out.push([u * u * cur[0] + 2 * u * t * c[0] + t * t * end[0], u * u * cur[1] + 2 * u * t * c[1] + t * t * end[1]]);
+    }
+    cur = end;
+  }
+  const last = pts[pts.length - 1];
+  out.push([last[0], last[1]]);
+  return out;
+}
+
+/**
+ * Flat (chisel) highlighter ends: adds a short straight piece of marker just
+ * behind each end, along the end direction. On straight strokes it lies
+ * inside the stroke; when the stroke curls back on a tight turn, it fills
+ * the notch a flat end would otherwise leave. Added as subpaths of the same
+ * path, so it is painted in the same single stroke.
+ */
+function flatEndFillers(ctx: CanvasRenderingContext2D, pts: [number, number][], width: number) {
+  if (pts.length < 2) return;
+  let total = 0;
+  for (let i = 1; i < pts.length; i++) total += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+  const len = Math.min(width / 2, total);
+  const piece = (end: [number, number], towards: [number, number]) => {
+    const dx = towards[0] - end[0];
+    const dy = towards[1] - end[1];
+    const d = Math.hypot(dx, dy);
+    if (d < 1e-6) return;
+    ctx.moveTo(end[0], end[1]);
+    ctx.lineTo(end[0] + (dx / d) * len, end[1] + (dy / d) * len);
+  };
+  // The path's end tangents: towards the neighbouring point at each end.
+  piece(pts[0], pts[1]);
+  piece(pts[pts.length - 1], pts[pts.length - 2]);
+}
+
 export function drawStroke(ctx: CanvasRenderingContext2D, el: StrokeEl) {
   const pts = el.points;
   if (pts.length === 0) return;
@@ -211,12 +261,19 @@ export function drawStroke(ctx: CanvasRenderingContext2D, el: StrokeEl) {
   if (el.tool === "highlighter") {
     ctx.globalAlpha = 0.35;
     ctx.globalCompositeOperation = "multiply";
-    // Round ends: a flat end turned back inside a tight curve leaves a notch
-    // that flickers while drawing.
-    ctx.lineCap = "round";
+    ctx.lineCap = "butt";
     ctx.lineWidth = el.width;
-    strokePath(ctx, steadyHighlight(pts, el.width));
-    ctx.stroke();
+    const steady = steadyHighlight(pts, el.width);
+    // The smoothed curve as many short straight pieces with round joins:
+    // stroking curves that bend tighter than the marker is wide makes the
+    // outline fold over and leave holes.
+    const flat = flattenSmooth(steady);
+    ctx.beginPath();
+    ctx.moveTo(flat[0][0], flat[0][1]);
+    if (flat.length === 1) ctx.lineTo(flat[0][0] + 0.01, flat[0][1]);
+    for (const p of flat.slice(1)) ctx.lineTo(p[0], p[1]);
+    flatEndFillers(ctx, flat, el.width);
+    ctx.stroke(); // one stroke: overlapping parts don't darken
     ctx.restore();
     return;
   }
