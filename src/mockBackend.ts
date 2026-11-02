@@ -22,7 +22,7 @@ import type {
 
 interface State {
   folders: Folder[];
-  notebooks: Omit<Notebook, "pageCount" | "thumbnail">[];
+  notebooks: Omit<Notebook, "pageCount" | "thumbnail" | "hasCover">[];
   pages: Page[];
   elements: Record<string, StoredElement[]>;
 }
@@ -59,7 +59,7 @@ export class MockBackend implements Backend {
   private nb(id: string): Notebook {
     const n = this.s.notebooks.find((x) => x.id === id) ?? fail(`not found: ${id}`);
     const pages = this.s.pages.filter((p) => p.notebookId === id).sort((a, b) => a.position - b.position);
-    return { ...n, pageCount: pages.length, thumbnail: pages[0]?.thumbnail ?? null };
+    return { ...n, pageCount: pages.length, thumbnail: pages[0]?.thumbnail ?? null, hasCover: pages[0]?.template === "cover" };
   }
 
   private page(id: string): Page {
@@ -160,7 +160,10 @@ export class MockBackend implements Backend {
       updatedAt: now,
       trashedAt: null,
     });
-    this.s.pages.push(this.newPage(id, 0, template, input.paperColor ?? "#fffdf7", input.width ?? 794, input.height ?? 1123));
+    const w = input.width ?? 794;
+    const h = input.height ?? 1123;
+    if (input.coverPage) this.s.pages.push(this.newPage(id, 0, "cover", input.coverColor ?? "#3b82f6", w, h));
+    this.s.pages.push(this.newPage(id, input.coverPage ? 1 : 0, template, input.paperColor ?? "#fffdf7", w, h));
     this.persist();
     return this.nb(id);
   }
@@ -191,6 +194,8 @@ export class MockBackend implements Backend {
 
   async setNotebookCover(id: string, color: string) {
     this.raw(id).coverColor = color;
+    const first = this.s.pages.filter((p) => p.notebookId === id).sort((a, b) => a.position - b.position)[0];
+    if (first?.template === "cover") Object.assign(first, { paperColor: color, thumbnail: null });
     this.persist();
   }
 

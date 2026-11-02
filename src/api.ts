@@ -25,7 +25,9 @@ export type Template =
   | "calligraphy"
   | "storyboard"
   | "planner-day"
-  | "planner-week";
+  | "planner-week"
+  /** A notebook's cover (page 1 of new notebooks); not offered in the paper picker. */
+  | "cover";
 
 export type TemplateCategory = "basic" | "notes" | "science" | "writing" | "planner";
 
@@ -87,6 +89,8 @@ export interface Notebook {
   createdAt: number;
   updatedAt: number;
   trashedAt: number | null;
+  /** The first page is a cover (shown full-size in the library). */
+  hasCover: boolean;
 }
 
 export interface Page {
@@ -135,6 +139,8 @@ export interface NewNotebook {
   /** Page size in units of 1/96 inch. */
   width?: number;
   height?: number;
+  /** Start with a cover page in the cover colour. */
+  coverPage?: boolean;
 }
 
 /** Paper sizes in units of 1/96 inch (portrait). */

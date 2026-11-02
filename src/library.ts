@@ -1,5 +1,6 @@
 // Library screen: folders, notebooks, favourites, trash and search.
 
+import { recolourCover, setUpCover } from "./cover";
 import { api, PAPER_COLORS, PAPER_SIZES, TEMPLATE_CATEGORIES, TEMPLATES, type Folder, type Library, type Notebook, type Template } from "./api";
 import { confirmDialog, formDialog, h, icon, popupMenu, relativeTime, reportError, toast, type MenuItem } from "./ui";
 
@@ -242,11 +243,16 @@ export class LibraryScreen {
           ];
       popupMenu(more, items);
     });
-    const cover = h(
-      "div",
-      { class: "nb-cover", style: { background: n.coverColor } },
-      n.thumbnail ? h("img", { src: n.thumbnail, alt: "", class: "nb-thumb" }) : h("div", { class: "nb-label" }, n.title),
-    );
+    // A cover page is the notebook's face: shown full-size. Otherwise the
+    // first page peeks out of a plain cover in the cover colour.
+    const cover =
+      n.hasCover && n.thumbnail
+        ? h("div", { class: "nb-cover full", style: { background: n.coverColor } }, h("img", { src: n.thumbnail, alt: "", class: "nb-face" }))
+        : h(
+            "div",
+            { class: "nb-cover", style: { background: n.coverColor } },
+            n.thumbnail ? h("img", { src: n.thumbnail, alt: "", class: "nb-thumb" }) : h("div", { class: "nb-label" }, n.title),
+          );
     return h(
       "article",
       { class: "card" },
@@ -310,7 +316,10 @@ export class LibraryScreen {
         paperColor: r.paper,
         width: landscape ? size.h : size.w,
         height: landscape ? size.w : size.h,
+        coverPage: true,
       });
+      // The cover's title and date, and its picture for the library.
+      await setUpCover(nb).catch(reportError);
       this.cb.openNotebook(nb.id);
     } catch (e) {
       reportError(e);
@@ -361,7 +370,11 @@ export class LibraryScreen {
 
   private async changeCover(n: Notebook) {
     const r = await formDialog("Change cover", [{ name: "cover", label: "Cover", type: "color-swatches", value: n.coverColor }]);
-    if (r) await this.run(() => api.setNotebookCover(n.id, r.cover));
+    if (r)
+      await this.run(async () => {
+        await api.setNotebookCover(n.id, r.cover);
+        await recolourCover(n.id);
+      });
   }
 
   private async moveNotebook(n: Notebook) {

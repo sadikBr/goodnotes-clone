@@ -98,6 +98,11 @@ const SIZE_SPECS: Record<string, { label: string; min: number; max: number; step
 };
 const DEFAULT_WIDTHS: Record<string, number> = { pen: 3, highlighter: 18, eraser: 14, shape: 3, text: 20, sticky: 18 };
 
+/** Thumbnail scale: covers are drawn sharper, since the library shows them full-size. */
+function thumbScale(page: Page): number {
+  return (page.template === "cover" ? 420 : 200) / page.width;
+}
+
 function loadWidths(): Record<string, number> {
   const out = { ...DEFAULT_WIDTHS };
   try {
@@ -453,9 +458,9 @@ export class EditorScreen {
   private async ensureThumbnail(page: Page) {
     if (page.thumbnail || !page.backgroundAsset) return;
     const els = this.elementCache.get(page.id) ?? [];
-    const bg = await this.backgroundNow(page, 200 / page.width).catch(() => null);
+    const bg = await this.backgroundNow(page, thumbScale(page)).catch(() => null);
     if (page.thumbnail) return;
-    const thumb = renderPage(page.template, page.paperColor, page.width, page.height, els, 200 / page.width, this.images, bg).toDataURL("image/jpeg", 0.82);
+    const thumb = renderPage(page.template, page.paperColor, page.width, page.height, els, thumbScale(page), this.images, bg).toDataURL("image/jpeg", 0.82);
     page.thumbnail = thumb;
     await api.setPageThumbnail(page.id, thumb).catch(() => {});
     const i = this.pages.indexOf(page);
@@ -617,7 +622,7 @@ export class EditorScreen {
   /** Shows the current paper as a small preview plus its name. */
   private renderTemplateButton() {
     if (!this.page) return;
-    const label = TEMPLATES.find((t) => t.id === this.page.template)?.label ?? this.page.template;
+    const label = TEMPLATES.find((t) => t.id === this.page.template)?.label ?? (this.page.template === "cover" ? "Cover" : this.page.template);
     this.templateBtn.setAttribute("aria-label", `Page paper: ${label}`);
     this.templateBtn.replaceChildren(
       h("span", { class: "template-thumb" }, templatePreview(this.page.template, this.page.paperColor, 22, 28)),
@@ -1217,7 +1222,12 @@ export class EditorScreen {
   private async setPaper(change: { template?: Template; color?: string }, allPages: boolean) {
     try {
       await this.flush();
-      const targets = allPages ? this.pages : [this.page];
+      // "All pages" leaves the cover alone, and the cover design isn't a paper for other pages.
+      if (allPages && change.template === "cover") {
+        toast("The cover design stays on the cover — pick a paper on another page to apply it to all pages");
+        return;
+      }
+      const targets = allPages ? this.pages.filter((p) => p.template !== "cover") : [this.page];
       for (const p of targets) {
         const template = change.template ?? p.template;
         await api.setPageTemplate(p.id, template, change.color ?? null);
@@ -1244,8 +1254,8 @@ export class EditorScreen {
     for (const p of pages) {
       const els = fromStored(await api.elements(p.id));
       await preloadImages(els, this.images);
-      const bg = await this.backgroundNow(p, 200 / p.width);
-      const thumb = renderPage(p.template, p.paperColor, p.width, p.height, els, 200 / p.width, this.images, bg).toDataURL("image/jpeg", 0.82);
+      const bg = await this.backgroundNow(p, thumbScale(p));
+      const thumb = renderPage(p.template, p.paperColor, p.width, p.height, els, thumbScale(p), this.images, bg).toDataURL("image/jpeg", 0.82);
       await api.setPageThumbnail(p.id, thumb);
       p.thumbnail = thumb;
     }
@@ -1587,9 +1597,9 @@ export class EditorScreen {
     this.dirty = false;
     const page = this.page;
     const elements = this.elements.map(toStored);
-    const thumbScale = 200 / page.width;
+    const scale = thumbScale(page);
     const bg = page.backgroundAsset && page.backgroundPage !== null ? cachedBackground(page.backgroundAsset, page.backgroundPage)?.canvas ?? null : null;
-    const thumb = renderPage(page.template, page.paperColor, page.width, page.height, this.elements, thumbScale, this.images, bg).toDataURL("image/jpeg", 0.82);
+    const thumb = renderPage(page.template, page.paperColor, page.width, page.height, this.elements, scale, this.images, bg).toDataURL("image/jpeg", 0.82);
     this.saving = this.saving
       .then(async () => {
         await api.saveElements(page.id, elements);

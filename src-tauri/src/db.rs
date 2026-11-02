@@ -54,6 +54,8 @@ pub struct Notebook {
     pub created_at: i64,
     pub updated_at: i64,
     pub trashed_at: Option<i64>,
+    /// Whether the first page is a cover (the library then shows it full-size).
+    pub has_cover: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -120,6 +122,9 @@ pub struct NewNotebook {
     pub paper_color: Option<String>,
     pub width: Option<f64>,
     pub height: Option<f64>,
+    /// Start with a cover page (in the cover colour) before the first paper page.
+    #[serde(default)]
+    pub cover_page: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -165,6 +170,7 @@ pub const TEMPLATES: &[&str] = &[
     "storyboard",
     "planner-day",
     "planner-week",
+    "cover",
 ];
 
 fn validate_template(t: &str) -> AppResult<()> {
@@ -463,6 +469,8 @@ impl Db {
         if let Some(folder) = &input.folder_id {
             ensure_exists(&conn, "folders", folder)?;
         }
+        let cover_color = input.cover_color.clone().unwrap_or_else(|| "#3b82f6".into());
+        validate_color(&cover_color)?;
         let now = now_ms();
         let id = new_id();
         let tx = conn.transaction()?;
@@ -473,24 +481,25 @@ impl Db {
                 id,
                 title,
                 input.folder_id,
-                input.cover_color.clone().unwrap_or_else(|| "#3b82f6".into()),
+                cover_color,
                 template,
                 now
             ],
         )?;
-        tx.execute(
-            "INSERT INTO pages (id, notebook_id, position, template, paper_color, width, height, created_at, updated_at)
-             VALUES (?1, ?2, 0, ?3, ?4, ?5, ?6, ?7, ?7)",
-            params![
-                new_id(),
-                id,
-                template,
-                input.paper_color.clone().unwrap_or_else(|| "#fffdf7".into()),
-                input.width.unwrap_or(DEFAULT_PAGE_WIDTH),
-                input.height.unwrap_or(DEFAULT_PAGE_HEIGHT),
-                now
-            ],
-        )?;
+        let width = input.width.unwrap_or(DEFAULT_PAGE_WIDTH);
+        let height = input.height.unwrap_or(DEFAULT_PAGE_HEIGHT);
+        let mut pages = Vec::new();
+        if input.cover_page {
+            pages.push(("cover".to_string(), cover_color.clone()));
+        }
+        pages.push((template.clone(), input.paper_color.clone().unwrap_or_else(|| "#fffdf7".into())));
+        for (position, (page_template, paper)) in pages.into_iter().enumerate() {
+            tx.execute(
+                "INSERT INTO pages (id, notebook_id, position, template, paper_color, width, height, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
+                params![new_id(), id, position as i64, page_template, paper, width, height, now],
+            )?;
+        }
         tx.commit()?;
         get_notebook(&conn, &id)
     }
@@ -523,13 +532,21 @@ impl Db {
     }
 
     pub fn set_notebook_cover(&self, id: &str, color: &str) -> AppResult<()> {
+        validate_color(color)?;
         let conn = self.conn();
         touch_row(
             &conn,
             "UPDATE notebooks SET cover_color = ?2, updated_at = ?3 WHERE id = ?1",
             id,
             color,
-        )
+        )?;
+        // A cover page takes the new colour too (its thumbnail is redrawn by the app).
+        conn.execute(
+            "UPDATE pages SET paper_color = ?2, thumbnail = NULL, updated_at = ?3
+             WHERE notebook_id = ?1 AND template = 'cover' AND position = 0",
+            params![id, color, now_ms()],
+        )?;
+        Ok(())
     }
 
     pub fn set_notebook_trashed(&self, id: &str, trashed: bool) -> AppResult<()> {
@@ -1104,7 +1121,8 @@ const NOTEBOOK_SELECT: &str =
     "SELECT n.id, n.title, n.folder_id, n.cover_color, n.default_template, n.favourite,
         (SELECT COUNT(*) FROM pages p WHERE p.notebook_id = n.id),
         (SELECT p.thumbnail FROM pages p WHERE p.notebook_id = n.id ORDER BY p.position LIMIT 1),
-        n.created_at, n.updated_at, n.trashed_at
+        n.created_at, n.updated_at, n.trashed_at,
+        COALESCE((SELECT p.template = 'cover' FROM pages p WHERE p.notebook_id = n.id ORDER BY p.position LIMIT 1), 0)
      FROM notebooks n LEFT JOIN folders f ON f.id = n.folder_id";
 
 fn notebook_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Notebook> {
@@ -1120,6 +1138,7 @@ fn notebook_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Notebook> {
         created_at: r.get(8)?,
         updated_at: r.get(9)?,
         trashed_at: r.get(10)?,
+        has_cover: r.get(11)?,
     })
 }
 
@@ -1436,6 +1455,33 @@ mod tests {
         assert_eq!(copied.len(), 1);
         assert_ne!(copied[0].id, "e1");
         assert_eq!(copied[0].data["id"], json!(copied[0].id));
+    }
+
+    #[test]
+    fn new_notebooks_can_start_with_a_cover_in_the_cover_colour() {
+        let db = Db::open_in_memory().unwrap();
+        let nb = db
+            .create_notebook(&NewNotebook {
+                title: "Biology".into(),
+                folder_id: None,
+                cover_color: Some("#0d9488".into()),
+                template: Some("grid".into()),
+                paper_color: None,
+                width: None,
+                height: None,
+                cover_page: true,
+            })
+            .unwrap();
+        assert!(nb.has_cover);
+        assert_eq!(nb.page_count, 2);
+        assert_eq!(nb.default_template, "grid");
+        let pages = db.pages(&nb.id).unwrap();
+        assert_eq!((pages[0].template.as_str(), pages[0].paper_color.as_str()), ("cover", "#0d9488"));
+        assert_eq!(pages[1].template, "grid");
+        // Changing the cover colour recolours the cover page.
+        db.set_notebook_cover(&nb.id, "#dc2626").unwrap();
+        assert_eq!(db.pages(&nb.id).unwrap()[0].paper_color, "#dc2626");
+        assert!(db.set_notebook_cover(&nb.id, "red").is_err());
     }
 
     #[test]
