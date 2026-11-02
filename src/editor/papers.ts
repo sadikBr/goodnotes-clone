@@ -164,47 +164,56 @@ function checkbox(lines: Lines, x: number, baseline: number, size = 14) {
   lines.rect(x, baseline - size - 5, size, size);
 }
 
+/**
+ * Millimetre paper: faint 1 mm lines, medium 5 mm lines and bolder 1 cm
+ * lines. One centimetre line passes through (ox, oy).
+ */
+function drawMillimetreGrid(ctx: Ctx, w: number, h: number, ink: Inks, ox: number, oy: number) {
+  const mm = new Lines();
+  const half = new Lines();
+  const cm = new Lines();
+  const level = (k: number) => (k % 10 === 0 ? cm : k % 5 === 0 ? half : mm);
+  const first = (o: number) => -Math.floor(o / MM);
+  for (let k = first(ox); ox + k * MM <= w; k++) level(((k % 10) + 10) % 10).add(ox + k * MM, 0, ox + k * MM, h);
+  for (let k = first(oy); oy + k * MM <= h; k++) level(((k % 10) + 10) % 10).add(0, oy + k * MM, w, oy + k * MM);
+  mm.stroke(ctx, ink.faint, 0.45);
+  half.stroke(ctx, ink.faint, 0.9);
+  cm.stroke(ctx, ink.line, 1);
+}
+
 function drawGraph(ctx: Ctx, w: number, h: number, ink: Inks) {
-  const minor = 5 * MM;
-  const major = minor * 5;
-  const ox = (w % major) / 2;
-  const oy = (h % major) / 2;
-  const thin = new Lines();
-  const thick = new Lines();
-  let i = 0;
-  for (let x = ox; x <= w; x += minor, i++) (i % 5 === 0 ? thick : thin).v(x, 0, h);
-  i = 0;
-  for (let y = oy; y <= h; y += minor, i++) (i % 5 === 0 ? thick : thin).h(y, 0, w);
-  thin.stroke(ctx, ink.faint, 0.8);
-  thick.stroke(ctx, ink.line, 1.1);
+  // Centre the centimetre grid on the page.
+  const cmU = 10 * MM;
+  drawMillimetreGrid(ctx, w, h, ink, (w % cmU) / 2, (h % cmU) / 2);
 }
 
 function drawCoordinate(ctx: Ctx, w: number, h: number, ink: Inks) {
-  const s = 24;
-  const cx = Math.round(w / 2 / s) * s;
-  const cy = Math.round(h / 2 / s) * s;
-  const grid = new Lines();
-  for (let x = cx % s; x < w; x += s) grid.v(x, 0, h);
-  for (let y = cy % s; y < h; y += s) grid.h(y, 0, w);
-  grid.stroke(ctx, ink.faint, 0.9);
+  const cmU = 10 * MM;
+  // Origin on the centimetre line nearest the page centre.
+  const ox = (w % cmU) / 2;
+  const oy = (h % cmU) / 2;
+  const cx = ox + Math.round((w / 2 - ox) / cmU) * cmU;
+  const cy = oy + Math.round((h / 2 - oy) / cmU) * cmU;
+  drawMillimetreGrid(ctx, w, h, ink, ox, oy);
   const axes = new Lines();
-  axes.h(cy, 12, w - 12).v(cx, 12, h - 12);
-  // Ticks: small on every line, longer every five.
-  for (let x = cx % s; x < w; x += s) {
-    const k = Math.round((x - cx) / s);
+  axes.add(12, cy, w - 12, cy).add(cx, 12, cx, h - 12);
+  // Ticks every 5 mm, longer every centimetre.
+  const step = 5 * MM;
+  for (let k = -Math.floor(cx / step); cx + k * step < w - 14; k++) {
     if (k === 0) continue;
-    const t = k % 5 === 0 ? 6 : 3;
-    axes.add(x + 0.5, cy + 0.5 - t, x + 0.5, cy + 0.5 + t);
+    const t = k % 2 === 0 ? 6 : 3;
+    const x = cx + k * step;
+    axes.add(x, cy - t, x, cy + t);
   }
-  for (let y = cy % s; y < h; y += s) {
-    const k = Math.round((y - cy) / s);
-    if (k === 0) continue;
-    const t = k % 5 === 0 ? 6 : 3;
-    axes.add(cx + 0.5 - t, y + 0.5, cx + 0.5 + t, y + 0.5);
+  for (let k = -Math.floor(cy / step); cy + k * step < h - 14; k++) {
+    if (k === 0 || cy + k * step < 14) continue;
+    const t = k % 2 === 0 ? 6 : 3;
+    const y = cy + k * step;
+    axes.add(cx - t, y, cx + t, y);
   }
   // Arrow heads on the positive ends (right and up).
-  axes.add(w - 12, cy + 0.5, w - 21, cy - 4.5).add(w - 12, cy + 0.5, w - 21, cy + 5.5);
-  axes.add(cx + 0.5, 12, cx - 4.5, 21).add(cx + 0.5, 12, cx + 5.5, 21);
+  axes.add(w - 12, cy, w - 21, cy - 5).add(w - 12, cy, w - 21, cy + 5);
+  axes.add(cx, 12, cx - 5, 21).add(cx, 12, cx + 5, 21);
   axes.stroke(ctx, ink.strong, 1.4);
 }
 

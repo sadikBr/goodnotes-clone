@@ -49,4 +49,16 @@ describe("paper templates", () => {
     }
     expect(paperLayout("wide-ruled", 794, 1123).rules.length).toBeLessThan(paperLayout("ruled", 794, 1123).rules.length);
   });
+
+  it("graph and coordinate papers are true millimetre grids", () => {
+    const mm = 96 / 25.4;
+    for (const t of ["graph", "coordinate"] as const) {
+      const p = new PdfPainter(794, 1123, measurer);
+      drawTemplate(p as unknown as CanvasRenderingContext2D, t, 794, 1123, "#ffffff");
+      // Vertical grid lines: "x 0 m x 1123 l".
+      const xs = [...p.rec.ops.join("").matchAll(/(-?[\d.]+) 0 m\s+\1 1123 l/g)].map((m) => Number(m[1])).sort((a, b) => a - b);
+      expect(xs.length).toBeGreaterThan(200); // 210 mm across A4
+      for (let i = 1; i < xs.length; i++) expect(xs[i] - xs[i - 1]).toBeCloseTo(mm, 2);
+    }
+  });
 });
