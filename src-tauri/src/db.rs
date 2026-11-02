@@ -170,6 +170,7 @@ pub const TEMPLATES: &[&str] = &[
     "storyboard",
     "planner-day",
     "planner-week",
+    "daftar",
     "cover",
     "cover-minimal",
     "cover-geometric",

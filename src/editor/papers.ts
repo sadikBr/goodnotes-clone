@@ -4,7 +4,7 @@
 // draws the screen, thumbnails and (through the PDF painter) vector exports.
 
 import type { Template } from "../api";
-import { fontCss } from "../fonts";
+import { fontCss, isRtl } from "../fonts";
 import { drawCoverDesign, isCoverTemplate } from "./covers";
 
 /** Inkleaf units per millimetre (units are 1/96 inch). */
@@ -387,6 +387,116 @@ function drawWeeklyPlanner(ctx: Ctx, w: number, h: number, ink: Inks) {
   strong.stroke(ctx, ink.line, 1.2);
 }
 
+// --- daftar annossous (دفتر النصوص / cahier de textes) ------------------------
+
+export interface DaftarLayout {
+  /** Page margin. */
+  m: number;
+  /** Baselines of the header fields (class, subject, teacher). */
+  fieldsY: number;
+  /** Header fields, right to left: label, and the x range where its value goes. */
+  fields: { key: "class" | "subject" | "teacher"; ar: string; fr: string; x0: number; x1: number }[];
+  /** Columns, right to left. */
+  cols: { key: "date" | "lesson" | "notes"; ar: string; fr: string; x0: number; x1: number }[];
+  /** Top of the column headings and of the first row. */
+  headTop: number;
+  bodyTop: number;
+  /** Row top edges (one more than rows: the last is the table's bottom). */
+  rows: number[];
+}
+
+/**
+ * Geometry of a daftar page, shared by the drawing and by whatever fills it
+ * in (dates from the timetable, the class name). The table reads right to
+ * left: date and session, lesson title and content, notes and visa.
+ */
+export function daftarLayout(w: number, h: number): DaftarLayout {
+  const m = 40;
+  const fieldsY = m + 78;
+  const tw = w - 2 * m;
+  const third = tw / 3;
+  const fields: DaftarLayout["fields"] = [
+    { key: "class", ar: "القسم", fr: "Classe", x0: w - m - third, x1: w - m },
+    { key: "subject", ar: "المادة", fr: "Matière", x0: m + third, x1: w - m - third },
+    { key: "teacher", ar: "الأستاذ(ة)", fr: "Enseignant(e)", x0: m, x1: m + third },
+  ];
+  const dateW = Math.round(tw * 0.19);
+  const notesW = Math.round(tw * 0.24);
+  const cols: DaftarLayout["cols"] = [
+    { key: "date", ar: "التاريخ والحصة", fr: "Date et séance", x0: w - m - dateW, x1: w - m },
+    { key: "lesson", ar: "عنوان الدرس والمضامين", fr: "Leçon et contenu", x0: m + notesW, x1: w - m - dateW },
+    { key: "notes", ar: "ملاحظات وتأشيرة المفتش", fr: "Observations et visa", x0: m, x1: m + notesW },
+  ];
+  const headTop = fieldsY + 22;
+  const bodyTop = headTop + 48;
+  const bottom = h - m;
+  const n = Math.max(3, Math.round((bottom - bodyTop) / 118));
+  const rowH = (bottom - bodyTop) / n;
+  const rows = Array.from({ length: n + 1 }, (_, i) => bodyTop + i * rowH);
+  return { m, fieldsY, fields, cols, headTop, bodyTop, rows };
+}
+
+/** A label placed by its right edge, its left edge or its centre; Arabic is drawn right to left. */
+function labelAligned(ctx: Ctx, text: string, x: number, y: number, ink: Inks, size: number, bold: boolean, align: "left" | "right" | "center", color = ink.text) {
+  ctx.save();
+  ctx.font = fontCss("sans", size, { bold });
+  ctx.fillStyle = color;
+  ctx.textBaseline = "alphabetic";
+  ctx.direction = isRtl(text) ? "rtl" : "ltr";
+  ctx.textAlign = "left";
+  const tw = ctx.measureText(text).width;
+  ctx.fillText(text, align === "right" ? x - tw : align === "center" ? x - tw / 2 : x, y);
+  ctx.restore();
+  return tw;
+}
+
+function drawDaftar(ctx: Ctx, w: number, h: number, ink: Inks) {
+  const L = daftarLayout(w, h);
+  const { m } = L;
+  const strong = new Lines();
+  const line = new Lines();
+  const faint = new Lines();
+  // Title: Arabic on the right, French on the left.
+  labelAligned(ctx, "دفتر النصوص", w - m, m + 30, ink, 24, true, "right", ink.strong);
+  labelAligned(ctx, "Cahier de textes", m, m + 28, ink, 19, true, "left", ink.strong);
+  strong.h(m + 44, m, w - m);
+  // Class, subject and teacher: "label / Label" then a dotted line for the value.
+  for (const f of L.fields) {
+    // Drawn in pieces (Arabic, slash, French) so mixed-direction text with
+    // parentheses can't get reordered.
+    let x = f.x1;
+    x -= labelAligned(ctx, f.ar, x, L.fieldsY, ink, 12, true, "right");
+    x -= labelAligned(ctx, " / ", x, L.fieldsY, ink, 11.5, false, "right");
+    x -= labelAligned(ctx, f.fr, x, L.fieldsY, ink, 11.5, true, "right");
+    for (let dx = x - 8; dx > f.x0 + 10; dx -= 5) faint.h(L.fieldsY + 2, dx - 2, dx);
+  }
+  // The table.
+  const top = L.headTop;
+  const bottom = L.rows[L.rows.length - 1];
+  strong.rect(m, top, w - 2 * m, bottom - top);
+  strong.h(L.bodyTop, m, w - m);
+  for (const c of L.cols.slice(1)) strong.v(c.x1, top, bottom);
+  for (const c of L.cols) {
+    const cx = (c.x0 + c.x1) / 2;
+    labelAligned(ctx, c.ar, cx, top + 20, ink, 12, true, "center");
+    labelAligned(ctx, c.fr, cx, top + 38, ink, 10.5, false, "center");
+  }
+  const date = L.cols[0];
+  const lesson = L.cols[1];
+  L.rows.slice(1, -1).forEach((y) => line.h(y, m, w - m));
+  for (let i = 0; i < L.rows.length - 1; i++) {
+    const y0 = L.rows[i];
+    const y1 = L.rows[i + 1];
+    // Date above, session time below.
+    faint.h(y0 + (y1 - y0) * 0.5, date.x0 + 8, date.x1 - 8);
+    // Writing lines in the lesson column.
+    for (let y = y0 + 27; y < y1 - 8; y += 27) faint.h(y, lesson.x0 + 8, lesson.x1 - 8);
+  }
+  faint.stroke(ctx, ink.faint, 1);
+  line.stroke(ctx, ink.line, 1);
+  strong.stroke(ctx, ink.strong, 1.3);
+}
+
 /** Draws the paper colour and the template's lines. */
 export function drawTemplate(ctx: Ctx, template: Template, w: number, h: number, paper: string) {
   ctx.fillStyle = paper;
@@ -469,6 +579,9 @@ export function drawTemplate(ctx: Ctx, template: Template, w: number, h: number,
     case "planner-week":
       drawWeeklyPlanner(ctx, w, h, ink);
       break;
+    case "daftar":
+      drawDaftar(ctx, w, h, ink);
+      break;
     default:
       if (isCoverTemplate(template)) drawCoverDesign(ctx, template, w, h, paper);
       break;
@@ -479,5 +592,5 @@ export function drawTemplate(ctx: Ctx, template: Template, w: number, h: number,
 
 /** Templates whose labels use the bundled sans font (PDF export loads it). */
 export function templateUsesText(template: Template): boolean {
-  return template === "planner-day" || template === "planner-week";
+  return template === "planner-day" || template === "planner-week" || template === "daftar";
 }

@@ -26,6 +26,8 @@ export type Template =
   | "storyboard"
   | "planner-day"
   | "planner-week"
+  /** Teacher's lesson log (دفتر النصوص / cahier de textes). */
+  | "daftar"
   /** Notebook cover designs (page 1 of new notebooks); not offered in the paper picker. */
   | "cover"
   | "cover-minimal"
@@ -36,7 +38,7 @@ export type Template =
   | "cover-kraft"
   | "cover-dots";
 
-export type TemplateCategory = "basic" | "notes" | "science" | "writing" | "planner";
+export type TemplateCategory = "basic" | "notes" | "science" | "writing" | "planner" | "teacher";
 
 /** `short` is the tab label in the paper picker. */
 export const TEMPLATE_CATEGORIES: { id: TemplateCategory; label: string; short: string }[] = [
@@ -45,6 +47,7 @@ export const TEMPLATE_CATEGORIES: { id: TemplateCategory; label: string; short: 
   { id: "science", label: "Maths & science", short: "Maths" },
   { id: "writing", label: "Writing & art", short: "Writing" },
   { id: "planner", label: "Planner", short: "Planner" },
+  { id: "teacher", label: "Teacher", short: "Teacher" },
 ];
 
 /**
@@ -71,6 +74,7 @@ export const TEMPLATES: { id: Template; label: string; category: TemplateCategor
   { id: "storyboard", label: "Storyboard", category: "writing", preview: "page" },
   { id: "planner-day", label: "Daily plan", category: "planner", preview: "page" },
   { id: "planner-week", label: "Weekly plan", category: "planner", preview: "page" },
+  { id: "daftar", label: "Daftar annossous", category: "teacher", preview: "page" },
 ];
 
 export interface Folder {

@@ -12,10 +12,10 @@ import "@fontsource/indie-flower/400.css";
 import "@fontsource/shadows-into-light/400.css";
 import "@fontsource/dancing-script/400.css";
 import "@fontsource/architects-daughter/400.css";
-// Arabic: every preset falls back to Noto Naskh Arabic for Arabic letters
+// Arabic: every preset falls back to Noto Sans Arabic for Arabic letters
 // (only its Arabic subset, so Latin text keeps each preset's own look).
-import "@fontsource/noto-naskh-arabic/arabic-400.css";
-import "@fontsource/noto-naskh-arabic/arabic-700.css";
+import "@fontsource/noto-sans-arabic/arabic-400.css";
+import "@fontsource/noto-sans-arabic/arabic-700.css";
 
 export type FontId = "sans" | "caveat" | "patrick-hand" | "kalam" | "indie-flower" | "shadows" | "dancing" | "architect";
 
@@ -29,7 +29,7 @@ export interface FontPreset {
 }
 
 /** Arabic fallback face, listed after each preset's own face. */
-export const ARABIC_FACE = "Noto Naskh Arabic";
+export const ARABIC_FACE = "Noto Sans Arabic";
 const AR = `"${ARABIC_FACE}"`;
 const SANS = `"Inter", ${AR}, "Segoe UI", system-ui, -apple-system, sans-serif`;
 /** Faces of Inter that are bundled (handwriting fonts only have a regular face). */

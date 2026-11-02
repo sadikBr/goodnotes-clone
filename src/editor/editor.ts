@@ -3155,8 +3155,16 @@ export class EditorScreen {
     this.draw();
     this.pageWrap.append(input);
     this.positionEditor();
+    // A new text box opens to the right of the tap. If its first words turn
+    // out to be Arabic, flip it so it extends to the left instead: Arabic
+    // writing starts at the tap.
+    let directionChosen = !isNew || el.kind !== "text";
     input.addEventListener("input", () => {
       el.text = input.value;
+      if (!directionChosen && /\p{L}/u.test(el.text)) {
+        directionChosen = true;
+        if (isRtl(el.text)) el.x = Math.max(0, el.x - el.w);
+      }
       this.positionEditor();
     });
     input.addEventListener("keydown", (e) => {
