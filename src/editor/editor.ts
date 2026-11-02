@@ -1219,7 +1219,10 @@ export class EditorScreen {
     ctx.setTransform(this.pixelScale, 0, 0, this.pixelScale, 0, 0);
     const g = this.gesture;
     if (g?.type === "draw") {
-      if (g.preview) {
+      if (g.preview && g.tool === "highlighter" && g.preview.shape.kind === "line") {
+        // A straightened highlight looks exactly like the highlight it becomes.
+        drawStroke(ctx, this.straightHighlight(g, g.preview.shape.points));
+      } else if (g.preview) {
         drawElement(ctx, g.preview, this.images, () => {});
         if (g.held) this.drawHeldHint(ctx, g.preview, g.held.mode);
       }
@@ -1565,10 +1568,20 @@ export class EditorScreen {
     if (g.tool === "shape") shape = beautify(pts);
     else if (g.tool === "highlighter") {
       const s = recognizeShape(pts);
-      shape = s?.kind === "line" ? s : null;
+      const len = s?.kind === "line" ? Math.hypot(s.points[1][0] - s.points[0][0], s.points[1][1] - s.points[0][1]) : 0;
+      // Short dabs stay as drawn: straightening them isn't useful.
+      shape = s?.kind === "line" && len > Math.max(24 / this.zoom, this.widths.highlighter * 1.5) ? s : null;
     } else shape = recognizeShape(pts) ?? detectBrace(pts);
     if (!shape) return null;
     return { id: newId(), z: nextZ(this.elements), kind: "shape", shape, color: this.colors[g.tool], width: this.widths[g.tool], fill: null };
+  }
+
+  /** The straight highlighter stroke for a held highlight's line. */
+  private straightHighlight(g: Extract<Gesture, { type: "draw" }>, line: P2[]): StrokeEl {
+    const a = line[0];
+    const b = line[line.length - 1];
+    const p = g.points[0][2];
+    return { id: "live", z: 0, kind: "stroke", tool: "highlighter", color: this.colors.highlighter, width: this.widths.highlighter, points: [[a[0], a[1], p], [b[0], b[1], p]] };
   }
 
   /** Lines pivot around their start (the end follows the pen); others around their centre. */
@@ -1584,6 +1597,8 @@ export class EditorScreen {
     const held = g.held;
     if (!held) return;
     window.clearTimeout(held.stillTimer);
+    // The highlighter only straightens: its end follows the pen, no move mode.
+    if (g.tool === "highlighter") return;
     held.stillTimer = window.setTimeout(() => {
       if (this.gesture !== g || !g.held || !g.preview) return;
       held.mode = held.mode === "transform" ? "move" : "transform";
@@ -1665,9 +1680,7 @@ export class EditorScreen {
         if (!shape && g.tool === "shape") shape = this.refine(g);
         this.gesture = null;
         if (shape && g.tool === "highlighter" && shape.shape.kind === "line") {
-          const [a, b] = shape.shape.points;
-          const p = g.points[0][2];
-          this.addElement({ id: newId(), z: nextZ(this.elements), kind: "stroke", tool: "highlighter", color: this.colors.highlighter, width: this.widths.highlighter, points: [[a[0], a[1], p], [b[0], b[1], p]] });
+          this.addElement({ ...this.straightHighlight(g, shape.shape.points), id: newId(), z: nextZ(this.elements) });
         } else if (shape) {
           shape.z = nextZ(this.elements);
           this.addElement(shape);
