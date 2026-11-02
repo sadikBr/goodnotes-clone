@@ -3,6 +3,7 @@
 import { api, PAPER_COLORS, TEMPLATES, type ExportFormat, type ExportPage, type Notebook, type P2, type Page, type RecognizedShape, type Template } from "../api";
 import { ensureFonts, FONT_PRESETS, fontPreset, type FontId } from "../fonts";
 import { getPref, hasPref, setPref } from "../prefs";
+import { customColorButton } from "../colorPicker";
 import { confirmDialog, formDialog, h, icon, popupMenu, reportError, sizeControl, toast } from "../ui";
 import {
   bounds,
@@ -726,7 +727,7 @@ export class EditorScreen {
             h("button", {
               class: "swatch small",
               role: "radio",
-              "aria-checked": String(this.colors[colorKey] === c),
+              "aria-checked": String(this.colors[colorKey].toLowerCase() === c),
               "aria-label": c,
               style: { background: c },
               onclick: () => {
@@ -735,6 +736,14 @@ export class EditorScreen {
               },
             }),
           ),
+          customColorButton({
+            value: this.colors[colorKey],
+            presets: palette,
+            onPick: (c) => {
+              this.colors[colorKey] = c;
+              this.renderToolbar();
+            },
+          }),
         )
       : null;
     let width: HTMLElement | null = null;
@@ -2100,10 +2109,21 @@ export class EditorScreen {
       ...shapeControls,
       ...textControls,
       ...INK_COLORS.slice(0, 6).map((c) => h("button", { class: "swatch small", style: { background: c }, "aria-label": `Recolour ${c}`, onclick: () => this.recolorSelection(c) })),
+      customColorButton({ value: this.selectionColor(), presets: INK_COLORS.slice(0, 6), onPick: (c) => this.recolorSelection(c) }),
       h("span", { class: "divider" }),
       h("button", { class: "icon-btn small", "aria-label": "Duplicate selection", title: "Duplicate (Ctrl+D)", onclick: () => this.duplicateSelection() }, icon("copy")),
       h("button", { class: "icon-btn small", "aria-label": "Delete selection", title: "Delete", onclick: () => this.deleteSelection() }, icon("trash")),
     );
+  }
+
+  /** The selection's colour when every selected item shares one (for the custom swatch). */
+  private selectionColor(): string | null {
+    const colors = new Set(
+      this.elements
+        .filter((el) => this.selection.has(el.id) && (el.kind === "stroke" || el.kind === "shape" || el.kind === "text"))
+        .map((el) => (el as StrokeEl | ShapeEl | TextEl).color.toLowerCase()),
+    );
+    return colors.size === 1 ? [...colors][0] || null : null;
   }
 
   /** Applies a font and/or size change to every selected text box and sticky note. */
