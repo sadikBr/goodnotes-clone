@@ -90,6 +90,16 @@ pub fn set_notebook_cover(db: State<'_, Db>, id: String, color: String) -> AppRe
 }
 
 #[tauri::command]
+pub fn set_notebook_meta(db: State<'_, Db>, id: String, meta: Option<String>) -> AppResult<()> {
+    db.set_notebook_meta(&id, meta.as_deref())
+}
+
+#[tauri::command]
+pub fn set_page_section(db: State<'_, Db>, page_id: String, section: Option<String>) -> AppResult<()> {
+    db.set_page_section(&page_id, section.as_deref())
+}
+
+#[tauri::command]
 pub fn set_notebook_trashed(db: State<'_, Db>, id: String, trashed: bool) -> AppResult<()> {
     db.set_notebook_trashed(&id, trashed)
 }

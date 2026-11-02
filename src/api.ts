@@ -102,6 +102,8 @@ export interface Notebook {
   trashedAt: number | null;
   /** The first page is a cover (shown full-size in the library). */
   hasCover: boolean;
+  /** App-defined settings as JSON (e.g. a daftar's classes and timetable). */
+  meta: string | null;
 }
 
 export interface Page {
@@ -119,6 +121,8 @@ export interface Page {
   /** Imported PDF shown behind this page, and which page of it (0-based). */
   backgroundAsset: string | null;
   backgroundPage: number | null;
+  /** The notebook section the page belongs to (a class, in a daftar). */
+  section: string | null;
 }
 
 export interface StoredElement {
@@ -211,6 +215,8 @@ export interface Backend {
   renameNotebook(id: string, title: string): Promise<void>;
   moveNotebook(id: string, folderId: string | null): Promise<void>;
   setNotebookCover(id: string, color: string): Promise<void>;
+  setNotebookMeta(id: string, meta: string | null): Promise<void>;
+  setPageSection(pageId: string, section: string | null): Promise<void>;
   setNotebookTrashed(id: string, trashed: boolean): Promise<void>;
   deleteNotebook(id: string): Promise<void>;
   setNotebookFavourite(id: string, favourite: boolean): Promise<void>;
@@ -270,6 +276,8 @@ class TauriBackend implements Backend {
   renameNotebook = (id: string, title: string) => invoke<void>("rename_notebook", { id, title });
   moveNotebook = (id: string, folderId: string | null) => invoke<void>("move_notebook", { id, folderId });
   setNotebookCover = (id: string, color: string) => invoke<void>("set_notebook_cover", { id, color });
+  setNotebookMeta = (id: string, meta: string | null) => invoke<void>("set_notebook_meta", { id, meta });
+  setPageSection = (pageId: string, section: string | null) => invoke<void>("set_page_section", { pageId, section });
   setNotebookTrashed = (id: string, trashed: boolean) => invoke<void>("set_notebook_trashed", { id, trashed });
   deleteNotebook = (id: string) => invoke<void>("delete_notebook", { id });
   setNotebookFavourite = (id: string, favourite: boolean) => invoke<void>("set_notebook_favourite", { id, favourite });

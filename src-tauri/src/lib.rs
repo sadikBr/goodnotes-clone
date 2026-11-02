@@ -33,6 +33,8 @@ pub fn run() {
             commands::rename_notebook,
             commands::move_notebook,
             commands::set_notebook_cover,
+            commands::set_notebook_meta,
+            commands::set_page_section,
             commands::set_notebook_trashed,
             commands::delete_notebook,
             commands::set_notebook_favourite,

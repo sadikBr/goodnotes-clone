@@ -52,8 +52,14 @@ export interface TextEl extends Base {
   align?: TextAlign;
   /** Rotation in radians around the box centre. */
   rotation?: number;
-  /** A cover's title or date (re-laid out when the cover design changes). */
-  role?: "cover-title" | "cover-date";
+  /**
+   * Text the app placed and may update: a cover's title or date (re-laid out
+   * when the cover design changes), or a daftar page's session date/time and
+   * header fields.
+   */
+  role?: "cover-title" | "cover-date" | "daftar-session" | "daftar-field";
+  /** For a daftar session cell: the session it shows (YYYY-MM-DD HH:MM). */
+  session?: string;
 }
 
 export type TextAlign = "left" | "center" | "right";

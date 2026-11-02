@@ -2745,3 +2745,125 @@ select option {
   max-width: 400px;
   margin: 12px 0 0;
 }
+
+/* ------------------------------------------------ daftar setup */
+.form-error {
+  margin: 4px 0 0;
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 600;
+}
+.tt {
+  display: grid;
+  gap: 8px;
+}
+.tt-list {
+  display: grid;
+  gap: 6px;
+}
+.tt-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(112px, 1fr) auto minmax(112px, 1fr) minmax(0, 0.9fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+.tt-row select,
+.tt-row input {
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.tt-dash {
+  color: var(--muted);
+}
+.tt-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.tt-add {
+  justify-self: start;
+}
+.dialog-form input[type="date"] {
+  width: 100%;
+}
+
+/* ------------------------------------------------ daftar in the editor */
+.daftar-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 6px;
+  flex: none;
+}
+.daftar-bar[hidden] {
+  display: none;
+}
+.daftar-class {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 650;
+  font-size: 13px;
+}
+.daftar-class:hover {
+  background: var(--surface-2);
+}
+.daftar-class .icon,
+.daftar-class svg {
+  width: 15px;
+  height: 15px;
+  color: var(--accent);
+}
+.daftar-class .icon:last-child svg,
+.daftar-class .icon:last-child {
+  width: 13px;
+  height: 13px;
+  color: var(--muted);
+}
+.daftar-today {
+  height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 650;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.daftar-today:hover {
+  filter: brightness(0.97);
+}
+.page-section {
+  list-style: none;
+  margin: 10px 4px 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+/* A daftar's header carries the class and "Today"; the page counter is bottom-right already. */
+.is-daftar .page-chip,
+.is-daftar .header-pill .template-name {
+  display: none;
+}
+.header-left {
+  overflow: hidden;
+}

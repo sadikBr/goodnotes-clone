@@ -224,6 +224,7 @@ export class LibraryScreen {
       );
       actions.append(
         sortBtn,
+        h("button", { class: "btn ghost", onclick: () => this.newDaftar(folderId), title: "A teacher's lesson log (cahier de textes): a section per class, dated from your timetable" }, icon("book"), "New daftar"),
         h("button", { class: "btn ghost", onclick: () => this.pdfInput.click(), title: "Open a PDF as a notebook you can write on" }, icon("page"), "Import PDF"),
         h("button", { class: "btn ghost", onclick: () => this.newFolder(folderId) }, icon("folder"), "New folder"),
       );
@@ -475,6 +476,12 @@ export class LibraryScreen {
     } catch (e) {
       reportError(e);
     }
+  }
+
+  private async newDaftar(folderId: string | null) {
+    const { newDaftarDialog } = await import("./daftarSetup");
+    const nb = await newDaftarDialog(folderId);
+    if (nb) this.cb.openNotebook(nb.id);
   }
 
   /** Imports a PDF as a notebook: one page per PDF page, ready to annotate. */

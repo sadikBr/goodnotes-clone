@@ -14,7 +14,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::error::{AppError, AppResult};
 
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 
 pub fn now_ms() -> i64 {
     SystemTime::now()
@@ -56,6 +56,8 @@ pub struct Notebook {
     pub trashed_at: Option<i64>,
     /// Whether the first page is a cover (the library then shows it full-size).
     pub has_cover: bool,
+    /// App-defined settings as JSON (e.g. a daftar's classes and timetable).
+    pub meta: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -75,6 +77,8 @@ pub struct Page {
     /// Imported PDF this page shows as its background, and which page of it.
     pub background_asset: Option<String>,
     pub background_page: Option<i64>,
+    /// Which section of the notebook the page belongs to (e.g. a class in a daftar).
+    pub section: Option<String>,
 }
 
 /// One element on a page. `data` is an opaque JSON payload owned by the
@@ -312,6 +316,14 @@ impl Db {
                 CREATE INDEX IF NOT EXISTS assets_by_notebook ON assets(notebook_id);
                 ALTER TABLE pages ADD COLUMN background_asset TEXT;
                 ALTER TABLE pages ADD COLUMN background_page INTEGER;",
+            )?;
+            conn.pragma_update(None, "user_version", 2)?;
+        }
+        if version < 3 {
+            // v3: notebook settings (JSON) and page sections.
+            conn.execute_batch(
+                "ALTER TABLE notebooks ADD COLUMN meta TEXT;
+                ALTER TABLE pages ADD COLUMN section TEXT;",
             )?;
             conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         }
@@ -557,6 +569,42 @@ impl Db {
         Ok(())
     }
 
+    /// Stores the notebook's app-defined settings (JSON), or clears them.
+    pub fn set_notebook_meta(&self, id: &str, meta: Option<&str>) -> AppResult<()> {
+        if let Some(m) = meta {
+            if m.len() > 256 * 1024 {
+                return Err(AppError::Invalid("notebook settings are too large".into()));
+            }
+            serde_json::from_str::<serde_json::Value>(m)
+                .map_err(|e| AppError::Invalid(format!("notebook settings are not valid JSON: {e}")))?;
+        }
+        let conn = self.conn();
+        let n = conn.execute(
+            "UPDATE notebooks SET meta = ?2, updated_at = ?3 WHERE id = ?1",
+            params![id, meta, now_ms()],
+        )?;
+        if n == 0 {
+            return Err(AppError::NotFound(id.to_string()));
+        }
+        Ok(())
+    }
+
+    /// Puts a page in a section of its notebook (or none).
+    pub fn set_page_section(&self, page_id: &str, section: Option<&str>) -> AppResult<()> {
+        if section.is_some_and(|s| s.len() > 200) {
+            return Err(AppError::Invalid("section name is too long".into()));
+        }
+        let conn = self.conn();
+        let n = conn.execute(
+            "UPDATE pages SET section = ?2, updated_at = ?3 WHERE id = ?1",
+            params![page_id, section, now_ms()],
+        )?;
+        if n == 0 {
+            return Err(AppError::NotFound(page_id.to_string()));
+        }
+        Ok(())
+    }
+
     pub fn set_notebook_trashed(&self, id: &str, trashed: bool) -> AppResult<()> {
         let conn = self.conn();
         let value = trashed.then(now_ms);
@@ -601,15 +649,16 @@ impl Db {
         let new_nb = new_id();
         let tx = conn.transaction()?;
         tx.execute(
-            "INSERT INTO notebooks (id, title, folder_id, cover_color, default_template, favourite, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?6)",
+            "INSERT INTO notebooks (id, title, folder_id, cover_color, default_template, favourite, created_at, updated_at, meta)
+             VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?6, ?7)",
             params![
                 new_nb,
                 format!("{} copy", source.title),
                 source.folder_id,
                 source.cover_color,
                 source.default_template,
-                now
+                now,
+                source.meta
             ],
         )?;
         let page_ids: Vec<String> = {
@@ -621,8 +670,8 @@ impl Db {
         for old_page in page_ids {
             let new_page = new_id();
             tx.execute(
-                "INSERT INTO pages (id, notebook_id, position, template, paper_color, width, height, favourite, thumbnail, created_at, updated_at, background_asset, background_page)
-                 SELECT ?1, ?2, position, template, paper_color, width, height, favourite, thumbnail, ?3, ?3, background_asset, background_page FROM pages WHERE id = ?4",
+                "INSERT INTO pages (id, notebook_id, position, template, paper_color, width, height, favourite, thumbnail, created_at, updated_at, background_asset, background_page, section)
+                 SELECT ?1, ?2, position, template, paper_color, width, height, favourite, thumbnail, ?3, ?3, background_asset, background_page, section FROM pages WHERE id = ?4",
                 params![new_page, new_nb, now, old_page],
             )?;
             copy_elements(&tx, &old_page, &new_page)?;
@@ -727,7 +776,7 @@ impl Db {
         let conn = self.conn();
         ensure_exists(&conn, "notebooks", notebook_id)?;
         let mut stmt = conn.prepare(
-            "SELECT id, notebook_id, position, template, paper_color, width, height, favourite, thumbnail, created_at, updated_at, background_asset, background_page
+            "SELECT id, notebook_id, position, template, paper_color, width, height, favourite, thumbnail, created_at, updated_at, background_asset, background_page, section
              FROM pages WHERE notebook_id = ?1 ORDER BY position",
         )?;
         let rows = stmt.query_map([notebook_id], page_from_row)?;
@@ -750,19 +799,20 @@ impl Db {
         let count = notebook.page_count;
         let index = index.unwrap_or(count).clamp(0, count);
         let tx = conn.transaction()?;
-        let neighbour: Option<(String, String, f64, f64)> = tx
+        let neighbour: Option<(String, String, f64, f64, Option<String>)> = tx
             .query_row(
-                "SELECT template, paper_color, width, height FROM pages WHERE notebook_id = ?1
+                "SELECT template, paper_color, width, height, section FROM pages WHERE notebook_id = ?1
                  ORDER BY ABS(position - ?2) LIMIT 1",
                 params![notebook_id, index - 1],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
             )
             .optional()?;
-        let (n_template, paper, width, height) = neighbour.unwrap_or((
+        let (n_template, paper, width, height, section) = neighbour.unwrap_or((
             notebook.default_template.clone(),
             "#fffdf7".into(),
             DEFAULT_PAGE_WIDTH,
             DEFAULT_PAGE_HEIGHT,
+            None,
         ));
         tx.execute(
             "UPDATE pages SET position = position + 1 WHERE notebook_id = ?1 AND position >= ?2",
@@ -771,9 +821,9 @@ impl Db {
         let now = now_ms();
         let id = new_id();
         tx.execute(
-            "INSERT INTO pages (id, notebook_id, position, template, paper_color, width, height, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
-            params![id, notebook_id, index, template.unwrap_or(&n_template), paper, width, height, now],
+            "INSERT INTO pages (id, notebook_id, position, template, paper_color, width, height, created_at, updated_at, section)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9)",
+            params![id, notebook_id, index, template.unwrap_or(&n_template), paper, width, height, now, section],
         )?;
         tx.execute(
             "UPDATE notebooks SET updated_at = ?2 WHERE id = ?1",
@@ -794,8 +844,8 @@ impl Db {
         let id = new_id();
         let now = now_ms();
         tx.execute(
-            "INSERT INTO pages (id, notebook_id, position, template, paper_color, width, height, favourite, thumbnail, created_at, updated_at, background_asset, background_page)
-             SELECT ?1, notebook_id, position + 1, template, paper_color, width, height, 0, thumbnail, ?2, ?2, background_asset, background_page FROM pages WHERE id = ?3",
+            "INSERT INTO pages (id, notebook_id, position, template, paper_color, width, height, favourite, thumbnail, created_at, updated_at, background_asset, background_page, section)
+             SELECT ?1, notebook_id, position + 1, template, paper_color, width, height, 0, thumbnail, ?2, ?2, background_asset, background_page, section FROM pages WHERE id = ?3",
             params![id, now, page_id],
         )?;
         copy_elements(&tx, page_id, &id)?;
@@ -1130,7 +1180,8 @@ const NOTEBOOK_SELECT: &str =
         (SELECT COUNT(*) FROM pages p WHERE p.notebook_id = n.id),
         (SELECT p.thumbnail FROM pages p WHERE p.notebook_id = n.id ORDER BY p.position LIMIT 1),
         n.created_at, n.updated_at, n.trashed_at,
-        COALESCE((SELECT p.template LIKE 'cover%' FROM pages p WHERE p.notebook_id = n.id ORDER BY p.position LIMIT 1), 0)
+        COALESCE((SELECT p.template LIKE 'cover%' FROM pages p WHERE p.notebook_id = n.id ORDER BY p.position LIMIT 1), 0),
+        n.meta
      FROM notebooks n LEFT JOIN folders f ON f.id = n.folder_id";
 
 fn notebook_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Notebook> {
@@ -1147,6 +1198,7 @@ fn notebook_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Notebook> {
         updated_at: r.get(9)?,
         trashed_at: r.get(10)?,
         has_cover: r.get(11)?,
+        meta: r.get(12)?,
     })
 }
 
@@ -1181,12 +1233,13 @@ fn page_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Page> {
         updated_at: r.get(10)?,
         background_asset: r.get(11)?,
         background_page: r.get(12)?,
+        section: r.get(13)?,
     })
 }
 
 fn get_page(conn: &Connection, id: &str) -> AppResult<Page> {
     conn.query_row(
-        "SELECT id, notebook_id, position, template, paper_color, width, height, favourite, thumbnail, created_at, updated_at, background_asset, background_page
+        "SELECT id, notebook_id, position, template, paper_color, width, height, favourite, thumbnail, created_at, updated_at, background_asset, background_page, section
          FROM pages WHERE id = ?1",
         [id],
         page_from_row,
@@ -1357,6 +1410,51 @@ mod tests {
         // Added pages are plain paper.
         let added = db.add_page(&copy.id, None, None).unwrap();
         assert_eq!(added.background_asset, None);
+    }
+
+    #[test]
+    fn notebook_meta_and_page_sections() {
+        let db = db();
+        let nb = notebook(&db, "Daftar");
+        assert_eq!(nb.meta, None);
+        db.set_notebook_meta(&nb.id, Some(r#"{"kind":"daftar","classes":["1AC-2"]}"#)).unwrap();
+        assert!(db.set_notebook_meta(&nb.id, Some("not json")).is_err());
+        assert_eq!(db.notebook(&nb.id).unwrap().meta.as_deref(), Some(r#"{"kind":"daftar","classes":["1AC-2"]}"#));
+        let first = db.pages(&nb.id).unwrap()[0].clone();
+        assert_eq!(first.section, None);
+        db.set_page_section(&first.id, Some("1AC-2")).unwrap();
+        // New pages and copies keep the section of the page next to them.
+        let added = db.add_page(&nb.id, Some(1), None).unwrap();
+        assert_eq!(added.section.as_deref(), Some("1AC-2"));
+        let copy = db.duplicate_page(&first.id).unwrap();
+        assert_eq!(copy.section.as_deref(), Some("1AC-2"));
+        let dup = db.duplicate_notebook(&nb.id).unwrap();
+        assert_eq!(dup.meta, db.notebook(&nb.id).unwrap().meta);
+        assert!(db.pages(&dup.id).unwrap().iter().all(|p| p.section.as_deref() == Some("1AC-2")));
+        db.set_page_section(&first.id, None).unwrap();
+        assert!(db.set_page_section("missing", Some("x")).is_err());
+    }
+
+    #[test]
+    fn upgrades_a_version_2_database() {
+        let dir = std::env::temp_dir().join(format!("inkleaf-mig-{}", new_id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("v2.db");
+        {
+            let db = Db::open(&path).unwrap();
+            notebook(&db, "Old notes");
+            // Turn it back into a version 2 database.
+            let conn = db.conn();
+            conn.execute_batch("ALTER TABLE notebooks DROP COLUMN meta; ALTER TABLE pages DROP COLUMN section;").unwrap();
+            conn.pragma_update(None, "user_version", 2).unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        let nbs = db.library().unwrap().notebooks;
+        assert_eq!(nbs.len(), 1);
+        assert_eq!(nbs[0].title, "Old notes");
+        assert_eq!(db.pages(&nbs[0].id).unwrap()[0].section, None);
+        drop(db);
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

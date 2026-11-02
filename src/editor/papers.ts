@@ -414,11 +414,13 @@ export function daftarLayout(w: number, h: number): DaftarLayout {
   const m = 40;
   const fieldsY = m + 78;
   const tw = w - 2 * m;
-  const third = tw / 3;
+  // Class names are short; teachers' names are the longest.
+  const classW = Math.round(tw * 0.26);
+  const subjectW = Math.round(tw * 0.33);
   const fields: DaftarLayout["fields"] = [
-    { key: "class", ar: "القسم", fr: "Classe", x0: w - m - third, x1: w - m },
-    { key: "subject", ar: "المادة", fr: "Matière", x0: m + third, x1: w - m - third },
-    { key: "teacher", ar: "الأستاذ(ة)", fr: "Enseignant(e)", x0: m, x1: m + third },
+    { key: "class", ar: "القسم", fr: "Classe", x0: w - m - classW, x1: w - m },
+    { key: "subject", ar: "المادة", fr: "Matière", x0: w - m - classW - subjectW, x1: w - m - classW },
+    { key: "teacher", ar: "الأستاذ(ة)", fr: "Enseignant(e)", x0: m, x1: w - m - classW - subjectW },
   ];
   const dateW = Math.round(tw * 0.19);
   const notesW = Math.round(tw * 0.24);

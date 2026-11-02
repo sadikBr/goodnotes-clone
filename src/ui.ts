@@ -135,6 +135,10 @@ export const COVER_COLORS = ["#2563eb", "#0d9488", "#16a34a", "#ca8a04", "#ea580
 export interface FormDialogOptions {
   /** A side panel (e.g. a live preview) beside the form; it can follow field changes. */
   aside?: (ctx: { values: Record<string, string>; onChange(fn: () => void): void }) => HTMLElement;
+  /** Checks the values on submit; a message keeps the dialog open and is shown. */
+  validate?: (values: Record<string, string>) => string | null;
+  /** Dialog width in px (default 420; 860 with an aside). */
+  width?: number;
 }
 
 export function formDialog(title: string, fields: Field[], submitLabel = "Save", opts: FormDialogOptions = {}): Promise<Record<string, string> | null> {
@@ -147,7 +151,7 @@ export function formDialog(title: string, fields: Field[], submitLabel = "Save",
     const backdrop = h(
       "div",
       { class: "modal-backdrop" },
-      h("div", { class: `modal${opts.aside ? " wide" : ""}`, role: "dialog", "aria-modal": "true", "aria-label": title }, ...(body ? [body] : [h("h2", {}, title), form])),
+      h("div", { class: `modal${opts.aside ? " wide" : ""}`, role: "dialog", "aria-modal": "true", "aria-label": title, style: opts.width ? { width: `${opts.width}px` } : undefined }, ...(body ? [body] : [h("h2", {}, title), form])),
     );
     const close = (result: Record<string, string> | null) => {
       backdrop.remove();
@@ -224,8 +228,16 @@ export function formDialog(title: string, fields: Field[], submitLabel = "Save",
         h("button", { type: "submit", class: "btn primary" }, submitLabel),
       ),
     );
+    const error = h("p", { class: "form-error", role: "alert", hidden: true });
+    form.lastElementChild!.before(error);
     form.addEventListener("submit", (e) => {
       e.preventDefault();
+      const problem = opts.validate?.(values) ?? null;
+      if (problem) {
+        error.textContent = problem;
+        error.hidden = false;
+        return;
+      }
       close({ ...values });
     });
     backdrop.addEventListener("pointerdown", (e) => e.target === backdrop && close(null));

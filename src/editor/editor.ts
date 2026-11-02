@@ -38,6 +38,7 @@ import {
   type ShapeKind,
 } from "./geometry";
 import { inkToTextDialog } from "./inkToText";
+import { DAYS, extendSection, isoDate, parseDaftar, type DaftarMeta } from "../daftar";
 import { cachedBackground, renderBackground } from "./pdfRender";
 import { INSTRUMENTS, MM, Ruler, type Guide as EdgeGuide, type InstrumentKind } from "./ruler";
 import { smoothPoints, SpeedInk, speedSensitive } from "./ink";
@@ -208,6 +209,9 @@ export interface EditorCallbacks {
 export class EditorScreen {
   readonly root = h("div", { class: "editor" });
   private notebook!: Notebook;
+  /** Set when the notebook is a daftar annossous (sections per class). */
+  private daftar: DaftarMeta | null = null;
+  private daftarBar = h("div", { class: "daftar-bar", hidden: true });
   private pages: Page[] = [];
   private index = 0;
   private elements: El[] = [];
@@ -312,7 +316,7 @@ export class EditorScreen {
           { class: "page-sidebar", "aria-label": "Pages" },
           h("div", { class: "page-sidebar-head" }, h("span", {}, "Pages"), this.pageCount),
           this.pageList,
-          h("button", { class: "add-page", title: "Add a page at the end", onclick: () => this.addPage(this.pages.length) }, icon("plus"), "Add page"),
+          h("button", { class: "add-page", title: "Add a page at the end", onclick: () => (this.daftar ? this.addDaftarPage(this.page.section) : this.addPage(this.pages.length)) }, icon("plus"), "Add page"),
         ),
         // The tool options and the page/zoom controls float over the canvas.
         h("div", { class: "canvas-area" }, this.scroller, this.optionsBar, this.statusBar, this.rulerLayer, this.laserLayer, this.laserDot, this.focusExit),
@@ -350,6 +354,7 @@ export class EditorScreen {
       this.pages = await api.pages(notebookId);
       const i = pageId ? this.pages.findIndex((p) => p.id === pageId) : 0;
       this.titleBtn.textContent = this.notebook.title;
+      this.daftar = parseDaftar(this.notebook);
       this.renderToolbar();
       await this.loadPage(Math.max(0, i), true);
       if (!this.drawerPinned && getPref<string>(DRAWER_TIP_KEY, "") !== "seen") {
@@ -682,6 +687,7 @@ export class EditorScreen {
       h("button", { class: "icon-btn sidebar-btn", "aria-label": "Show or hide pages", title: "Pages sidebar", onclick: () => this.toggleSidebar() }, icon("sidebar")),
       this.titleBtn,
       this.pageChip,
+      this.daftarBar,
     );
   }
 
@@ -1486,6 +1492,7 @@ export class EditorScreen {
     );
     this.renderTemplateButton();
     this.pageChip.textContent = `Page ${this.index + 1} of ${this.pages.length}`;
+    this.renderDaftarBar();
     this.pageCount.textContent = String(this.pages.length);
   }
 
@@ -1493,14 +1500,14 @@ export class EditorScreen {
 
   private renderPageList() {
     this.pageList.replaceChildren(
-      ...this.pages.map((p, i) => {
+      ...this.pages.flatMap((p, i) => {
         const aspect = `${p.width} / ${p.height}`;
         const thumb = p.thumbnail ? h("img", { src: p.thumbnail, alt: "", style: { aspectRatio: aspect } }) : h("div", { class: "thumb-blank", style: { background: p.paperColor, aspectRatio: aspect } });
         const more = h("button", { class: "icon-btn small page-more", "aria-label": `Page ${i + 1} options` }, icon("more"));
         more.addEventListener("click", (e) => {
           e.stopPropagation();
           popupMenu(more, [
-            { label: "Add page after", action: () => this.addPage(i + 1) },
+            { label: "Add page after", action: () => (this.daftar && p.section ? this.addDaftarPage(p.section) : this.addPage(i + 1)) },
             { label: "Duplicate page", action: () => this.duplicatePage(p) },
             { label: "Move up", action: () => this.movePage(p, i - 1) },
             { label: "Move down", action: () => this.movePage(p, i + 1) },
@@ -1508,13 +1515,15 @@ export class EditorScreen {
             { label: "Delete page", danger: true, action: () => this.deletePage(p) },
           ]);
         });
-        return h(
+        // A daftar's sidebar has a heading for each class's section.
+        const heading = this.daftar && p.section && p.section !== this.pages[i - 1]?.section ? [h("li", { class: "page-section", role: "presentation" }, p.section)] : [];
+        return [...heading, h(
           "li",
           { class: `page-item${i === this.index ? " active" : ""}` },
           h("button", { class: "page-thumb", "aria-label": `Go to page ${i + 1}`, "aria-current": i === this.index ? "page" : undefined, onclick: () => this.goTo(i) }, thumb),
           h("div", { class: "page-num" }, p.favourite ? "★ " : "", String(i + 1)),
           more,
-        );
+        )];
       }),
     );
     this.pageList.querySelector(".active")?.scrollIntoView({ block: "nearest" });
@@ -1532,6 +1541,98 @@ export class EditorScreen {
     for (const id of [...this.elementCache.keys()]) if (!ids.has(id)) this.elementCache.delete(id);
     this.buildColumn();
     await this.loadPage(Math.max(0, Math.min(selectIndex, this.pages.length - 1)));
+  }
+
+  // ------------------------------------------------------------- daftar
+
+  /** The class whose section the current page is in (or the first class). */
+  private currentClass(): string | null {
+    const d = this.daftar;
+    if (!d) return null;
+    const s = this.page?.section;
+    return s && d.classes.includes(s) ? s : (d.classes[0] ?? null);
+  }
+
+  /** Header controls for a daftar: the class (switches section) and "Today". */
+  private renderDaftarBar() {
+    const d = this.daftar;
+    this.daftarBar.hidden = !d;
+    this.root.classList.toggle("is-daftar", !!d);
+    if (!d) return;
+    const cls = this.currentClass();
+    const chip = h("button", { class: "daftar-class", "aria-haspopup": "menu", title: "Switch class" }, icon("book"), h("span", {}, cls ?? "—"), icon("down"));
+    chip.addEventListener("click", () =>
+      popupMenu(
+        chip,
+        d.classes.map((c) => ({ label: c, checked: c === cls, action: () => void this.goToToday(c) })),
+      ),
+    );
+    const today = h("button", { class: "daftar-today", title: "Go to today's lesson for this class" }, "Today · اليوم");
+    today.addEventListener("click", () => void this.goToToday(this.currentClass()));
+    this.daftarBar.replaceChildren(chip, today);
+  }
+
+  /** Saves the daftar settings changed by extendSection and refreshes the page list. */
+  private async afterDaftarChange(selectId?: string) {
+    this.notebook = await api.notebook(this.notebook.id);
+    this.daftar = parseDaftar(this.notebook);
+    const pages = await api.pages(this.notebook.id);
+    const at = selectId ? pages.findIndex((p) => p.id === selectId) : this.index;
+    await this.reloadPages(Math.max(0, at));
+  }
+
+  /**
+   * Goes to today's row for a class: extends its dated pages when the
+   * year has moved past them, then opens the page with the latest session
+   * on or before today (the first page before the year starts).
+   */
+  private async goToToday(cls: string | null) {
+    const d = this.daftar;
+    if (!d || !cls) return;
+    try {
+      await this.flush();
+      const today = isoDate(new Date());
+      if (d.timetable.some((l) => l.cls === cls) && (d.dated[cls] ?? "") < today) {
+        const ahead = new Date();
+        ahead.setDate(ahead.getDate() + 7);
+        await extendSection(this.notebook, d, cls, { through: isoDate(ahead) });
+        await this.afterDaftarChange();
+      }
+      const inClass = this.pages.map((p, i) => ({ p, i })).filter(({ p }) => p.section === cls);
+      if (!inClass.length) return;
+      let best: { i: number; key: string } | null = null;
+      for (const { p, i } of inClass) {
+        const els = this.elementCache.get(p.id) ?? fromStored(await api.elements(p.id));
+        for (const el of els) {
+          if (el.kind !== "text" || el.role !== "daftar-session" || !el.session) continue;
+          if (el.session.slice(0, 10) <= today && (!best || el.session > best.key)) best = { i, key: el.session };
+        }
+      }
+      const target = best ? best.i : d.timetable.some((l) => l.cls === cls) ? inClass[0].i : inClass[inClass.length - 1].i;
+      this.goTo(target);
+      if (best) {
+        const day = DAYS[new Date(best.key.slice(0, 10) + "T12:00").getDay()];
+        toast(`${cls}: ${day.fr} ${best.key.slice(8, 10)}/${best.key.slice(5, 7)} · ${best.key.slice(11)}`);
+      }
+    } catch (e) {
+      reportError(e);
+    }
+  }
+
+  /** Adds a page at the end of a class's section, continuing its dates. */
+  private async addDaftarPage(section: string | null) {
+    const d = this.daftar;
+    const cls = section && d?.classes.includes(section) ? section : this.currentClass();
+    if (!d || !cls) return this.addPage(this.pages.length);
+    try {
+      await this.flush();
+      await extendSection(this.notebook, d, cls, { oneMore: true });
+      const pages = await api.pages(this.notebook.id);
+      const last = pages.filter((p) => p.section === cls).pop();
+      await this.afterDaftarChange(last?.id);
+    } catch (e) {
+      reportError(e);
+    }
   }
 
   private async addPage(at: number) {

@@ -59,7 +59,7 @@ export class MockBackend implements Backend {
   private nb(id: string): Notebook {
     const n = this.s.notebooks.find((x) => x.id === id) ?? fail(`not found: ${id}`);
     const pages = this.s.pages.filter((p) => p.notebookId === id).sort((a, b) => a.position - b.position);
-    return { ...n, pageCount: pages.length, thumbnail: pages[0]?.thumbnail ?? null, hasCover: !!pages[0] && (pages[0].template === "cover" || pages[0].template.startsWith("cover-")) };
+    return { ...n, meta: n.meta ?? null, pageCount: pages.length, thumbnail: pages[0]?.thumbnail ?? null, hasCover: !!pages[0] && (pages[0].template === "cover" || pages[0].template.startsWith("cover-")) };
   }
 
   private page(id: string): Page {
@@ -159,6 +159,7 @@ export class MockBackend implements Backend {
       createdAt: now,
       updatedAt: now,
       trashedAt: null,
+      meta: null,
     });
     const w = input.width ?? 794;
     const h = input.height ?? 1123;
@@ -170,7 +171,7 @@ export class MockBackend implements Backend {
 
   private newPage(notebookId: string, position: number, template: Template, paperColor: string, width: number, height: number): Page {
     const now = Date.now();
-    return { id: uid(), notebookId, position, template, paperColor, width, height, favourite: false, thumbnail: null, createdAt: now, updatedAt: now, backgroundAsset: null, backgroundPage: null };
+    return { id: uid(), notebookId, position, template, paperColor, width, height, favourite: false, thumbnail: null, createdAt: now, updatedAt: now, backgroundAsset: null, backgroundPage: null, section: null };
   }
 
   private raw(id: string) {
@@ -199,6 +200,17 @@ export class MockBackend implements Backend {
     this.persist();
   }
 
+  async setNotebookMeta(id: string, meta: string | null) {
+    if (meta !== null) JSON.parse(meta);
+    Object.assign(this.raw(id), { meta, updatedAt: Date.now() });
+    this.persist();
+  }
+
+  async setPageSection(pageId: string, section: string | null) {
+    this.page(pageId).section = section;
+    this.persist();
+  }
+
   async setNotebookTrashed(id: string, trashed: boolean) {
     const n = this.raw(id);
     n.trashedAt = trashed ? Date.now() : null;
@@ -220,6 +232,7 @@ export class MockBackend implements Backend {
   async duplicateNotebook(id: string) {
     const src = this.raw(id);
     const copy = await this.createNotebook({ title: `${src.title} copy`, folderId: src.folderId, coverColor: src.coverColor, template: src.defaultTemplate });
+    this.raw(copy.id).meta = src.meta ?? null;
     this.s.pages = this.s.pages.filter((p) => p.notebookId !== copy.id);
     for (const p of this.notebookPages(id)) {
       const np = { ...p, id: uid(), notebookId: copy.id };
@@ -242,6 +255,7 @@ export class MockBackend implements Backend {
     const at = Math.max(0, Math.min(index ?? pages.length, pages.length));
     const ref = pages[Math.max(0, at - 1)];
     const p = this.newPage(notebookId, at, template ?? ref?.template ?? "ruled", ref?.paperColor ?? "#fffdf7", ref?.width ?? 794, ref?.height ?? 1123);
+    p.section = ref?.section ?? null;
     pages.forEach((x) => x.position >= at && (x.position += 1));
     this.s.pages.push(p);
     this.raw(notebookId).updatedAt = Date.now();
