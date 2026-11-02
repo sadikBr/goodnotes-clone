@@ -13,7 +13,7 @@ no Goodnotes code, assets or branding.
 ## Features
 
 - **Library:** notebooks with colour covers and live first-page previews, nested folders, favourites, search over titles and typed text, trash with recover / delete forever, duplicate, move, rename
-- **Paper:** blank, ruled, narrow ruled, grid, dotted and Cornell templates, switchable per page
+- **Paper:** blank, ruled, narrow ruled, grid, dotted and Cornell templates; A4, A5, US Letter, US Legal or square, portrait or landscape; white, cream, yellow, grey or dark paper. Paper style and colour can be changed per page or for all pages
 - **Pen types:** fountain pen (pressure-sensitive), ballpoint, pencil (grain texture), calligraphy (flat 45° nib) and brush pen (tapered); translucent highlighter, colour palette and size control
 - **Eraser:** *Precise* (default) erases only what it touches, cutting strokes and shape outlines; *Whole stroke* removes anything it touches. Text boxes and sticky notes are erased whole
 - **Pen-only mode:** when a stylus is detected, only the pen writes; finger and mouse scroll, and two fingers pinch-zoom. Touches while the pen is writing or hovering are ignored (palm rejection). Toggle with the pen button in the top-right; the choice is remembered
@@ -22,10 +22,12 @@ no Goodnotes code, assets or branding.
 - **Hold to refine:** keep the pen (or mouse) down at the end of a stroke and it snaps to its refined form while you're still holding. Keep moving to rotate and resize it; hold still again to switch to moving it (and back). It's placed only when you lift. With the pen tool this applies to shapes and braces only, so handwriting is never altered
 - **Alignment guides:** when moving text, magenta guides appear and the text snaps when its baseline or letter centre lines up with other text, sits on a ruled line or centred between two, or its ink lines up left/right/centre with other text, the margin or the page centre. Guides follow the letters, not the text box. Hold Alt to move freely
 - **Objects:** text boxes, sticky notes, images (insert or paste)
+- **Text formatting:** bold, italic, bulleted and numbered lists (Enter continues the list, wrapped lines indent under the text) and left/centre/right alignment, per text box or sticky note; Ctrl+B / Ctrl+I while typing
 - **Handwriting fonts:** eight presets for typed text: Clean, Quick notes, Neat print, Casual, Bubbly, Light pencil, Cursive and Architect. Pick one before or while typing, or lasso-select text boxes and sticky notes and change the font or size (A− / A+) from the selection bar. The fonts are bundled, so they work offline (SIL Open Font License; see `public/third-party-licenses.txt`)
 - **Sizes:** each tool shows its exact size in px, with one-tap presets, − / + buttons and a box to type a value. Sizes are remembered
 - **Lasso:** draw around items or tap one to select it; move, recolour, duplicate, copy/paste, delete
-- **Edit shapes:** tap a shape with the lasso to get handles. Drag corners or edges to resize (Shift keeps proportions) and drag line/arrow ends to move them. The bar above it changes the shape type, line width (exact px), fill and colour. Images and sticky notes resize the same way
+- **Resize and rotate anything:** any selection (handwriting, shapes, text, sticky notes, images, or a mix) gets a box with resize handles and a rotation knob below it. Corners keep proportions, edges stretch (Shift keeps proportions on edges too); rotation snaps to 15° with Shift. Text scales its font size; text, sticky notes and images can be rotated
+- **Edit shapes:** a selected shape's bar changes its type, line width (exact px), fill and colour; a selected line or arrow has handles on both ends
 - **Apply a font to handwriting:** lasso-select pen writing (e.g. a title) and choose *Apply font*. On Windows the built-in offline handwriting recognizer (Windows Ink) reads the words and suggests alternatives; you can correct the text, preview it in every handwriting font, and it replaces the ink at the same place and size (optionally keeping the ink). Elsewhere you type what you wrote
 - **Pages:** sidebar thumbnails, add / insert / duplicate / reorder / delete / bookmark
 - **Editing:** undo/redo, zoom (Ctrl+wheel, pinch, fit width), pan tool

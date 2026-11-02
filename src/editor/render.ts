@@ -1,5 +1,5 @@
-import type { Template } from "../api";
-import { handlesFor, isClosedShape, pressureWidth, setLineCounter, textHeight, type Rect, type TextStyle } from "./geometry";
+import type { P2, Template } from "../api";
+import { boxOf, groupHandles, handlesFor, isClosedShape, pressureWidth, setLineCounter, textHeight, type Rect, type TextStyle } from "./geometry";
 import { LIST_MARKER } from "./textFormat";
 import { fontCss } from "../fonts";
 import type { El, Pt, ShapeEl, StickyEl, StrokeEl, TextEl } from "./model";
@@ -348,6 +348,13 @@ export function measureText(text: string, font: string | undefined, size: number
   return Math.max(...text.split("\n").map((line) => measureCtx!.measureText(line).width));
 }
 
+/** Width a text box needs to show every paragraph on one line. */
+export function naturalTextWidth(el: TextEl): number {
+  measureCtx ??= document.createElement("canvas").getContext("2d");
+  if (!measureCtx) return el.w;
+  return Math.max(0, ...layoutText(measureCtx, el.text, 0, 0, 1e6, el.fontSize, el.fontSize, el).map((l) => l.width));
+}
+
 /**
  * Picks a font size so `text` covers roughly the same area as the
  * handwriting it replaces: width-driven, limited by the ink's height.
@@ -454,6 +461,19 @@ function drawSticky(ctx: CanvasRenderingContext2D, el: StickyEl) {
 export type ImageCache = Map<string, HTMLImageElement>;
 
 export function drawElement(ctx: CanvasRenderingContext2D, el: El, images: ImageCache, onImageLoad: () => void) {
+  // Text boxes, sticky notes and images can be rotated around their centre.
+  if ((el.kind === "text" || el.kind === "sticky" || el.kind === "image") && el.rotation) {
+    const r = boxOf(el);
+    const cx = r.x + r.w / 2;
+    const cy = r.y + r.h / 2;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(el.rotation);
+    ctx.translate(-cx, -cy);
+    drawElement(ctx, { ...el, rotation: 0 }, images, onImageLoad);
+    ctx.restore();
+    return;
+  }
   switch (el.kind) {
     case "stroke":
       return drawStroke(ctx, el);
@@ -489,6 +509,46 @@ export function drawSelection(ctx: CanvasRenderingContext2D, r: Rect, zoom: numb
   ctx.lineWidth = 1.5 / zoom;
   ctx.setLineDash([6 / zoom, 4 / zoom]);
   ctx.strokeRect(r.x - 6, r.y - 6, r.w + 12, r.h + 12);
+  ctx.restore();
+}
+
+/** Selection transform handles: 8 resize squares and a rotation knob below. */
+export function drawGroupHandles(ctx: CanvasRenderingContext2D, box: Rect, zoom: number) {
+  const size = 9 / zoom;
+  const hs = groupHandles(box, zoom);
+  const rot = hs.find((h) => h.id === "rot")!;
+  ctx.save();
+  ctx.lineWidth = 1.5 / zoom;
+  ctx.strokeStyle = "#2563eb";
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.moveTo(rot.x, box.y + box.h);
+  ctx.lineTo(rot.x, rot.y - size * 0.7);
+  ctx.stroke();
+  for (const h of hs) {
+    ctx.beginPath();
+    if (h.id === "rot") ctx.arc(h.x, h.y, size * 0.7, 0, Math.PI * 2);
+    else ctx.rect(h.x - size / 2, h.y - size / 2, size, size);
+    ctx.fill();
+    ctx.stroke();
+  }
+  // A small turning arrow inside the rotation knob.
+  ctx.beginPath();
+  ctx.arc(rot.x, rot.y, size * 0.35, -Math.PI * 0.9, Math.PI * 0.5);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** The selection outline while it is being transformed (possibly rotated). */
+export function drawTransformedBox(ctx: CanvasRenderingContext2D, corners: P2[], zoom: number) {
+  ctx.save();
+  ctx.strokeStyle = "#2563eb";
+  ctx.lineWidth = 1.5 / zoom;
+  ctx.setLineDash([6 / zoom, 4 / zoom]);
+  ctx.beginPath();
+  corners.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+  ctx.closePath();
+  ctx.stroke();
   ctx.restore();
 }
 

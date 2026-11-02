@@ -21,6 +21,12 @@ import {
   eraseElement,
   geomBox,
   transformShape,
+  applyAffine,
+  groupHandleAt,
+  groupTransform,
+  transformElement,
+  type Affine,
+  type GroupHandle,
   translate,
   unionRects,
   type Handle,
@@ -32,7 +38,7 @@ import { continueList, currentList, toggleList, type ListKind } from "./textForm
 import { beautify, detectBrace, recognizeShape } from "./beautify";
 import { anchorsAsTargets, paperTargets, snapMove, type Anchor, type Guide, type Target } from "./snap";
 import { fromStored, newId, nextZ, PEN_STYLES, toStored, type El, type PenStyle, type Pt, type ShapeEl, type StickyEl, type StrokeEl, type TextAlign, type TextEl } from "./model";
-import { drawElement, drawGuides, drawHandles, drawLasso, drawSelection, drawStroke, drawTemplate, fitTextToBox, paperLayout, preloadImages, renderPage, templatePreview, textAnchors, type ImageCache } from "./render";
+import { drawElement, drawGroupHandles, drawGuides, drawHandles, drawLasso, drawTransformedBox, drawSelection, drawStroke, drawTemplate, fitTextToBox, naturalTextWidth, paperLayout, preloadImages, renderPage, templatePreview, textAnchors, type ImageCache } from "./render";
 
 type Tool = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "sticky" | "hand";
 
@@ -106,7 +112,8 @@ type Gesture =
   | { type: "move"; start: P2; original: El[]; dx: number; dy: number; snap: { anchors: Anchor[]; targets: Target[] } | null; guides: Guide[] }
   | { type: "pan"; sx: number; sy: number; left: number; top: number }
   | { type: "shape"; start: P2; preview: ShapeEl | null }
-  | { type: "handle"; handle: Handle; original: El; preview: El };
+  | { type: "handle"; handle: Handle; original: El; preview: El }
+  | { type: "transform"; handle: GroupHandle; start: P2; box: Rect; originals: El[]; previews: El[]; m: Affine };
 
 /**
  * After a held stroke snaps to a refined shape, the pen keeps control of it
@@ -964,14 +971,22 @@ export class EditorScreen {
       drawGuides(ctx, g.guides, this.zoom);
     } else if (g?.type === "handle") {
       drawElement(ctx, g.preview, this.images, () => {});
+    } else if (g?.type === "transform") {
+      for (const el of g.previews) drawElement(ctx, el, this.images, () => {});
+      const b = g.box;
+      drawTransformedBox(ctx, ([[b.x, b.y], [b.x + b.w, b.y], [b.x + b.w, b.y + b.h], [b.x, b.y + b.h]] as P2[]).map((p) => applyAffine(g.m, p)), this.zoom);
     }
-    const sel = g?.type === "handle" ? bounds(g.preview) : this.selectionBounds();
+    const sel = g?.type === "handle" ? bounds(g.preview) : g?.type === "transform" ? null : this.selectionBounds();
     if (sel) {
       const r = g?.type === "move" ? { ...sel, x: sel.x + g.dx, y: sel.y + g.dy } : sel;
       drawSelection(ctx, r, this.zoom);
     }
-    const editable = g?.type === "handle" ? g.preview : g ? null : this.singleResizable();
-    if (editable) drawHandles(ctx, editable, this.zoom);
+    const segment = g?.type === "handle" ? g.preview : g ? null : this.singleSegment();
+    if (segment) drawHandles(ctx, segment, this.zoom);
+    else if (!g) {
+      const box = this.transformBox();
+      if (box) drawGroupHandles(ctx, box, this.zoom);
+    }
     if (this.tool === "eraser" && this.cursor) {
       ctx.save();
       ctx.strokeStyle = "rgba(100,100,100,0.8)";
@@ -1116,11 +1131,24 @@ export class EditorScreen {
         this.eraseAlong([x, y]);
         break;
       case "lasso": {
-        const single = this.singleResizable();
+        const single = this.singleSegment();
         const handle = single ? handleAt(single, x, y, 10 / this.zoom) : null;
         if (single && handle) {
           this.gesture = { type: "handle", handle, original: single, preview: single };
           this.hiddenIds.add(single.id);
+          this.rebuildCache();
+          break;
+        }
+        // Pressing on the selected content itself always moves it; the
+        // handles sit just outside, so small selections stay easy to drag.
+        const content = this.selectionBounds();
+        const onContent = !!content && rectContains(content, x, y);
+        const tbox = single || onContent ? null : this.transformBox();
+        const gh = tbox ? groupHandleAt(tbox, x, y, this.zoom) : null;
+        if (tbox && gh) {
+          const originals = this.elements.filter((el) => this.selection.has(el.id));
+          this.gesture = { type: "transform", handle: gh, start: [x, y], box: tbox, originals, previews: originals, m: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 } };
+          for (const el of originals) this.hiddenIds.add(el.id);
           this.rebuildCache();
           break;
         }
@@ -1213,6 +1241,12 @@ export class EditorScreen {
       case "handle":
         g.preview = resizeElement(g.original, g.handle, this.cursor, e.shiftKey);
         break;
+      case "transform": {
+        const t = groupTransform(g.box, g.handle, g.start, this.cursor, e.shiftKey);
+        g.m = t.m;
+        g.previews = g.originals.map((el) => transformElement(el, t.m, t.sx, t.sy, t.angle));
+        break;
+      }
       case "shape": {
         const shape = buildShape(this.shapeKind, g.start, this.cursor, e.shiftKey);
         g.preview = shape ? this.makeShapeEl(shape) : null;
@@ -1332,11 +1366,11 @@ export class EditorScreen {
 
   /** Alignment anchors for moving text, and what they can line up with. */
   private buildSnap(moving: El[]): { anchors: Anchor[]; targets: Target[] } | null {
-    const texts = moving.filter((el): el is TextEl => el.kind === "text" && el.text.trim().length > 0);
+    const texts = moving.filter((el): el is TextEl => el.kind === "text" && el.text.trim().length > 0 && !el.rotation);
     if (!texts.length) return null;
     const ids = new Set(moving.map((el) => el.id));
     const targets: Target[] = [];
-    for (const el of this.elements) if (!ids.has(el.id) && el.kind === "text" && el.text.trim()) targets.push(...anchorsAsTargets(textAnchors(el)));
+    for (const el of this.elements) if (!ids.has(el.id) && el.kind === "text" && el.text.trim() && !el.rotation) targets.push(...anchorsAsTargets(textAnchors(el)));
     const paper = paperLayout(this.page.template, this.page.width, this.page.height);
     targets.push(...paperTargets(paper.rules, paper.ruleSpan, paper.margin, this.page.width, this.page.height));
     return { anchors: texts.flatMap(textAnchors), targets };
@@ -1403,6 +1437,22 @@ export class EditorScreen {
           for (const el of this.elements) if (insideLasso(el, g.points)) this.selection.add(el.id);
         }
         this.draw();
+        break;
+      }
+      case "transform": {
+        this.gesture = null;
+        this.hiddenIds.clear();
+        if (g.previews !== g.originals) {
+          const next = new Map(g.previews.map((el) => [el.id, el]));
+          this.snapshot();
+          this.elements = this.elements.map((el) => next.get(el.id) ?? el);
+          this.selectionBarKey = "";
+          this.changed();
+          void this.loadFontsFor(g.previews);
+        } else {
+          this.rebuildCache();
+          this.draw();
+        }
         break;
       }
       case "handle": {
@@ -1597,19 +1647,39 @@ export class EditorScreen {
   }
 
   /** The selected element when exactly one reshapeable item is selected. */
-  private singleResizable(): El | null {
+  /** The selected shape when exactly one shape is selected (for the shape bar). */
+  private singleShape(): ShapeEl | null {
     if (this.selection.size !== 1) return null;
     const el = this.elements.find((x) => this.selection.has(x.id));
-    return el && isResizable(el) ? el : null;
+    return el?.kind === "shape" ? el : null;
+  }
+
+  /** A single selected line or arrow: edited by dragging its two ends. */
+  private singleSegment(): ShapeEl | null {
+    const s = this.singleShape();
+    return s && (s.shape.kind === "line" || s.shape.kind === "arrow") && isResizable(s) ? s : null;
+  }
+
+  /** The box with resize/rotate handles around the current selection. */
+  private transformBox(): Rect | null {
+    if (this.tool !== "lasso" || this.singleSegment()) return null;
+    const sel = this.selectionBounds();
+    return sel ? { x: sel.x - 6, y: sel.y - 6, w: sel.w + 12, h: sel.h + 12 } : null;
   }
 
   private updateHoverCursor() {
-    const single = this.singleResizable();
+    const single = this.singleSegment();
     const c = this.cursor;
     let cursor = "";
     if (single && c) {
       const hd = handleAt(single, c[0], c[1], 10 / this.zoom);
       if (hd) cursor = HANDLE_CURSORS[hd];
+    }
+    const content = this.selectionBounds();
+    const tbox = c && content && rectContains(content, c[0], c[1]) ? null : this.transformBox();
+    if (!cursor && tbox && c) {
+      const gh = groupHandleAt(tbox, c[0], c[1], this.zoom);
+      if (gh) cursor = gh === "rot" ? "grab" : HANDLE_CURSORS[gh];
     }
     if (!cursor && c) {
       const sel = this.selectionBounds();
@@ -1620,7 +1690,7 @@ export class EditorScreen {
 
   /** Applies a change to the single selected shape, as one undo step. */
   private updateSelectedShape(change: (el: El) => El, refreshBar = true) {
-    const single = this.singleResizable();
+    const single = this.singleShape();
     if (!single) return;
     const next = change(single);
     if (next === single) return;
@@ -1716,7 +1786,7 @@ export class EditorScreen {
       );
     }
     const shapeControls: HTMLElement[] = [];
-    const single = this.singleResizable();
+    const single = this.singleShape();
     if (single?.kind === "shape") {
       const closed = isClosedShape(single.shape);
       const kindBtn = h("button", { class: "icon-btn small apply-font", "aria-haspopup": "menu", title: "Change shape" }, icon(SHAPE_KINDS.find((k) => k.id === single.shape.kind)?.icon ?? "shape"), icon("down"));
@@ -1922,6 +1992,8 @@ export class EditorScreen {
     input.style.fontWeight = el.bold ? "bold" : "normal";
     input.style.fontStyle = el.italic ? "italic" : "normal";
     input.style.textAlign = el.align ?? "left";
+    input.style.transformOrigin = "center";
+    input.style.transform = el.rotation ? `rotate(${el.rotation}rad)` : "";
     if (el.kind === "text") {
       input.style.fontSize = `${el.fontSize * z}px`;
       input.style.color = el.color;
@@ -1948,6 +2020,16 @@ export class EditorScreen {
     const before = this.undoStack[this.undoStack.length - 1];
     if (el.kind === "text" && !el.text.trim()) {
       this.elements = this.elements.filter((x) => x.id !== el.id);
+    } else if (el.kind === "text") {
+      // Shrink the box to its text when nothing needs wrapping, so selecting,
+      // aligning and transforming follow the visible words.
+      const natural = Math.ceil(naturalTextWidth(el) + 4);
+      if (natural < el.w) {
+        const shrunk = { ...el, w: Math.max(24, natural) };
+        if (el.align === "center") shrunk.x = el.x + (el.w - shrunk.w) / 2;
+        else if (el.align === "right") shrunk.x = el.x + el.w - shrunk.w;
+        this.elements = this.elements.map((x) => (x.id === el.id ? shrunk : x));
+      }
     }
     // Drop the undo entry when nothing changed.
     if (before === JSON.stringify(this.elements)) this.undoStack.pop();

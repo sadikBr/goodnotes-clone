@@ -50,6 +50,8 @@ export interface TextEl extends Base {
   bold?: boolean;
   italic?: boolean;
   align?: TextAlign;
+  /** Rotation in radians around the box centre. */
+  rotation?: number;
 }
 
 export type TextAlign = "left" | "center" | "right";
@@ -68,6 +70,7 @@ export interface StickyEl extends Base {
   bold?: boolean;
   italic?: boolean;
   align?: TextAlign;
+  rotation?: number;
 }
 
 export interface ImageEl extends Base {
@@ -77,6 +80,7 @@ export interface ImageEl extends Base {
   w: number;
   h: number;
   src: string;
+  rotation?: number;
 }
 
 export type El = StrokeEl | ShapeEl | TextEl | StickyEl | ImageEl;

@@ -85,11 +85,28 @@ export function bounds(el: El): Rect {
       return rectOfPoints(s.points, el.width / 2);
     }
     case "text":
-      return { x: el.x, y: el.y, w: el.w, h: textHeight(el.text, el.fontSize, el.w, el) };
     case "sticky":
     case "image":
-      return { x: el.x, y: el.y, w: el.w, h: el.h };
+      return rotatedBounds(boxOf(el), el.rotation ?? 0);
   }
+}
+
+/** The unrotated box of a text box, sticky note or image. */
+export function boxOf(el: Extract<El, { kind: "text" | "sticky" | "image" }>): Rect {
+  if (el.kind === "text") return { x: el.x, y: el.y, w: el.w, h: textHeight(el.text, el.fontSize, el.w, el) };
+  return { x: el.x, y: el.y, w: el.w, h: el.h };
+}
+
+/** Axis-aligned bounds of a box rotated around its centre. */
+function rotatedBounds(r: Rect, angle: number): Rect {
+  if (!angle) return r;
+  const cx = r.x + r.w / 2;
+  const cy = r.y + r.h / 2;
+  const c = Math.abs(Math.cos(angle));
+  const s = Math.abs(Math.sin(angle));
+  const w = r.w * c + r.h * s;
+  const h = r.w * s + r.h * c;
+  return { x: cx - w / 2, y: cy - h / 2, w, h };
 }
 
 export function unionRects(rects: Rect[]): Rect | null {
@@ -124,8 +141,20 @@ export function hitTest(el: El, x: number, y: number, radius: number): boolean {
       return closed && el.fill !== null && pointInPolygon(x, y, s.points);
     }
     default: {
-      const r = bounds(el);
-      return rectContains({ x: r.x - radius, y: r.y - radius, w: r.w + 2 * radius, h: r.h + 2 * radius }, x, y);
+      // Test in the box's own (unrotated) frame.
+      const r = boxOf(el);
+      const rot = el.rotation ?? 0;
+      let px = x;
+      let py = y;
+      if (rot) {
+        const cx = r.x + r.w / 2;
+        const cy = r.y + r.h / 2;
+        const c = Math.cos(-rot);
+        const s = Math.sin(-rot);
+        px = cx + (x - cx) * c - (y - cy) * s;
+        py = cy + (x - cx) * s + (y - cy) * c;
+      }
+      return rectContains({ x: r.x - radius, y: r.y - radius, w: r.w + 2 * radius, h: r.h + 2 * radius }, px, py);
     }
   }
 }
@@ -488,4 +517,131 @@ export function eraseElement(el: El, x: number, y: number, radius: number): El[]
     });
   }
   return null;
+}
+
+// ------------------------------------------------- selection transforms
+
+/** 2D affine map: x' = a·x + c·y + e, y' = b·x + d·y + f. */
+export interface Affine {
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+  e: number;
+  f: number;
+}
+
+export function applyAffine(m: Affine, [x, y]: P2): P2 {
+  return [m.a * x + m.c * y + m.e, m.b * x + m.d * y + m.f];
+}
+
+export function scaleAbout(ax: number, ay: number, sx: number, sy: number): Affine {
+  return { a: sx, b: 0, c: 0, d: sy, e: ax - sx * ax, f: ay - sy * ay };
+}
+
+export function rotateAbout(cx: number, cy: number, angle: number): Affine {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return { a: cos, b: sin, c: -sin, d: cos, e: cx - cos * cx + sin * cy, f: cy - sin * cx - cos * cy };
+}
+
+export type GroupHandle = Exclude<Handle, "p0" | "p1"> | "rot";
+
+/** Handles around a selection box; the rotation handle sits below it. */
+export function groupHandles(box: Rect, zoom: number): { id: GroupHandle; x: number; y: number }[] {
+  const [x0, y0, x1, y1] = [box.x, box.y, box.x + box.w, box.y + box.h];
+  const cx = (x0 + x1) / 2;
+  const cy = (y0 + y1) / 2;
+  return [
+    { id: "nw", x: x0, y: y0 },
+    { id: "n", x: cx, y: y0 },
+    { id: "ne", x: x1, y: y0 },
+    { id: "e", x: x1, y: cy },
+    { id: "se", x: x1, y: y1 },
+    { id: "s", x: cx, y: y1 },
+    { id: "sw", x: x0, y: y1 },
+    { id: "w", x: x0, y: cy },
+    { id: "rot", x: cx, y: y1 + 30 / zoom },
+  ];
+}
+
+export function groupHandleAt(box: Rect, x: number, y: number, zoom: number): GroupHandle | null {
+  for (const h of groupHandles(box, zoom)) if (Math.hypot(h.x - x, h.y - y) <= 10 / zoom) return h.id;
+  return null;
+}
+
+/**
+ * The affine map for dragging a selection handle to `p`: corner/edge handles
+ * scale from the opposite side (Shift keeps proportions), the rotation handle
+ * turns around the centre (Shift snaps to 15°).
+ */
+export function groupTransform(box: Rect, handle: GroupHandle, start: P2, p: P2, constrain: boolean): { m: Affine; sx: number; sy: number; angle: number } {
+  if (handle === "rot") {
+    const cx = box.x + box.w / 2;
+    const cy = box.y + box.h / 2;
+    let angle = Math.atan2(p[1] - cy, p[0] - cx) - Math.atan2(start[1] - cy, start[0] - cx);
+    if (constrain) angle = Math.round(angle / (Math.PI / 12)) * (Math.PI / 12);
+    return { m: rotateAbout(cx, cy, angle), sx: 1, sy: 1, angle };
+  }
+  let x0 = box.x;
+  let y0 = box.y;
+  let x1 = box.x + box.w;
+  let y1 = box.y + box.h;
+  if (handle.includes("w")) x0 = Math.min(p[0], x1 - MIN_SIZE);
+  if (handle.includes("e")) x1 = Math.max(p[0], x0 + MIN_SIZE);
+  if (handle.includes("n")) y0 = Math.min(p[1], y1 - MIN_SIZE);
+  if (handle.includes("s")) y1 = Math.max(p[1], y0 + MIN_SIZE);
+  let sx = box.w > 0 ? (x1 - x0) / box.w : 1;
+  let sy = box.h > 0 ? (y1 - y0) / box.h : 1;
+  if (constrain || handle.length === 2) {
+    // Corners keep proportions by default; Shift does it for edges too.
+    const s = handle.length === 2 ? Math.max(sx, sy) : handle === "n" || handle === "s" ? sy : sx;
+    sx = s;
+    sy = s;
+  }
+  const ax = handle.includes("w") ? box.x + box.w : handle.includes("e") ? box.x : box.x + box.w / 2;
+  const ay = handle.includes("n") ? box.y + box.h : handle.includes("s") ? box.y : box.y + box.h / 2;
+  return { m: scaleAbout(ax, ay, sx, sy), sx, sy, angle: 0 };
+}
+
+/** Applies a selection transform to one element. */
+export function transformElement(el: El, m: Affine, sx: number, sy: number, angle: number): El {
+  const widthScale = Math.sqrt(Math.abs(sx * sy));
+  switch (el.kind) {
+    case "stroke":
+      return { ...el, width: el.width * widthScale, points: el.points.map((p) => [...applyAffine(m, [p[0], p[1]]), p[2]] as Pt) };
+    case "shape": {
+      const s = el.shape;
+      let shape: RecognizedShape;
+      if (s.kind === "ellipse") {
+        const [cx, cy] = applyAffine(m, [s.cx, s.cy]);
+        const circle = Math.abs(s.rx - s.ry) < 0.5;
+        if (!angle || circle) shape = { ...s, cx, cy, rx: s.rx * Math.abs(sx), ry: s.ry * Math.abs(sy) };
+        else {
+          const pts: P2[] = [];
+          for (let i = 0; i < 72; i++) {
+            const t = (i / 72) * Math.PI * 2;
+            pts.push(applyAffine(m, [s.cx + Math.cos(t) * s.rx, s.cy + Math.sin(t) * s.ry]));
+          }
+          shape = { kind: "path", points: [...pts, pts[0]], closed: true };
+        }
+      } else shape = { ...s, points: s.points.map((p) => applyAffine(m, p)) } as RecognizedShape;
+      return { ...el, width: el.width * widthScale, shape };
+    }
+    case "text":
+    case "sticky":
+    case "image": {
+      const r = boxOf(el);
+      const [cx, cy] = applyAffine(m, [r.x + r.w / 2, r.y + r.h / 2]);
+      const w = r.w * Math.abs(sx);
+      const h = r.h * Math.abs(sy);
+      const rotation = (el.rotation ?? 0) + angle;
+      if (el.kind === "text") {
+        const fontSize = Math.max(4, el.fontSize * Math.abs(sy));
+        return { ...el, x: cx - w / 2, y: cy - h / 2, w, fontSize, rotation };
+      }
+      if (el.kind === "sticky") return { ...el, x: cx - w / 2, y: cy - h / 2, w, h, rotation, fontSize: Math.max(4, (el.fontSize ?? 18) * Math.abs(sy)) };
+      return { ...el, x: cx - w / 2, y: cy - h / 2, w, h, rotation };
+    }
+  }
 }

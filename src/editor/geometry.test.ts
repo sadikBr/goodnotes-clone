@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bounds, buildShape, convertShape, eraseElement, geomBox, handleAt, handlesFor, hitForSelect, hitTest, resizeElement, setLineCounter, insideLasso, isHeld, pointInPolygon, pressureWidth, translate, unionRects } from "./geometry";
+import { applyAffine, bounds, groupTransform, rotateAbout, scaleAbout, transformElement, buildShape, convertShape, eraseElement, geomBox, handleAt, handlesFor, hitForSelect, hitTest, resizeElement, setLineCounter, insideLasso, isHeld, pointInPolygon, pressureWidth, translate, unionRects } from "./geometry";
 import { fromStored, nextZ, toStored, type El, type StrokeEl } from "./model";
 
 const stroke = (points: [number, number][], width = 4): StrokeEl => ({
@@ -198,5 +198,62 @@ describe("partial erasing", () => {
   it("leaves text alone (handled as whole objects)", () => {
     const text: El = { id: "t", z: 0, kind: "text", x: 0, y: 0, w: 100, text: "hi", fontSize: 20, color: "#000" };
     expect(eraseElement(text, 5, 5, 10)).toBeNull();
+  });
+});
+
+describe("selection transforms", () => {
+  const box = { x: 0, y: 0, w: 100, h: 50 };
+
+  it("scales from the opposite corner, keeping proportions on corners", () => {
+    const t = groupTransform(box, "se", [100, 50], [200, 60], false);
+    expect([t.sx, t.sy]).toEqual([2, 2]);
+    expect(applyAffine(t.m, [0, 0])).toEqual([0, 0]); // opposite corner stays put
+    expect(applyAffine(t.m, [100, 50])).toEqual([200, 100]);
+  });
+
+  it("stretches along one axis from an edge handle", () => {
+    const t = groupTransform(box, "e", [100, 25], [150, 999], false);
+    expect([t.sx, t.sy]).toEqual([1.5, 1]);
+    const w = groupTransform(box, "w", [0, 25], [-50, 25], false);
+    expect(applyAffine(w.m, [100, 0])[0]).toBeCloseTo(100); // right edge fixed
+  });
+
+  it("rotates around the centre, snapping to 15° with Shift", () => {
+    const t = groupTransform(box, "rot", [50, 80], [10, 25], true);
+    expect(t.angle).toBeCloseTo(Math.PI / 2);
+    const c = applyAffine(t.m, [50, 25]);
+    expect(c[0]).toBeCloseTo(50);
+    expect(c[1]).toBeCloseTo(25);
+  });
+
+  it("transforms every element kind", () => {
+    const r = rotateAbout(0, 0, Math.PI / 2);
+    const st = transformElement(stroke([[10, 0]]), r, 1, 1, Math.PI / 2) as StrokeEl;
+    expect(st.points[0][0]).toBeCloseTo(0);
+    expect(st.points[0][1]).toBeCloseTo(10);
+    expect(st.points[0][2]).toBe(0.5); // pressure kept
+
+    const img: El = { id: "i", z: 0, kind: "image", x: 0, y: 0, w: 100, h: 50, src: "x" };
+    const scaled = transformElement(img, scaleAbout(0, 0, 2, 2), 2, 2, 0) as typeof img;
+    expect([scaled.x, scaled.y, scaled.w, scaled.h]).toEqual([0, 0, 200, 100]);
+
+    const turned = transformElement(img, rotateAbout(50, 25, Math.PI / 2), 1, 1, Math.PI / 2) as typeof img;
+    expect(turned.rotation).toBeCloseTo(Math.PI / 2);
+    expect(turned.x).toBeCloseTo(0); // rotates in place around its own centre
+    const b = bounds(turned);
+    expect(b.w).toBeCloseTo(50);
+    expect(b.h).toBeCloseTo(100);
+
+    const text: El = { id: "t", z: 0, kind: "text", x: 0, y: 0, w: 100, text: "hi", fontSize: 20, color: "#000" };
+    const big = transformElement(text, scaleAbout(0, 0, 1.5, 1.5), 1.5, 1.5, 0) as typeof text;
+    expect(big.fontSize).toBe(30);
+    expect(big.w).toBe(150);
+  });
+
+  it("hit-tests rotated boxes in their own frame", () => {
+    const img: El = { id: "i", z: 0, kind: "image", x: 0, y: 40, w: 200, h: 20, src: "x", rotation: Math.PI / 2 };
+    expect(hitTest(img, 100, 50, 0)).toBe(true); // centre
+    expect(hitTest(img, 100, 140, 1)).toBe(true); // now extends vertically
+    expect(hitTest(img, 190, 50, 1)).toBe(false); // no longer horizontally
   });
 });
