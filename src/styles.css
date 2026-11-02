@@ -1235,23 +1235,23 @@ select option {
 
 /* Custom colour swatch and picker */
 .swatch-custom {
-  position: relative;
-  -webkit-appearance: none;
-  appearance: none;
-  background: conic-gradient(from 0deg, #ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ec4899, #ef4444);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  overflow: visible;
 }
-/* With a custom colour in use: rainbow ring around that colour. */
-.swatch-custom.has-colour::after {
-  content: "";
-  position: absolute;
-  inset: 3px;
-  border-radius: 50%;
-  background: var(--custom);
-  box-shadow: 0 0 0 1.5px var(--surface);
+.swatch-custom svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 .swatch-custom[aria-checked="true"] {
-  border-color: var(--surface);
+  /* Same ring as a selected preset: a gap in the surface colour, then accent. */
+  padding: 2px;
+  border-radius: 50%;
+  background: var(--surface);
   box-shadow: 0 0 0 2px var(--accent);
 }
 

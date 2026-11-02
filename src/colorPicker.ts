@@ -89,9 +89,26 @@ export function customColorButton(opts: CustomColorOptions): HTMLButtonElement {
     title: "Custom colour…",
     "aria-haspopup": "dialog",
   });
-  if (isCustom) btn.style.setProperty("--custom", value);
+  btn.innerHTML = rainbowSvg(isCustom ? value : null);
   btn.addEventListener("click", () => openColorPicker(btn, value ?? "#2563eb", opts.onPick));
   return btn;
+}
+
+/**
+ * The swatch artwork as SVG (CSS conic gradients render inconsistently in
+ * WebKitGTK): a disc of rainbow slices, or a rainbow ring around `colour`.
+ */
+function rainbowSvg(colour: string | null): string {
+  const n = 36;
+  const slices: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const a0 = (i / n) * Math.PI * 2 - Math.PI / 2;
+    const a1 = ((i + 1.15) / n) * Math.PI * 2 - Math.PI / 2; // slight overlap hides seams
+    const p = (a: number) => `${(12 + 12 * Math.cos(a)).toFixed(3)} ${(12 + 12 * Math.sin(a)).toFixed(3)}`;
+    slices.push(`<path d="M12 12L${p(a0)}A12 12 0 0 1 ${p(a1)}Z" fill="hsl(${(i * 360) / n} 85% 55%)"/>`);
+  }
+  const centre = colour ? `<circle cx="12" cy="12" r="7.6" fill="${colour}" stroke="var(--surface)" stroke-width="1.6"/>` : "";
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${slices.join("")}${centre}<circle cx="12" cy="12" r="11.6" fill="none" stroke="rgba(0,0,0,0.15)" stroke-width="0.8"/></svg>`;
 }
 
 // --- picker panel --------------------------------------------------------------
