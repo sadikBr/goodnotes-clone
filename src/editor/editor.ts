@@ -6,6 +6,7 @@ import { getPref, hasPref, setPref } from "../prefs";
 import { customColorButton } from "../colorPicker";
 import { isDark, toggleTheme } from "../theme";
 import { shortcutsSheet } from "./shortcuts";
+import { choiceChip, colorFavourites, Favourites, paletteFor, popover, sizeFavourites, type FavTool } from "./toolkit";
 import { confirmDialog, formDialog, h, icon, popupMenu, reportError, sizeControl, toast } from "../ui";
 import {
   bounds,
@@ -90,6 +91,30 @@ const ERASER_MODE_KEY = "inkleaf-eraser-mode";
 const LASER_MODE_KEY = "inkleaf-laser-mode";
 const INSTRUMENT_KEY = "inkleaf-instrument";
 const SIDEBAR_KEY = "inkleaf-page-sidebar";
+const FAV_TOOLS: FavTool[] = ["pen", "highlighter", "shape", "text", "sticky", "laser", "eraser"];
+const isFavTool = (t: string): t is FavTool => (FAV_TOOLS as string[]).includes(t);
+
+/** A short stroke drawn with a pen nib, for the nib menu. */
+function nibSample(style: PenStyle, color: string): HTMLElement {
+  const w = 56;
+  const hgt = 22;
+  const dpr = Math.max(2, window.devicePixelRatio || 1);
+  const c = document.createElement("canvas");
+  c.width = w * dpr;
+  c.height = hgt * dpr;
+  c.className = "nib-sample";
+  c.style.width = `${w}px`;
+  c.style.height = `${hgt}px`;
+  const ctx = c.getContext("2d")!;
+  ctx.scale(dpr, dpr);
+  const points: Pt[] = [];
+  for (let i = 0; i <= 24; i++) {
+    const t = i / 24;
+    points.push([4 + t * (w - 8), hgt / 2 + Math.sin(t * Math.PI * 2) * 6, 0.35 + 0.5 * Math.sin(t * Math.PI)]);
+  }
+  drawStroke(ctx, { id: "sample", z: 0, kind: "stroke", tool: "pen", style, color: color === "#ffffff" ? "#111827" : color, width: 2.6, points });
+  return c;
+}
 
 /** Size control ranges and one-tap presets per tool. */
 const SIZE_SPECS: Record<string, { label: string; min: number; max: number; step: number; presets: number[]; preview: "dot" | "letter" }> = {
@@ -168,6 +193,8 @@ export class EditorScreen {
   private redoStack: string[] = [];
   private tool: Tool = "pen";
   private colors: Record<string, string> = { pen: INK_COLORS[0], highlighter: "#facc15", shape: INK_COLORS[0], text: INK_COLORS[0], sticky: STICKY_COLORS[0], laser: LASER_COLORS[0] };
+  /** Each tool's favourite colours and sizes. */
+  private favs = new Favourites();
   /** Presentation laser: never part of the page. */
   private laser = Object.assign(new Laser(), { mode: getPref<LaserMode>(LASER_MODE_KEY, "trail", ["trail", "dot"]) });
   /** The laser has its own layer over the visible area, so the page is never redrawn for it. */
@@ -271,6 +298,13 @@ export class EditorScreen {
       this.fileInput,
     );
     this.root.classList.toggle("no-sidebar", getPref(SIDEBAR_KEY, "shown", ["shown", "hidden"]) === "hidden");
+    // Start every tool on its selected favourites.
+    for (const t of FAV_TOOLS) {
+      const c = this.favs.color(t);
+      const w = this.favs.size(t);
+      if (c) this.colors[t] = c;
+      if (w !== undefined) this.widths[t] = w;
+    }
     this.pageWrap.append(this.selectionBar);
     this.rulerLayer.append(this.ruler.el);
     this.ruler.setKind(getPref<InstrumentKind>(INSTRUMENT_KEY, "ruler", INSTRUMENTS.map((i) => i.id)));
@@ -910,48 +944,40 @@ export class EditorScreen {
         icon(t.id === "highlighter" ? "highlighter" : t.id === "sticky" ? "sticky" : t.id),
       ),
     );
-    const colorKey = this.tool === "sticky" ? "sticky" : this.tool === "lasso" ? null : this.colors[this.tool] ? this.tool : null;
-    const palette = colorKey === "sticky" ? STICKY_COLORS : colorKey === "laser" ? LASER_COLORS : INK_COLORS;
-    const swatches = colorKey
-      ? h(
-          "div",
-          { class: "ink-colors", role: "radiogroup", "aria-label": "Colour" },
-          ...palette.map((c) =>
-            h("button", {
-              class: "swatch small",
-              role: "radio",
-              "aria-checked": String(this.colors[colorKey].toLowerCase() === c),
-              "aria-label": c,
-              style: { background: c },
-              onclick: () => {
-                this.colors[colorKey] = c;
-                this.renderToolbar();
-              },
-            }),
-          ),
-          customColorButton({
-            value: this.colors[colorKey],
-            presets: palette,
-            onPick: (c) => {
-              this.colors[colorKey] = c;
-              this.renderToolbar();
+    // Favourite colours and sizes for the tool (the full choice is one tap away).
+    const tool = this.tool;
+    const fav = isFavTool(tool) ? this.favs.get(tool) : null;
+    const swatches =
+      fav && fav.colors.length
+        ? colorFavourites({
+            colors: fav.colors,
+            index: fav.color,
+            palette: paletteFor(tool as FavTool),
+            onSelect: (i) => {
+              this.favs.selectColor(tool as FavTool, i);
+              this.useFavourites(tool);
             },
-          }),
-        )
-      : null;
+            onEdit: (i, c) => {
+              this.favs.setColor(tool as FavTool, i, c);
+              this.useFavourites(tool);
+            },
+          })
+        : null;
     let width: HTMLElement | null = null;
-    const spec = SIZE_SPECS[this.tool];
-    if (spec) {
-      const tool = this.tool;
-      width = sizeControl({
-        ...spec,
-        value: this.widths[tool],
+    const spec = SIZE_SPECS[tool];
+    if (spec && fav && fav.sizes.length) {
+      width = sizeFavourites({
+        sizes: fav.sizes,
+        index: fav.size,
+        spec,
         unit: "px",
-        onChange: (v) => {
-          this.widths[tool] = v;
-          setPref(WIDTHS_KEY, JSON.stringify(this.widths));
-          if (tool === "text" || tool === "sticky") this.applyToEditing({ fontSize: v });
-          if (tool === "eraser") this.draw();
+        onSelect: (i) => {
+          this.favs.selectSize(tool as FavTool, i);
+          this.useFavourites(tool);
+        },
+        onEdit: (i, v) => {
+          this.favs.setSize(tool as FavTool, i, v);
+          this.useFavourites(tool, false);
         },
       });
     }
@@ -975,22 +1001,46 @@ export class EditorScreen {
     this.canvas.dataset.tool = this.tool;
   }
 
+  /**
+   * Applies a tool's selected favourites (colour and size). `rerender` is off
+   * while a slider is being dragged, so the popover stays open.
+   */
+  private useFavourites(tool: Tool, rerender = true) {
+    if (!isFavTool(tool)) return;
+    const c = this.favs.color(tool);
+    const w = this.favs.size(tool);
+    if (c) this.colors[tool] = c;
+    if (w !== undefined) {
+      this.widths[tool] = w;
+      setPref(WIDTHS_KEY, JSON.stringify(this.widths));
+      if (tool === "text" || tool === "sticky") this.applyToEditing({ fontSize: w });
+      if (tool === "eraser") this.draw();
+    }
+    if (rerender) this.renderToolbar();
+    else {
+      // Keep the size chip's number in step with the slider.
+      const chip = this.optionsBar.querySelector(".value-chip");
+      if (chip?.firstChild && w !== undefined) chip.firstChild.textContent = w.toFixed(SIZE_SPECS[tool]!.step < 1 ? 1 : 0);
+      this.optionsBar.querySelectorAll<HTMLElement>(".fav-size").forEach((b, i) => b.setAttribute("aria-checked", String(i === this.favs.get(tool).size)));
+    }
+  }
+
   /** Secondary choices for the active tool: pen type, or shape kind and fill. */
   private toolOptions(): HTMLElement | null {
     const chip = (label: string, ic: Parameters<typeof icon>[0], active: boolean, onclick: () => void) =>
       h("button", { class: `tool-btn small${active ? " active" : ""}`, "aria-pressed": String(active), "aria-label": label, title: label, onclick }, icon(ic));
     if (this.tool === "pen") {
-      return h(
-        "div",
-        { class: "tool-group options", role: "group", "aria-label": "Pen type" },
-        ...PEN_STYLES.map((p) =>
-          chip(p.label, p.id, this.penStyle === p.id, () => {
-            this.penStyle = p.id;
-            setPref(PEN_STYLE_KEY, p.id);
-            this.renderToolbar();
-          }),
-        ),
-      );
+      return choiceChip({
+        label: "Pen",
+        title: "Pen type",
+        current: this.penStyle,
+        items: PEN_STYLES.map((p) => ({ id: p.id, label: p.label, art: () => nibSample(p.id, this.colors.pen) })),
+        onPick: (id) => {
+          this.penStyle = id as PenStyle;
+          setPref(PEN_STYLE_KEY, id);
+          this.renderToolbar();
+        },
+      });
     }
     if (this.tool === "text" || this.tool === "sticky") return h("div", { class: "text-options" }, this.fontPicker(), this.formatControls());
     if (this.tool === "laser") {
@@ -1042,15 +1092,18 @@ export class EditorScreen {
     if (this.tool === "shape") {
       return h(
         "div",
-        { class: "tool-group options", role: "group", "aria-label": "Shape" },
-        ...SHAPE_KINDS.map((k) =>
-          chip(k.label, k.icon, this.shapeKind === k.id, () => {
-            this.shapeKind = k.id;
-            setPref(SHAPE_KIND_KEY, k.id);
+        { class: "options-row" },
+        choiceChip({
+          label: "Shape",
+          title: "Shape to draw",
+          current: this.shapeKind,
+          items: SHAPE_KINDS.map((k) => ({ id: k.id, label: k.id === "auto" ? "Auto shape" : k.label, art: () => icon(k.icon) })),
+          onPick: (id) => {
+            this.shapeKind = id as ShapeKind;
+            setPref(SHAPE_KIND_KEY, id);
             this.renderToolbar();
-          }),
-        ),
-        h("span", { class: "divider" }),
+          },
+        }),
         chip(this.shapeFill ? "Fill on" : "Fill off", "fill", this.shapeFill, () => {
           this.shapeFill = !this.shapeFill;
           this.renderToolbar();
@@ -1103,14 +1156,52 @@ export class EditorScreen {
       { class: "tool-group options", role: "group", "aria-label": "Text format" },
       btn("Bold (Ctrl+B)", h("b", {}, "B"), f.bold, () => this.applyFormat({ bold: !f.bold })),
       btn("Italic (Ctrl+I)", h("i", {}, "I"), f.italic, () => this.applyFormat({ italic: !f.italic }), "serif"),
-      h("span", { class: "divider" }),
-      btn("Bulleted list", icon("listBullet"), list === "bullet", () => this.applyFormat({ list: "bullet" })),
-      btn("Numbered list", icon("listNumber"), list === "number", () => this.applyFormat({ list: "number" })),
-      h("span", { class: "divider" }),
-      btn("Align left", icon("alignLeft"), f.align === "left", () => this.applyFormat({ align: "left" })),
-      btn("Align centre", icon("alignCenter"), f.align === "center", () => this.applyFormat({ align: "center" })),
-      btn("Align right", icon("alignRight"), f.align === "right", () => this.applyFormat({ align: "right" })),
+      this.paragraphChip(f.align, list),
     );
+  }
+
+  /** Lists and alignment, tucked behind one chip that shows the current alignment. */
+  private paragraphChip(align: TextAlign, list: ListKind | null): HTMLElement {
+    const alignIcon = { left: "alignLeft", center: "alignCenter", right: "alignRight" } as const;
+    const chipBtn = h(
+      "button",
+      { class: "choice-chip", "aria-haspopup": "dialog", "aria-label": "Paragraph: lists and alignment", title: "Lists & alignment" },
+      icon(alignIcon[align]),
+      ...(list ? [icon(list === "bullet" ? "listBullet" : "listNumber")] : []),
+      icon("down"),
+    );
+    // Keep the caret in the text box while picking.
+    chipBtn.addEventListener("pointerdown", (e) => e.preventDefault());
+    chipBtn.addEventListener("click", () => {
+      let close = () => {};
+      const opt = (label: string, art: HTMLElement, active: boolean, change: Parameters<EditorScreen["applyFormat"]>[0]) => {
+        const b = h(
+          "button",
+          { class: `tool-btn small fmt-btn${active ? " active" : ""}`, "aria-pressed": String(active), "aria-label": label, title: label, onclick: () => (close(), this.applyFormat(change)) },
+          art,
+        );
+        b.addEventListener("pointerdown", (e) => e.preventDefault());
+        return b;
+      };
+      close = popover(
+        chipBtn,
+        h(
+          "div",
+          { class: "para-pop" },
+          h("div", { class: "popover-title" }, "Lists"),
+          h("div", { class: "para-row" }, opt("Bulleted list", icon("listBullet"), list === "bullet", { list: "bullet" }), opt("Numbered list", icon("listNumber"), list === "number", { list: "number" })),
+          h("div", { class: "popover-title" }, "Alignment"),
+          h(
+            "div",
+            { class: "para-row" },
+            opt("Align left", icon("alignLeft"), align === "left", { align: "left" }),
+            opt("Align centre", icon("alignCenter"), align === "center", { align: "center" }),
+            opt("Align right", icon("alignRight"), align === "right", { align: "right" }),
+          ),
+        ),
+      );
+    });
+    return chipBtn;
   }
 
   /** Applies formatting to the box being edited (and remembers it for new boxes). */
