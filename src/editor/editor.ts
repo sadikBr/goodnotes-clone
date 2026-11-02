@@ -1,6 +1,6 @@
 // Notebook editor: page canvas, tools, page sidebar, undo/redo and autosave.
 
-import { api, PAPER_COLORS, TEMPLATES, type ExportFormat, type ExportPage, type Notebook, type P2, type Page, type RecognizedShape, type Template } from "../api";
+import { api, PAPER_COLORS, TEMPLATE_CATEGORIES, TEMPLATES, type ExportFormat, type ExportPage, type Notebook, type P2, type Page, type RecognizedShape, type Template } from "../api";
 import { ensureFonts, FONT_PRESETS, fontPreset, type FontId } from "../fonts";
 import { getPref, hasPref, setPref } from "../prefs";
 import { customColorButton } from "../colorPicker";
@@ -596,22 +596,56 @@ export class EditorScreen {
       document.removeEventListener("pointerdown", onOutside, true);
       document.removeEventListener("keydown", onKey, true);
     };
-    const cards = TEMPLATES.map((t) =>
+    // Papers are grouped in tabs so the panel stays small; previews are
+    // drawn when a tab is first shown.
+    let category = TEMPLATES.find((t) => t.id === current)?.category ?? "basic";
+    const grid = h("div", { class: "template-grid", role: "radiogroup", "aria-label": "Paper style" });
+    const previews = new Map<Template, HTMLElement>();
+    const card = (t: (typeof TEMPLATES)[number]) => {
+      let el = previews.get(t.id);
+      if (!el) {
+        el = h(
+          "button",
+          {
+            class: "template-card",
+            role: "radio",
+            title: t.label,
+            "aria-checked": String(t.id === current),
+            onclick: () => {
+              close();
+              if (t.id !== this.page.template) void this.setTemplate(t.id);
+            },
+          },
+          templatePreview(t.id, this.page.paperColor, 88, 110, t.preview === "page"),
+          h("span", { class: "template-card-label" }, t.label),
+        );
+        previews.set(t.id, el);
+      }
+      return el;
+    };
+    const tabs = TEMPLATE_CATEGORIES.map((c) =>
       h(
         "button",
         {
-          class: "template-card",
-          role: "radio",
-          "aria-checked": String(t.id === current),
+          class: "template-tab",
+          role: "tab",
+          title: c.label,
           onclick: () => {
-            close();
-            if (t.id !== this.page.template) void this.setTemplate(t.id);
+            category = c.id;
+            showCategory();
           },
         },
-        templatePreview(t.id, this.page.paperColor, 96, 120),
-        h("span", { class: "template-card-label" }, t.label),
+        c.short,
       ),
     );
+    const showCategory = () => {
+      TEMPLATE_CATEGORIES.forEach((c, i) => {
+        tabs[i].setAttribute("aria-selected", String(c.id === category));
+        tabs[i].classList.toggle("has-current", TEMPLATES.some((t) => t.id === current && t.category === c.id));
+      });
+      grid.replaceChildren(...TEMPLATES.filter((t) => t.category === category).map(card));
+    };
+    showCategory();
     const colours = h(
       "div",
       { class: "swatches paper-colours", role: "radiogroup", "aria-label": "Paper colour" },
@@ -634,7 +668,8 @@ export class EditorScreen {
       "div",
       { class: "template-popover", role: "dialog", "aria-label": "Page paper" },
       h("div", { class: "template-popover-title" }, "Paper for this page"),
-      h("div", { class: "template-grid", role: "radiogroup", "aria-label": "Paper style" }, ...cards),
+      h("div", { class: "template-tabs", role: "tablist", "aria-label": "Paper categories" }, ...tabs),
+      grid,
       h("div", { class: "template-popover-title spaced" }, "Paper colour"),
       colours,
       h(

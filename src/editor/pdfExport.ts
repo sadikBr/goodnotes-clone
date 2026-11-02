@@ -6,6 +6,7 @@ import type { El } from "./model";
 import { loadFaces, type FaceSpec } from "./pdfFonts";
 import { canvasMeasurer, markOpaque, PdfDocument, PdfPainter } from "./pdfVector";
 import { drawElement, drawTemplate, type ImageCache } from "./render";
+import { templateUsesText } from "./papers";
 
 export interface PdfPageInput {
   page: Page;
@@ -24,6 +25,9 @@ function facesOf(pages: PdfPageInput[]): FaceSpec[] {
       out.set(`${spec.font}/${spec.bold}/${spec.italic}`, spec);
     }
   }
+  // Planner labels are drawn in the regular sans face.
+  if (pages.some((p) => templateUsesText(p.page.template))) out.set("sans/false/false", { font: "sans", bold: false, italic: false });
+  if (pages.some((p) => templateUsesText(p.page.template))) out.set("sans/true/false", { font: "sans", bold: true, italic: false });
   return [...out.values()];
 }
 

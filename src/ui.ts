@@ -103,7 +103,8 @@ interface Field {
   label: string;
   type?: "text" | "select" | "color-swatches";
   value?: string;
-  options?: { value: string; label: string }[];
+  /** Options for a "select" field; consecutive options sharing a group go in one <optgroup>. */
+  options?: { value: string; label: string; group?: string }[];
   /** Colours for a "color-swatches" field (defaults to cover colours). */
   colors?: { color: string; label: string }[];
 }
@@ -130,7 +131,17 @@ export function formDialog(title: string, fields: Field[], submitLabel = "Save")
     for (const f of fields) {
       values[f.name] = f.value ?? "";
       if (f.type === "select") {
-        const select = h("select", { name: f.name }, ...(f.options ?? []).map((o) => h("option", { value: o.value, selected: o.value === f.value }, o.label)));
+        const option = (o: { value: string; label: string }) => h("option", { value: o.value, selected: o.value === f.value }, o.label);
+        const items: HTMLElement[] = [];
+        for (const o of f.options ?? []) {
+          if (!o.group) items.push(option(o));
+          else {
+            let grp = items[items.length - 1];
+            if (!(grp instanceof HTMLOptGroupElement) || grp.label !== o.group) items.push((grp = h("optgroup", { label: o.group })));
+            grp.append(option(o));
+          }
+        }
+        const select = h("select", { name: f.name }, ...items);
         select.addEventListener("change", () => (values[f.name] = select.value));
         if (!f.value && f.options?.length) values[f.name] = f.options[0].value;
         form.append(h("label", {}, h("span", {}, f.label), select));

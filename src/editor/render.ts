@@ -5,91 +5,8 @@ import { fontCss } from "../fonts";
 import type { El, Pt, ShapeEl, StickyEl, StrokeEl, TextEl } from "./model";
 import type { Anchor, Guide } from "./snap";
 
-/** True for dark paper, where lines and dots need to be light. */
-export function isDarkPaper(color: string): boolean {
-  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(color.trim());
-  if (!m) return false;
-  const [r, g, b] = [m[1], m[2], m[3]].map((x) => parseInt(x, 16) / 255);
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.45;
-}
-
-/** Where the paper's writing lines and margin are (shared with alignment guides). */
-export function paperLayout(template: Template, w: number, h: number): { rules: number[]; ruleSpan: [number, number]; margin: number | null } {
-  const rules: number[] = [];
-  switch (template) {
-    case "ruled":
-    case "narrow-ruled": {
-      const gap = template === "ruled" ? 34 : 26;
-      for (let y = 110; y < h - 30; y += gap) rules.push(y);
-      return { rules, ruleSpan: [0, w], margin: 90 };
-    }
-    case "grid":
-    case "dotted":
-      for (let y = 24; y < h; y += 24) rules.push(y);
-      return { rules, ruleSpan: [0, w], margin: null };
-    case "cornell": {
-      const cue = Math.round(w * 0.28);
-      const summary = h - Math.round(h * 0.2);
-      for (let y = 110; y < summary - 10; y += 34) rules.push(y);
-      return { rules, ruleSpan: [cue, w], margin: cue };
-    }
-    case "blank":
-      return { rules, ruleSpan: [0, w], margin: null };
-  }
-}
-
-export function drawTemplate(ctx: CanvasRenderingContext2D, template: Template, w: number, h: number, paper: string) {
-  ctx.fillStyle = paper;
-  ctx.fillRect(0, 0, w, h);
-  ctx.save();
-  const dark = isDarkPaper(paper);
-  const LINE_COLOR = dark ? "rgba(170, 190, 225, 0.28)" : "rgba(96, 140, 200, 0.35)";
-  const MARGIN_COLOR = dark ? "rgba(255, 120, 120, 0.45)" : "rgba(220, 80, 80, 0.45)";
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = LINE_COLOR;
-  const hline = (y: number, x0 = 0, x1 = w) => {
-    ctx.beginPath();
-    ctx.moveTo(x0, y + 0.5);
-    ctx.lineTo(x1, y + 0.5);
-    ctx.stroke();
-  };
-  const vline = (x: number, y0 = 0, y1 = h) => {
-    ctx.beginPath();
-    ctx.moveTo(x + 0.5, y0);
-    ctx.lineTo(x + 0.5, y1);
-    ctx.stroke();
-  };
-  switch (template) {
-    case "ruled":
-    case "narrow-ruled": {
-      for (const y of paperLayout(template, w, h).rules) hline(y);
-      ctx.strokeStyle = MARGIN_COLOR;
-      vline(90);
-      break;
-    }
-    case "grid":
-      for (let y = 24; y < h; y += 24) hline(y);
-      for (let x = 24; x < w; x += 24) vline(x);
-      break;
-    case "dotted":
-      ctx.fillStyle = dark ? "rgba(200, 210, 225, 0.4)" : "rgba(90, 100, 120, 0.45)";
-      for (let y = 24; y < h; y += 24) for (let x = 24; x < w; x += 24) ctx.fillRect(x - 1, y - 1, 2.2, 2.2);
-      break;
-    case "cornell": {
-      const cue = Math.round(w * 0.28);
-      const summary = h - Math.round(h * 0.2);
-      for (const y of paperLayout(template, w, h).rules) hline(y, cue, w);
-      ctx.strokeStyle = MARGIN_COLOR;
-      vline(cue, 70, summary);
-      hline(70);
-      hline(summary);
-      break;
-    }
-    case "blank":
-      break;
-  }
-  ctx.restore();
-}
+export { drawTemplate, isDarkPaper, paperLayout } from "./papers";
+import { drawTemplate } from "./papers";
 
 function strokePath(ctx: CanvasRenderingContext2D, pts: Pt[]) {
   ctx.beginPath();
@@ -709,10 +626,11 @@ export async function preloadImages(elements: El[], images: ImageCache): Promise
 }
 
 /**
- * A small preview of a paper template. Shows the page's top-left corner
- * (the full page would make lines too faint at thumbnail size).
+ * A small preview of a paper template: a close-up of the page's top-left
+ * corner (lines would be too faint at thumbnail size), or the whole page
+ * for structured layouts (`whole`).
  */
-export function templatePreview(template: Template, paper: string, cssW: number, cssH: number): HTMLCanvasElement {
+export function templatePreview(template: Template, paper: string, cssW: number, cssH: number, whole = false): HTMLCanvasElement {
   const dpr = Math.max(2, window.devicePixelRatio || 1);
   const region = 300; // page units shown across
   const scale = cssW / region;
@@ -722,6 +640,11 @@ export function templatePreview(template: Template, paper: string, cssW: number,
   c.style.width = `${cssW}px`;
   c.style.height = `${cssH}px`;
   const ctx = c.getContext("2d")!;
+  if (whole) {
+    ctx.scale((cssW / 794) * dpr, (cssH / 1123) * dpr);
+    drawTemplate(ctx, template, 794, 1123, paper);
+    return c;
+  }
   ctx.scale(scale * dpr, scale * dpr);
   // Start a little above the first ruled line so lines are visible.
   ctx.translate(-40, -70);

@@ -1172,8 +1172,50 @@ select option {
 }
 .template-grid {
   display: grid;
-  grid-template-columns: repeat(3, 108px);
-  gap: 10px;
+  grid-template-columns: repeat(3, 100px);
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: 8px;
+}
+.template-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.template-tab {
+  position: relative;
+  flex: 1;
+  height: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.template-tab:hover {
+  color: var(--text);
+}
+.template-tab[aria-selected="true"] {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+/* A dot marks the tab holding this page's current paper. */
+.template-tab.has-current::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 .template-card {
   display: flex;
@@ -1198,6 +1240,10 @@ select option {
   background: var(--accent-soft);
 }
 .template-card-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 12px;
 }
 .template-popover-title.spaced {

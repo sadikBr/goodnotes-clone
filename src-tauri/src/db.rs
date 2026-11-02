@@ -149,9 +149,22 @@ pub const TEMPLATES: &[&str] = &[
     "blank",
     "ruled",
     "narrow-ruled",
+    "wide-ruled",
     "grid",
     "dotted",
     "cornell",
+    "legal",
+    "two-column",
+    "checklist",
+    "graph",
+    "coordinate",
+    "isometric",
+    "hexagon",
+    "handwriting",
+    "calligraphy",
+    "storyboard",
+    "planner-day",
+    "planner-week",
 ];
 
 fn validate_template(t: &str) -> AppResult<()> {

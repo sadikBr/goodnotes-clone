@@ -6,14 +6,62 @@ import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { MockBackend } from "./mockBackend";
 
-export type Template = "blank" | "ruled" | "narrow-ruled" | "grid" | "dotted" | "cornell";
-export const TEMPLATES: { id: Template; label: string }[] = [
-  { id: "blank", label: "Blank" },
-  { id: "ruled", label: "Ruled" },
-  { id: "narrow-ruled", label: "Narrow ruled" },
-  { id: "grid", label: "Grid" },
-  { id: "dotted", label: "Dotted" },
-  { id: "cornell", label: "Cornell" },
+export type Template =
+  | "blank"
+  | "ruled"
+  | "narrow-ruled"
+  | "wide-ruled"
+  | "grid"
+  | "dotted"
+  | "cornell"
+  | "legal"
+  | "two-column"
+  | "checklist"
+  | "graph"
+  | "coordinate"
+  | "isometric"
+  | "hexagon"
+  | "handwriting"
+  | "calligraphy"
+  | "storyboard"
+  | "planner-day"
+  | "planner-week";
+
+export type TemplateCategory = "basic" | "notes" | "science" | "writing" | "planner";
+
+/** `short` is the tab label in the paper picker. */
+export const TEMPLATE_CATEGORIES: { id: TemplateCategory; label: string; short: string }[] = [
+  { id: "basic", label: "Basic", short: "Basic" },
+  { id: "notes", label: "Notes", short: "Notes" },
+  { id: "science", label: "Maths & science", short: "Maths" },
+  { id: "writing", label: "Writing & art", short: "Writing" },
+  { id: "planner", label: "Planner", short: "Planner" },
+];
+
+/**
+ * Paper styles. `preview: "page"` shows the whole page in the picker (for
+ * structured layouts); otherwise a close-up of the top-left corner.
+ */
+export const TEMPLATES: { id: Template; label: string; category: TemplateCategory; preview?: "page" }[] = [
+  { id: "blank", label: "Blank", category: "basic" },
+  { id: "ruled", label: "Ruled", category: "basic" },
+  { id: "narrow-ruled", label: "Narrow ruled", category: "basic" },
+  { id: "wide-ruled", label: "Wide ruled", category: "basic" },
+  { id: "grid", label: "Grid", category: "basic" },
+  { id: "dotted", label: "Dotted", category: "basic" },
+  { id: "cornell", label: "Cornell", category: "notes", preview: "page" },
+  { id: "legal", label: "Legal pad", category: "notes" },
+  { id: "two-column", label: "Two columns", category: "notes", preview: "page" },
+  { id: "checklist", label: "To-do list", category: "notes" },
+  { id: "graph", label: "Graph", category: "science" },
+  { id: "coordinate", label: "Coordinates", category: "science", preview: "page" },
+  { id: "isometric", label: "Isometric", category: "science" },
+  { id: "hexagon", label: "Hexagon", category: "science" },
+  { id: "handwriting", label: "Handwriting", category: "writing" },
+  { id: "calligraphy", label: "Calligraphy", category: "writing" },
+  { id: "storyboard", label: "Storyboard", category: "writing", preview: "page" },
+  { id: "planner-day", label: "Daily plan", category: "planner", preview: "page" },
+  { id: "planner-week", label: "Weekly plan", category: "planner", preview: "page" },
 ];
 
 export interface Folder {
