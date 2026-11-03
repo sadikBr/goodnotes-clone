@@ -200,6 +200,7 @@ var Inkleaf = (() => {
     matchSymbol: () => matchSymbol,
     measureText: () => measureText,
     naturalTextWidth: () => naturalTextWidth,
+    paintPage: () => paintPage,
     paperLayout: () => paperLayout,
     rankSymbols: () => rankSymbols,
     recognizeShape: () => recognizeShape,
@@ -11437,6 +11438,7 @@ var Inkleaf = (() => {
   __export(daftarQt_exports, {
     DAYS: () => DAYS,
     OUTLINES: () => OUTLINES,
+    addClassPage: () => addClassPage,
     create: () => create,
     currentClass: () => currentClass,
     exportPages: () => exportPages,
@@ -11920,6 +11922,61 @@ var Inkleaf = (() => {
     return { pages: picked.map(function(p2) {
       return p2.i;
     }), name: "".concat(cls.replace(/[\\/]/g, "-")).concat(period ? " - ".concat(period) : "") };
+  }
+  function addClassPage(core, notebookId) {
+    return __awaiter7(this, void 0, void 0, function() {
+      var nb, d2, s2, page;
+      return __generator8(this, function(_a) {
+        switch (_a.label) {
+          case 0:
+            return [4, api.notebook(notebookId)];
+          case 1:
+            nb = _a.sent();
+            d2 = parseDaftar(nb);
+            s2 = core.page.section;
+            if (!d2 || !s2 || !d2.classes.includes(s2))
+              return [2, { plain: true }];
+            return [4, addLessonPage(nb, d2, s2)];
+          case 2:
+            page = _a.sent();
+            return [2, { reload: true, pageId: page.id }];
+        }
+      });
+    });
+  }
+
+  // qt/js/bridge.ts
+  var __values19 = globalThis.__fast && globalThis.__fast.__values || function(o2) {
+    var s2 = typeof Symbol === "function" && Symbol.iterator, m2 = s2 && o2[s2], i2 = 0;
+    if (m2) return m2.call(o2);
+    if (o2 && typeof o2.length === "number") return {
+      next: function() {
+        if (o2 && i2 >= o2.length) o2 = void 0;
+        return { value: o2 && o2[i2++], done: !o2 };
+      }
+    };
+    throw new TypeError(s2 ? "Object is not iterable." : "Symbol.iterator is not defined.");
+  };
+  function paintPage(ctx, template, paper, w2, h3, elements, images, background) {
+    var e_1, _a;
+    drawTemplate(ctx, template, w2, h3, paper);
+    if (background)
+      ctx.drawImage(background, 0, 0, w2, h3);
+    try {
+      for (var elements_1 = __values19(elements), elements_1_1 = elements_1.next(); !elements_1_1.done; elements_1_1 = elements_1.next()) {
+        var el = elements_1_1.value;
+        drawElement(ctx, el, images, function() {
+        });
+      }
+    } catch (e_1_1) {
+      e_1 = { error: e_1_1 };
+    } finally {
+      try {
+        if (elements_1_1 && !elements_1_1.done && (_a = elements_1.return)) _a.call(elements_1);
+      } finally {
+        if (e_1) throw e_1.error;
+      }
+    }
   }
   return __toCommonJS(bridge_exports);
 })();

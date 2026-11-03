@@ -172,7 +172,22 @@ JsCanvas::JsCanvas(int w, int h, QObject* parent) : QObject(parent) {
   reset(w, h);
 }
 
+JsCanvas::JsCanvas(QPainter* external, int w, int h, QObject* parent) : QObject(parent) {
+  m_states.emplace_back();
+  m_states.back().font = parseFont(m_states.back().fontCss);
+  reset(1, 1);  // a tiny picture for font metrics at 96 dpi
+  m_external = external;
+  m_size = QSize(w, h);
+  m_external->save();
+  m_external->setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing | QPainter::SmoothPixmapTransform);
+}
+
 JsCanvas::~JsCanvas() {
+  if (m_external) {
+    for (size_t i = 1; i < m_states.size(); ++i) m_external->restore();
+    m_external->restore();
+    return;
+  }
   if (m_painter)
     for (size_t i = 1; i < m_states.size(); ++i) m_painter->restore();
   m_painter.reset();
@@ -194,6 +209,7 @@ void JsCanvas::reset(int w, int h) {
 }
 
 QImage JsCanvas::image() {
+  if (m_external) return {};
   // Ends painting (it starts again on the next call), balancing saved states.
   if (m_painter)
     for (size_t i = 1; i < m_states.size(); ++i) m_painter->restore();
@@ -202,6 +218,7 @@ QImage JsCanvas::image() {
 }
 
 QPainter& JsCanvas::painter() {
+  if (m_external) return *m_external;
   if (!m_painter) {
     m_painter = std::make_unique<QPainter>(&m_img);
     m_painter->setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing | QPainter::SmoothPixmapTransform);

@@ -45,6 +45,13 @@ Item {
             root.notify("Exporting " + pages.length + " page" + (pages.length > 1 ? "s" : "") + "…", false)
             Qt.callLater(() => {
                 try {
+                    if (root.format === "pdf") {
+                        // Vector pages: sharp at any zoom, with real (searchable) text.
+                        const err = root.canvas.exportPdf(selectedFile.toString(), pages, root.title)
+                        if (err) throw new Error(err)
+                        root.notify("Exported to " + decodeURIComponent(selectedFile.toString().replace(/^file:\/\//, "")), false)
+                        return
+                    }
                     const rendered = pages.map(i => root.canvas.exportPage(i, root.scales[root.format], root.format !== "png"))
                     const saved = InkleafCore.saveBytes(selectedFile.toString(), "buildDocument", { format: root.format, pages: rendered })
                     root.notify("Exported to " + saved, false)

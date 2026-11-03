@@ -92,6 +92,9 @@ class JsCanvas : public QObject {
   Q_PROPERTY(QString className MEMBER m_className)
 public:
   JsCanvas(int w, int h, QObject* parent = nullptr);
+  /// Draws through `external` (e.g. on a PDF page) instead of into a picture;
+  /// w and h are the page's size. The painter must outlive the canvas.
+  JsCanvas(QPainter* external, int w, int h, QObject* parent = nullptr);
   ~JsCanvas() override;
 
   /// The picture so far (ends painting first).
@@ -99,10 +102,10 @@ public:
   /// Clears and resizes; keeps nothing.
   void reset(int w, int h);
 
-  int width() const { return m_img.width(); }
-  int height() const { return m_img.height(); }
-  void setWidth(int w) { reset(w, height()); }
-  void setHeight(int h) { reset(width(), h); }
+  int width() const { return m_external ? m_size.width() : m_img.width(); }
+  int height() const { return m_external ? m_size.height() : m_img.height(); }
+  void setWidth(int w) { if (!m_external) reset(w, height()); }
+  void setHeight(int h) { if (!m_external) reset(width(), h); }
 
   // The context is the canvas itself (canvas.getContext("2d")).
   Q_INVOKABLE QObject* getContext(const QString&) { return this; }
@@ -255,6 +258,8 @@ private:
   QVariantMap m_style;
   QString m_className;
   std::unique_ptr<QPainter> m_painter;
+  QPainter* m_external = nullptr;
+  QSize m_size;
   std::vector<State> m_states;
   QPainterPath m_path;
   bool m_hasPoint = false;

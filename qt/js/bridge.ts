@@ -25,3 +25,11 @@ export { createEditor } from "./editorCore";
 export { renderPage, drawSelection } from "../../src/editor/render";
 export * as samples from "./samples";
 export * as daftarQt from "./daftarQt";
+
+import { drawElement as drawEl, drawTemplate as drawTmpl } from "../../src/editor/render";
+/** A page drawn onto a given context (the vector PDF export): paper, PDF background, elements. */
+export function paintPage(ctx: CanvasRenderingContext2D, template: never, paper: string, w: number, h: number, elements: never[], images: never, background: CanvasImageSource | null) {
+  drawTmpl(ctx, template, w, h, paper);
+  if (background) ctx.drawImage(background, 0, 0, w, h);
+  for (const el of elements) drawEl(ctx, el, images, () => {});
+}

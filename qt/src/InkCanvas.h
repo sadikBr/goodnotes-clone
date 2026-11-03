@@ -175,6 +175,8 @@ public:
   Q_INVOKABLE QString pagePreview(int index, qreal scale);
   /// A page drawn for export: { dataUrl, widthPx, heightPx, pageWidth, pageHeight }.
   Q_INVOKABLE QVariantMap exportPage(int index, qreal scale, bool jpeg);
+  /** Writes these pages as a vector PDF at `path`; returns an error ("" when done). */
+  Q_INVOKABLE QString exportPdf(const QString& path, const QVariantList& indexes, const QString& title);
 
 signals:
   void notebookIdChanged();

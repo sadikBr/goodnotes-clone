@@ -7,6 +7,7 @@
 #include <QJsonDocument>
 #include <QMatrix4x4>
 #include <QPainter>
+#include <QPdfWriter>
 #include <QPixmap>
 #include <QQuickWindow>
 #include <QSGFlatColorMaterial>
@@ -682,6 +683,58 @@ QString InkCanvas::pagePreview(int index, qreal scale) {
   QObject* o = canvas.toQObject();
   auto* c = qobject_cast<JsCanvas*>(o);
   return c ? c->toDataURL("image/png") : QString();
+}
+
+QString InkCanvas::exportPdf(const QString& path, const QVariantList& indexes, const QString& title) {
+  const QString file = QUrl(path).isLocalFile() ? QUrl(path).toLocalFile() : path;
+  if (indexes.isEmpty()) return "Nothing to export";
+  finishEdit();
+  flush();
+  Js& js = Js::instance();
+  // Pages are drawn by the same code as the screen, as vectors: lines and
+  // ink stay sharp, text stays text (Qt embeds and shapes the fonts).
+  QPdfWriter writer(file);
+  writer.setResolution(96);  // 1 device unit = 1 page unit (CSS px)
+  writer.setCreator("Inkleaf");
+  writer.setTitle(title);
+  const auto sizeOf = [&](int i) {
+    const Page& p = m_pages[i];
+    return QPageSize(QSizeF(p.w * 0.75, p.h * 0.75), QPageSize::Point, QString(), QPageSize::ExactMatch);
+  };
+  int first = -1;
+  for (const QVariant& v : indexes)
+    if (v.toInt() >= 0 && v.toInt() < int(m_pages.size())) {
+      first = v.toInt();
+      break;
+    }
+  if (first < 0) return "Nothing to export";
+  writer.setPageLayout(QPageLayout(sizeOf(first), QPageLayout::Portrait, QMarginsF(0, 0, 0, 0)));
+  QPainter painter;
+  if (!painter.begin(&writer)) return "Couldn't write " + file;
+  bool started = false;
+  for (const QVariant& v : indexes) {
+    const int i = v.toInt();
+    if (i < 0 || i >= int(m_pages.size())) continue;
+    const Page& p = m_pages[i];
+    if (started) {
+      writer.setPageLayout(QPageLayout(sizeOf(i), QPageLayout::Portrait, QMarginsF(0, 0, 0, 0)));
+      writer.newPage();
+    }
+    started = true;
+    QJSValue bg(QJSValue::NullValue);
+    const QString asset = p.meta["backgroundAsset"].toString();
+    if (!asset.isEmpty() && !p.meta["backgroundPage"].isNull()) {
+      const int bp = p.meta["backgroundPage"].toInt();
+      const QImage img = PdfDocs::instance().render(asset, bp, 3 * p.w / std::max(1.0, PdfDocs::instance().pageSize(asset, bp).width()));
+      if (!img.isNull()) bg = js.engine().newQObject(new JsImage(img.convertToFormat(QImage::Format_ARGB32_Premultiplied)));
+    }
+    auto* canvas = new JsCanvas(&painter, int(std::ceil(p.w)), int(std::ceil(p.h)));
+    QJSValue ctx = js.engine().newQObject(canvas);
+    js.call("paintPage", {ctx, p.tmpl, p.paper, p.w, p.h, core("scene", jsArgs({i})), coreProp("images"), bg});
+    delete canvas;  // restores the painter for the next page
+  }
+  painter.end();
+  return {};
 }
 
 QVariantMap InkCanvas::exportPage(int index, qreal scale, bool jpeg) {
