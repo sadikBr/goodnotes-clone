@@ -316,6 +316,56 @@ function lessonBase(w: number, h: number) {
   return { inset, x0, x1, cols: cols.map((c, i) => ({ ...c, ...edges[i] })), headTop, headH, bodyTop, bodyBottom, step, rows, fieldsY: inset.y0 + 40 };
 }
 
+const HOLIDAY_COLS: Col[] = [
+  { ar: "الرقم الترتيبي", fr: "N°", f: 0.1 },
+  { ar: "العطلة", fr: "Vacances", f: 0.34 },
+  { ar: "من", fr: "Du", f: 0.16 },
+  { ar: "إلى", fr: "Au", f: 0.16 },
+  { ar: "المدة", fr: "Durée", f: 0.1 },
+  { ar: "ملاحظات", fr: "Remarques", f: 0.14 },
+];
+
+function holidaysBase(_w: number, h: number) {
+  const top = 140;
+  const rows = 14;
+  const headH = 46;
+  return { top, rows, headH, rowH: (h - 150 - top - headH) / rows };
+}
+
+function studentsBase(w: number, h: number) {
+  const top = 140;
+  const gap = 18;
+  const tw = (w - 2 * M - gap) / 2;
+  const rows = 30;
+  return { top, tw, rows, rowH: (h - 50 - top - 72) / rows, rights: [w - M, w - M - tw - gap], bodyTop: top + 28 + 44 };
+}
+
+/** A table's cells in page coordinates: columns right to left, rows from `top`. */
+export interface TableLayout {
+  cols: { x0: number; x1: number }[];
+  top: number;
+  rowH: number;
+  rows: number;
+}
+
+function scaleTable(t: TableLayout, w: number, h: number): TableLayout {
+  const { k, ox, oy } = fit(w, h);
+  return { cols: t.cols.map((c) => ({ x0: ox + c.x0 * k, x1: ox + c.x1 * k })), top: oy + t.top * k, rowH: t.rowH * k, rows: t.rows };
+}
+
+/** The holiday list's table: N°, holiday, from, to, length, remarks. */
+export function holidaysLayout(w: number, h: number): TableLayout {
+  const T = holidaysBase(A4.w, A4.h);
+  return scaleTable({ cols: columns(HOLIDAY_COLS, M, A4.w - M), top: T.top + T.headH, rowH: T.rowH, rows: T.rows }, w, h);
+}
+
+/** The student list's two tables (right one first): N°, national number, name. */
+export function studentsLayout(w: number, h: number): TableLayout[] {
+  const S = studentsBase(A4.w, A4.h);
+  const f = [{ f: 0.16 }, { f: 0.28 }, { f: 0.56 }] as Col[];
+  return S.rights.map((right) => scaleTable({ cols: columns(f, right - S.tw, right), top: S.bodyTop, rowH: S.rowH, rows: S.rows }, w, h));
+}
+
 /** Timetable page geometry (page coordinates): Monday to Saturday right to left, 08:00 to 18:00. */
 export function timetableLayout(w: number, h: number) {
   const T = timetableBase(A4.w, A4.h);
@@ -510,27 +560,8 @@ function drawPage(ctx: Ctx, t: string, w: number, h: number): Record<string, Slo
     case "daftar-holidays": {
       topStrip(ctx, w, accent);
       heading(ctx, "لائحة العطل المدرسية", "Vacances scolaires", w, 86);
-      const top = 140;
-      const rows = 14;
-      const rowH = (h - 150 - top - 46) / rows;
-      table(
-        ctx,
-        [
-          { ar: "الرقم الترتيبي", fr: "N°", f: 0.1 },
-          { ar: "العطلة", fr: "Vacances", f: 0.34 },
-          { ar: "من", fr: "Du", f: 0.16 },
-          { ar: "إلى", fr: "Au", f: 0.16 },
-          { ar: "المدة", fr: "Durée", f: 0.1 },
-          { ar: "ملاحظات", fr: "Remarques", f: 0.14 },
-        ],
-        M,
-        w - M,
-        top,
-        rowH,
-        rows,
-        accent,
-        { headH: 46, numberFrom: 1 },
-      );
+      const T = holidaysBase(w, h);
+      table(ctx, HOLIDAY_COLS, M, w - M, T.top, T.rowH, T.rows, accent, { headH: T.headH, numberFrom: 1 });
       signatures(ctx, w, h - 92, M);
       break;
     }
@@ -550,12 +581,8 @@ function drawPage(ctx: Ctx, t: string, w: number, h: number): Record<string, Slo
     case "daftar-students": {
       topStrip(ctx, w, accent);
       heading(ctx, "لائحة أسماء المتعلمين والمتعلمات", "Liste des élèves", w, 86);
-      const top = 140;
-      const gap = 18;
-      const tw = (w - 2 * M - gap) / 2;
-      const rows = 30;
-      const rowH = (h - 50 - top - 72) / rows;
-      [w - M, w - M - tw - gap].forEach((right, k) => {
+      const { top, tw, rows, rowH, rights } = studentsBase(w, h);
+      rights.forEach((right, k) => {
         const x0 = right - tw;
         // "الفوج / المستوى" strip above the column headings.
         ctx.fillStyle = accent;

@@ -2865,6 +2865,33 @@ select option {
 .tt-add {
   justify-self: start;
 }
+.hd-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(126px, 1fr) auto minmax(126px, 1fr) 34px auto;
+  align-items: center;
+  gap: 6px;
+}
+.hd-row input {
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.hd-days {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+.hd-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
 .dialog-form input[type="date"] {
   width: 100%;
 }
@@ -3221,5 +3248,40 @@ select option {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
+  }
+}
+
+/* Pasting a class list / writing an outline. */
+.paste {
+  display: grid;
+  gap: 6px;
+}
+.paste-area {
+  width: 100%;
+  min-height: 120px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  box-sizing: border-box;
+}
+.paste-count {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* In a daftar the header holds more controls: keep some of the title. */
+.is-daftar .title-btn {
+  min-width: 5.5em;
+}
+@media (max-width: 1500px) {
+  .daftar-today .fr {
+    display: none;
   }
 }

@@ -8,7 +8,7 @@ import { customColorButton } from "../colorPicker";
 import { isDark, toggleTheme } from "../theme";
 import { shortcutsSheet } from "./shortcuts";
 import { choiceChip, colorFavourites, Favourites, paletteFor, popover, sizeFavourites, type FavTool } from "./toolkit";
-import { confirmDialog, COVER_COLORS, formDialog, h, icon, popupMenu, reportError, sizeControl, toast } from "../ui";
+import { confirmDialog, COVER_COLORS, formDialog, h, icon, popupMenu, reportError, sizeControl, toast, type CustomFieldContext } from "../ui";
 import {
   bounds,
   buildShape,
@@ -39,7 +39,7 @@ import {
   type ShapeKind,
 } from "./geometry";
 import { inkToTextDialog } from "./inkToText";
-import { addLessonPage, DAYS, isoDate, lessonEntry, nextFreeRow, parseDaftar, type DaftarMeta } from "../daftar";
+import { addLessonPage, classExportPages, DAYS, fillStudents, holidayOn, isoDate, lessonEntry, nextFreeRow, OUTLINES, outlineElements, parseDaftar, parseStudents, termRange, type DaftarMeta, type Outline, type Term } from "../daftar";
 import { isLessonTemplate, lessonLayout } from "./daftarPapers";
 import { cachedBackground, renderBackground } from "./pdfRender";
 import { INSTRUMENTS, MM, Ruler, type Guide as EdgeGuide, type InstrumentKind } from "./ruler";
@@ -251,6 +251,9 @@ export interface EditorCallbacks {
  * the visible part of the page (high zoom on big or HiDPI screens).
  */
 const FULL_CANVAS_PIXELS = 9_000_000;
+
+/** Lesson outlines the teacher wrote (JSON Outline[]). */
+const OUTLINES_KEY = "inkleaf-daftar-outlines";
 
 export class EditorScreen {
   readonly root = h("div", { class: "editor" });
@@ -1660,9 +1663,19 @@ export class EditorScreen {
         d.classes.map((c) => ({ label: c, checked: c === cls, action: () => void this.goToClass(c) })),
       ),
     );
-    const lesson = h("button", { class: "daftar-today", title: "Write today's date, the class and the lesson time on the next free line" }, icon("plus"), "حصة جديدة · New lesson");
+    const lesson = h("button", { class: "daftar-today", title: "Write today's date, the class and the lesson time on the next free line" }, icon("plus"), h("span", {}, "حصة جديدة"), h("span", { class: "fr" }, " · New lesson"));
     lesson.addEventListener("click", () => void this.newLesson());
-    this.daftarBar.replaceChildren(chip, lesson);
+    const outline = h("button", { class: "icon-btn daftar-outline", "aria-haspopup": "menu", "aria-label": "Lesson outline", title: "Write a lesson outline (النشاط 1، النشاط 2…) on the lesson's lines" }, icon("page"));
+    outline.addEventListener("click", () => this.outlineMenu(outline));
+    const more = h("button", { class: "icon-btn", "aria-haspopup": "menu", "aria-label": "Daftar", title: "Student list, class export, daftar settings" }, icon("more"));
+    more.addEventListener("click", () =>
+      popupMenu(more, [
+        { label: "لائحة التلاميذ · Paste the student list…", action: () => void this.pasteStudents() },
+        { label: "تصدير القسم · Export this class as PDF…", action: () => void this.exportClass() },
+        { label: "إعدادات الدفتر · Daftar settings…", action: () => void this.daftarSettings() },
+      ]),
+    );
+    this.daftarBar.replaceChildren(chip, lesson, outline, more);
   }
 
   /** Elements of a page (the live ones for the page being edited). */
@@ -1694,6 +1707,8 @@ export class EditorScreen {
     const d = this.daftar;
     const cls = this.currentClass();
     if (!d || !cls) return;
+    const holiday = holidayOn(d);
+    if (holiday && !(await confirmDialog("Today is a holiday · عطلة", `${holiday.name}. Write a lesson for ${cls} anyway?`, "Write the lesson"))) return;
     try {
       await this.flush();
       const here = this.page;
@@ -1739,6 +1754,188 @@ export class EditorScreen {
       const day = DAYS[now.getDay()];
       const time = entry[2]?.text; // date, class, then time when the timetable has one
       toast(`${cls} · ${day.ar} ${entry[0].text}${time ? ` · ${time}` : ""}`);
+    } catch (e) {
+      reportError(e);
+    }
+  }
+
+  /**
+   * Reloads everything after the daftar was changed outside the editor
+   * (details re-filled, student list written): cached pages and their undo
+   * history are dropped so nothing brings back the old values.
+   */
+  private async reloadDaftar(selectId: string | null) {
+    await this.flush();
+    this.activeId = null;
+    this.elementCache.clear();
+    this.history.clear();
+    this.undoStack = [];
+    this.redoStack = [];
+    this.notebook = await api.notebook(this.notebook.id);
+    this.daftar = parseDaftar(this.notebook);
+    const pages = await api.pages(this.notebook.id);
+    await this.reloadPages(Math.max(0, pages.findIndex((p) => p.id === selectId)));
+  }
+
+  private async daftarSettings() {
+    const d = this.daftar;
+    if (!d) return;
+    try {
+      this.finishTextEdit();
+      await this.flush();
+      const { editDaftarDialog } = await import("../daftarSetup");
+      const next = await editDaftarDialog(this.notebook, d);
+      if (!next) return;
+      await this.reloadDaftar(this.page?.id ?? null);
+      toast("Daftar updated");
+    } catch (e) {
+      reportError(e);
+    }
+  }
+
+  /** Fills a class's student list from text pasted from Massar or a spreadsheet. */
+  private async pasteStudents() {
+    const d = this.daftar;
+    const cls0 = this.currentClass();
+    if (!d || !cls0) return;
+    const pasteField = (ctx: CustomFieldContext) => {
+      const area = h("textarea", { class: "paste-area", rows: "10", placeholder: "D130045678\tالعلوي\tمحمد\nD131122334\tبناني\tسلمى\n…", "aria-label": "Student list" });
+      const count = h("p", { class: "paste-count" }, "Copy the rows from Massar or Excel (code, surname, first name) and paste them here.");
+      area.addEventListener("input", () => {
+        ctx.set(area.value);
+        const n = parseStudents(area.value);
+        count.textContent = n.length ? `${n.length} student${n.length > 1 ? "s" : ""} found · ${n.filter((x) => x.code).length} with a Massar code. First: ${n[0].name}` : "No names found yet.";
+      });
+      queueMicrotask(() => area.focus());
+      return h("div", { class: "paste" }, area, count);
+    };
+    const r = await formDialog(
+      "Student list · لائحة التلاميذ",
+      [
+        { name: "cls", label: "القسم · Class", type: "select", value: cls0, options: d.classes.map((c) => ({ value: c, label: c })) },
+        { name: "text", label: "", type: "custom", value: "", render: pasteField },
+      ],
+      "Write the list",
+      { width: 560, validate: (v) => (parseStudents(v.text ?? "").length ? null : "Paste at least one student's name.") },
+    );
+    if (!r) return;
+    try {
+      const students = parseStudents(r.text);
+      await this.flush();
+      await fillStudents(this.notebook, d, r.cls, students);
+      const pages = await api.pages(this.notebook.id);
+      const first = pages.find((p) => p.section === r.cls && p.template === "daftar-students");
+      await this.reloadDaftar(first?.id ?? null);
+      toast(`${students.length} students written for ${r.cls}`);
+    } catch (e) {
+      reportError(e);
+    }
+  }
+
+  private customOutlines(): Outline[] {
+    try {
+      const v = JSON.parse(getPref<string>(OUTLINES_KEY, "[]")) as Outline[];
+      return Array.isArray(v) ? v.filter((o) => o && typeof o.name === "string" && Array.isArray(o.lines)) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private outlineMenu(anchor: HTMLElement) {
+    const mine = this.customOutlines();
+    popupMenu(anchor, [
+      ...[...OUTLINES, ...mine].map((o) => ({ label: o.name, action: () => void this.insertOutline(o.lines) })),
+      { label: "Write my own outline…", action: () => void this.newOutline() },
+      ...(mine.length ? [{ label: "Remove my outlines", danger: true, action: () => (setPref(OUTLINES_KEY, "[]"), toast("Your outlines were removed")) }] : []),
+    ]);
+  }
+
+  private async newOutline() {
+    const linesField = (ctx: CustomFieldContext) => {
+      const area = h("textarea", { class: "paste-area", rows: "7", placeholder: "التمهيد\nالنشاط 1\nالنشاط 2\nالتقويم", "aria-label": "Lines" });
+      area.addEventListener("input", () => ctx.set(area.value));
+      return area;
+    };
+    const r = await formDialog("My outline · مخطط", [{ name: "name", label: "Name", value: "" }, { name: "lines", label: "Lines (one per line of the daftar)", type: "custom", value: "", render: linesField }], "Save and write it", {
+      validate: (v) => (!v.name.trim() ? "Give the outline a name." : !v.lines.trim() ? "Write at least one line." : null),
+    });
+    if (!r) return;
+    const o: Outline = { name: r.name.trim(), lines: r.lines.split(/\r?\n/).map((l) => l.trim()).filter(Boolean) };
+    setPref(OUTLINES_KEY, JSON.stringify([...this.customOutlines(), o].slice(-12)));
+    await this.insertOutline(o.lines);
+  }
+
+  /**
+   * Writes an outline down the activities column: next to the lesson just
+   * started (when its activities are still empty), else on the next free lines.
+   */
+  private async insertOutline(lines: string[]) {
+    const cls = this.currentClass();
+    if (!this.daftar || !cls) return;
+    if (!(this.page && isLessonTemplate(this.page.template))) {
+      await this.goToClass(cls);
+      if (!isLessonTemplate(this.page.template)) return;
+    }
+    const p = this.page;
+    const L = lessonLayout(p.width, p.height);
+    const act = L.cols.find((c) => c.key === "activities")!;
+    const ink = this.elements.filter((e) => !(e.kind === "text" && e.role === "daftar-field")).map((e) => {
+      const b = bounds(e);
+      return { x0: b.x, y0: b.y, x1: b.x + b.w, y1: b.y + b.h };
+    });
+    const sessionRows = this.elements.flatMap((e) => (e.kind === "text" && e.role === "daftar-session" ? [Math.round((e.y - 2 - L.bodyTop) / L.step)] : []));
+    let row: number | null = null;
+    if (sessionRows.length) {
+      const last = Math.max(...sessionRows);
+      const top = L.bodyTop + last * L.step + 1;
+      const used = ink.some((r) => r.x1 > act.x0 + 1 && r.x0 < act.x1 - 1 && r.y1 > top);
+      if (!used && last + lines.length <= L.rows) row = last;
+    }
+    if (row === null) row = nextFreeRow(ink, p.width, p.height, lines.length);
+    if (row === null) return toast("No room left for this outline on the page. Start a new lesson for a new page.", "error");
+    this.snapshot();
+    let z = nextZ(this.elements);
+    for (const el of outlineElements(lines, row, p.width, p.height)) this.elements.push({ ...el, z: z++ });
+    this.changed();
+  }
+
+  /** Exports a class's pages (for the inspector), optionally for one term. */
+  private async exportClass() {
+    const d = this.daftar;
+    const cls0 = this.currentClass();
+    if (!d || !cls0) return;
+    const r = await formDialog(
+      "Export a class · تصدير القسم",
+      [
+        { name: "cls", label: "القسم · Class", type: "select", value: cls0, options: d.classes.map((c) => ({ value: c, label: c })) },
+        {
+          name: "term",
+          label: "الفترة · Period",
+          type: "select",
+          value: "year",
+          options: [
+            { value: "year", label: "السنة كاملة · Whole year" },
+            { value: "s1", label: "الدورة الأولى · 1st semester (Sept – Jan)" },
+            { value: "s2", label: "الدورة الثانية · 2nd semester (Feb – July)" },
+            { value: "month", label: "هذا الشهر · This month" },
+          ],
+        },
+      ],
+      "Export PDF",
+    );
+    if (!r) return;
+    try {
+      this.finishTextEdit();
+      await this.flush();
+      const sessions = new Map<string, string[]>();
+      for (const p of this.pages)
+        if (p.section === r.cls && isLessonTemplate(p.template))
+          sessions.set(p.id, (await this.pageEls(p)).flatMap((e) => (e.kind === "text" && e.role === "daftar-session" && e.session ? [e.session] : [])));
+      const range = termRange(d, r.term as Term);
+      const pages = classExportPages(this.pages, r.cls, (p) => sessions.get(p.id) ?? [], range);
+      if (!pages.some((p) => isLessonTemplate(p.template))) return toast("No lessons in that period for this class", "error");
+      const period = { year: d.year, s1: "S1", s2: "S2", month: isoDate(new Date()).slice(0, 7) }[r.term as Term] ?? "";
+      await this.exportAs("pdf", { pages, name: `${this.notebook.title} - ${r.cls.replace(/[\\/]/g, "-")}${period ? ` - ${period}` : ""}` });
     } catch (e) {
       reportError(e);
     }
@@ -3683,12 +3880,12 @@ export class EditorScreen {
     return buildVectorPdf(input, this.images, title);
   }
 
-  private async exportAs(format: ExportFormat, scope: "all" | "current") {
+  private async exportAs(format: ExportFormat, scope: "all" | "current" | { pages: Page[]; name: string }) {
     try {
       this.finishTextEdit();
       await this.flush();
-      const pages = scope === "all" ? this.pages : [this.page];
-      const name = scope === "all" ? this.notebook.title : `${this.notebook.title} - page ${this.index + 1}`;
+      const pages = scope === "all" ? this.pages : scope === "current" ? [this.page] : scope.pages;
+      const name = scope === "all" ? this.notebook.title : scope === "current" ? `${this.notebook.title} - page ${this.index + 1}` : scope.name;
       const path = await api.chooseExportPath(name, format);
       if (!path) return;
       toast(`Exporting ${pages.length} page${pages.length > 1 ? "s" : ""}…`);

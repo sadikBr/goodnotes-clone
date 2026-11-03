@@ -1,9 +1,9 @@
 // The "New daftar" dialog: school details, classes, and an optional weekly
 // timetable that pre-dates each class's rows.
 
-import { createDaftar, DAYS, finishDaftarCover, schoolYear, type DaftarMeta, type Lesson } from "./daftar";
+import { createDaftar, DAYS, finishDaftarCover, holidayDays, nationalHolidays, schoolYear, updateDaftar, type DaftarMeta, type Holiday, type Lesson } from "./daftar";
 import { type Notebook } from "./api";
-import { formDialog, h, icon, reportError, toast, type CustomFieldContext } from "./ui";
+import { formDialog, h, icon, reportError, toast, type CustomFieldContext, type Field } from "./ui";
 import { refreshCoverThumbnail, setUpCover } from "./cover";
 import { api } from "./api";
 
@@ -16,7 +16,13 @@ const SCHOOL_DAYS = [1, 2, 3, 4, 5, 6];
 
 /** An editable list of weekly lessons (day, start, end, class). */
 function timetableField(ctx: CustomFieldContext): HTMLElement {
-  let lessons: Lesson[] = [];
+  let lessons: Lesson[] = (() => {
+    try {
+      return JSON.parse(ctx.values.timetable || "[]") as Lesson[];
+    } catch {
+      return [];
+    }
+  })();
   const list = h("div", { class: "tt-list" });
   const empty = h("p", { class: "tt-empty" }, "No lessons yet — without a timetable you write the dates yourself.");
   const save = () => ctx.set(JSON.stringify(lessons));
@@ -78,50 +84,140 @@ function timetableField(ctx: CustomFieldContext): HTMLElement {
   return h("div", { class: "tt" }, list, empty, add);
 }
 
+/** An editable list of holidays: name, first day, last day. */
+function holidaysField(ctx: CustomFieldContext): HTMLElement {
+  let items: Holiday[] = (() => {
+    try {
+      return JSON.parse(ctx.values.holidays || "[]") as Holiday[];
+    } catch {
+      return [];
+    }
+  })();
+  const list = h("div", { class: "tt-list" });
+  const empty = h("p", { class: "tt-empty" }, "No holidays yet. New lesson warns you when today is one.");
+  const save = () => ctx.set(JSON.stringify(items));
+  const draw = () => {
+    items.sort((a, b) => (a.from || "9").localeCompare(b.from || "9"));
+    list.replaceChildren(
+      ...items.map((hd, i) => {
+        const name = h("input", { value: hd.name, "aria-label": "Holiday", placeholder: "عيد الفطر · Aïd al-Fitr" });
+        name.addEventListener("input", () => ((hd.name = name.value), save()));
+        const from = h("input", { type: "date", value: hd.from, "aria-label": "From" });
+        from.addEventListener("change", () => {
+          hd.from = from.value;
+          if (!hd.to || hd.to < hd.from) hd.to = hd.from;
+          save();
+          draw();
+        });
+        const to = h("input", { type: "date", value: hd.to, "aria-label": "To" });
+        to.addEventListener("change", () => ((hd.to = to.value), save(), draw()));
+        const remove = h("button", { type: "button", class: "icon-btn small", "aria-label": "Remove holiday", title: "Remove" }, icon("close"));
+        remove.addEventListener("click", () => {
+          items.splice(i, 1);
+          save();
+          draw();
+        });
+        const days = hd.from && hd.to >= hd.from ? `${holidayDays(hd)} d` : "";
+        return h("div", { class: "hd-row" }, name, from, h("span", { class: "tt-dash" }, "–"), to, h("span", { class: "hd-days" }, days), remove);
+      }),
+    );
+    empty.hidden = items.length > 0;
+  };
+  const add = h("button", { type: "button", class: "btn ghost tt-add" }, icon("plus"), "Add a holiday");
+  add.addEventListener("click", () => {
+    items.push({ name: "", from: "", to: "" });
+    save();
+    draw();
+    (list.lastElementChild?.querySelector("input") as HTMLInputElement | null)?.focus();
+  });
+  const national = h("button", { type: "button", class: "btn ghost tt-add" }, icon("star"), "Add national holidays");
+  national.title = "Fixed-date public holidays for the school year (religious holidays and vacations are added by hand)";
+  national.addEventListener("click", () => {
+    const have = new Set(items.map((x) => x.from));
+    const fresh = nationalHolidays(ctx.values.year || schoolYear()).filter((x) => !have.has(x.from));
+    if (!fresh.length) return toast("The national holidays are already in the list");
+    items.push(...fresh);
+    save();
+    draw();
+  });
+  draw();
+  return h("div", { class: "tt" }, list, empty, h("div", { class: "hd-actions" }, add, national));
+}
+
+/** The daftar's fields, filled from `m` (or empty for a new one). */
+function daftarFields(m: DaftarMeta | null, title: string): Field[] {
+  const fields: Field[] = [
+    { name: "teacher", label: "الأستاذ(ة) · Teacher", value: m?.teacher ?? "", half: true },
+    { name: "subject", label: "المادة · Subject", value: m?.subject ?? "", half: true },
+    { name: "school", label: "المؤسسة · School", value: m?.school ?? "", half: true },
+    { name: "year", label: "الموسم الدراسي · School year", value: m?.year ?? schoolYear(), half: true },
+    { name: "region", label: "الجهة / الأكاديمية · Region", value: m?.region ?? "", half: true },
+    { name: "directorate", label: "المديرية الإقليمية · Directorate", value: m?.directorate ?? "", half: true },
+    { name: "payroll", label: "رقم التأجير · Payroll number (optional)", value: m?.payroll ?? "", half: true },
+    { name: "title", label: "Title", value: title, half: true },
+    { name: "classes", label: "الأقسام · Classes — separate with commas, e.g. 3/6, 3/7, 2/1", value: m?.classes.join(", ") ?? "" },
+    { name: "timetable", label: "استعمال الزمن · Weekly timetable (optional: gives each new lesson its time)", type: "custom", value: JSON.stringify(m?.timetable ?? []), render: timetableField },
+    { name: "holidays", label: "العطل · Holidays and vacations (optional)", type: "custom", value: JSON.stringify(m?.holidays ?? []), render: holidaysField },
+  ];
+  if (m) fields.splice(fields.findIndex((f) => f.name === "title"), 1);
+  return fields;
+}
+
+function validateDaftar(v: Record<string, string>): string | null {
+  if (!parseClasses(v.classes ?? "").length) return "Add at least one class.";
+  const bad = (JSON.parse(v.timetable || "[]") as Lesson[]).find((l) => !(l.start < l.end));
+  if (bad) return `A ${DAYS[bad.day].fr} lesson ends before it starts.`;
+  const hd = (JSON.parse(v.holidays || "[]") as Holiday[]).find((x) => !x.from || !x.name.trim());
+  if (hd) return hd.from ? "Give each holiday a name." : `Choose the dates of “${hd.name.trim() || "the new holiday"}”.`;
+  return null;
+}
+
+function metaFrom(r: Record<string, string>): DaftarMeta {
+  const classes = parseClasses(r.classes);
+  return {
+    kind: "daftar",
+    year: r.year.trim(),
+    region: r.region.trim(),
+    directorate: r.directorate.trim(),
+    school: r.school.trim(),
+    teacher: r.teacher.trim(),
+    payroll: r.payroll.trim(),
+    subject: r.subject.trim(),
+    classes,
+    timetable: (JSON.parse(r.timetable || "[]") as Lesson[]).filter((l) => classes.includes(l.cls)),
+    holidays: (JSON.parse(r.holidays || "[]") as Holiday[]).map((x) => ({ name: x.name.trim(), from: x.from, to: x.to >= x.from ? x.to : x.from })),
+  };
+}
+
+/**
+ * Changes a daftar's details after it was made. Every page's filled-in
+ * values are written again; new classes get a section. Resolves with the
+ * new details (null when cancelled).
+ */
+export async function editDaftarDialog(nb: Notebook, meta: DaftarMeta): Promise<DaftarMeta | null> {
+  const r = await formDialog("Daftar settings · إعدادات الدفتر", daftarFields(meta, nb.title), "Save", { width: 640, twoColumns: true, validate: validateDaftar });
+  if (!r) return null;
+  const next = metaFrom(r);
+  const removed = meta.classes.filter((c) => !next.classes.includes(c));
+  toast(removed.length ? `Updating… The pages of ${removed.join(", ")} are kept.` : "Updating your daftar…");
+  await updateDaftar(nb, meta, next);
+  return next;
+}
+
 /** Asks for the daftar's details and creates it. */
 export async function newDaftarDialog(folderId: string | null): Promise<Notebook | null> {
   const r = await formDialog(
     "New daftar annossous · دفتر النصوص",
     [
-      { name: "teacher", label: "الأستاذ(ة) · Teacher", value: "", half: true },
-      { name: "subject", label: "المادة · Subject", value: "", half: true },
-      { name: "school", label: "المؤسسة · School", value: "", half: true },
-      { name: "year", label: "الموسم الدراسي · School year", value: schoolYear(), half: true },
-      { name: "region", label: "الجهة / الأكاديمية · Region", value: "", half: true },
-      { name: "directorate", label: "المديرية الإقليمية · Directorate", value: "", half: true },
-      { name: "payroll", label: "رقم التأجير · Payroll number (optional)", value: "", half: true },
-      { name: "title", label: "Title", value: "دفتر النصوص", half: true },
-      { name: "classes", label: "الأقسام · Classes — separate with commas, e.g. 3/6, 3/7, 2/1", value: "" },
-      { name: "timetable", label: "استعمال الزمن · Weekly timetable (optional: gives each new lesson its time)", type: "custom", value: "[]", render: timetableField },
+      ...daftarFields(null, "دفتر النصوص"),
       { name: "cover", label: "Cover colour", type: "color-swatches", value: "#5b2a5e", colors: [ { color: "#5b2a5e", label: "Plum" }, { color: "#1f7a4a", label: "Green" }, { color: "#1f6fd1", label: "Blue" }, { color: "#2d2f72", label: "Navy" }, { color: "#d1245f", label: "Raspberry" }, { color: "#e0612a", label: "Orange" }, { color: "#0d9488", label: "Teal" }, { color: "#475569", label: "Slate" } ] },
     ],
     "Create daftar",
-    {
-      width: 640,
-      twoColumns: true,
-      validate: (v) => {
-        if (!parseClasses(v.classes ?? "").length) return "Add at least one class.";
-        const bad = (JSON.parse(v.timetable || "[]") as Lesson[]).find((l) => !(l.start < l.end));
-        if (bad) return `A ${DAYS[bad.day].fr} lesson ends before it starts.`;
-        return null;
-      },
-    },
+    { width: 640, twoColumns: true, validate: validateDaftar },
   );
   if (!r) return null;
   try {
-    const classes = parseClasses(r.classes);
-    const meta: DaftarMeta = {
-      kind: "daftar",
-      year: r.year.trim(),
-      region: r.region.trim(),
-      directorate: r.directorate.trim(),
-      school: r.school.trim(),
-      teacher: r.teacher.trim(),
-      payroll: r.payroll.trim(),
-      subject: r.subject.trim(),
-      classes,
-      timetable: (JSON.parse(r.timetable || "[]") as Lesson[]).filter((l) => classes.includes(l.cls)),
-    };
+    const meta = metaFrom(r);
     toast("Preparing your daftar…");
     const nb = await createDaftar({ title: r.title.trim() || "دفتر النصوص", folderId, coverColor: r.cover, meta });
     await setUpCover(nb).catch(reportError);

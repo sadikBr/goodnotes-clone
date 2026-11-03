@@ -62,7 +62,7 @@ export interface TextEl extends Base {
    * when the cover design changes), or a daftar page's session date/time and
    * header fields.
    */
-  role?: "cover-title" | "cover-date" | "daftar-session" | "daftar-field";
+  role?: "cover-title" | "cover-date" | "daftar-session" | "daftar-field" | "daftar-student";
   /** For a daftar session cell: the session it shows (YYYY-MM-DD HH:MM). */
   session?: string;
 }
@@ -71,6 +71,8 @@ export type TextAlign = "left" | "center" | "right";
 
 export interface StickyEl extends Base {
   kind: "sticky";
+  /** A daftar timetable note the app placed (rebuilt when the timetable changes). */
+  role?: "daftar-field";
   x: number;
   y: number;
   w: number;

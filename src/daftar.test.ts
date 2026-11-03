@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lessonEntry, nextFreeRow, pageElements, parseDaftar, schoolYear, todaysLesson, type DaftarMeta } from "./daftar";
+import { classExportPages, holidayDays, holidayElements, holidayOn, lessonEntry, nationalHolidays, nextFreeRow, outlineElements, pageElements, parseDaftar, parseStudents, schoolYear, studentElements, termRange, todaysLesson, type DaftarMeta } from "./daftar";
 import { daftarSlots, lessonLayout, lessonTemplateFor, LESSON_TEMPLATES, DAFTAR_PAGES } from "./editor/daftarPapers";
 
 const W = 794;
@@ -15,6 +15,7 @@ const meta = (over: Partial<DaftarMeta> = {}): DaftarMeta => ({
   payroll: "2320866",
   subject: "اللغة العربية",
   classes: ["3/6", "3/7"],
+  holidays: [],
   // 3/6: Monday 08:00–10:00 and 14:00–16:00; 3/7: Tuesday 10:00–12:00.
   timetable: [
     { day: 1, start: "14:00", end: "16:00", cls: "3/6" },
@@ -111,5 +112,79 @@ describe("daftar settings", () => {
   it("school years start in September", () => {
     expect(schoolYear(new Date(2026, 8, 1))).toBe("2026-2027");
     expect(schoolYear(new Date(2027, 2, 1))).toBe("2026-2027");
+  });
+});
+
+describe("student lists", () => {
+  it("reads Massar rows: code to the national number, surname and first name to the name", () => {
+    const text = ["رقم التلميذ\tالنسب\tالاسم\tالنوع\tتاريخ الازدياد", "D130045678\tالعلوي\tمحمد\tذكر\t12/03/2012", "1\tR131122334\tBennani\tSalma\tF", "", "  "].join("\n");
+    expect(parseStudents(text)).toEqual([
+      { code: "D130045678", name: "العلوي محمد" },
+      { code: "R131122334", name: "Bennani Salma" },
+    ]);
+  });
+  it("reads plain lines with or without a code, and CSV", () => {
+    expect(parseStudents("1. Alaoui Mohamed\nD130000001 Idrissi Sara\nBennani;Omar")).toEqual([
+      { code: "", name: "Alaoui Mohamed" },
+      { code: "D130000001", name: "Idrissi Sara" },
+      { code: "", name: "Bennani Omar" },
+    ]);
+  });
+  it("puts 30 names per table and 60 per page", () => {
+    const st = Array.from({ length: 70 }, (_, i) => ({ code: `D${1000000 + i}`, name: `N${i}` }));
+    const first = studentElements(st, 0, W, H);
+    expect(first.filter((e) => e.text.startsWith("N"))).toHaveLength(60);
+    const n0 = first.find((e) => e.text === "N0")!;
+    const n30 = first.find((e) => e.text === "N30")!;
+    expect(n30.x).toBeLessThan(n0.x); // the second table is to the left
+    expect(Math.abs(n30.y - n0.y)).toBeLessThan(0.01);
+    expect(studentElements(st, 60, W, H).filter((e) => e.text.startsWith("N"))).toHaveLength(10);
+  });
+});
+
+describe("holidays", () => {
+  const hd = { name: "عطلة", from: "2026-12-20", to: "2026-12-28" };
+  it("counts both ends and finds the holiday a day falls in", () => {
+    expect(holidayDays(hd)).toBe(9);
+    expect(holidayOn(meta({ holidays: [hd] }), new Date(2026, 11, 24))?.name).toBe("عطلة");
+    expect(holidayOn(meta({ holidays: [hd] }), new Date(2026, 11, 29))).toBeNull();
+  });
+  it("suggests the fixed national holidays of the school year", () => {
+    const list = nationalHolidays("2026-2027").map((x) => x.from);
+    expect(list).toContain("2026-11-18");
+    expect(list).toContain("2027-01-11");
+    expect(list).toContain("2027-05-01");
+  });
+  it("writes the holiday list on the holidays page", () => {
+    const els = holidayElements(meta({ holidays: [hd] }), W, H);
+    expect(els.map((e) => e.text)).toEqual(["عطلة", "20/12/2026", "28/12/2026", "9"]);
+    expect(pageElements("daftar-holidays", meta({ holidays: [hd] }), null, W, H).some((e) => e.kind === "text" && e.text === "9")).toBe(true);
+  });
+});
+
+describe("outlines and class export", () => {
+  it("writes one outline line per grid row in the activities column", () => {
+    const L = lessonLayout(W, H);
+    const els = outlineElements(["النشاط 1", "النشاط 2"], 3, W, H);
+    const act = L.cols.find((c) => c.key === "activities")!;
+    expect(els).toHaveLength(2);
+    expect(els[1].y - els[0].y).toBeCloseTo(L.step);
+    expect(els[0].x).toBeGreaterThan(act.x0);
+    expect(els[0].x + els[0].w).toBeLessThan(act.x1);
+  });
+  it("keeps the front pages, the class's list and its lessons in the period", () => {
+    const pages = [
+      { id: "t", template: "daftar-title", section: null },
+      { id: "s", template: "daftar-students", section: "3/6" },
+      { id: "a", template: "daftar", section: "3/6" },
+      { id: "b", template: "daftar", section: "3/6" },
+      { id: "o", template: "daftar-blue", section: "3/7" },
+      { id: "m", template: "daftar-memos", section: null },
+    ] as const;
+    const sessions: Record<string, string[]> = { a: ["2026-10-05 08:00"], b: ["2027-03-01 08:00"] };
+    const pick = (term: "year" | "s1" | "s2") => classExportPages([...pages] as { id: string; template: never; section: string | null }[], "3/6", (p) => sessions[p.id] ?? [], termRange(meta(), term)).map((p) => p.id);
+    expect(pick("year")).toEqual(["t", "s", "a", "b"]);
+    expect(pick("s1")).toEqual(["t", "s", "a"]);
+    expect(pick("s2")).toEqual(["t", "s", "b"]);
   });
 });
