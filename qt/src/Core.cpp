@@ -1,6 +1,7 @@
 #include "Core.h"
 
 #include <QPointer>
+#include <QFile>
 #include <QSaveFile>
 #include <QThreadPool>
 #include <QStandardPaths>
@@ -189,8 +190,14 @@ QString InkleafCore::saveBytes(const QString& path, const QString& cmd, const QV
   QString err;
   const QByteArray bytes = callBytes(cmd, QJsonObject::fromVariantMap(args), &err);
   if (err.isEmpty()) {
-    QSaveFile f(file);
-    if (!f.open(QIODevice::WriteOnly) || f.write(bytes) != bytes.size() || !f.commit()) err = "Couldn't write " + file + ": " + f.errorString();
+    if (file.startsWith("content:")) {
+      // Android's document URLs can't be written by renaming a temporary file.
+      QFile f(file);
+      if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate) || f.write(bytes) != bytes.size()) err = "Couldn't write the file: " + f.errorString();
+    } else {
+      QSaveFile f(file);
+      if (!f.open(QIODevice::WriteOnly) || f.write(bytes) != bytes.size() || !f.commit()) err = "Couldn't write " + file + ": " + f.errorString();
+    }
   }
   if (!err.isEmpty()) {
     if (QJSEngine* js = qjsEngine(this)) js->throwError(err);
