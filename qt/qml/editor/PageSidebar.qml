@@ -8,6 +8,9 @@ import Inkleaf
 Rectangle {
     id: root
     required property InkCanvas canvas
+    /// Set for a daftar: its pages are grouped by class (page.section).
+    property bool daftar: false
+    signal addDaftarPage()
     color: Theme.surface
     Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Theme.border }
     clip: true
@@ -49,12 +52,24 @@ Rectangle {
                 required property var modelData
                 required property int index
                 readonly property bool active: index === root.canvas.currentPage
+                // A daftar's list has a heading where each class's section starts.
+                readonly property string section: root.daftar && modelData.section && modelData.section !== ((root.canvas.pages[index - 1] || {}).section) ? modelData.section : ""
                 width: list.width
-                height: thumb.height + 24
+                height: thumb.height + 24 + thumb.y
                 HoverHandler { id: hover }
+                Rectangle {
+                    visible: cell.section !== ""
+                    x: 22; y: 2
+                    width: parent.width - 44
+                    height: 22
+                    radius: 6
+                    color: Theme.accentSoft
+                    Label { anchors.centerIn: parent; width: parent.width - 12; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight; text: cell.section; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 0.2; color: Theme.accent }
+                }
                 AbstractButton {
                     id: thumb
                     x: 18
+                    y: cell.section !== "" ? 34 : 0
                     width: parent.width - 36
                     height: width * (cell.modelData.height || 1123) / (cell.modelData.width || 794)
                     hoverEnabled: true
@@ -84,7 +99,7 @@ Rectangle {
                     Behavior on opacity { NumberAnimation { duration: 150 } }
                     Rectangle { anchors.fill: parent; z: -1; radius: 10; color: Theme.surface }
                     onClicked: menu.show(more, [
-                        { label: "Add page after", action: () => root.canvas.addPage(cell.index + 1, "") },
+                        { label: "Add page after", action: () => root.daftar && cell.modelData.section ? root.addDaftarPage() : root.canvas.addPage(cell.index + 1, "") },
                         { label: "Duplicate page", action: () => root.canvas.duplicatePage(cell.index) },
                         { label: "Move up", action: () => root.canvas.movePage(cell.index, cell.index - 1) },
                         { label: "Move down", action: () => root.canvas.movePage(cell.index, cell.index + 1) },
@@ -112,7 +127,7 @@ Rectangle {
             Layout.bottomMargin: 16
             implicitHeight: 40
             hoverEnabled: true
-            onClicked: root.canvas.addPage(-1, "")
+            onClicked: root.daftar ? root.addDaftarPage() : root.canvas.addPage(-1, "")
             background: Item {
                 DashedBox { anchors.fill: parent; radius: Theme.radius; color: add.hovered ? Theme.accent : Theme.borderStrong; fill: add.hovered ? Theme.accentSoft : "transparent"; lineWidth: 1.5 }
             }

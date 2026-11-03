@@ -51,6 +51,8 @@ public:
 
   /// For QML: calls Inkleaf.<path> with plain values; returns plain values.
   Q_INVOKABLE QVariant run(const QString& path, const QVariantList& args = {});
+  /** Calls Inkleaf.<path>(...) and waits for a promise it returns. */
+  QJSValue awaitCall(const QString& path, const QJSValueList& args);
 
   /// A page's paper (template, colour) at `scale` pixels per page unit,
   /// only the `region` part of the page (page units), or all of it.

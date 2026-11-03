@@ -76,6 +76,7 @@ qt_add_qml_module(inkleaf
     qml/SettingsDialog.qml
     qml/Library.qml
     qml/Editor.qml
+    qml/Daftar.qml
     qml/IconButton.qml
     qml/Icon.qml
     qml/IconData.js

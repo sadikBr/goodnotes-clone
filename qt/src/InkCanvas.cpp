@@ -444,6 +444,43 @@ void InkCanvas::reloadPages(bool elementsToo) {
   afterCore();
 }
 
+QVariant InkCanvas::daftarQuery(const QString& fn, const QVariantList& args) {
+  if (m_core.isUndefined()) return {};
+  Js& js = Js::instance();
+  QJSValueList list{m_core};
+  for (const QVariant& a : args) list << js.engine().toScriptValue(a);
+  return js.awaitCall("daftarQt." + fn, list).toVariant(QJSValue::ConvertJSObjects);
+}
+
+QVariantMap InkCanvas::daftar(const QString& fn, const QVariantList& args) {
+  if (m_core.isUndefined()) return {};
+  flush();
+  QVariantMap r = daftarQuery(fn, args).toMap();
+  if (r.value("reloadAll").toBool() || r.value("reload").toBool()) {
+    reloadPages(r.value("reloadAll").toBool());
+    const QString id = r.value("pageId").toString();
+    for (int i = 0; i < int(m_pages.size()); ++i)
+      if (m_pages[i].meta.value("id").toString() == id) r.insert("goTo", i);
+  }
+  if (r.value("again").toBool()) return daftar(fn, args);
+  afterCore();
+  if (r.contains("goTo") && !r.value("goTo").isNull()) {
+    const int i = r.value("goTo").toInt();
+    if (r.contains("y") && i >= 0 && i < int(m_pages.size())) {
+      // The line written, a third of the way down the view.
+      m_scroll.setY((m_pages[i].top + r.value("y").toDouble()) * m_zoom - height() * 0.35);
+      clampScroll();
+      emit viewChanged();
+      refresh();
+    } else {
+      goToPage(i);
+    }
+  }
+  if (r.contains("toast")) emit message(r.value("toast").toString(), false);
+  if (r.contains("error")) emit message(r.value("error").toString(), true);
+  return r;
+}
+
 void InkCanvas::flush() {
   m_saveTimer.stop();
   if (m_core.isUndefined()) return;

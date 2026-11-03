@@ -12,10 +12,23 @@ Item {
     readonly property var scales: ({ pdf: 3, png: 3, pptx: 2 })
     property string format: "pdf"
     property string scope: "all"
+    property var only: null
 
+    /** Exports these page indexes as a PDF named after the notebook and `suffix` (a daftar class). */
+    function runPages(list, suffix) {
+        only = list
+        format = "pdf"
+        scope = "some"
+        canvas.finishEdit()
+        canvas.flush()
+        dialog.selectedFile = InkleafCore.documentsFolder() + "/" + (title + " - " + suffix).replace(/[\\/:*?"<>|]/g, "_") + ".pdf"
+        dialog.nameFilters = ["PDF (*.pdf)"]
+        dialog.open()
+    }
     function run(fmt, sc) {
         format = fmt
         scope = sc
+        only = null
         canvas.finishEdit()
         canvas.flush()
         const name = sc === "all" ? title : title + " - page " + (canvas.currentPage + 1)
@@ -28,7 +41,7 @@ Item {
         fileMode: FileDialog.SaveFile
         title: "Export"
         onAccepted: {
-            const pages = root.scope === "all" ? [...Array(root.canvas.pageCount).keys()] : [root.canvas.currentPage]
+            const pages = root.scope === "some" ? root.only : root.scope === "all" ? [...Array(root.canvas.pageCount).keys()] : [root.canvas.currentPage]
             root.notify("Exporting " + pages.length + " page" + (pages.length > 1 ? "s" : "") + "…", false)
             Qt.callLater(() => {
                 try {

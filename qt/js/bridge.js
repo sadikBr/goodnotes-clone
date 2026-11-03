@@ -181,6 +181,7 @@ var Inkleaf = (() => {
     createEditor: () => createEditor,
     daftar: () => daftar_exports,
     daftarPapers: () => daftarPapers_exports,
+    daftarQt: () => daftarQt_exports,
     drawCoverDesign: () => drawCoverDesign,
     drawElement: () => drawElement,
     drawGuides: () => drawGuides,
@@ -11429,6 +11430,496 @@ var Inkleaf = (() => {
       points.push([4 + t2 * (w2 - 8), hgt / 2 + Math.sin(t2 * Math.PI * 2) * 5 + (jitter - Math.floor(jitter) - 0.5) * 3.2, 0.5]);
     }
     drawStroke(ctx, { id: "sample", z: 0, kind: "stroke", tool: "pen", style: "ballpoint", color: sampleInk(color, dark), width: 1.6, points, smooth: streamline });
+  }
+
+  // qt/js/daftarQt.ts
+  var daftarQt_exports = {};
+  __export(daftarQt_exports, {
+    DAYS: () => DAYS,
+    OUTLINES: () => OUTLINES,
+    create: () => create,
+    currentClass: () => currentClass,
+    exportPages: () => exportPages,
+    formValues: () => formValues,
+    goToClass: () => goToClass,
+    holidayDays: () => holidayDays,
+    holidayToday: () => holidayToday,
+    info: () => info,
+    insertOutline: () => insertOutline,
+    nationalHolidaysFor: () => nationalHolidaysFor,
+    newLesson: () => newLesson,
+    parseClasses: () => parseClasses,
+    parseStudents: () => parseStudents,
+    pasteStudents: () => pasteStudents,
+    schoolYear: () => schoolYear,
+    sections: () => sections,
+    studentsSummary: () => studentsSummary,
+    update: () => update,
+    validate: () => validate
+  });
+  var __assign11 = function() {
+    __assign11 = Object.assign || function(t2) {
+      for (var s2, i2 = 1, n2 = arguments.length; i2 < n2; i2++) {
+        s2 = arguments[i2];
+        for (var p2 in s2) if (Object.prototype.hasOwnProperty.call(s2, p2))
+          t2[p2] = s2[p2];
+      }
+      return t2;
+    };
+    return __assign11.apply(this, arguments);
+  };
+  var __awaiter7 = function(thisArg, _arguments, P2, generator) {
+    function adopt(value) {
+      return value instanceof P2 ? value : new P2(function(resolve) {
+        resolve(value);
+      });
+    }
+    return new (P2 || (P2 = Promise))(function(resolve, reject) {
+      function fulfilled(value) {
+        try {
+          step(generator.next(value));
+        } catch (e2) {
+          reject(e2);
+        }
+      }
+      function rejected(value) {
+        try {
+          step(generator["throw"](value));
+        } catch (e2) {
+          reject(e2);
+        }
+      }
+      function step(result) {
+        result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+      }
+      step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+  };
+  var __generator8 = function(thisArg, body) {
+    var _2 = { label: 0, sent: function() {
+      if (t2[0] & 1) throw t2[1];
+      return t2[1];
+    }, trys: [], ops: [] }, f3, y2, t2, g3 = Object.create((typeof Iterator === "function" ? Iterator : Object).prototype);
+    return g3.next = verb(0), g3["throw"] = verb(1), g3["return"] = verb(2), typeof Symbol === "function" && (g3[Symbol.iterator] = function() {
+      return this;
+    }), g3;
+    function verb(n2) {
+      return function(v2) {
+        return step([n2, v2]);
+      };
+    }
+    function step(op) {
+      if (f3) throw new TypeError("Generator is already executing.");
+      while (g3 && (g3 = 0, op[0] && (_2 = 0)), _2) try {
+        if (f3 = 1, y2 && (t2 = op[0] & 2 ? y2["return"] : op[0] ? y2["throw"] || ((t2 = y2["return"]) && t2.call(y2), 0) : y2.next) && !(t2 = t2.call(y2, op[1])).done) return t2;
+        if (y2 = 0, t2) op = [op[0] & 2, t2.value];
+        switch (op[0]) {
+          case 0:
+          case 1:
+            t2 = op;
+            break;
+          case 4:
+            _2.label++;
+            return { value: op[1], done: false };
+          case 5:
+            _2.label++;
+            y2 = op[1];
+            op = [0];
+            continue;
+          case 7:
+            op = _2.ops.pop();
+            _2.trys.pop();
+            continue;
+          default:
+            if (!(t2 = _2.trys, t2 = t2.length > 0 && t2[t2.length - 1]) && (op[0] === 6 || op[0] === 2)) {
+              _2 = 0;
+              continue;
+            }
+            if (op[0] === 3 && (!t2 || op[1] > t2[0] && op[1] < t2[3])) {
+              _2.label = op[1];
+              break;
+            }
+            if (op[0] === 6 && _2.label < t2[1]) {
+              _2.label = t2[1];
+              t2 = op;
+              break;
+            }
+            if (t2 && _2.label < t2[2]) {
+              _2.label = t2[2];
+              _2.ops.push(op);
+              break;
+            }
+            if (t2[2]) _2.ops.pop();
+            _2.trys.pop();
+            continue;
+        }
+        op = body.call(thisArg, _2);
+      } catch (e2) {
+        op = [6, e2];
+        y2 = 0;
+      } finally {
+        f3 = t2 = 0;
+      }
+      if (op[0] & 5) throw op[1];
+      return { value: op[0] ? op[1] : void 0, done: true };
+    }
+  };
+  var __read19 = globalThis.__fast && globalThis.__fast.__read || function(o2, n2) {
+    var m2 = typeof Symbol === "function" && o2[Symbol.iterator];
+    if (!m2) return o2;
+    var i2 = m2.call(o2), r2, ar = [], e2;
+    try {
+      while ((n2 === void 0 || n2-- > 0) && !(r2 = i2.next()).done) ar.push(r2.value);
+    } catch (error) {
+      e2 = { error };
+    } finally {
+      try {
+        if (r2 && !r2.done && (m2 = i2["return"])) m2.call(i2);
+      } finally {
+        if (e2) throw e2.error;
+      }
+    }
+    return ar;
+  };
+  var __spreadArray15 = globalThis.__fast && globalThis.__fast.__spreadArray || function(to, from, pack) {
+    if (pack || arguments.length === 2) for (var i2 = 0, l2 = from.length, ar; i2 < l2; i2++) {
+      if (ar || !(i2 in from)) {
+        if (!ar) ar = Array.prototype.slice.call(from, 0, i2);
+        ar[i2] = from[i2];
+      }
+    }
+    return to.concat(ar || Array.prototype.slice.call(from));
+  };
+  function parseClasses(s2) {
+    return __spreadArray15([], __read19(new Set(String(s2 || "").split(/[,;،\n]+/).map(function(c2) {
+      return c2.trim();
+    }).filter(Boolean))), false).slice(0, 30);
+  }
+  function nationalHolidaysFor(year) {
+    return nationalHolidays(year || schoolYear());
+  }
+  function info(notebookId) {
+    return __awaiter7(this, void 0, Promise, function() {
+      var _a;
+      return __generator8(this, function(_b) {
+        switch (_b.label) {
+          case 0:
+            _a = parseDaftar;
+            return [4, api.notebook(notebookId)];
+          case 1:
+            return [2, _a.apply(void 0, [_b.sent()])];
+        }
+      });
+    });
+  }
+  function formValues(m2, title) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+    return {
+      teacher: (_a = m2 === null || m2 === void 0 ? void 0 : m2.teacher) !== null && _a !== void 0 ? _a : "",
+      subject: (_b = m2 === null || m2 === void 0 ? void 0 : m2.subject) !== null && _b !== void 0 ? _b : "",
+      school: (_c = m2 === null || m2 === void 0 ? void 0 : m2.school) !== null && _c !== void 0 ? _c : "",
+      year: (_d = m2 === null || m2 === void 0 ? void 0 : m2.year) !== null && _d !== void 0 ? _d : schoolYear(),
+      region: (_e = m2 === null || m2 === void 0 ? void 0 : m2.region) !== null && _e !== void 0 ? _e : "",
+      directorate: (_f = m2 === null || m2 === void 0 ? void 0 : m2.directorate) !== null && _f !== void 0 ? _f : "",
+      payroll: (_g = m2 === null || m2 === void 0 ? void 0 : m2.payroll) !== null && _g !== void 0 ? _g : "",
+      title,
+      classes: (_h = m2 === null || m2 === void 0 ? void 0 : m2.classes.join(", ")) !== null && _h !== void 0 ? _h : "",
+      timetable: JSON.stringify((_j = m2 === null || m2 === void 0 ? void 0 : m2.timetable) !== null && _j !== void 0 ? _j : []),
+      holidays: JSON.stringify((_k = m2 === null || m2 === void 0 ? void 0 : m2.holidays) !== null && _k !== void 0 ? _k : [])
+    };
+  }
+  function validate(v2) {
+    var _a;
+    if (!parseClasses((_a = v2.classes) !== null && _a !== void 0 ? _a : "").length)
+      return "Add at least one class.";
+    var bad = JSON.parse(v2.timetable || "[]").find(function(l2) {
+      return !(l2.start < l2.end);
+    });
+    if (bad)
+      return "A ".concat(DAYS[bad.day].fr, " lesson ends before it starts.");
+    var hd = JSON.parse(v2.holidays || "[]").find(function(x2) {
+      return !x2.from || !x2.name.trim();
+    });
+    if (hd)
+      return hd.from ? "Give each holiday a name." : "Choose the dates of “".concat(hd.name.trim() || "the new holiday", "”.");
+    return null;
+  }
+  function metaFrom(r2) {
+    var classes = parseClasses(r2.classes);
+    var t2 = function(k2) {
+      var _a;
+      return String((_a = r2[k2]) !== null && _a !== void 0 ? _a : "").trim();
+    };
+    return {
+      kind: "daftar",
+      year: t2("year"),
+      region: t2("region"),
+      directorate: t2("directorate"),
+      school: t2("school"),
+      teacher: t2("teacher"),
+      payroll: t2("payroll"),
+      subject: t2("subject"),
+      classes,
+      timetable: JSON.parse(r2.timetable || "[]").filter(function(l2) {
+        return classes.includes(l2.cls);
+      }),
+      holidays: JSON.parse(r2.holidays || "[]").map(function(x2) {
+        return { name: x2.name.trim(), from: x2.from, to: x2.to >= x2.from ? x2.to : x2.from };
+      })
+    };
+  }
+  function create(values2, folderId) {
+    return __awaiter7(this, void 0, Promise, function() {
+      var meta, nb, _a, cover;
+      return __generator8(this, function(_b) {
+        switch (_b.label) {
+          case 0:
+            meta = metaFrom(values2);
+            return [4, createDaftar({ title: String(values2.title || "").trim() || "دفتر النصوص", folderId: folderId || null, coverColor: values2.cover || "#5b2a5e", meta })];
+          case 1:
+            nb = _b.sent();
+            return [4, setUpCover(nb).catch(function() {
+            })];
+          case 2:
+            _b.sent();
+            return [4, finishDaftarCover(nb, meta)];
+          case 3:
+            _b.sent();
+            return [4, api.pages(nb.id)];
+          case 4:
+            _a = __read19.apply(void 0, [_b.sent(), 1]), cover = _a[0];
+            if (!cover) return [3, 6];
+            return [4, refreshCoverThumbnail(cover).catch(function() {
+            })];
+          case 5:
+            _b.sent();
+            _b.label = 6;
+          case 6:
+            return [2, nb];
+        }
+      });
+    });
+  }
+  function update(notebookId, values2) {
+    return __awaiter7(this, void 0, Promise, function() {
+      var nb, before, next;
+      return __generator8(this, function(_a) {
+        switch (_a.label) {
+          case 0:
+            return [4, api.notebook(notebookId)];
+          case 1:
+            nb = _a.sent();
+            before = parseDaftar(nb);
+            if (!before)
+              return [2, { removed: [] }];
+            next = metaFrom(values2);
+            return [4, updateDaftar(nb, before, next)];
+          case 2:
+            _a.sent();
+            return [2, { removed: before.classes.filter(function(c2) {
+              return !next.classes.includes(c2);
+            }) }];
+        }
+      });
+    });
+  }
+  var isField = function(e2) {
+    return e2.kind === "text" && e2.role === "daftar-field";
+  };
+  function inkRects(els) {
+    return els.filter(function(e2) {
+      return !isField(e2);
+    }).map(function(e2) {
+      var b2 = bounds(e2);
+      return { x0: b2.x, y0: b2.y, x1: b2.x + b2.w, y1: b2.y + b2.h };
+    });
+  }
+  function currentClass(core, meta) {
+    var _a;
+    var s2 = core.page.section;
+    return s2 && meta.classes.includes(s2) ? s2 : (_a = meta.classes[0]) !== null && _a !== void 0 ? _a : null;
+  }
+  function sections(core) {
+    var out = [];
+    var pages = core.pages;
+    pages.forEach(function(p2, i2) {
+      var _a;
+      var s2 = p2.meta.section;
+      if (s2 && s2 !== ((_a = pages[i2 - 1]) === null || _a === void 0 ? void 0 : _a.meta.section))
+        out.push({ index: i2, label: s2 });
+    });
+    return out;
+  }
+  function classPage(core, cls) {
+    var pages = core.pages;
+    var current = null;
+    pages.forEach(function(p2, i2) {
+      if (p2.meta.section !== cls || !isLessonTemplate(p2.meta.template))
+        return;
+      if (current === null)
+        current = i2;
+      if (core.load(i2).some(function(e2) {
+        return !isField(e2);
+      }))
+        current = i2;
+    });
+    return current;
+  }
+  function goToClass(core, cls) {
+    return { goTo: classPage(core, cls) };
+  }
+  function holidayToday(meta) {
+    var _a, _b;
+    return (_b = (_a = holidayOn(meta)) === null || _a === void 0 ? void 0 : _a.name) !== null && _b !== void 0 ? _b : null;
+  }
+  function newLesson(core, notebookId, cls) {
+    return __awaiter7(this, void 0, void 0, function() {
+      var nb, d2, here, target, row, p_1, page, p2, today, logged, entry, c2, z, L2, time;
+      var _a;
+      return __generator8(this, function(_b) {
+        switch (_b.label) {
+          case 0:
+            return [4, api.notebook(notebookId)];
+          case 1:
+            nb = _b.sent();
+            d2 = parseDaftar(nb);
+            if (!d2)
+              return [2, {}];
+            core.finishTextEdit();
+            here = core.page;
+            target = classPage(core, cls);
+            if (here.section === cls && isLessonTemplate(here.template))
+              target = core.active;
+            row = null;
+            if (target !== null) {
+              p_1 = core.pages[target].meta;
+              row = nextFreeRow(inkRects(core.load(target)), p_1.width, p_1.height);
+            }
+            if (!(target === null || row === null)) return [3, 3];
+            return [4, addLessonPage(nb, d2, cls)];
+          case 2:
+            page = _b.sent();
+            return [2, { reload: true, again: true, pageId: page.id }];
+          case 3:
+            p2 = core.pages[target].meta;
+            core.activate(target);
+            today = isoDate(/* @__PURE__ */ new Date());
+            logged = new Set(core.elements.flatMap(function(e2) {
+              var _a2;
+              return e2.kind === "text" && e2.role === "daftar-session" && ((_a2 = e2.session) === null || _a2 === void 0 ? void 0 : _a2.startsWith(today)) ? [e2.session.slice(11)] : [];
+            }));
+            entry = lessonEntry(d2, cls, row, p2.width, p2.height, /* @__PURE__ */ new Date(), logged);
+            c2 = core;
+            c2.snapshot();
+            z = nextZ(core.elements);
+            core.elements = core.elements.concat(entry.map(function(el) {
+              return __assign11(__assign11({}, el), { z: z++ });
+            }));
+            c2.changed();
+            L2 = lessonLayout(p2.width, p2.height);
+            time = (_a = entry[2]) === null || _a === void 0 ? void 0 : _a.text;
+            return [2, { goTo: target, y: L2.bodyTop + row * L2.step, toast: "".concat(cls, " · ").concat(DAYS[(/* @__PURE__ */ new Date()).getDay()].ar, " ").concat(entry[0].text).concat(time ? " · ".concat(time) : "") }];
+        }
+      });
+    });
+  }
+  function insertOutline(core, meta, lines2) {
+    var cls = currentClass(core, meta);
+    if (!cls)
+      return {};
+    core.finishTextEdit();
+    if (!isLessonTemplate(core.page.template)) {
+      var i2 = classPage(core, cls);
+      if (i2 === null)
+        return {};
+      core.activate(i2);
+    }
+    var p2 = core.page;
+    var L2 = lessonLayout(p2.width, p2.height);
+    var act = L2.cols.find(function(c3) {
+      return c3.key === "activities";
+    });
+    var ink = inkRects(core.elements);
+    var sessionRows = core.elements.flatMap(function(e2) {
+      return e2.kind === "text" && e2.role === "daftar-session" ? [Math.round((e2.y - 2 - L2.bodyTop) / L2.step)] : [];
+    });
+    var row = null;
+    if (sessionRows.length) {
+      var last = Math.max.apply(Math, __spreadArray15([], __read19(sessionRows), false));
+      var top_1 = L2.bodyTop + last * L2.step + 1;
+      var used = ink.some(function(r2) {
+        return r2.x1 > act.x0 + 1 && r2.x0 < act.x1 - 1 && r2.y1 > top_1;
+      });
+      if (!used && last + lines2.length <= L2.rows)
+        row = last;
+    }
+    if (row === null)
+      row = nextFreeRow(ink, p2.width, p2.height, lines2.length);
+    if (row === null)
+      return { error: "No room left for this outline on the page. Start a new lesson for a new page." };
+    var c2 = core;
+    c2.snapshot();
+    var z = nextZ(core.elements);
+    core.elements = core.elements.concat(outlineElements(lines2, row, p2.width, p2.height).map(function(el) {
+      return __assign11(__assign11({}, el), { z: z++ });
+    }));
+    c2.changed();
+    return { goTo: core.active, y: L2.bodyTop + row * L2.step };
+  }
+  function studentsSummary(text2) {
+    var n2 = parseStudents(text2 || "");
+    return n2.length ? "".concat(n2.length, " student").concat(n2.length > 1 ? "s" : "", " found · ").concat(n2.filter(function(x2) {
+      return x2.code;
+    }).length, " with a Massar code. First: ").concat(n2[0].name) : "No names found yet.";
+  }
+  function pasteStudents(notebookId, cls, text2) {
+    return __awaiter7(this, void 0, void 0, function() {
+      var nb, d2, students, pages, first;
+      var _a;
+      return __generator8(this, function(_b) {
+        switch (_b.label) {
+          case 0:
+            return [4, api.notebook(notebookId)];
+          case 1:
+            nb = _b.sent();
+            d2 = parseDaftar(nb);
+            if (!d2)
+              return [2, {}];
+            students = parseStudents(text2);
+            return [4, fillStudents(nb, d2, cls, students)];
+          case 2:
+            _b.sent();
+            return [4, api.pages(nb.id)];
+          case 3:
+            pages = _b.sent();
+            first = pages.find(function(p2) {
+              return p2.section === cls && p2.template === "daftar-students";
+            });
+            return [2, { reloadAll: true, pageId: (_a = first === null || first === void 0 ? void 0 : first.id) !== null && _a !== void 0 ? _a : null, toast: "".concat(students.length, " students written for ").concat(cls) }];
+        }
+      });
+    });
+  }
+  function exportPages(core, meta, cls, term) {
+    var _a;
+    var pages = core.pages.map(function(p2, i2) {
+      return __assign11(__assign11({}, p2.meta), { i: i2 });
+    });
+    var sessions = function(p2) {
+      return core.load(p2.i).flatMap(function(e2) {
+        return e2.kind === "text" && e2.role === "daftar-session" && e2.session ? [e2.session] : [];
+      });
+    };
+    var range = termRange(meta, term);
+    var picked = classExportPages(pages, cls, sessions, range);
+    if (!picked.some(function(p2) {
+      return isLessonTemplate(p2.template);
+    }))
+      return null;
+    var period = (_a = { year: meta.year, s1: "S1", s2: "S2", month: isoDate(/* @__PURE__ */ new Date()).slice(0, 7) }[term]) !== null && _a !== void 0 ? _a : "";
+    return { pages: picked.map(function(p2) {
+      return p2.i;
+    }), name: "".concat(cls.replace(/[\\/]/g, "-")).concat(period ? " - ".concat(period) : "") };
   }
   return __toCommonJS(bridge_exports);
 })();

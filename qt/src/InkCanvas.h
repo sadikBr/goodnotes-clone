@@ -164,6 +164,13 @@ public:
   Q_INVOKABLE void reloadPages(bool elementsToo = false);
   /// Saves pending changes now (before leaving the notebook).
   Q_INVOKABLE void flush();
+  /**
+   * Runs Inkleaf.daftarQt.<fn>(core, ...args) for the daftar bar and does
+   * what it asks: reload the pages, go to a page (and a line on it).
+   */
+  Q_INVOKABLE QVariantMap daftar(const QString& fn, const QVariantList& args = {});
+  /** Inkleaf.daftarQt.<fn>(core, ...args) without side effects (queries). */
+  Q_INVOKABLE QVariant daftarQuery(const QString& fn, const QVariantList& args = {});
   /// A page's picture (paper and everything on it) at `scale`, as a data: URL.
   Q_INVOKABLE QString pagePreview(int index, qreal scale);
   /// A page drawn for export: { dataUrl, widthPx, heightPx, pageWidth, pageHeight }.

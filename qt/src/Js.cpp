@@ -108,6 +108,10 @@ QJsonValue Js::toJson(const QJSValue& v) {
 QVariant Js::run(const QString& path, const QVariantList& args) {
   QJSValueList list;
   for (const QVariant& a : args) list << m_engine.toScriptValue(a);
+  return awaitCall(path, list).toVariant(QJSValue::ConvertJSObjects);
+}
+
+QJSValue Js::awaitCall(const QString& path, const QJSValueList& list) {
   QJSValue r = call(path, list);
   // A promise (the web code's async functions): wait for it, for up to 20 s.
   if (r.isObject() && r.property("then").isCallable()) {
@@ -123,7 +127,7 @@ QVariant Js::run(const QString& path, const QVariantList& args) {
     }
     r = state.property("value");
   }
-  return r.toVariant(QJSValue::ConvertJSObjects);
+  return r;
 }
 
 QObject* Js::imageFor(const QString& src) {

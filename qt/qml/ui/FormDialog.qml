@@ -1,7 +1,10 @@
 // A modal form (the web app's formDialog / confirmDialog):
 //   dialog.ask("New folder", [{ name, label, type?, value, options?, colors? }],
 //              "Create", values => ..., { message?, danger?, aside? })
-// Field types: "text" (default), "select", "swatches", "segmented".
+// Field types: "text" (default), "select", "swatches", "segmented", "covers",
+// "hidden", "custom" (field.component, given `field` and `dialog`).
+// Options: width, twoColumns (fields with `half` share a row), validate
+// (values => error text or null), message, danger, aside.
 // `aside` is a Component shown beside the form; it can read `dialog.values`.
 import QtQuick
 import QtQuick.Controls
@@ -18,6 +21,10 @@ Popup {
     property var values: ({})
     property Component aside: null
     property var onOk: null
+    property int formWidth: 420
+    property bool twoColumns: false
+    property var validate: null
+    property string error: ""
     signal changed(string name, var value)
 
     function ask(t, f, ok, cb, opts) {
@@ -27,6 +34,10 @@ Popup {
         message = opts.message || ""
         danger = !!opts.danger
         aside = opts.aside || null
+        formWidth = opts.width || 420
+        twoColumns = !!opts.twoColumns
+        validate = opts.validate || null
+        error = ""
         onOk = cb
         const v = {}
         for (const x of f) v[x.name] = x.value !== undefined ? x.value : (x.type === "swatches" ? (typeof x.colors[0] === "string" ? x.colors[0] : x.colors[0].color) : "")
@@ -38,11 +49,16 @@ Popup {
         const v = Object.assign({}, values)
         v[name] = value
         values = v
+        error = ""
         changed(name, value)
     }
     function submit() {
         for (const f of fields)
-            if ((f.type || "text") === "text" && f.required !== false && String(values[f.name]).trim() === "") return
+            if ((f.type || "text") === "text" && f.required !== false && !root.validate && String(values[f.name]).trim() === "") return
+        if (validate) {
+            const problem = validate(values)
+            if (problem) { error = problem; return }
+        }
         const cb = onOk
         const v = values
         close()
@@ -55,7 +71,7 @@ Popup {
     focus: true
     padding: 0
     closePolicy: Popup.CloseOnEscape
-    width: Math.min(parent.width - 32, aside ? 860 : 420)
+    width: Math.min(parent.width - 32, aside ? 860 : formWidth)
     height: Math.min(parent.height - 32, implicitHeight)
 
     Overlay.modal: Rectangle {
@@ -104,24 +120,46 @@ Popup {
                 spacing: 0
                 Label { text: root.title; font.pixelSize: 19; font.weight: Font.Bold; color: Theme.text; Layout.fillWidth: true; wrapMode: Text.Wrap; Layout.bottomMargin: 18 }
                 Label { visible: root.message.length > 0; text: root.message; color: Theme.muted; wrapMode: Text.Wrap; lineHeight: 1.25; Layout.fillWidth: true; Layout.bottomMargin: 18 }
-                Repeater {
-                    model: root.fields
-                    delegate: ColumnLayout {
-                        id: row
-                        required property var modelData
-                        required property int index
-                        visible: (modelData.type || "text") !== "hidden"
-                        Layout.fillWidth: true
-                        Layout.bottomMargin: 16
-                        spacing: 7
-                        Label { visible: !!row.modelData.label; text: row.modelData.label || ""; font.pixelSize: 12; font.weight: Font.DemiBold; color: Theme.muted }
-                        Loader {
-                            Layout.fillWidth: true
-                            property var field: row.modelData
-                            property bool first: row.index === 0
-                            sourceComponent: { const t = row.modelData.type || "text"; return t === "select" ? selectField : t === "swatches" ? swatchField : t === "segmented" ? segField : t === "covers" ? coverField : textField }
+                Flow {
+                    id: fieldsFlow
+                    Layout.fillWidth: true
+                    spacing: 14
+                    Layout.bottomMargin: 16
+                    Repeater {
+                        model: root.fields
+                        delegate: Item {
+                            id: row
+                            required property var modelData
+                            required property int index
+                            readonly property bool half: root.twoColumns && !!modelData.half
+                            visible: (modelData.type || "text") !== "hidden"
+                            width: half ? (fieldsFlow.width - 14) / 2 : fieldsFlow.width
+                            height: col.implicitHeight + 2
+                            ColumnLayout {
+                                id: col
+                                width: parent.width
+                                spacing: 7
+                                Label { visible: !!row.modelData.label; text: "\u200E" + (row.modelData.label || ""); horizontalAlignment: Text.AlignLeft; font.pixelSize: 12; font.weight: Font.DemiBold; color: Theme.muted; Layout.fillWidth: true; wrapMode: Text.Wrap }
+                                Loader {
+                                    Layout.fillWidth: true
+                                    property var field: row.modelData
+                                    property var dialog: root
+                                    property bool first: row.index === 0
+                                    sourceComponent: { const t = row.modelData.type || "text"; return t === "custom" ? row.modelData.component : t === "select" ? selectField : t === "swatches" ? swatchField : t === "segmented" ? segField : t === "covers" ? coverField : textField }
+                                }
+                            }
                         }
                     }
+                }
+                Label {
+                    visible: root.error.length > 0
+                    text: root.error
+                    color: "#dc2626"
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                    Layout.bottomMargin: 6
                 }
                 RowLayout {
                     Layout.fillWidth: true

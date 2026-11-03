@@ -24,3 +24,4 @@ export { INSTRUMENTS, MM, snapAngle } from "../../src/editor/ruler";
 export { createEditor } from "./editorCore";
 export { renderPage, drawSelection } from "../../src/editor/render";
 export * as samples from "./samples";
+export * as daftarQt from "./daftarQt";

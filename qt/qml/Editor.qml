@@ -62,6 +62,63 @@ Rectangle {
     PaperPicker { id: paperPicker; canvas: canvas }
     CoverPicker { id: coverPicker; canvas: canvas; notebookId: root.notebookId; title: root.title }
     FormDialog { id: dialog }
+    Daftar { id: daftarUi; dialog: dialog; onNotify: (m, e) => root.notify(m, e) }
+
+    // --- daftar annossous --------------------------------------------------------
+    /// The daftar's details when this notebook is one (else null).
+    property var daftar: null
+    function loadDaftar() { daftar = notebookId ? Js.run("daftarQt.info", [notebookId]) : null }
+    onNotebookIdChanged: loadDaftar()
+    Component.onCompleted: loadDaftar()
+    readonly property string daftarClass: {
+        if (!daftar) return ""
+        const s = (canvas.pages[canvas.currentPage] || {}).section
+        return s && daftar.classes.indexOf(s) >= 0 ? s : (daftar.classes[0] || "")
+    }
+    function customOutlines() {
+        try {
+            const v = JSON.parse(prefs.store.daftarOutlines || "[]")
+            return Array.isArray(v) ? v.filter(o => o && typeof o.name === "string" && Array.isArray(o.lines)) : []
+        } catch (e) { return [] }
+    }
+    function newLesson() {
+        const holiday = Js.run("daftarQt.holidayToday", [daftar])
+        const go = () => canvas.daftar("newLesson", [root.notebookId, root.daftarClass])
+        if (holiday) dialog.ask("Today is a holiday · عطلة", [], "Write the lesson", go, { message: holiday + ". Write a lesson for " + daftarClass + " anyway?" })
+        else go()
+    }
+    function insertOutline(lines) { canvas.daftar("insertOutline", [daftar, lines]) }
+    function outlineMenu(anchor) {
+        const mine = customOutlines()
+        const builtIn = Js.run("daftarQt.OUTLINES.slice", [0]) || []
+        menu.show(anchor, builtIn.concat(mine).map(o => ({ label: o.name, action: () => root.insertOutline(o.lines) })).concat([
+            { label: "Write my own outline…", action: () => daftarUi.askOutline(o => {
+                prefs.store.daftarOutlines = JSON.stringify(root.customOutlines().concat([o]).slice(-12))
+                root.insertOutline(o.lines)
+            }) }
+        ]).concat(mine.length ? [{ label: "Remove my outlines", danger: true, action: () => { prefs.store.daftarOutlines = "[]"; root.notify("Your outlines were removed", false) } }] : []))
+    }
+    function daftarMenu(anchor) {
+        menu.show(anchor, [
+            { label: "لائحة التلاميذ · Paste the student list…", action: () => daftarUi.askStudents(daftar, daftarClass, (cls, text) => canvas.daftar("pasteStudents", [root.notebookId, cls, text])) },
+            { label: "تصدير القسم · Export this class as PDF…", action: () => daftarUi.askExport(daftar, daftarClass, (cls, term) => {
+                canvas.finishEdit()
+                canvas.flush()
+                const r = canvas.daftarQuery("exportPages", [daftar, cls, term])
+                if (!r) return root.notify("No lessons in that period for this class", true)
+                exporter.runPages(r.pages, r.name)
+            }) },
+            { label: "إعدادات الدفتر · Daftar settings…", action: () => {
+                canvas.finishEdit()
+                canvas.flush()
+                daftarUi.askSettings({ id: root.notebookId, title: root.title }, daftar, () => {
+                    root.loadDaftar()
+                    canvas.reloadPages(true)
+                    root.notify("Daftar updated", false)
+                })
+            } }
+        ], 300)
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -92,7 +149,10 @@ Rectangle {
                     IconButton { iconName: "sidebar"; tip: "Pages sidebar"; implicitWidth: 36; implicitHeight: 36; iconColor: Theme.muted; onClicked: root.toggleSidebar() }
                     AbstractButton {
                         id: titleBtn
-                        Layout.maximumWidth: 260
+                        // In a daftar the bar beside it needs room: the title gives way (to 5.5em).
+                        Layout.maximumWidth: root.daftar ? Math.min(implicitWidth, 260) : 260
+                        Layout.fillWidth: !!root.daftar
+                        Layout.minimumWidth: root.daftar ? 82 : 0
                         implicitHeight: 32
                         implicitWidth: titleLabel.implicitWidth + 16
                         hoverEnabled: true
@@ -105,8 +165,59 @@ Rectangle {
                         background: Rectangle { radius: 8; color: titleBtn.hovered ? Theme.surface2 : "transparent" }
                         contentItem: Label { id: titleLabel; text: root.title; font.pixelSize: 15; font.weight: Font.DemiBold; color: Theme.text; elide: Text.ElideRight; leftPadding: 8; rightPadding: 8; verticalAlignment: Text.AlignVCenter }
                     }
+                    // A daftar's class (switches section), New lesson, outline and its menu.
+                    RowLayout {
+                        visible: !!root.daftar
+                        Layout.leftMargin: 6
+                        spacing: 6
+                        AbstractButton {
+                            id: classChip
+                            implicitHeight: 32
+                            implicitWidth: classRow.implicitWidth + 18
+                            hoverEnabled: true
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Switch class · القسم"
+                            ToolTip.delay: 500
+                            onClicked: menu.show(classChip, (root.daftar ? root.daftar.classes : []).map(c => ({ label: c, checked: c === root.daftarClass, action: () => canvas.daftar("goToClass", [c]) })))
+                            background: Rectangle { radius: 10; color: classChip.hovered ? Theme.surface2 : Theme.surface; border.color: Theme.border }
+                            contentItem: Item {
+                                RowLayout {
+                                    id: classRow
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    x: 10
+                                    spacing: 6
+                                    Icon { name: "book"; size: 15; color: Theme.accent }
+                                    Label { text: root.daftarClass || "—"; font.pixelSize: 13; font.weight: 650; color: Theme.text }
+                                    Icon { name: "down"; size: 13; color: Theme.muted }
+                                }
+                            }
+                        }
+                        AbstractButton {
+                            id: lessonBtn
+                            implicitHeight: 32
+                            implicitWidth: lessonRow.implicitWidth + 24
+                            hoverEnabled: true
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Write today's date, the class and the lesson time on the next free line"
+                            ToolTip.delay: 500
+                            onClicked: root.newLesson()
+                            background: Rectangle { radius: 10; color: Theme.accentSoft; Rectangle { anchors.fill: parent; radius: 10; color: "black"; opacity: lessonBtn.hovered ? 0.03 : 0 } }
+                            contentItem: Item {
+                                RowLayout {
+                                    id: lessonRow
+                                    anchors.centerIn: parent
+                                    spacing: 4
+                                    Icon { name: "plus"; size: 16; color: Theme.accent }
+                                    Label { text: "حصة جديدة"; font.pixelSize: 13; font.weight: 650; color: Theme.accent }
+                                    Label { visible: root.width > 1500; text: " · New lesson"; font.pixelSize: 13; font.weight: 650; color: Theme.accent }
+                                }
+                            }
+                        }
+                        IconButton { id: outlineBtn; iconName: "page"; tip: "Write a lesson outline (النشاط 1، النشاط 2…) on the lesson's lines"; implicitWidth: 34; implicitHeight: 34; onClicked: root.outlineMenu(outlineBtn) }
+                        IconButton { id: daftarMore; iconName: "more"; tip: "Student list, class export, daftar settings"; implicitWidth: 34; implicitHeight: 34; onClicked: root.daftarMenu(daftarMore) }
+                    }
                     Rectangle {
-                        visible: root.width > 1100
+                        visible: root.width > 1100 && !root.daftar
                         implicitHeight: 20
                         implicitWidth: chipLabel.implicitWidth + 18
                         radius: 10
@@ -273,6 +384,8 @@ Rectangle {
             spacing: 0
             PageSidebar {
                 canvas: canvas
+                daftar: !!root.daftar
+                onAddDaftarPage: { if (canvas.daftar("addClassPage", [root.notebookId]).plain) canvas.addPage(-1, "") }
                 Layout.fillHeight: true
                 Layout.preferredWidth: root.sidebarShown && !root.focusMode ? 168 : 0
                 visible: Layout.preferredWidth > 0

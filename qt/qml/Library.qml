@@ -147,7 +147,7 @@ Rectangle {
         const fid = folderId || null
         return [
             { id: "notebook", icon: "book", title: "Notebook", sub: "Cover, paper and page size", key: "N", action: () => newNotebook(fid) },
-            { id: "daftar", icon: "docs", title: "Daftar annossous", sub: "Lesson log for your classes", tint: "#7c3aed", action: () => root.notify("Daftar annossous is coming to the native app soon — use the current app for now.", false) },
+            { id: "daftar", icon: "docs", title: "Daftar annossous", sub: "Lesson log for your classes", tint: "#7c3aed", action: () => daftarUi.askNew(fid, nb => root.openRequested(nb.id, nb.title)) },
             { id: "pdf", icon: "page", title: "Import PDFs", sub: "One or several, to write on", tint: "#dc2626", action: () => { pdfDialog.folder = fid; pdfDialog.open() } },
             { id: "folder", icon: "folder", title: "Folder", sub: "Group your documents", tint: "#ca8a04", iconColor: "#b45309", action: () => newFolder(fid) }
         ]
@@ -343,6 +343,7 @@ Rectangle {
     PopupMenu { id: menu }
     CreateMenu { id: createMenu }
     FormDialog { id: dialog }
+    Daftar { id: daftarUi; dialog: dialog; onNotify: (m, e) => root.notify(m, e) }
     Timer { id: searchDelay; interval: 200; onTriggered: root.runSearch() }
 
     // The live cover in the new-notebook and change-cover dialogs.

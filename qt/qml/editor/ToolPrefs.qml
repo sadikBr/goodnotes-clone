@@ -36,6 +36,7 @@ QtObject {
     property Prefs store: Prefs {
         category: "editor"
         property string favs: "{}"
+        property string daftarOutlines: "[]"
         property string tool: "pen"
         property string penStyle: "fountain"
         property string shapeKind: "auto"

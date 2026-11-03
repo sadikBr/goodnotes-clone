@@ -13,6 +13,8 @@ TextField {
     selectionColor: Theme.alpha(Theme.accent, 0.3)
     selectedTextColor: Theme.text
     font.pixelSize: 14
+    // Left-aligned like the web app's inputs, whatever the script.
+    horizontalAlignment: TextInput.AlignLeft
     background: Rectangle {
         radius: Theme.radius
         color: Theme.surface2
