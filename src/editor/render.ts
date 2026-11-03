@@ -1,5 +1,5 @@
 import type { P2, Template } from "../api";
-import { boxOf, groupHandles, handlesFor, isClosedShape, setLineCounter, textHeight, type Rect, type TextStyle } from "./geometry";
+import { boxOf, groupHandles, handlesFor, isClosedShape, setLineCounter, shapeParts, textHeight, type Rect, type TextStyle } from "./geometry";
 import { LIST_MARKER } from "./textFormat";
 import { outlinePath, strokeOutline } from "./ink";
 import { fontCss, isRtl } from "../fonts";
@@ -272,6 +272,12 @@ function drawShape(ctx: CanvasRenderingContext2D, el: ShapeEl) {
   ctx.beginPath();
   if (s.kind === "ellipse") {
     ctx.ellipse(s.cx, s.cy, Math.max(s.rx, 0.5), Math.max(s.ry, 0.5), 0, 0, Math.PI * 2);
+  } else if (s.kind === "path" && s.breaks?.length) {
+    // A multi-stroke symbol: each stroke on its own.
+    for (const part of shapeParts(s)) {
+      ctx.moveTo(part[0][0], part[0][1]);
+      for (const p of part.slice(1)) ctx.lineTo(p[0], p[1]);
+    }
   } else {
     ctx.moveTo(s.points[0][0], s.points[0][1]);
     for (const p of s.points.slice(1)) ctx.lineTo(p[0], p[1]);

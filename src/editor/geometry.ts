@@ -123,6 +123,16 @@ export function rectContains(r: Rect, x: number, y: number): boolean {
 }
 
 /** Whether a point (with radius) touches an element, for the eraser. */
+/** A shape's separate strokes: a path with breaks (a multi-stroke symbol) is several polylines. */
+export function shapeParts(s: RecognizedShape): P2[][] {
+  if (s.kind === "ellipse") return [];
+  if (s.kind !== "path" || !s.breaks?.length) return [s.points];
+  const cuts = [0, ...s.breaks, s.points.length];
+  const out: P2[][] = [];
+  for (let i = 0; i < cuts.length - 1; i++) if (cuts[i + 1] > cuts[i]) out.push(s.points.slice(cuts[i], cuts[i + 1]));
+  return out;
+}
+
 export function hitTest(el: El, x: number, y: number, radius: number): boolean {
   switch (el.kind) {
     case "stroke":
@@ -137,6 +147,7 @@ export function hitTest(el: El, x: number, y: number, radius: number): boolean {
         return d <= radius + el.width / 2 || (el.fill !== null && Math.hypot(nx, ny) <= 1);
       }
       const closed = isClosedShape(s);
+      if (s.kind === "path" && s.breaks?.length) return shapeParts(s).some((part) => distToPolyline(x, y, part, false) <= radius + el.width / 2);
       if (distToPolyline(x, y, s.points, closed) <= radius + el.width / 2) return true;
       return closed && el.fill !== null && pointInPolygon(x, y, s.points);
     }
@@ -502,6 +513,19 @@ export function eraseElement(el: El, x: number, y: number, radius: number): El[]
     const runs = cutPolyline(el.points, x, y, reach, lerp3);
     if (!runs) return null;
     return runs.map((points, i) => ({ ...el, id: i === 0 ? el.id : newId(), points }));
+  }
+  if (el.kind === "shape" && el.shape.kind === "path" && el.shape.breaks?.length) {
+    // A multi-stroke symbol: cut each of its strokes on its own.
+    const reach = radius + el.width / 2;
+    let touched = false;
+    const pieces: P2[][] = [];
+    for (const part of shapeParts(el.shape)) {
+      const runs = cutPolyline(part, x, y, reach, lerp2);
+      if (runs) touched = true;
+      pieces.push(...(runs ?? [part]));
+    }
+    if (!touched) return null;
+    return pieces.filter((p) => p.length > 1).map((points, i) => ({ ...el, id: i === 0 ? el.id : newId(), shape: { kind: "path", points, closed: false }, fill: null }));
   }
   if (el.kind === "shape") {
     const reach = radius + el.width / 2;

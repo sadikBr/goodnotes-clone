@@ -211,7 +211,7 @@ export type RecognizedShape =
   | { kind: "line" | "arrow" | "triangle" | "rectangle" | "polygon"; points: P2[] }
   | { kind: "ellipse"; cx: number; cy: number; rx: number; ry: number }
   /** A smoothed freehand path (graphs, curves, braces...). */
-  | { kind: "path"; points: P2[]; closed: boolean };
+  | { kind: "path"; points: P2[]; closed: boolean; /** Indices where a new stroke starts (multi-stroke symbols). */ breaks?: number[] };
 
 export type ExportFormat = "pdf" | "pptx" | "png";
 

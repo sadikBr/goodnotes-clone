@@ -48,7 +48,8 @@ import { applyCover, coverPreview } from "../cover";
 import { Laser, LASER_CORE_FADE_MS, LASER_HOLD_MS, type LaserLayers, type LaserMode } from "./laser";
 import { buildVectorPdf, type PdfPageInput } from "./pdfExport";
 import { continueList, currentList, toggleList, type ListKind } from "./textFormat";
-import { beautify, detectBrace, recognizeShape } from "./beautify";
+import { beautify, recognizeShape } from "./beautify";
+import { matchSymbol, symbolShape } from "./symbols";
 import { anchorsAsTargets, paperTargets, snapMove, type Anchor, type Guide, type Target } from "./snap";
 import { fromStored, newId, nextZ, PEN_STYLES, toStored, type El, type PenStyle, type Pt, type ShapeEl, type StickyEl, type StrokeEl, type TextAlign, type TextEl } from "./model";
 import { drawElement, drawGroupHandles, drawGuides, drawHandles, drawLasso, drawTransformedBox, drawSelection, drawStroke, drawTemplate, steadyHighlight, fitTextToBox, naturalTextWidth, paperLayout, preloadImages, renderPage, templatePreview, textAnchors, type ImageCache } from "./render";
@@ -103,6 +104,18 @@ const SMOOTHING_LABELS: Record<SmoothingLevel, string> = { off: "Off", light: "L
 const DRAWER_TIP_KEY = "inkleaf-tool-drawer-tip";
 const FAV_TOOLS: FavTool[] = ["pen", "highlighter", "shape", "text", "sticky", "laser", "eraser"];
 const isFavTool = (t: string): t is FavTool => (FAV_TOOLS as string[]).includes(t);
+
+/** Bounding box of points. */
+function rectOfPts(pts: P2[]): { x: number; y: number; w: number; h: number } {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const [x, y] of pts) {
+    x0 = Math.min(x0, x);
+    y0 = Math.min(y0, y);
+    x1 = Math.max(x1, x);
+    y1 = Math.max(y1, y);
+  }
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
 
 /** A shaky test line drawn with a smoothing level, for the smoothing menu. */
 function smoothingSample(streamline: number, color: string): HTMLElement {
@@ -202,7 +215,7 @@ const EXPORT_SCALE: Record<ExportFormat, number> = { pdf: 3, png: 3, pptx: 2 };
 const MAX_UNDO = 100;
 
 type Gesture =
-  | { type: "draw"; tool: "pen" | "highlighter" | "shape"; points: Pt[]; times: number[]; preview: ShapeEl | null; holdTimer: number; held: Held | null; ruler?: { edge: EdgeGuide; offset: number }; ink?: SpeedInk | null; frozen?: number; smooth?: Pt[] }
+  | { type: "draw"; tool: "pen" | "highlighter" | "shape"; points: Pt[]; times: number[]; preview: ShapeEl | null; holdTimer: number; held: Held | null; ruler?: { edge: EdgeGuide; offset: number }; ink?: SpeedInk | null; frozen?: number; smooth?: Pt[]; absorb?: string[] }
   | { type: "erase"; changed: boolean; last: P2 | null }
   | { type: "lasso"; points: P2[] }
   | { type: "laser" }
@@ -2594,10 +2607,14 @@ export class EditorScreen {
       const now = performance.now();
       const times = [...g.times.slice(0, -1), Math.max(now, g.times[g.times.length - 1])];
       if (!isHeld(times, g.points, HOLD_MS - 50, 4 / this.zoom)) return;
-      const shape = this.refine(g);
+      const multi = this.multiStrokeSymbol(g);
+      const shape = multi?.shape ?? this.refine(g);
       if (!shape) return;
       g.preview = shape;
-      if (g.frozen) this.rebuildCache(); // drop the stroke pieces drawn so far
+      // Strokes that become part of the symbol hide while it's shown.
+      g.absorb = multi?.absorb;
+      for (const id of g.absorb ?? []) this.hiddenIds.add(id);
+      if (g.frozen || g.absorb?.length) this.rebuildCache(); // drop the stroke pieces drawn so far
       const last = g.points[g.points.length - 1];
       const anchor: P2 = [last[0], last[1]];
       g.held = { mode: "transform", base: shape, anchor, pivot: this.pivotFor(shape), still: anchor, stillTimer: 0 };
@@ -2614,15 +2631,58 @@ export class EditorScreen {
   private refine(g: Extract<Gesture, { type: "draw" }>): ShapeEl | null {
     const pts = g.points.map((p) => [p[0], p[1]] as P2);
     let shape: RecognizedShape | null;
-    if (g.tool === "shape") shape = beautify(pts);
-    else if (g.tool === "highlighter") {
+    if (g.tool === "highlighter") {
       const s = recognizeShape(pts);
       const len = s?.kind === "line" ? Math.hypot(s.points[1][0] - s.points[0][0], s.points[1][1] - s.points[0][1]) : 0;
       // Short dabs stay as drawn: straightening them isn't useful.
       shape = s?.kind === "line" && len > Math.max(24 / this.zoom, this.widths.highlighter * 1.5) ? s : null;
-    } else shape = recognizeShape(pts) ?? detectBrace(pts);
+    } else {
+      // Pen (on hold) and shape tool: a maths symbol drawn in one stroke, else
+      // a shape, an arc, a brace or — failing all those — a smoothed curve.
+      const sym = pts.length > 3 ? matchSymbol([pts]) : null;
+      shape = sym ? symbolShape(sym.name, rectOfPts(pts)) : beautify(pts);
+    }
     if (!shape) return null;
     return { id: newId(), z: nextZ(this.elements), kind: "shape", shape, color: this.colors[g.tool], width: this.widths[g.tool], fill: null };
+  }
+
+  /** Pen strokes just written (newest last), for symbols drawn in several strokes. */
+  private recentInk: { id: string; t: number; pts: P2[] }[] = [];
+
+  /**
+   * A maths symbol made of the stroke being held and the pen strokes written
+   * just before it (up to three, each within 2.5 s of the next and right
+   * next to it): ⇒, ⇔, ≠, ≤… Returns the clean symbol and the strokes it replaces.
+   */
+  private multiStrokeSymbol(g: Extract<Gesture, { type: "draw" }>): { shape: ShapeEl; absorb: string[] } | null {
+    if (g.tool !== "pen") return null;
+    const pts = g.points.map((p) => [p[0], p[1]] as P2);
+    const cur = rectOfPts(pts);
+    const size = Math.max(cur.w, cur.h, 12 / this.zoom);
+    const group: { id: string; pts: P2[] }[] = [];
+    let t = g.times[0];
+    let box = cur;
+    for (let i = this.recentInk.length - 1; i >= 0 && group.length < 3; i--) {
+      const r = this.recentInk[i];
+      if (t - r.t > 2500 || !this.elements.some((e) => e.id === r.id)) break;
+      const b = rectOfPts(r.pts);
+      const reach = size * 0.9 + 8 / this.zoom;
+      const near = b.x < box.x + box.w + reach && b.x + b.w > box.x - reach && b.y < box.y + box.h + reach && b.y + b.h > box.y - reach;
+      if (!near) break;
+      group.unshift({ id: r.id, pts: r.pts });
+      box = unionRects([box, b]) ?? box;
+      t = r.t;
+    }
+    // Prefer the symbol that uses the most strokes.
+    for (let n = group.length; n >= 1; n--) {
+      const used = group.slice(group.length - n);
+      const strokes = [...used.map((u) => u.pts), pts];
+      const m = matchSymbol(strokes);
+      if (!m) continue;
+      const shape = symbolShape(m.name, rectOfPts(strokes.flat()));
+      return { shape: { id: newId(), z: nextZ(this.elements), kind: "shape", shape, color: this.colors.pen, width: this.widths.pen, fill: null }, absorb: used.map((u) => u.id) };
+    }
+    return null;
   }
 
   /** Length (straight edge) or swept angle (protractor arc) of a guided stroke. */
@@ -2794,7 +2854,16 @@ export class EditorScreen {
           this.addElement({ ...this.straightHighlight(g, shape.shape.points), id: newId(), z: nextZ(this.elements) });
         } else if (shape) {
           shape.z = nextZ(this.elements);
-          this.addElement(shape);
+          if (g.absorb?.length) {
+            // A multi-stroke symbol replaces the strokes it was made of (one undo step).
+            const gone = new Set(g.absorb);
+            for (const id of gone) this.hiddenIds.delete(id);
+            this.recentInk = this.recentInk.filter((r) => !gone.has(r.id));
+            this.snapshot();
+            this.elements = this.elements.filter((e) => !gone.has(e.id));
+            this.elements.push(shape);
+            this.changed();
+          } else this.addElement(shape);
         } else {
           const tool = g.tool === "highlighter" ? "highlighter" : "pen";
           let points = tool === "highlighter" ? steadyHighlight(g.points, this.widths.highlighter) : g.points;
@@ -2803,8 +2872,9 @@ export class EditorScreen {
           } catch {
             /* keep the raw points */
           }
+          const id = newId();
           this.addElement({
-            id: newId(),
+            id,
             z: nextZ(this.elements),
             kind: "stroke",
             tool,
@@ -2815,6 +2885,11 @@ export class EditorScreen {
             // Remember the smoothing, so changing the setting leaves this stroke as written.
             ...(tool === "pen" ? { smooth: this.streamline } : {}),
           });
+          // Kept briefly: the next strokes may complete a symbol (⇒, ≠, ≤…).
+          if (tool === "pen" && g.tool === "pen") {
+            this.recentInk.push({ id, t: g.times[g.times.length - 1], pts: g.points.map((p) => [p[0], p[1]] as P2) });
+            if (this.recentInk.length > 6) this.recentInk.shift();
+          }
         }
         break;
       }
