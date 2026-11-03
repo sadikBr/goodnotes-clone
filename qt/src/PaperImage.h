@@ -20,3 +20,11 @@ public:
   InkSampleImage() : QQuickImageProvider(QQuickImageProvider::Image) {}
   QImage requestImage(const QString& id, QSize* size, const QSize& requested) override;
 };
+
+/// Cover previews with the title (src/cover.ts coverPreview):
+///   image://cover/<design>/<colour>/<landscape 0|1>/<title, URL-encoded>
+class CoverImage : public QQuickImageProvider {
+public:
+  CoverImage() : QQuickImageProvider(QQuickImageProvider::Image) {}
+  QImage requestImage(const QString& id, QSize* size, const QSize& requested) override;
+};

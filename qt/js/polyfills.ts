@@ -87,3 +87,21 @@ G.__fast = {
     return to.concat(Array.prototype.slice.call(from));
   },
 };
+
+// Month and year in words (Qt's engine ignores toLocaleDateString's options).
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const DP = Date.prototype as any;
+const nativeLocaleDate = DP.toLocaleDateString;
+DP.toLocaleDateString = function (this: Date, locales?: any, options?: any) {
+  if (options && (options.month === "long" || options.month === "short")) {
+    const m = MONTHS[this.getMonth()];
+    const month = options.month === "short" ? m.slice(0, 3) : m;
+    const parts: string[] = [];
+    if (options.weekday) parts.push(["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][this.getDay()]);
+    if (options.day) parts.push(String(this.getDate()));
+    parts.push(month);
+    if (options.year) parts.push(String(this.getFullYear()));
+    return parts.join(" ");
+  }
+  return nativeLocaleDate.call(this, locales, options);
+};

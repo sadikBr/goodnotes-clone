@@ -11,7 +11,7 @@ export * as geometry from "../../src/editor/geometry";
 export { beautify, recognizeShape, smoothPath, snapToAxis } from "../../src/editor/beautify";
 export { matchSymbol, rankSymbols, symbolShape, SYMBOL_GLYPHS } from "../../src/editor/symbols";
 export { COVER_DESIGNS, coverDesignOf, coverTemplate, coverText, isCoverTemplate, drawCoverDesign } from "../../src/editor/covers";
-export { coverTextElements } from "../../src/cover";
+export { coverTextElements, coverPreview, setUpCover, applyCover, refreshCoverThumbnail } from "../../src/cover";
 export * as textFormat from "../../src/editor/textFormat";
 export * as snap from "../../src/editor/snap";
 export * as daftar from "../../src/daftar";

@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QMetaObject>
 #include <QThread>
+#include <QUrl>
 
 #include "Js.h"
 #include "JsCanvas.h"
@@ -47,6 +48,27 @@ QImage InkSampleImage::requestImage(const QString& id, QSize* size, const QSize&
   if (p.value(0) == "nib") js.call("samples.nibSample", {ctx, p.value(1), "#" + p.value(2), p.value(3).toDouble(), p.value(4) == "1"});
   else js.call("samples.smoothingSample", {ctx, p.value(1).toDouble(), "#" + p.value(2), p.value(3) == "1"});
   QImage img = canvas->image();
+  if (size) *size = img.size();
+  return img;
+}
+
+QImage CoverImage::requestImage(const QString& id, QSize* size, const QSize& requested) {
+  if (QThread::currentThread() != qApp->thread()) {
+    QImage out;
+    QMetaObject::invokeMethod(qApp, [&] { out = requestImage(id, size, requested); }, Qt::BlockingQueuedConnection);
+    return out;
+  }
+  const QStringList p = id.split('/');
+  const QString design = p.value(0, "classic");
+  const QString color = "#" + p.value(1, "2563eb");
+  const bool landscape = p.value(2) == "1";
+  const QString title = QUrl::fromPercentEncoding(p.mid(3).join('/').toUtf8());
+  const int w = requested.isValid() && requested.width() > 0 ? requested.width() : 240;
+  Js& js = Js::instance();
+  // coverPreview draws at twice the size given (sharp on HiDPI screens).
+  QJSValue c = js.call("coverPreview", {design, color, title, w / 2.0, landscape});
+  auto* canvas = qobject_cast<JsCanvas*>(c.toQObject());
+  QImage img = canvas ? canvas->image() : QImage();
   if (size) *size = img.size();
   return img;
 }

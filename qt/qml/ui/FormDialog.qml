@@ -119,7 +119,7 @@ Popup {
                             Layout.fillWidth: true
                             property var field: row.modelData
                             property bool first: row.index === 0
-                            sourceComponent: { const t = row.modelData.type || "text"; return t === "select" ? selectField : t === "swatches" ? swatchField : t === "segmented" ? segField : textField }
+                            sourceComponent: { const t = row.modelData.type || "text"; return t === "select" ? selectField : t === "swatches" ? swatchField : t === "segmented" ? segField : t === "covers" ? coverField : textField }
                         }
                     }
                 }
@@ -159,6 +159,60 @@ Popup {
             colors: parent.field.colors
             value: root.values[parent.field.name] ?? ""
             onPicked: c => root.set(parent.field.name, c)
+        }
+    }
+    // Cover designs with previews (the notebook's title and colour on each).
+    property string previewTitle: ""
+    Timer { id: titleDelay; interval: 350; onTriggered: root.previewTitle = root.values.title || "" }
+    onValuesChanged: if ((values.title || "") !== previewTitle) titleDelay.restart()
+    onOpened: previewTitle = values.title || ""
+    function coverUrl(design, w) {
+        return "image://cover/" + design + "/" + String(values.cover || "#2563eb").replace("#", "") + "/" + (values.orientation === "landscape" ? 1 : 0) + "/" + encodeURIComponent(previewTitle || "Untitled")
+    }
+    Component {
+        id: coverField
+        Flow {
+            id: coversFlow
+            readonly property var field: parent.field
+            spacing: 8
+            Repeater {
+                model: coversFlow.field.options
+                delegate: AbstractButton {
+                    id: cv
+                    required property var modelData
+                    readonly property bool on: root.values[coversFlow.field.name] === modelData.value
+                    width: 64
+                    height: 104
+                    hoverEnabled: true
+                    onClicked: root.set(coversFlow.field.name, modelData.value)
+                    ToolTip.visible: hovered
+                    ToolTip.text: modelData.label
+                    background: Item {}
+                    contentItem: Column {
+                        spacing: 4
+                        Item {
+                            width: 64; height: 86
+                            Rectangle { anchors.fill: parent; anchors.margins: cv.on ? -3 : -1; radius: 6; color: cv.on ? Theme.accent : cv.hovered ? Theme.borderStrong : Theme.border }
+                            Rectangle {
+                                visible: cv.modelData.value === "none"
+                                anchors.fill: parent
+                                radius: 4
+                                color: Theme.surface2
+                                Label { anchors.centerIn: parent; text: "None"; color: Theme.muted; font.pixelSize: 12 }
+                            }
+                            Image {
+                                visible: cv.modelData.value !== "none"
+                                anchors.fill: parent
+                                sourceSize: Qt.size(128, 172)
+                                fillMode: Image.PreserveAspectFit
+                                source: cv.modelData.value === "none" ? "" : root.coverUrl(cv.modelData.value)
+                                asynchronous: false
+                            }
+                        }
+                        Label { width: 64; text: cv.modelData.label; font.pixelSize: 11; color: cv.on ? Theme.accent : Theme.muted; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight }
+                    }
+                }
+            }
         }
     }
     Component {

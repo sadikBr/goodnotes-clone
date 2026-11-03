@@ -154,7 +154,7 @@ public:
   /// Paper style and/or colour for one page or all of them.
   Q_INVOKABLE void setPaper(int index, const QString& tmpl, const QString& color, bool allPages);
   /// Reloads pages from the library (after changes made elsewhere).
-  Q_INVOKABLE void reloadPages();
+  Q_INVOKABLE void reloadPages(bool elementsToo = false);
   /// Saves pending changes now (before leaving the notebook).
   Q_INVOKABLE void flush();
   /// A page's picture (paper and everything on it) at `scale`, as a data: URL.

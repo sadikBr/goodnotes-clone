@@ -4,7 +4,9 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QCoreApplication>
 #include <QElapsedTimer>
+#include <QEventLoop>
 #include <QUuid>
 #include <QDebug>
 
@@ -106,7 +108,22 @@ QJsonValue Js::toJson(const QJSValue& v) {
 QVariant Js::run(const QString& path, const QVariantList& args) {
   QJSValueList list;
   for (const QVariant& a : args) list << m_engine.toScriptValue(a);
-  return call(path, list).toVariant(QJSValue::ConvertJSObjects);
+  QJSValue r = call(path, list);
+  // A promise (the web code's async functions): wait for it, for up to 20 s.
+  if (r.isObject() && r.property("then").isCallable()) {
+    QJSValue state = m_engine.newObject();
+    QJSValue done = m_engine.evaluate("(function (s) { return [function (v) { s.done = true; s.value = v; }, function (e) { s.done = true; s.error = String(e && e.message || e); }]; })").call({state});
+    r.property("then").callWithInstance(r, {done.property(0), done.property(1)});
+    QElapsedTimer t;
+    t.start();
+    while (!state.property("done").toBool() && t.elapsed() < 20000) QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents | QEventLoop::WaitForMoreEvents, 20);
+    if (state.property("error").isString()) {
+      qWarning().noquote() << "script error in" << path << ":" << state.property("error").toString();
+      return {};
+    }
+    r = state.property("value");
+  }
+  return r.toVariant(QJSValue::ConvertJSObjects);
 }
 
 QObject* Js::imageFor(const QString& src) {

@@ -35,10 +35,10 @@ var Inkleaf = (() => {
     open: () => open,
     save: () => save
   });
-  var __awaiter2, __generator3, open, save, MockBackend;
+  var __awaiter3, __generator4, open, save, MockBackend;
   var init_tauri_stub = __esm({
     "qt/js/tauri-stub.ts"() {
-      __awaiter2 = function(thisArg, _arguments, P2, generator) {
+      __awaiter3 = function(thisArg, _arguments, P2, generator) {
         function adopt(value) {
           return value instanceof P2 ? value : new P2(function(resolve) {
             resolve(value);
@@ -65,7 +65,7 @@ var Inkleaf = (() => {
           step((generator = generator.apply(thisArg, _arguments || [])).next());
         });
       };
-      __generator3 = function(thisArg, body) {
+      __generator4 = function(thisArg, body) {
         var _2 = { label: 0, sent: function() {
           if (t2[0] & 1) throw t2[1];
           return t2[1];
@@ -135,15 +135,15 @@ var Inkleaf = (() => {
         }
       };
       open = function() {
-        return __awaiter2(void 0, void 0, void 0, function() {
-          return __generator3(this, function(_a) {
+        return __awaiter3(void 0, void 0, void 0, function() {
+          return __generator4(this, function(_a) {
             return [2, null];
           });
         });
       };
       save = function() {
-        return __awaiter2(void 0, void 0, void 0, function() {
-          return __generator3(this, function(_a) {
+        return __awaiter3(void 0, void 0, void 0, function() {
+          return __generator4(this, function(_a) {
             return [2, null];
           });
         });
@@ -171,8 +171,10 @@ var Inkleaf = (() => {
     SYMBOL_GLYPHS: () => SYMBOL_GLYPHS,
     TEMPLATES: () => TEMPLATES2,
     TEMPLATE_CATEGORIES: () => TEMPLATE_CATEGORIES,
+    applyCover: () => applyCover,
     beautify: () => beautify,
     coverDesignOf: () => coverDesignOf,
+    coverPreview: () => coverPreview,
     coverTemplate: () => coverTemplate,
     coverText: () => coverText,
     coverTextElements: () => coverTextElements,
@@ -200,8 +202,10 @@ var Inkleaf = (() => {
     paperLayout: () => paperLayout,
     rankSymbols: () => rankSymbols,
     recognizeShape: () => recognizeShape,
+    refreshCoverThumbnail: () => refreshCoverThumbnail,
     renderPage: () => renderPage,
     samples: () => samples_exports,
+    setUpCover: () => setUpCover,
     smoothPath: () => smoothPath,
     snap: () => snap_exports,
     snapAngle: () => snapAngle,
@@ -465,6 +469,25 @@ var Inkleaf = (() => {
       return to.concat(Array.prototype.slice.call(from));
     }
   };
+  var MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  var DP = Date.prototype;
+  var nativeLocaleDate = DP.toLocaleDateString;
+  DP.toLocaleDateString = function(locales, options2) {
+    if (options2 && (options2.month === "long" || options2.month === "short")) {
+      var m2 = MONTHS[this.getMonth()];
+      var month = options2.month === "short" ? m2.slice(0, 3) : m2;
+      var parts = [];
+      if (options2.weekday)
+        parts.push(["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][this.getDay()]);
+      if (options2.day)
+        parts.push(String(this.getDate()));
+      parts.push(month);
+      if (options2.year)
+        parts.push(String(this.getFullYear()));
+      return parts.join(" ");
+    }
+    return nativeLocaleDate.call(this, locales, options2);
+  };
 
   // qt/js/shims.ts
   var __read2 = globalThis.__fast && globalThis.__fast.__read || function(o2, n2) {
@@ -678,6 +701,102 @@ var Inkleaf = (() => {
   };
 
   // src/fonts.ts
+  var __awaiter = function(thisArg, _arguments, P2, generator) {
+    function adopt(value) {
+      return value instanceof P2 ? value : new P2(function(resolve) {
+        resolve(value);
+      });
+    }
+    return new (P2 || (P2 = Promise))(function(resolve, reject) {
+      function fulfilled(value) {
+        try {
+          step(generator.next(value));
+        } catch (e2) {
+          reject(e2);
+        }
+      }
+      function rejected(value) {
+        try {
+          step(generator["throw"](value));
+        } catch (e2) {
+          reject(e2);
+        }
+      }
+      function step(result) {
+        result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+      }
+      step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+  };
+  var __generator2 = function(thisArg, body) {
+    var _2 = { label: 0, sent: function() {
+      if (t2[0] & 1) throw t2[1];
+      return t2[1];
+    }, trys: [], ops: [] }, f3, y2, t2, g3 = Object.create((typeof Iterator === "function" ? Iterator : Object).prototype);
+    return g3.next = verb(0), g3["throw"] = verb(1), g3["return"] = verb(2), typeof Symbol === "function" && (g3[Symbol.iterator] = function() {
+      return this;
+    }), g3;
+    function verb(n2) {
+      return function(v2) {
+        return step([n2, v2]);
+      };
+    }
+    function step(op) {
+      if (f3) throw new TypeError("Generator is already executing.");
+      while (g3 && (g3 = 0, op[0] && (_2 = 0)), _2) try {
+        if (f3 = 1, y2 && (t2 = op[0] & 2 ? y2["return"] : op[0] ? y2["throw"] || ((t2 = y2["return"]) && t2.call(y2), 0) : y2.next) && !(t2 = t2.call(y2, op[1])).done) return t2;
+        if (y2 = 0, t2) op = [op[0] & 2, t2.value];
+        switch (op[0]) {
+          case 0:
+          case 1:
+            t2 = op;
+            break;
+          case 4:
+            _2.label++;
+            return { value: op[1], done: false };
+          case 5:
+            _2.label++;
+            y2 = op[1];
+            op = [0];
+            continue;
+          case 7:
+            op = _2.ops.pop();
+            _2.trys.pop();
+            continue;
+          default:
+            if (!(t2 = _2.trys, t2 = t2.length > 0 && t2[t2.length - 1]) && (op[0] === 6 || op[0] === 2)) {
+              _2 = 0;
+              continue;
+            }
+            if (op[0] === 3 && (!t2 || op[1] > t2[0] && op[1] < t2[3])) {
+              _2.label = op[1];
+              break;
+            }
+            if (op[0] === 6 && _2.label < t2[1]) {
+              _2.label = t2[1];
+              t2 = op;
+              break;
+            }
+            if (t2 && _2.label < t2[2]) {
+              _2.label = t2[2];
+              _2.ops.push(op);
+              break;
+            }
+            if (t2[2]) _2.ops.pop();
+            _2.trys.pop();
+            continue;
+        }
+        op = body.call(thisArg, _2);
+      } catch (e2) {
+        op = [6, e2];
+        y2 = 0;
+      } finally {
+        f3 = t2 = 0;
+      }
+      if (op[0] & 5) throw op[1];
+      return { value: op[0] ? op[1] : void 0, done: true };
+    }
+  };
   var __values3 = globalThis.__fast && globalThis.__fast.__values || function(o2) {
     var s2 = typeof Symbol === "function" && Symbol.iterator, m2 = s2 && o2[s2], i2 = 0;
     if (m2) return m2.call(o2);
@@ -693,6 +812,7 @@ var Inkleaf = (() => {
   var AR = '"'.concat(ARABIC_FACE, '"');
   var SANS = '"Inter", '.concat(AR, ', "Segoe UI", system-ui, -apple-system, sans-serif');
   var HAND = "".concat(AR, ', "Inter", cursive');
+  var INTER_STYLES = ["", "bold ", "italic ", "italic bold "];
   var FONT_PRESETS = [
     { id: "sans", label: "Clean", family: SANS, face: "Inter", bold: true, italic: true },
     { id: "book", label: "Book", family: '"Lora", '.concat(AR, ', "Inter", serif'), face: "Lora", bold: true, italic: true },
@@ -729,6 +849,64 @@ var Inkleaf = (() => {
   function fontCss(id, sizePx, style) {
     var family = fontPreset(id).family;
     return "".concat((style === null || style === void 0 ? void 0 : style.italic) ? "italic " : "").concat((style === null || style === void 0 ? void 0 : style.bold) ? "bold " : "").concat(sizePx, "px ").concat((style === null || style === void 0 ? void 0 : style.rtl) ? arabicFirst(family) : family);
+  }
+  var loaded = /* @__PURE__ */ new Set();
+  function ensureFonts(ids) {
+    return __awaiter(this, void 0, Promise, function() {
+      var pending, _loop_1, _a, _b, id;
+      var e_1, _c;
+      return __generator2(this, function(_d) {
+        switch (_d.label) {
+          case 0:
+            if (typeof document === "undefined" || !("fonts" in document))
+              return [2, false];
+            pending = [];
+            if (!loaded.has(ARABIC_FACE)) {
+              pending.push(Promise.all(["", "bold "].map(function(st) {
+                return document.fonts.load("".concat(st, '24px "').concat(ARABIC_FACE, '"'), "بسم");
+              })).then(function() {
+                return loaded.add(ARABIC_FACE);
+              }).catch(function() {
+                return loaded.add(ARABIC_FACE);
+              }));
+            }
+            _loop_1 = function(id2) {
+              var preset = fontPreset(id2);
+              var face = preset.face;
+              if (!face || loaded.has(face))
+                return "continue";
+              var styles = preset.italic ? INTER_STYLES : preset.bold ? ["", "bold "] : [""];
+              pending.push(Promise.all(styles.map(function(st) {
+                return document.fonts.load("".concat(st, '24px "').concat(face, '"'), "Aa");
+              })).then(function() {
+                return loaded.add(face);
+              }).catch(function() {
+                return loaded.add(face);
+              }));
+            };
+            try {
+              for (_a = __values3(new Set(ids)), _b = _a.next(); !_b.done; _b = _a.next()) {
+                id = _b.value;
+                _loop_1(id);
+              }
+            } catch (e_1_1) {
+              e_1 = { error: e_1_1 };
+            } finally {
+              try {
+                if (_b && !_b.done && (_c = _a.return)) _c.call(_a);
+              } finally {
+                if (e_1) throw e_1.error;
+              }
+            }
+            if (pending.length === 0)
+              return [2, false];
+            return [4, Promise.all(pending)];
+          case 1:
+            _d.sent();
+            return [2, true];
+        }
+      });
+    });
   }
   var RTL_CHAR = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/;
   var STRONG = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFFA-Za-z\u00C0-\u024F\u0370-\u03FF\u0400-\u04FF]/;
@@ -6547,7 +6725,7 @@ var Inkleaf = (() => {
   }
 
   // qt/js/tauri-core.ts
-  var __awaiter = function(thisArg, _arguments, P2, generator) {
+  var __awaiter2 = function(thisArg, _arguments, P2, generator) {
     function adopt(value) {
       return value instanceof P2 ? value : new P2(function(resolve) {
         resolve(value);
@@ -6574,7 +6752,7 @@ var Inkleaf = (() => {
       step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
-  var __generator2 = function(thisArg, body) {
+  var __generator3 = function(thisArg, body) {
     var _2 = { label: 0, sent: function() {
       if (t2[0] & 1) throw t2[1];
       return t2[1];
@@ -6650,9 +6828,9 @@ var Inkleaf = (() => {
     });
   };
   function invoke(cmd, args) {
-    return __awaiter(this, void 0, Promise, function() {
+    return __awaiter2(this, void 0, Promise, function() {
       var out, r2;
-      return __generator2(this, function(_a) {
+      return __generator3(this, function(_a) {
         out = N4.call(camel(cmd), JSON.stringify(args !== null && args !== void 0 ? args : {}));
         r2 = JSON.parse(out);
         if (r2.error)
@@ -6665,7 +6843,7 @@ var Inkleaf = (() => {
   // src/api.ts
   init_tauri_stub();
   init_tauri_stub();
-  var __awaiter3 = function(thisArg, _arguments, P2, generator) {
+  var __awaiter4 = function(thisArg, _arguments, P2, generator) {
     function adopt(value) {
       return value instanceof P2 ? value : new P2(function(resolve) {
         resolve(value);
@@ -6692,7 +6870,7 @@ var Inkleaf = (() => {
       step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
-  var __generator4 = function(thisArg, body) {
+  var __generator5 = function(thisArg, body) {
     var _2 = { label: 0, sent: function() {
       if (t2[0] & 1) throw t2[1];
       return t2[1];
@@ -6929,9 +7107,9 @@ var Inkleaf = (() => {
           return invoke("simplify_stroke", { points, epsilon });
         };
         this.chooseExportPath = function(fileName, format) {
-          return __awaiter3(_this, void 0, void 0, function() {
+          return __awaiter4(_this, void 0, void 0, function() {
             var ext, defaultPath, _a;
-            return __generator4(this, function(_b) {
+            return __generator5(this, function(_b) {
               switch (_b.label) {
                 case 0:
                   ext = FORMAT_FILTERS[format].extensions[0];
@@ -6951,9 +7129,9 @@ var Inkleaf = (() => {
           });
         };
         this.exportDocument = function(path, format, pages) {
-          return __awaiter3(_this, void 0, void 0, function() {
+          return __awaiter4(_this, void 0, void 0, function() {
             var _a, _b, _c, _d;
-            return __generator4(this, function(_e) {
+            return __generator5(this, function(_e) {
               switch (_e.label) {
                 case 0:
                   if (!isAndroid) return [3, 2];
@@ -6986,9 +7164,9 @@ var Inkleaf = (() => {
           return invoke("create_pdf_notebook", { input });
         };
         this.assetBytes = function(id) {
-          return __awaiter3(_this, void 0, void 0, function() {
+          return __awaiter4(_this, void 0, void 0, function() {
             var _a;
-            return __generator4(this, function(_b) {
+            return __generator5(this, function(_b) {
               switch (_b.label) {
                 case 0:
                   _a = Uint8Array.bind;
@@ -7012,9 +7190,9 @@ var Inkleaf = (() => {
           return invoke("backup_if_due", { label: label2 });
         };
         this.chooseBackupFolder = function(current) {
-          return __awaiter3(_this, void 0, void 0, function() {
+          return __awaiter4(_this, void 0, void 0, function() {
             var r2;
-            return __generator4(this, function(_a) {
+            return __generator5(this, function(_a) {
               switch (_a.label) {
                 case 0:
                   return [4, open({ title: "Choose the backup folder", directory: true, multiple: false, defaultPath: current !== null && current !== void 0 ? current : void 0 })];
@@ -7026,9 +7204,9 @@ var Inkleaf = (() => {
           });
         };
         this.exportLibrary = function(label2) {
-          return __awaiter3(_this, void 0, void 0, function() {
+          return __awaiter4(_this, void 0, void 0, function() {
             var name, dir, _a, defaultPath, path, _b, _c, _d, _e;
-            return __generator4(this, function(_f) {
+            return __generator5(this, function(_f) {
               switch (_f.label) {
                 case 0:
                   name = "Inkleaf everything ".concat(label2, ".inkleaf");
@@ -7068,9 +7246,9 @@ var Inkleaf = (() => {
           });
         };
         this.chooseBackupFile = function() {
-          return __awaiter3(_this, void 0, void 0, function() {
+          return __awaiter4(_this, void 0, void 0, function() {
             var r2;
-            return __generator4(this, function(_a) {
+            return __generator5(this, function(_a) {
               switch (_a.label) {
                 case 0:
                   return [4, open({ title: "Restore from a backup", multiple: false, filters: [BACKUP_FILTER] })];
@@ -7100,9 +7278,9 @@ var Inkleaf = (() => {
           return invoke("sync_now", { open: open2 });
         };
         this.inspectBackup = function(path) {
-          return __awaiter3(_this, void 0, void 0, function() {
+          return __awaiter4(_this, void 0, void 0, function() {
             var _a, _b, _c;
-            return __generator4(this, function(_d) {
+            return __generator5(this, function(_d) {
               switch (_d.label) {
                 case 0:
                   if (!isAndroid) return [3, 2];
@@ -7122,9 +7300,9 @@ var Inkleaf = (() => {
           });
         };
         this.restoreBackup = function(path) {
-          return __awaiter3(_this, void 0, void 0, function() {
+          return __awaiter4(_this, void 0, void 0, function() {
             var _a, _b, _c;
-            return __generator4(this, function(_d) {
+            return __generator5(this, function(_d) {
               switch (_d.label) {
                 case 0:
                   if (!isAndroid) return [3, 2];
@@ -7149,9 +7327,9 @@ var Inkleaf = (() => {
   );
   var BACKUP_FILTER = { name: "Inkleaf backup", extensions: ["inkleaf", "db"] };
   function readPicked(path) {
-    return __awaiter3(this, void 0, Promise, function() {
+    return __awaiter4(this, void 0, Promise, function() {
       var readFile;
-      return __generator4(this, function(_a) {
+      return __generator5(this, function(_a) {
         switch (_a.label) {
           case 0:
             return [4, Promise.resolve().then(() => (init_tauri_stub(), tauri_stub_exports))];
@@ -7165,10 +7343,10 @@ var Inkleaf = (() => {
   var isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
   var isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
   function writePicked(path, bytes) {
-    return __awaiter3(this, void 0, Promise, function() {
+    return __awaiter4(this, void 0, Promise, function() {
       var writeFile;
       var _a;
-      return __generator4(this, function(_b) {
+      return __generator5(this, function(_b) {
         switch (_b.label) {
           case 0:
             return [4, Promise.resolve().then(() => (init_tauri_stub(), tauri_stub_exports))];
@@ -7300,6 +7478,102 @@ var Inkleaf = (() => {
     };
     return __assign8.apply(this, arguments);
   };
+  var __awaiter5 = function(thisArg, _arguments, P2, generator) {
+    function adopt(value) {
+      return value instanceof P2 ? value : new P2(function(resolve) {
+        resolve(value);
+      });
+    }
+    return new (P2 || (P2 = Promise))(function(resolve, reject) {
+      function fulfilled(value) {
+        try {
+          step(generator.next(value));
+        } catch (e2) {
+          reject(e2);
+        }
+      }
+      function rejected(value) {
+        try {
+          step(generator["throw"](value));
+        } catch (e2) {
+          reject(e2);
+        }
+      }
+      function step(result) {
+        result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+      }
+      step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+  };
+  var __generator6 = function(thisArg, body) {
+    var _2 = { label: 0, sent: function() {
+      if (t2[0] & 1) throw t2[1];
+      return t2[1];
+    }, trys: [], ops: [] }, f3, y2, t2, g3 = Object.create((typeof Iterator === "function" ? Iterator : Object).prototype);
+    return g3.next = verb(0), g3["throw"] = verb(1), g3["return"] = verb(2), typeof Symbol === "function" && (g3[Symbol.iterator] = function() {
+      return this;
+    }), g3;
+    function verb(n2) {
+      return function(v2) {
+        return step([n2, v2]);
+      };
+    }
+    function step(op) {
+      if (f3) throw new TypeError("Generator is already executing.");
+      while (g3 && (g3 = 0, op[0] && (_2 = 0)), _2) try {
+        if (f3 = 1, y2 && (t2 = op[0] & 2 ? y2["return"] : op[0] ? y2["throw"] || ((t2 = y2["return"]) && t2.call(y2), 0) : y2.next) && !(t2 = t2.call(y2, op[1])).done) return t2;
+        if (y2 = 0, t2) op = [op[0] & 2, t2.value];
+        switch (op[0]) {
+          case 0:
+          case 1:
+            t2 = op;
+            break;
+          case 4:
+            _2.label++;
+            return { value: op[1], done: false };
+          case 5:
+            _2.label++;
+            y2 = op[1];
+            op = [0];
+            continue;
+          case 7:
+            op = _2.ops.pop();
+            _2.trys.pop();
+            continue;
+          default:
+            if (!(t2 = _2.trys, t2 = t2.length > 0 && t2[t2.length - 1]) && (op[0] === 6 || op[0] === 2)) {
+              _2 = 0;
+              continue;
+            }
+            if (op[0] === 3 && (!t2 || op[1] > t2[0] && op[1] < t2[3])) {
+              _2.label = op[1];
+              break;
+            }
+            if (op[0] === 6 && _2.label < t2[1]) {
+              _2.label = t2[1];
+              t2 = op;
+              break;
+            }
+            if (t2 && _2.label < t2[2]) {
+              _2.label = t2[2];
+              _2.ops.push(op);
+              break;
+            }
+            if (t2[2]) _2.ops.pop();
+            _2.trys.pop();
+            continue;
+        }
+        op = body.call(thisArg, _2);
+      } catch (e2) {
+        op = [6, e2];
+        y2 = 0;
+      } finally {
+        f3 = t2 = 0;
+      }
+      if (op[0] & 5) throw op[1];
+      return { value: op[0] ? op[1] : void 0, done: true };
+    }
+  };
   var __read13 = globalThis.__fast && globalThis.__fast.__read || function(o2, n2) {
     var m2 = typeof Symbol === "function" && o2[Symbol.iterator];
     if (!m2) return o2;
@@ -7326,6 +7600,7 @@ var Inkleaf = (() => {
     }
     return to.concat(ar || Array.prototype.slice.call(from));
   };
+  var DATE_RE = /^[A-Za-z\u00AA\u00B5\u00BA\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u02AF\u0370-\u03FF\u0400-\u052F\u05D0-\u05EA\u0620-\u064A\u066E-\u06D3\u06D5\u06FA-\u06FF\u0750-\u077F\u08A0-\u08C9\u1E00-\u1FFF\uFB50-\uFDFF\uFE70-\uFEFC .,-]*\d{4}$/;
   function layoutText2(design, title, date, w2, hgt) {
     var t2 = coverText(design, w2, hgt);
     var box = t2.title;
@@ -7350,6 +7625,146 @@ var Inkleaf = (() => {
       __assign8(__assign8({}, l2.title), { id: newId(), z: 0, kind: "text", role: "cover-title" }),
       __assign8(__assign8({}, l2.date), { id: newId(), z: 1, kind: "text", role: "cover-date" })
     ];
+  }
+  function refreshCoverThumbnail(page) {
+    return __awaiter5(this, void 0, Promise, function() {
+      var els, _a, scale, thumb;
+      return __generator6(this, function(_b) {
+        switch (_b.label) {
+          case 0:
+            _a = fromStored;
+            return [4, api.elements(page.id)];
+          case 1:
+            els = _a.apply(void 0, [_b.sent()]);
+            return [4, ensureFonts(["sans", "mynerve", "playpen"])];
+          case 2:
+            _b.sent();
+            scale = 420 / page.width;
+            thumb = renderPage(page.template, page.paperColor, page.width, page.height, els, scale, /* @__PURE__ */ new Map()).toDataURL("image/jpeg", 0.85);
+            return [4, api.setPageThumbnail(page.id, thumb)];
+          case 3:
+            _b.sent();
+            return [
+              2
+              /*return*/
+            ];
+        }
+      });
+    });
+  }
+  var monthYear = function() {
+    return (/* @__PURE__ */ new Date()).toLocaleDateString(void 0, { month: "long", year: "numeric" });
+  };
+  function setUpCover(nb) {
+    return __awaiter5(this, void 0, Promise, function() {
+      var _a, page;
+      return __generator6(this, function(_b) {
+        switch (_b.label) {
+          case 0:
+            return [4, api.pages(nb.id)];
+          case 1:
+            _a = __read13.apply(void 0, [_b.sent(), 1]), page = _a[0];
+            if (!page || !isCoverTemplate(page.template))
+              return [
+                2
+                /*return*/
+              ];
+            return [4, ensureFonts(["sans", "mynerve", "playpen"])];
+          case 2:
+            _b.sent();
+            return [4, api.saveElements(page.id, coverTextElements(coverDesignOf(page.template), nb.title, monthYear(), page.width, page.height).map(toStored))];
+          case 3:
+            _b.sent();
+            return [4, refreshCoverThumbnail(page)];
+          case 4:
+            _b.sent();
+            return [
+              2
+              /*return*/
+            ];
+        }
+      });
+    });
+  }
+  function applyCover(nb, design, color) {
+    return __awaiter5(this, void 0, Promise, function() {
+      var template, pages, page, els, _a, titleEl_1, dateEl_1, l_1, next;
+      var _b, _c;
+      return __generator6(this, function(_d) {
+        switch (_d.label) {
+          case 0:
+            return [4, api.setNotebookCover(nb.id, color)];
+          case 1:
+            _d.sent();
+            return [4, ensureFonts(["sans", "mynerve", "playpen"])];
+          case 2:
+            _d.sent();
+            template = coverTemplate(design);
+            return [4, api.pages(nb.id)];
+          case 3:
+            pages = _d.sent();
+            page = pages[0];
+            if (!(!page || !isCoverTemplate(page.template))) return [3, 7];
+            return [4, api.addPage(nb.id, 0, template)];
+          case 4:
+            page = _d.sent();
+            return [4, api.setPageTemplate(page.id, template, color)];
+          case 5:
+            _d.sent();
+            return [4, api.saveElements(page.id, coverTextElements(design, nb.title, monthYear(), page.width, page.height).map(toStored))];
+          case 6:
+            _d.sent();
+            return [3, 11];
+          case 7:
+            return [4, api.setPageTemplate(page.id, template, color)];
+          case 8:
+            _d.sent();
+            _a = fromStored;
+            return [4, api.elements(page.id)];
+          case 9:
+            els = _a.apply(void 0, [_d.sent()]);
+            titleEl_1 = els.find(function(e2) {
+              return e2.kind === "text" && (e2.role === "cover-title" || !e2.role && e2.text === nb.title);
+            });
+            dateEl_1 = els.find(function(e2) {
+              return e2.kind === "text" && e2 !== titleEl_1 && (e2.role === "cover-date" || !e2.role && DATE_RE.test(e2.text.trim()));
+            });
+            l_1 = layoutText2(design, (_b = titleEl_1 === null || titleEl_1 === void 0 ? void 0 : titleEl_1.text) !== null && _b !== void 0 ? _b : nb.title, (_c = dateEl_1 === null || dateEl_1 === void 0 ? void 0 : dateEl_1.text) !== null && _c !== void 0 ? _c : monthYear(), page.width, page.height);
+            next = els.map(function(e2) {
+              return e2 === titleEl_1 ? __assign8(__assign8(__assign8({}, e2), l_1.title), { role: "cover-title" }) : e2 === dateEl_1 ? __assign8(__assign8(__assign8({}, e2), l_1.date), { role: "cover-date" }) : e2;
+            });
+            return [4, api.saveElements(page.id, next.map(toStored))];
+          case 10:
+            _d.sent();
+            _d.label = 11;
+          case 11:
+            return [4, api.pages(nb.id)];
+          case 12:
+            page = _d.sent()[0];
+            return [4, refreshCoverThumbnail(page)];
+          case 13:
+            _d.sent();
+            return [
+              2
+              /*return*/
+            ];
+        }
+      });
+    });
+  }
+  function coverPreview(design, color, title, cssW, landscape) {
+    if (landscape === void 0) {
+      landscape = false;
+    }
+    var w2 = landscape ? 1123 : 794;
+    var hgt = landscape ? 794 : 1123;
+    var cssH = cssW * hgt / w2;
+    var dpr = Math.max(2, window.devicePixelRatio || 1);
+    var els = coverTextElements(design, title || "Untitled", monthYear(), w2, hgt);
+    var c2 = renderPage(coverTemplate(design), color, w2, hgt, els, cssW * dpr / w2, /* @__PURE__ */ new Map());
+    c2.style.width = "".concat(cssW, "px");
+    c2.style.height = "".concat(cssH, "px");
+    return c2;
   }
 
   // src/editor/snap.ts
@@ -7545,7 +7960,7 @@ var Inkleaf = (() => {
     };
     return __assign9.apply(this, arguments);
   };
-  var __awaiter4 = function(thisArg, _arguments, P2, generator) {
+  var __awaiter6 = function(thisArg, _arguments, P2, generator) {
     function adopt(value) {
       return value instanceof P2 ? value : new P2(function(resolve) {
         resolve(value);
@@ -7572,7 +7987,7 @@ var Inkleaf = (() => {
       step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
-  var __generator5 = function(thisArg, body) {
+  var __generator7 = function(thisArg, body) {
     var _2 = { label: 0, sent: function() {
       if (t2[0] & 1) throw t2[1];
       return t2[1];
@@ -8067,9 +8482,9 @@ var Inkleaf = (() => {
     });
   }
   function addFilledPage(nb, at, template, meta, cls) {
-    return __awaiter4(this, void 0, Promise, function() {
+    return __awaiter6(this, void 0, Promise, function() {
       var page;
-      return __generator5(this, function(_a) {
+      return __generator7(this, function(_a) {
         switch (_a.label) {
           case 0:
             return [4, api.addPage(nb.id, at, template)];
@@ -8090,9 +8505,9 @@ var Inkleaf = (() => {
     });
   }
   function addLessonPage(nb, meta, cls) {
-    return __awaiter4(this, void 0, Promise, function() {
+    return __awaiter6(this, void 0, Promise, function() {
       var pages, inClass, at;
-      return __generator5(this, function(_a) {
+      return __generator7(this, function(_a) {
         switch (_a.label) {
           case 0:
             return [4, api.pages(nb.id)];
@@ -8109,11 +8524,11 @@ var Inkleaf = (() => {
   }
   var LESSON_PAGES = 3;
   function createDaftar(input) {
-    return __awaiter4(this, void 0, Promise, function() {
+    return __awaiter6(this, void 0, Promise, function() {
       var meta, nb, _a, cover, title, at, add, _b, _c, t2, e_4_1, _d, _e, _f, i2, cls, k2, e_5_1;
       var e_4, _g, e_5, _h;
       var _this = this;
-      return __generator5(this, function(_j) {
+      return __generator7(this, function(_j) {
         switch (_j.label) {
           case 0:
             meta = input.meta;
@@ -8131,8 +8546,8 @@ var Inkleaf = (() => {
             _j.sent();
             at = 2;
             add = function(t3, cls2) {
-              return __awaiter4(_this, void 0, void 0, function() {
-                return __generator5(this, function(_a2) {
+              return __awaiter6(_this, void 0, void 0, function() {
+                return __generator7(this, function(_a2) {
                   switch (_a2.label) {
                     case 0:
                       return [4, addFilledPage(nb, at, t3, meta, cls2)];
@@ -8234,9 +8649,9 @@ var Inkleaf = (() => {
     });
   }
   function finishDaftarCover(nb, meta) {
-    return __awaiter4(this, void 0, void 0, function() {
+    return __awaiter6(this, void 0, void 0, function() {
       var _a, cover, els, _b;
-      return __generator5(this, function(_c) {
+      return __generator7(this, function(_c) {
         switch (_c.label) {
           case 0:
             return [4, api.pages(nb.id)];
@@ -8265,10 +8680,10 @@ var Inkleaf = (() => {
     });
   }
   function updateDaftar(nb, before, meta) {
-    return __awaiter4(this, void 0, Promise, function() {
+    return __awaiter6(this, void 0, Promise, function() {
       var pages, oldNote, _loop_2, _a, _b, _c, i2, p2, e_6_1, added, memos, at, added_1, added_1_1, cls, k2, e_7_1;
       var e_6, _d, e_7, _e;
-      return __generator5(this, function(_f) {
+      return __generator7(this, function(_f) {
         switch (_f.label) {
           case 0:
             return [4, api.pages(nb.id)];
@@ -8279,7 +8694,7 @@ var Inkleaf = (() => {
             }));
             _loop_2 = function(i3, p3) {
               var isCover, els, _g, keep, fresh, z0;
-              return __generator5(this, function(_h) {
+              return __generator7(this, function(_h) {
                 switch (_h.label) {
                   case 0:
                     isCover = i3 === 0 && p3.template.startsWith("cover");
@@ -8406,10 +8821,10 @@ var Inkleaf = (() => {
     });
   }
   function fillStudents(nb, meta, cls, students) {
-    return __awaiter4(this, void 0, Promise, function() {
+    return __awaiter6(this, void 0, Promise, function() {
       var pages, need, all, inClass, at, k2, _a, _b, _c, k2, p2, els, _d, e_8_1;
       var e_8, _e;
-      return __generator5(this, function(_f) {
+      return __generator7(this, function(_f) {
         switch (_f.label) {
           case 0:
             return [4, api.pages(nb.id)];
@@ -9409,6 +9824,30 @@ var Inkleaf = (() => {
         this.touchOverlay();
         this.selectionRev++;
       };
+      EditorCore2.prototype.forgetAll = function() {
+        var e_1, _a;
+        this.finishTextEdit();
+        this.selection.clear();
+        try {
+          for (var _b = __values18(this.pages), _c = _b.next(); !_c.done; _c = _b.next()) {
+            var p2 = _c.value;
+            if (!p2.dirty)
+              p2.elements = null;
+          }
+        } catch (e_1_1) {
+          e_1 = { error: e_1_1 };
+        } finally {
+          try {
+            if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
+          } finally {
+            if (e_1) throw e_1.error;
+          }
+        }
+        this.undoStack = [];
+        this.redoStack = [];
+        this.rev++;
+        this.selectionRev++;
+      };
       EditorCore2.prototype.setPages = function(pages) {
         var _a;
         var old = new Map(this.pages.map(function(p2) {
@@ -9444,7 +9883,7 @@ var Inkleaf = (() => {
         return out;
       };
       EditorCore2.prototype.packElements = function(i2, ids) {
-        var e_1, _a, e_2, _b, e_3, _c;
+        var e_2, _a, e_3, _b, e_4, _c;
         var _d, _e;
         var byId = /* @__PURE__ */ new Map();
         try {
@@ -9452,13 +9891,13 @@ var Inkleaf = (() => {
             var el = _g.value;
             byId.set(el.id, el);
           }
-        } catch (e_1_1) {
-          e_1 = { error: e_1_1 };
+        } catch (e_2_1) {
+          e_2 = { error: e_2_1 };
         } finally {
           try {
             if (_g && !_g.done && (_a = _f.return)) _a.call(_f);
           } finally {
-            if (e_1) throw e_1.error;
+            if (e_2) throw e_2.error;
           }
         }
         var n2 = 0;
@@ -9473,13 +9912,13 @@ var Inkleaf = (() => {
             if (el.kind === "stroke")
               n2 += el.points.length * 3;
           }
-        } catch (e_2_1) {
-          e_2 = { error: e_2_1 };
+        } catch (e_3_1) {
+          e_3 = { error: e_3_1 };
         } finally {
           try {
             if (ids_1_1 && !ids_1_1.done && (_b = ids_1.return)) _b.call(ids_1);
           } finally {
-            if (e_2) throw e_2.error;
+            if (e_3) throw e_3.error;
           }
         }
         var buf = new Float32Array(n2);
@@ -9501,13 +9940,13 @@ var Inkleaf = (() => {
               meta.push({ id: el.id, kind: el.kind, rev: (_e = this.revs.get(el)) !== null && _e !== void 0 ? _e : 0, el, b: boxOfEl(el) });
             }
           }
-        } catch (e_3_1) {
-          e_3 = { error: e_3_1 };
+        } catch (e_4_1) {
+          e_4 = { error: e_4_1 };
         } finally {
           try {
             if (els_1_1 && !els_1_1.done && (_c = els_1.return)) _c.call(els_1);
           } finally {
-            if (e_3) throw e_3.error;
+            if (e_4) throw e_4.error;
           }
         }
         return { meta: JSON.stringify(meta), pts: buf.buffer };
@@ -9609,7 +10048,7 @@ var Inkleaf = (() => {
           this.pages[i2].dirty = true;
       };
       EditorCore2.prototype.packForSave = function(i2) {
-        var e_4, _a, e_5, _b;
+        var e_5, _a, e_6, _b;
         var els = this.load(i2);
         var n2 = 0;
         try {
@@ -9618,13 +10057,13 @@ var Inkleaf = (() => {
             if (el.kind === "stroke")
               n2 += el.points.length * 3;
           }
-        } catch (e_4_1) {
-          e_4 = { error: e_4_1 };
+        } catch (e_5_1) {
+          e_5 = { error: e_5_1 };
         } finally {
           try {
             if (els_2_1 && !els_2_1.done && (_a = els_2.return)) _a.call(els_2);
           } finally {
-            if (e_4) throw e_4.error;
+            if (e_5) throw e_5.error;
           }
         }
         var buf = new Float32Array(n2);
@@ -9650,13 +10089,13 @@ var Inkleaf = (() => {
               buf[o2++] = p2[2] === void 0 ? 0.5 : p2[2];
             }
           }
-        } catch (e_5_1) {
-          e_5 = { error: e_5_1 };
+        } catch (e_6_1) {
+          e_6 = { error: e_6_1 };
         } finally {
           try {
             if (els_3_1 && !els_3_1.done && (_b = els_3.return)) _b.call(els_3);
           } finally {
-            if (e_5) throw e_5.error;
+            if (e_6) throw e_6.error;
           }
         }
         return { meta: JSON.stringify(meta), pts: buf.buffer };
@@ -9848,7 +10287,7 @@ var Inkleaf = (() => {
         return "";
       };
       EditorCore2.prototype.up = function() {
-        var e_6, _a, e_7, _b;
+        var e_7, _a, e_8, _b;
         var _this = this;
         var _c;
         var g3 = this.gesture;
@@ -9877,13 +10316,13 @@ var Inkleaf = (() => {
                     var id = gone_1_1.value;
                     this.hiddenIds.delete(id);
                   }
-                } catch (e_6_1) {
-                  e_6 = { error: e_6_1 };
+                } catch (e_7_1) {
+                  e_7 = { error: e_7_1 };
                 } finally {
                   try {
                     if (gone_1_1 && !gone_1_1.done && (_a = gone_1.return)) _a.call(gone_1);
                   } finally {
-                    if (e_6) throw e_6.error;
+                    if (e_7) throw e_7.error;
                   }
                 }
                 this.recentInk = this.recentInk.filter(function(r2) {
@@ -9941,13 +10380,13 @@ var Inkleaf = (() => {
                   if (overlaps(boxOfEl(el), box) && insideLasso(el, g3.points))
                     this.selection.add(el.id);
                 }
-              } catch (e_7_1) {
-                e_7 = { error: e_7_1 };
+              } catch (e_8_1) {
+                e_8 = { error: e_8_1 };
               } finally {
                 try {
                   if (_f && !_f.done && (_b = _e.return)) _b.call(_e);
                 } finally {
-                  if (e_7) throw e_7.error;
+                  if (e_8) throw e_8.error;
                 }
               }
             }
@@ -10005,7 +10444,7 @@ var Inkleaf = (() => {
         this.selectionRev++;
       };
       EditorCore2.prototype.cancel = function() {
-        var e_8, _a;
+        var e_9, _a;
         var _b;
         var g3 = this.gesture;
         if (!g3)
@@ -10019,13 +10458,13 @@ var Inkleaf = (() => {
               var id = _d.value;
               this.hiddenIds.delete(id);
             }
-          } catch (e_8_1) {
-            e_8 = { error: e_8_1 };
+          } catch (e_9_1) {
+            e_9 = { error: e_9_1 };
           } finally {
             try {
               if (_d && !_d.done && (_a = _c.return)) _a.call(_c);
             } finally {
-              if (e_8) throw e_8.error;
+              if (e_9) throw e_9.error;
             }
           }
         }
@@ -10060,7 +10499,7 @@ var Inkleaf = (() => {
           return;
         clearTimeout(g3.holdTimer);
         g3.holdTimer = setTimeout(function() {
-          var e_9, _a;
+          var e_10, _a;
           var _b, _c, _d;
           if (_this.gesture !== g3 || g3.preview || g3.points.length < 4)
             return;
@@ -10079,13 +10518,13 @@ var Inkleaf = (() => {
               var id = _f.value;
               _this.hiddenIds.add(id);
             }
-          } catch (e_9_1) {
-            e_9 = { error: e_9_1 };
+          } catch (e_10_1) {
+            e_10 = { error: e_10_1 };
           } finally {
             try {
               if (_f && !_f.done && (_a = _e.return)) _a.call(_e);
             } finally {
-              if (e_9) throw e_9.error;
+              if (e_10) throw e_10.error;
             }
           }
           if ((_d = g3.absorb) === null || _d === void 0 ? void 0 : _d.length)
@@ -10217,7 +10656,7 @@ var Inkleaf = (() => {
         g3.preview = __assign10(__assign10({}, h3.base), { shape });
       };
       EditorCore2.prototype.buildSnap = function(moving) {
-        var e_10, _a;
+        var e_11, _a;
         var texts = moving.filter(function(el2) {
           return el2.kind === "text" && el2.text.trim().length > 0 && !el2.rotation;
         });
@@ -10233,13 +10672,13 @@ var Inkleaf = (() => {
             if (!ids.has(el.id) && el.kind === "text" && el.text.trim() && !el.rotation)
               targets.push.apply(targets, __spreadArray14([], __read18(anchorsAsTargets(textAnchors(el))), false));
           }
-        } catch (e_10_1) {
-          e_10 = { error: e_10_1 };
+        } catch (e_11_1) {
+          e_11 = { error: e_11_1 };
         } finally {
           try {
             if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
           } finally {
-            if (e_10) throw e_10.error;
+            if (e_11) throw e_11.error;
           }
         }
         var paper = paperLayout(this.page.template, this.page.width, this.page.height);
@@ -10264,7 +10703,7 @@ var Inkleaf = (() => {
         g3.last = p2;
       };
       EditorCore2.prototype.eraseAt = function(x2, y2) {
-        var e_11, _a;
+        var e_12, _a;
         var _b;
         var g3 = this.gesture;
         if ((g3 === null || g3 === void 0 ? void 0 : g3.type) !== "erase")
@@ -10294,13 +10733,13 @@ var Inkleaf = (() => {
               next.push.apply(next, __spreadArray14([], __read18(pieces), false));
             }
           }
-        } catch (e_11_1) {
-          e_11 = { error: e_11_1 };
+        } catch (e_12_1) {
+          e_12 = { error: e_12_1 };
         } finally {
           try {
             if (_d && !_d.done && (_a = _c.return)) _a.call(_c);
           } finally {
-            if (e_11) throw e_11.error;
+            if (e_12) throw e_12.error;
           }
         }
         if (!changed)
@@ -10328,19 +10767,19 @@ var Inkleaf = (() => {
         this.selectionRev++;
       };
       EditorCore2.prototype.selectAll = function() {
-        var e_12, _a;
+        var e_13, _a;
         try {
           for (var _b = __values18(this.elements), _c = _b.next(); !_c.done; _c = _b.next()) {
             var el = _c.value;
             this.selection.add(el.id);
           }
-        } catch (e_12_1) {
-          e_12 = { error: e_12_1 };
+        } catch (e_13_1) {
+          e_13 = { error: e_13_1 };
         } finally {
           try {
             if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
           } finally {
-            if (e_12) throw e_12.error;
+            if (e_13) throw e_13.error;
           }
         }
         this.touchOverlay();
@@ -10779,7 +11218,7 @@ var Inkleaf = (() => {
     return [q[0] + nx * off, q[1] + ny * off];
   }
   function extent(points, line2) {
-    var e_13, _a;
+    var e_14, _a;
     var dir = [line2[1][0] - line2[0][0], line2[1][1] - line2[0][1]];
     var lo = points[0];
     var hi = points[0];
@@ -10794,13 +11233,13 @@ var Inkleaf = (() => {
         if (t2(p2) > t2(hi))
           hi = p2;
       }
-    } catch (e_13_1) {
-      e_13 = { error: e_13_1 };
+    } catch (e_14_1) {
+      e_14 = { error: e_14_1 };
     } finally {
       try {
         if (points_1_1 && !points_1_1.done && (_a = points_1.return)) _a.call(points_1);
       } finally {
-        if (e_13) throw e_13.error;
+        if (e_14) throw e_14.error;
       }
     }
     return [[lo[0], lo[1]], [hi[0], hi[1]]];

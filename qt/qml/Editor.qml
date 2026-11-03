@@ -60,6 +60,7 @@ Rectangle {
     }
     PopupMenu { id: menu }
     PaperPicker { id: paperPicker; canvas: canvas }
+    CoverPicker { id: coverPicker; canvas: canvas; notebookId: root.notebookId; title: root.title }
     FormDialog { id: dialog }
 
     ColumnLayout {
@@ -169,8 +170,13 @@ Rectangle {
                             implicitWidth: paperRow.implicitWidth + 10
                             hoverEnabled: true
                             ToolTip.visible: hovered && !paperPicker.opened
-                            ToolTip.text: "Page paper"
-                            onClicked: paperPicker.opened ? paperPicker.close() : paperPicker.show(paperBtn, canvas.currentPage)
+                            ToolTip.text: cover ? "Cover design and colour" : "Page paper"
+                            readonly property bool cover: String(meta.template || "").startsWith("cover")
+                            onClicked: {
+                                if (paperPicker.opened || coverPicker.opened) { paperPicker.close(); coverPicker.close(); return }
+                                if (cover) coverPicker.show(paperBtn)
+                                else paperPicker.show(paperBtn, canvas.currentPage)
+                            }
                             background: Rectangle { radius: 10; color: paperBtn.hovered || paperPicker.opened ? Theme.surface : "transparent" }
                             contentItem: RowLayout {
                                 id: paperRow

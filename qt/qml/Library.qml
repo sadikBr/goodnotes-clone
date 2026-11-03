@@ -169,12 +169,20 @@ Rectangle {
             { name: "size", label: "Page size", type: "select", value: "a4", options: Theme.paperSizes.map(p => ({ value: p.id, label: p.label })) },
             { name: "orientation", label: "Orientation", type: "segmented", value: "portrait", options: [{ value: "portrait", label: "Portrait" }, { value: "landscape", label: "Landscape" }] },
             { name: "paper", label: "Paper colour", type: "swatches", value: "#fffdf7", colors: Theme.paperColors },
-            { name: "cover", label: "Cover colour", type: "swatches", colors: Theme.coverColors }
+            { name: "cover", label: "Cover colour", type: "swatches", colors: Theme.coverColors },
+            { name: "design", label: "Cover design", type: "covers", value: "classic", options: coverDesigns }
         ], "Create", r => {
             const size = Theme.paperSizes.find(p => p.id === r.size) || Theme.paperSizes[0]
             const landscape = r.orientation === "landscape"
-            const nb = run("createNotebook", { input: { title: r.title.trim(), folderId: fid, template: r.template, coverColor: r.cover, paperColor: r.paper, width: landscape ? size.h : size.w, height: landscape ? size.w : size.h } })
-            if (nb) root.openRequested(nb.id, nb.title)
+            const nb = run("createNotebook", { input: { title: r.title.trim(), folderId: fid, template: r.template, coverColor: r.cover, paperColor: r.paper, width: landscape ? size.h : size.w, height: landscape ? size.w : size.h, coverPage: true } })
+            if (!nb) return
+            // The chosen cover design, its title and date, and its picture for the library.
+            if (r.design !== "classic") {
+                const pages = run("pages", { notebookId: nb.id })
+                if (pages && pages.length) run("setPageTemplate", { pageId: pages[0].id, template: "cover-" + r.design, paperColor: r.cover })
+            }
+            Js.run("setUpCover", [nb])
+            root.openRequested(nb.id, nb.title)
         }, { aside: coverPreview })
     }
     function newFolder(parentId) {
@@ -195,11 +203,22 @@ Rectangle {
     function renameNotebook(n) {
         dialog.ask("Rename notebook", [{ name: "title", label: "Title", value: n.title }], "Save", r => run("renameNotebook", { id: n.id, title: r.title.trim() }))
     }
+    readonly property var coverDesigns: (Js.run("COVER_DESIGNS.slice", [0]) || []).map(d => ({ value: d.id, label: d.label }))
     function changeCover(n) {
+        // The current design (or none, for a notebook without a cover page).
+        let current = "none"
+        if (n.hasCover) {
+            const pages = run("pages", { notebookId: n.id })
+            if (pages && pages.length && String(pages[0].template).startsWith("cover")) current = pages[0].template === "cover" ? "classic" : String(pages[0].template).slice(6)
+        }
         dialog.ask("Change cover", [
             { name: "title", label: "", type: "hidden", value: n.title },
-            { name: "cover", label: "Cover colour", type: "swatches", value: n.coverColor, colors: Theme.coverColors }
-        ], "Save", r => run("setNotebookCover", { id: n.id, color: r.cover }), { aside: coverPreview })
+            { name: "cover", label: "Cover colour", type: "swatches", value: n.coverColor, colors: Theme.coverColors },
+            { name: "design", label: "Cover design", type: "covers", value: current, options: (n.hasCover ? [] : [{ value: "none", label: "No cover" }]).concat(coverDesigns) }
+        ], "Save", r => {
+            if (r.design === "none") run("setNotebookCover", { id: n.id, color: r.cover })
+            else Js.run("applyCover", [n, r.design, r.cover])
+        }, { aside: coverPreview })
     }
     /// Folders something can move into (not a folder itself or anything inside it).
     function folderOptions(exclude) {
@@ -309,12 +328,28 @@ Rectangle {
         Column {
             spacing: 16
             Book {
+                visible: !dialog.values.design || dialog.values.design === "none"
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: 200; height: 266
                 coverColor: dialog.values.cover || Theme.coverColors[0]
                 title: dialog.values.title || ""
                 raised: true
                 transform: Rotation { origin.x: 100; origin.y: 133; axis { x: 0; y: 1; z: 0 } angle: -8 }
+            }
+            Item {
+                visible: !!dialog.values.design && dialog.values.design !== "none"
+                readonly property bool landscape: dialog.values.orientation === "landscape"
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: landscape ? 250 : 200
+                height: landscape ? 177 : 283
+                Shadow { anchors.fill: parent; radius: 8; level: 3 }
+                Image {
+                    anchors.fill: parent
+                    sourceSize: Qt.size(parent.width * 2, parent.height * 2)
+                    source: parent.visible ? dialog.coverUrl(dialog.values.design) : ""
+                    asynchronous: false
+                }
+                transform: Rotation { origin.x: 100; origin.y: 141; axis { x: 0; y: 1; z: 0 } angle: -8 }
             }
             Label {
                 anchors.horizontalCenter: parent.horizontalCenter

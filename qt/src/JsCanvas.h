@@ -87,6 +87,9 @@ class JsCanvas : public QObject {
   Q_PROPERTY(bool imageSmoothingEnabled READ smoothing WRITE setSmoothing)
   Q_PROPERTY(QString filter READ filter WRITE setFilter)
   Q_PROPERTY(QString letterSpacing READ letterSpacing WRITE setLetterSpacing)
+  // Accepts canvas.style.* and className (the web code sizes canvases it shows).
+  Q_PROPERTY(QVariantMap style MEMBER m_style)
+  Q_PROPERTY(QString className MEMBER m_className)
 public:
   JsCanvas(int w, int h, QObject* parent = nullptr);
   ~JsCanvas() override;
@@ -249,6 +252,8 @@ private:
   void drawText(const QString& text, double x, double y, bool stroke, const QJSValue& maxWidth);
 
   QImage m_img;
+  QVariantMap m_style;
+  QString m_className;
   std::unique_ptr<QPainter> m_painter;
   std::vector<State> m_states;
   QPainterPath m_path;

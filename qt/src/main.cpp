@@ -88,6 +88,7 @@ int main(int argc, char* argv[]) {
   engine.addImageProvider("shadow", new ShadowImage);
   engine.addImageProvider("paper", new PaperImage);
   engine.addImageProvider("ink", new InkSampleImage);
+  engine.addImageProvider("cover", new CoverImage);
   engine.addImportPath(QStringLiteral("qrc:/qt/qml"));  // the default from Qt 6.5 on
   QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app, [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
   engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Inkleaf/qml/Main.qml")));

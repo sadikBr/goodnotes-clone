@@ -108,6 +108,7 @@ qt_add_qml_module(inkleaf
     qml/editor/SelectionBar.qml
     qml/editor/PageSidebar.qml
     qml/editor/PaperPicker.qml
+    qml/editor/CoverPicker.qml
     qml/editor/TextEditor.qml
     qml/editor/Exporter.qml
     qml/editor/ShortcutsSheet.qml

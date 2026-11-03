@@ -424,9 +424,18 @@ QVariantList InkCanvas::pages() const {
   return out;
 }
 
-void InkCanvas::reloadPages() {
+void InkCanvas::reloadPages(bool elementsToo) {
   if (m_notebookId.isEmpty()) return;
   flush();
+  if (elementsToo) {
+    core("forgetAll");
+    for (Page& p : m_pages) {
+      for (auto& it : p.items) m_graveyard.push_back(it);
+      p.items.clear();
+      p.byId.clear();
+      p.synced = false;
+    }
+  }
   QString err;
   const QJsonArray pages = InkleafCore::instance()->callJson("pages", {{"notebookId", m_notebookId}}, &err).toArray();
   if (!err.isEmpty()) return emit message(err, true);

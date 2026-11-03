@@ -188,6 +188,17 @@ export class EditorCore {
     this.selectionRev++;
   }
 
+  /** Drops what's loaded for every page (after changes made outside the editor). */
+  forgetAll() {
+    this.finishTextEdit();
+    this.selection.clear();
+    for (const p of this.pages) if (!p.dirty) p.elements = null;
+    this.undoStack = [];
+    this.redoStack = [];
+    this.rev++;
+    this.selectionRev++;
+  }
+
   setPages(pages: PageMeta[]) {
     const old = new Map(this.pages.map((p) => [p.meta.id, p]));
     const activeId = this.page?.id;
