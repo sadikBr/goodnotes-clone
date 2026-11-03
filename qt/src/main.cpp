@@ -1,12 +1,19 @@
 // Inkleaf — native Qt app.
+#include <QDebug>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QStandardPaths>
 #include <QFontDatabase>
 #include <QGuiApplication>
 #include <QIcon>
+#include <QLoggingCategory>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QSurfaceFormat>
 
+#include "Js.h"
 #include "ShadowImage.h"
 
 int main(int argc, char* argv[]) {
@@ -22,10 +29,49 @@ int main(int argc, char* argv[]) {
   QGuiApplication::setApplicationVersion(QStringLiteral(INKLEAF_VERSION));
   QGuiApplication::setDesktopFileName("inkleaf");
   QGuiApplication app(argc, argv);
+  // The bundled web code trips the QML compiler's style hints; they're noise here.
+  QLoggingCategory::setFilterRules(QStringLiteral("qt.qml.compiler=false"));
   QGuiApplication::setWindowIcon(QIcon(":/qt/qml/Inkleaf/assets/icon.svg"));
 
-  for (const char* f : {"inter-latin-400-normal.woff", "inter-latin-600-normal.woff", "inter-latin-700-normal.woff", "inter-latin-ext-400-normal.woff"})
-    QFontDatabase::addApplicationFont(QStringLiteral(":/qt/qml/Inkleaf/assets/fonts/") + f);
+  // The UI font and every handwriting face for text boxes and notes.
+  // Loaded from files: Qt drops kerning for fonts loaded from memory, so the
+  // bundled ones are copied to the cache folder first (once per version).
+  {
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/fonts-" + QStringLiteral(INKLEAF_VERSION);
+    QDir().mkpath(dir);
+    for (const QString& f : QDir(QStringLiteral(":/qt/qml/Inkleaf/assets/fonts")).entryList({"*.ttf"})) {
+      const QString src = QStringLiteral(":/qt/qml/Inkleaf/assets/fonts/") + f, dst = dir + "/" + f;
+      if (QFileInfo(dst).size() != QFileInfo(src).size()) {
+        QFile::remove(dst);
+        QFile::copy(src, dst);
+      }
+      if (QFontDatabase::addApplicationFont(dst) < 0) QFontDatabase::addApplicationFont(src);
+    }
+  }
+
+  // Developer check: evaluates a script with the bridge loaded and prints
+  // the result (inkleaf --js "<expression>").
+  if (const int i = QCoreApplication::arguments().indexOf("--js"); i > 0 && i + 1 < argc) {
+    const QJSValue r = Js::instance().engine().evaluate(QCoreApplication::arguments().at(i + 1));
+    qInfo().noquote() << (r.isError() ? "error: " + r.toString() : Js::instance().engine().evaluate("JSON.stringify").call({r}).toString());
+    return 0;
+  }
+
+  // Developer check: draws every paper with the web app's code, then quits
+  // (inkleaf --render-papers <folder>).
+  if (const int i = QCoreApplication::arguments().indexOf("--render-papers"); i > 0 && i + 1 < argc) {
+    const QString dir = QCoreApplication::arguments().at(i + 1);
+    QDir().mkpath(dir);
+    QJSValue list = Js::instance().fn("TEMPLATES");
+    const int n = list.property("length").toInt();
+    for (int k = 0; k < n; ++k) {
+      const QString id = list.property(k).property("id").toString();
+      Js::instance().paper(id, "#fffdf7", 794, 1123, 1.0).save(dir + "/" + id + ".png");
+    }
+    for (const char* c : {"cover", "cover-geometric", "cover-zellige", "cover-marble", "cover-waves", "cover-leather", "cover-kraft", "cover-dots", "cover-minimal"})
+      Js::instance().paper(c, "#2563eb", 794, 1123, 0.5).save(dir + "/" + c + ".png");
+    return 0;
+  }
   QFont ui("Inter");
   ui.setPixelSize(14);
   ui.setHintingPreference(QFont::PreferNoHinting);

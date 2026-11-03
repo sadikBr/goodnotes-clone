@@ -46,10 +46,15 @@ qt_add_executable(inkleaf
   src/InkCanvas.h src/InkCanvas.cpp
   src/RoundImage.h src/RoundImage.cpp
   src/ShadowImage.h src/ShadowImage.cpp
+  src/JsCanvas.h src/JsCanvas.cpp
+  src/Js.h src/Js.cpp
 )
 
 # Theme is a singleton (must be set before the module is declared).
 set_source_files_properties(qml/Theme.qml qml/AppSettings.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+
+# Fonts: the UI's Inter and the handwriting faces for text (as in src/fonts.ts).
+file(GLOB INKLEAF_FONTS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/*.ttf)
 
 # Prefs.qml wraps Settings from QtCore (Qt 6.5+) or Qt.labs.settings (6.4).
 if(Qt6_VERSION VERSION_GREATER_EQUAL 6.5)
@@ -93,10 +98,8 @@ qt_add_qml_module(inkleaf
     ${CMAKE_CURRENT_BINARY_DIR}/gen/Prefs.qml
   RESOURCES
     assets/icon.svg
-    assets/fonts/inter-latin-400-normal.woff
-    assets/fonts/inter-latin-600-normal.woff
-    assets/fonts/inter-latin-700-normal.woff
-    assets/fonts/inter-latin-ext-400-normal.woff
+    js/bridge.js
+    ${INKLEAF_FONTS}
 )
 
 # The controls style (tooltips, scroll bars; everything else from Basic): a
