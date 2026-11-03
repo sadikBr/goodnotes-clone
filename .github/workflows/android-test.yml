@@ -35,7 +35,10 @@ jobs:
           workspaces: src-tauri
       - run: npm ci
       - name: Generate the Android project
-        run: npx tauri android init --ci
+        run: |
+          npx tauri android init --ci
+          # The app's own launcher icons (adaptive: leaf on the brand green), not Tauri's defaults.
+          cp -r src-tauri/icons/android/. src-tauri/gen/android/app/src/main/res/
       - name: Signing
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/inkleaf.jks"

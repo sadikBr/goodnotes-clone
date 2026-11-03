@@ -52,12 +52,23 @@ function folderMeta(f: Folder, data: Library): string {
 }
 
 /** The brand mark: a leaf whose vein is a pen nib's slit. */
-const BRAND_MARK = `<svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">
-  <rect width="32" height="32" rx="9" fill="var(--accent)"/>
-  <path d="M9 23c0-8 5-13.5 14-14.5-.6 8.8-6 14-14 14.5z" fill="var(--accent-contrast)" opacity="0.95"/>
-  <path d="M9.5 22.5l8-8" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round"/>
-  <circle cx="18.6" cy="13.4" r="1.4" fill="var(--accent)"/>
-</svg>`;
+/** The app icon (branding/icon.svg), so the library shows the same mark as the desktop, Android and browser icons. */
+const BRAND_MARK = `<svg viewBox="48 48 928 928" width="30" height="30" aria-hidden="true"><defs>
+    <linearGradient id="brand-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2b9a71"/>
+      <stop offset="1" stop-color="#15573f"/>
+    </linearGradient>
+    <linearGradient id="brand-leaf" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#f6efdc"/>
+      <stop offset="1" stop-color="#fffdf7"/>
+    </linearGradient>
+  </defs>
+  <rect x="48" y="48" width="928" height="928" rx="212" fill="url(#brand-bg)"/>
+  <g>
+    <path d="M300 724c0-256 160-432 448-464-19 282-192 448-448 464z" fill="url(#brand-leaf)"/>
+    <path d="M372 652l212-212" stroke="#1f7a5a" stroke-width="38" stroke-linecap="round"/>
+    <path d="M342 682c-46 54-90 90-150 102" fill="none" stroke="#f6efdc" stroke-width="40" stroke-linecap="round"/>
+  </g></svg>`;
 
 /** A small illustration for empty views: a stack of notebooks and a pen. */
 const EMPTY_ART = `<svg viewBox="0 0 160 120" width="160" height="120" aria-hidden="true">
