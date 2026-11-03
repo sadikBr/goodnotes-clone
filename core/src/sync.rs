@@ -15,8 +15,9 @@
 //!
 //! The notebook open in the editor is never replaced underneath it.
 //!
-//! Sign-in uses Google's device flow (the user enters a short code at
-//! google.com/device), the same on desktop and Android.
+//! Sign-in is Google's flow for installed apps: the browser opens Google's
+//! page and comes back to a one-off listener on 127.0.0.1 (with PKCE), the
+//! same on desktop and Android. It needs a "Desktop app" OAuth client.
 
 use base64::Engine as _;
 use rusqlite::types::{Value as SqlValue, ValueRef};
@@ -24,7 +25,9 @@ use rusqlite::{params, params_from_iter, Connection, OptionalExtension, ToSql};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
-use std::io::Read;
+use sha2::{Digest, Sha256};
+use std::io::{Read, Write};
+use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -676,6 +679,8 @@ pub struct SyncStatus {
     pub last_error: Option<String>,
 }
 
+/// How to sign in: the page to open (`verification_url`). `user_code` is
+/// empty: the browser brings the answer back by itself.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceCode {
@@ -685,8 +690,13 @@ pub struct DeviceCode {
 }
 
 struct Pending {
-    device_code: String,
-    interval: u64,
+    /// Where the browser comes back to.
+    listener: TcpListener,
+    redirect: String,
+    /// PKCE: the secret whose hash went with the request.
+    verifier: String,
+    /// Ties the answer to this sign-in.
+    state: String,
     deadline: Instant,
 }
 
@@ -700,6 +710,93 @@ pub struct SyncManager {
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Percent-encodes a query value.
+fn url_encode(s: &str) -> String {
+    let mut out = String::new();
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+fn url_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < b.len() {
+        match b[i] {
+            b'+' => out.push(b' '),
+            b'%' if i + 2 < b.len() => {
+                if let Some(v) = std::str::from_utf8(&b[i + 1..i + 3]).ok().and_then(|h| u8::from_str_radix(h, 16).ok()) {
+                    out.push(v);
+                    i += 2;
+                } else {
+                    out.push(b'%');
+                }
+            }
+            c => out.push(c),
+        }
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// Reads the browser's visit to the listener and answers it with a short
+/// page. None: not the sign-in answer (e.g. a favicon request); else the
+/// code, or why there is none.
+fn browser_answer(mut stream: TcpStream, state: &str) -> Option<AppResult<String>> {
+    let _ = stream.set_nonblocking(false);
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+    let mut buf = [0u8; 8192];
+    let mut req = Vec::new();
+    while !req.windows(4).any(|w| w == b"\r\n\r\n") && req.len() < buf.len() {
+        match stream.read(&mut buf) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => req.extend_from_slice(&buf[..n]),
+        }
+    }
+    let req = String::from_utf8_lossy(&req);
+    let target = req.lines().next()?.split_whitespace().nth(1)?.to_string();
+    let reply = |stream: &mut TcpStream, ok: bool| {
+        let (title, line) = if ok {
+            ("Signed in", "Inkleaf can now keep your notebooks in Google Drive. You can close this tab and go back to Inkleaf.")
+        } else {
+            ("Not signed in", "Inkleaf wasn't given access to Google Drive. You can close this tab and try again from Inkleaf.")
+        };
+        let body = format!(
+            "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'><title>{title}</title>\
+             <body style='font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:90vh;margin:0;background:#f6f5f1;color:#1f2328'>\
+             <div style='max-width:420px;padding:24px;text-align:center'><h1 style='font-size:22px'>{title}</h1><p style='line-height:1.5;color:#59606b'>{line}</p></div>"
+        );
+        let _ = write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+        let _ = stream.flush();
+    };
+    let query = target.split_once('?').map(|(_, q)| q).unwrap_or("");
+    let params: HashMap<String, String> = query
+        .split('&')
+        .filter_map(|kv| kv.split_once('='))
+        .map(|(k, v)| (url_decode(k), url_decode(v)))
+        .collect();
+    if !params.contains_key("code") && !params.contains_key("error") {
+        let _ = write!(stream, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        return None;
+    }
+    if params.get("state").map(String::as_str) != Some(state) {
+        reply(&mut stream, false);
+        return Some(Err(invalid("the sign-in answer didn't match: try again")));
+    }
+    if let Some(e) = params.get("error") {
+        reply(&mut stream, false);
+        return Some(Err(invalid(if e == "access_denied" { "access to Google Drive wasn't allowed".to_string() } else { format!("Google sign-in failed: {e}") })));
+    }
+    reply(&mut stream, true);
+    Some(Ok(params["code"].clone()))
 }
 
 /// The email in a Google id_token (its middle part is base64 JSON).
@@ -733,76 +830,79 @@ impl SyncManager {
         }
     }
 
-    /// Step 1: a code for the user to enter at google.com/device.
+    /// Step 1: Google's sign-in page to open in the browser. The browser comes
+    /// back to a one-off listener on this computer (127.0.0.1) with the
+    /// answer: Google's sign-in for installed apps, with PKCE.
     pub fn sign_in_start(&self) -> AppResult<DeviceCode> {
         let (id, _) = client()?;
-        let v = json_of(call(agent().post("https://oauth2.googleapis.com/device/code").send_form(&[("client_id", id), ("scope", SCOPES)]))?)?;
-        let s = |k: &str| v.get(k).and_then(Value::as_str).map(str::to_string);
-        let device_code = s("device_code").ok_or_else(|| invalid("Google didn't return a sign-in code"))?;
-        let expires_in = v.get("expires_in").and_then(Value::as_u64).unwrap_or(1800);
-        *lock(&self.pending) = Some(Pending {
-            device_code,
-            interval: v.get("interval").and_then(Value::as_u64).unwrap_or(5),
-            deadline: Instant::now() + Duration::from_secs(expires_in),
-        });
+        let listener = TcpListener::bind(("127.0.0.1", 0)).map_err(|e| invalid(format!("can't start signing in: {e}")))?;
+        listener.set_nonblocking(true)?;
+        let port = listener.local_addr()?.port();
+        let redirect = format!("http://127.0.0.1:{port}");
+        let verifier = format!("{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());
+        let challenge = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
+        let state = uuid::Uuid::new_v4().simple().to_string();
+        let query = [
+            ("client_id", id),
+            ("redirect_uri", redirect.as_str()),
+            ("response_type", "code"),
+            ("scope", SCOPES),
+            ("code_challenge", challenge.as_str()),
+            ("code_challenge_method", "S256"),
+            ("state", state.as_str()),
+            ("access_type", "offline"),
+            ("prompt", "consent"),
+        ];
+        let url = format!(
+            "https://accounts.google.com/o/oauth2/v2/auth?{}",
+            query.iter().map(|(k, v)| format!("{k}={}", url_encode(v))).collect::<Vec<_>>().join("&")
+        );
+        let expires_in = 600;
+        *lock(&self.pending) = Some(Pending { listener, redirect, verifier, state, deadline: Instant::now() + Duration::from_secs(expires_in) });
         self.cancel.store(false, Ordering::SeqCst);
-        Ok(DeviceCode {
-            user_code: s("user_code").unwrap_or_default(),
-            verification_url: s("verification_url").or_else(|| s("verification_uri")).unwrap_or_else(|| "https://www.google.com/device".into()),
-            expires_in,
-        })
+        Ok(DeviceCode { user_code: String::new(), verification_url: url, expires_in })
     }
 
-    /// Step 2: waits until the user has approved (or refused) on Google's page.
+    /// Step 2: waits for the browser to come back (allowed or refused), then
+    /// trades the answer for lasting access.
     pub fn sign_in_wait(&self, device: &str) -> AppResult<SyncStatus> {
         let (id, secret) = client()?;
-        let (code, mut interval, deadline) = {
-            let p = lock(&self.pending);
-            let p = p.as_ref().ok_or_else(|| invalid("start signing in first"))?;
-            (p.device_code.clone(), p.interval, p.deadline)
-        };
-        let a = agent();
-        loop {
+        let pending = lock(&self.pending).take().ok_or_else(|| invalid("start signing in first"))?;
+        let code = loop {
             if self.cancel.load(Ordering::SeqCst) {
                 return Err(invalid("sign-in cancelled"));
             }
-            if Instant::now() > deadline {
-                return Err(invalid("the code expired: try signing in again"));
+            if Instant::now() > pending.deadline {
+                return Err(invalid("signing in took too long: try again"));
             }
-            std::thread::sleep(Duration::from_secs(interval));
-            let r = a.post("https://oauth2.googleapis.com/token").send_form(&[
-                ("client_id", id),
-                ("client_secret", secret),
-                ("device_code", &code),
-                ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
-            ]);
-            match r {
-                Ok(resp) => {
-                    let v = json_of(resp)?;
-                    let refresh = v.get("refresh_token").and_then(Value::as_str).ok_or_else(|| invalid("Google didn't allow offline access"))?;
-                    let mut c = lock(&self.config);
-                    c.refresh_token = Some(refresh.to_string());
-                    c.email = v.get("id_token").and_then(Value::as_str).and_then(email_of);
-                    c.device = device.trim().chars().take(40).collect();
-                    c.last_error = None;
-                    self.save(&c);
-                    *lock(&self.pending) = None;
-                    drop(c);
-                    return Ok(self.status());
-                }
-                Err(ureq::Error::Status(_, resp)) => {
-                    let v: Value = serde_json::from_str(&resp.into_string().unwrap_or_default()).unwrap_or(Value::Null);
-                    match v.get("error").and_then(Value::as_str).unwrap_or("") {
-                        "authorization_pending" => {}
-                        "slow_down" => interval += 5,
-                        "access_denied" => return Err(invalid("access to Google Drive wasn't allowed")),
-                        "expired_token" => return Err(invalid("the code expired: try signing in again")),
-                        other => return Err(invalid(format!("Google sign-in failed: {other}"))),
+            match pending.listener.accept() {
+                Ok((stream, _)) => {
+                    if let Some(answer) = browser_answer(stream, &pending.state) {
+                        break answer?;
                     }
                 }
-                Err(e) => return Err(invalid(format!("can't reach Google (are you online?): {e}"))),
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => std::thread::sleep(Duration::from_millis(150)),
+                Err(e) => return Err(invalid(format!("signing in failed: {e}"))),
             }
-        }
+        };
+        let r = agent().post("https://oauth2.googleapis.com/token").send_form(&[
+            ("client_id", id),
+            ("client_secret", secret),
+            ("code", &code),
+            ("code_verifier", &pending.verifier),
+            ("redirect_uri", &pending.redirect),
+            ("grant_type", "authorization_code"),
+        ]);
+        let v = json_of(call(r)?)?;
+        let refresh = v.get("refresh_token").and_then(Value::as_str).ok_or_else(|| invalid("Google didn't allow offline access"))?;
+        let mut c = lock(&self.config);
+        c.refresh_token = Some(refresh.to_string());
+        c.email = v.get("id_token").and_then(Value::as_str).and_then(email_of);
+        c.device = device.trim().chars().take(40).collect();
+        c.last_error = None;
+        self.save(&c);
+        drop(c);
+        Ok(self.status())
     }
 
     pub fn sign_in_cancel(&self) {
@@ -1020,5 +1120,49 @@ mod tests {
         sync_with(&tablet, &mut drive, "Tablet", None).unwrap();
         sync_with(&pc, &mut drive, "PC", None).unwrap();
         assert_eq!(pc.library().unwrap().folders[0].name, "Classes 2026");
+    }
+}
+
+#[cfg(test)]
+mod sign_in_tests {
+    use super::*;
+
+    fn visit(path: &str, state: &str) -> (Option<AppResult<String>>, String) {
+        let l = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = l.local_addr().unwrap().port();
+        let path = path.to_string();
+        let browser = std::thread::spawn(move || {
+            let mut s = TcpStream::connect(("127.0.0.1", port)).unwrap();
+            write!(s, "GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n").unwrap();
+            let mut page = String::new();
+            let _ = s.read_to_string(&mut page);
+            page
+        });
+        let (stream, _) = l.accept().unwrap();
+        let answer = browser_answer(stream, state);
+        (answer, browser.join().unwrap())
+    }
+
+    #[test]
+    fn the_browser_brings_the_code_back() {
+        let (a, page) = visit("/?state=abc&code=4%2F0Ab-x_y&scope=email", "abc");
+        assert_eq!(a.unwrap().unwrap(), "4/0Ab-x_y");
+        assert!(page.starts_with("HTTP/1.1 200") && page.contains("Signed in"));
+    }
+
+    #[test]
+    fn refusals_and_strangers_are_not_codes() {
+        let (a, page) = visit("/?state=abc&error=access_denied", "abc");
+        assert!(a.unwrap().is_err() && page.contains("Not signed in"));
+        let (a, _) = visit("/?state=zzz&code=1", "abc");
+        assert!(a.unwrap().is_err());
+        let (a, page) = visit("/favicon.ico", "abc");
+        assert!(a.is_none() && page.starts_with("HTTP/1.1 404"));
+    }
+
+    #[test]
+    fn query_values_round_trip() {
+        let s = "http://127.0.0.1:1234 openid email";
+        assert_eq!(url_decode(&url_encode(s)), s);
     }
 }

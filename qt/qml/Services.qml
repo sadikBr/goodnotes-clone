@@ -36,7 +36,7 @@ QtObject {
 
     property var syncStatus: null
     property bool syncing: false
-    /// While signing in: { userCode, verificationUrl }.
+    /// While signing in: { verificationUrl } (Google's page, opened in the browser).
     property var signInCode: null
 
     function refreshSync() {
@@ -69,6 +69,7 @@ QtObject {
         InkleafCore.callAsync("syncSignInStart", {}, (code, err) => {
             if (err) return root.notify(err, true)
             root.signInCode = code
+            Qt.openUrlExternally(code.verificationUrl)
             InkleafCore.callAsync("syncSignInWait", { device: root.defaultDevice() }, (s, err2) => {
                 root.signInCode = null
                 if (err2) {

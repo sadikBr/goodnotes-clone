@@ -1,5 +1,6 @@
-// "Sign in to Google Drive": the code to enter on Google's page, while the
-// app waits for the user to allow access (src/syncSettings.ts signIn).
+// "Sign in to Google Drive": while the user allows access in the browser
+// (opened by Services.signIn), which then comes back to the app by itself
+// (src/syncSettings.ts signIn).
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -33,42 +34,14 @@ Popup {
             wrapMode: Text.Wrap
             color: Theme.text
             lineHeight: 1.2
-            text: "On Google's page, sign in, enter this code and allow Inkleaf to keep its files in your Drive. Inkleaf only sees its own hidden folder there, not your other files."
+            text: "Continue in your browser: choose your Google account and allow Inkleaf to keep its files in your Drive. Inkleaf only sees its own hidden folder there, not your other files."
         }
-        Rectangle { antialiasing: true;
+        UiButton {
             Layout.alignment: Qt.AlignHCenter
-            implicitWidth: codeText.implicitWidth + 36
-            implicitHeight: codeText.implicitHeight + 20
-            radius: 12
-            color: Theme.surface2
-            TextEdit {
-                id: codeText
-                anchors.centerIn: parent
-                text: root.code ? root.code.userCode : ""
-                readOnly: true
-                selectByMouse: true
-                color: Theme.text
-                font.family: "monospace"
-                font.pixelSize: 28
-                font.weight: Font.Bold
-                font.letterSpacing: 3.4
-            }
+            text: "Open the sign-in page again"
+            onClicked: Qt.openUrlExternally(root.code.verificationUrl)
         }
-        RowLayout {
-            Layout.alignment: Qt.AlignHCenter
-            spacing: 8
-            UiButton { text: "Open Google's page"; kind: "primary"; iconName: "download"; onClicked: Qt.openUrlExternally(root.code.verificationUrl) }
-            UiButton {
-                text: "Copy code"
-                onClicked: {
-                    codeText.selectAll()
-                    codeText.copy()
-                    codeText.deselect()
-                    root.services.notify("Code copied", false)
-                }
-            }
-        }
-        Label { text: "Waiting for you to allow access…"; font.pixelSize: 12; color: Theme.muted }
+        Label { Layout.alignment: Qt.AlignHCenter; text: "Waiting for you to allow access…"; font.pixelSize: 12; color: Theme.muted }
         RowLayout {
             Layout.fillWidth: true
             Item { Layout.fillWidth: true }

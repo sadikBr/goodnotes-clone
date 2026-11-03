@@ -57,12 +57,14 @@ export function startSync(h: SyncHooks) {
 
 const defaultDevice = () => (isAndroid ? "Tablet" : navigator.userAgent.includes("Windows") ? "Windows PC" : "Computer");
 
-/** The "enter this code" dialog; resolves when signed in (or cancelled). */
+/** Signing in in the browser; resolves when signed in (or cancelled). */
 async function signIn(): Promise<void> {
   const code = await api.syncSignInStart();
-  const codeEl = h("div", { class: "signin-code" }, code.userCode);
-  const open = h("button", { class: "btn primary" }, icon("download"), "Open Google's page");
-  const copy = h("button", { class: "btn" }, "Copy code");
+  const openPage = async () => {
+    const { openUrl } = await import("@tauri-apps/plugin-opener");
+    await openUrl(code.verificationUrl).catch(reportError);
+  };
+  const again = h("button", { class: "btn" }, "Open the sign-in page again");
   const cancel = h("button", { class: "btn ghost" }, "Cancel");
   const waiting = h("p", { class: "set-help" }, "Waiting for you to allow access…");
   const backdrop = h(
@@ -72,20 +74,16 @@ async function signIn(): Promise<void> {
       "div",
       { class: "modal signin-modal", role: "dialog", "aria-modal": "true", "aria-label": "Sign in to Google Drive" },
       h("h2", {}, "Sign in to Google Drive"),
-      h("p", {}, "On Google's page, sign in, enter this code and allow Inkleaf to keep its files in your Drive. Inkleaf only sees its own hidden folder there, not your other files."),
-      codeEl,
-      h("div", { class: "signin-actions" }, open, copy),
+      h("p", {}, "Continue in your browser: choose your Google account and allow Inkleaf to keep its files in your Drive. Inkleaf only sees its own hidden folder there, not your other files."),
+      h("div", { class: "signin-actions" }, again),
       waiting,
       h("div", { class: "signin-foot" }, cancel),
     ),
   );
   document.body.append(backdrop);
   const close = () => backdrop.remove();
-  open.addEventListener("click", async () => {
-    const { openUrl } = await import("@tauri-apps/plugin-opener");
-    await openUrl(code.verificationUrl).catch(reportError);
-  });
-  copy.addEventListener("click", () => void navigator.clipboard?.writeText(code.userCode).then(() => toast("Code copied")));
+  again.addEventListener("click", () => void openPage());
+  void openPage();
   cancel.addEventListener("click", () => {
     void api.syncSignInCancel();
     close();

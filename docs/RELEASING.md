@@ -68,8 +68,10 @@ and allow "Install unknown apps" for the browser or file manager when asked.
    - Audience: *External*. Then **Publish app** (in "Testing", Google ends
      sign-ins after 7 days and only allows listed test users).
    - Data access: add the scopes `.../auth/drive.appdata`, `openid` and `email`.
-4. **Clients → Create client**, application type **TVs and Limited Input
-   devices**, name *Inkleaf*. Copy the client ID and client secret.
+4. **Clients → Create client**, application type **Desktop app**, name
+   *Inkleaf*. Copy the client ID and client secret. (Not *TVs and Limited
+   Input devices*: Google doesn't allow `drive.appdata` with that kind of
+   sign-in, and Inkleaf signs in through the browser.)
 
 | Where | Name | Value |
 |---|---|---|
@@ -79,7 +81,8 @@ and allow "Install unknown apps" for the browser or file manager when asked.
 Inkleaf asks only for its own hidden app folder in Drive (`drive.appdata`): it
 can't see the user's other files. For a local build with sync, set
 `INKLEAF_GOOGLE_CLIENT_ID` and `INKLEAF_GOOGLE_CLIENT_SECRET` in the
-environment before `npm run tauri build`.
+environment before building (`npm run tauri build`, or the Qt app's CMake
+build, which builds the core).
 
 ## 4. Making a release
 
