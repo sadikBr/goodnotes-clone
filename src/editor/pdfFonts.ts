@@ -14,12 +14,16 @@ const PACKAGES: Record<FontId, string> = {
   "cursive-fr": "playwrite-fr-moderne",
   marker: "shantell-sans",
   neat: "handlee",
+  book: "lora",
+  "cursive-trad": "playwrite-fr-trad",
+  chalk: "schoolbell",
+  quick: "gochi-hand",
 };
 
 /** Presets with a real bold face bundled (others are emboldened, as on screen). */
-const REAL_BOLD = new Set<FontId>(["sans", "playpen", "school", "marker"]);
+const REAL_BOLD = new Set<FontId>(["sans", "book", "playpen", "school", "marker"]);
 /** Presets with a real italic face bundled. */
-const REAL_ITALIC = new Set<FontId>(["sans"]);
+const REAL_ITALIC = new Set<FontId>(["sans", "book"]);
 
 const FILES = import.meta.glob(["../../node_modules/@fontsource/*/files/*-latin-400-*.woff", "../../node_modules/@fontsource/*/files/*-latin-ext-400-*.woff", "../../node_modules/@fontsource/*/files/*-latin-700-*.woff", "../../node_modules/@fontsource/*/files/*-latin-ext-700-*.woff", "../../node_modules/@fontsource/noto-sans-arabic/files/noto-sans-arabic-arabic-*-normal.woff"], {
   query: "?url",
