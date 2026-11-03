@@ -246,6 +246,12 @@ export interface EditorCallbacks {
   close(): void;
 }
 
+/**
+ * Above this many device pixels for the whole page, the editor draws only
+ * the visible part of the page (high zoom on big or HiDPI screens).
+ */
+const FULL_CANVAS_PIXELS = 9_000_000;
+
 export class EditorScreen {
   readonly root = h("div", { class: "editor" });
   private notebook!: Notebook;
@@ -298,7 +304,7 @@ export class EditorScreen {
     viewWidth: () => this.scroller.clientWidth,
     pageOrigin: () => {
       const layer = this.rulerLayer.getBoundingClientRect();
-      const page = this.canvas.getBoundingClientRect();
+      const page = this.pageWrap.getBoundingClientRect();
       return [page.left - layer.left, page.top - layer.top];
     },
   });
@@ -330,6 +336,7 @@ export class EditorScreen {
   private visibleSlots = new Set<number>();
   private observer: IntersectionObserver | null = null;
   private staticZoom = 0;
+  private viewFrame = 0;
   private staticTimer = 0;
   private scrollTimer = 0;
   /** Scrolls we cause ourselves shouldn't change the current page. */
@@ -701,6 +708,11 @@ export class EditorScreen {
 
   /** After scrolling settles, the page in view becomes the current page. */
   private onScroll() {
+    if (this.windowed && !this.viewFrame)
+      this.viewFrame = requestAnimationFrame(() => {
+        this.viewFrame = 0;
+        if (this.root.isConnected) this.followView();
+      });
     if (!this.selectionBar.hidden) this.positionSelectionBar();
     if (this.tool === "laser") this.renderLaser();
     if (this.ruler.visible) this.ruler.layout();
@@ -1911,32 +1923,24 @@ export class EditorScreen {
   private zoomAt(z: number, client: { x: number; y: number }, anchor?: P2) {
     const pagePt = anchor ?? this.point({ clientX: client.x, clientY: client.y });
     this.zoom = Math.max(0.25, Math.min(4, z));
-    this.layout();
-    const r = this.canvas.getBoundingClientRect();
+    this.layout(false);
+    const r = this.pageWrap.getBoundingClientRect();
     this.scroller.scrollLeft += r.left + pagePt[0] * this.zoom - client.x;
     this.scroller.scrollTop += r.top + pagePt[1] * this.zoom - client.y;
+    // Painted once the page is where it will be shown.
+    this.placeCanvas();
   }
 
-  private layout() {
+  /** Sizes the page for the zoom; `paint` false leaves the canvas to the caller (see zoomAt). */
+  private layout(paint = true) {
     if (!this.page) return;
     this.sizeSlots();
     if (this.staticZoom !== this.zoom) this.scheduleStatics();
-    const dpr = window.devicePixelRatio || 1;
     const w = this.page.width * this.zoom;
     const hgt = this.page.height * this.zoom;
-    this.canvas.style.width = `${w}px`;
-    this.canvas.style.height = `${hgt}px`;
     this.pageWrap.style.width = `${w}px`;
     this.pageWrap.style.height = `${hgt}px`;
-    // Cap the backing store so very high zoom levels stay within canvas limits.
-    const scale = Math.min(this.zoom * dpr, 8192 / Math.max(this.page.width, this.page.height));
-    this.overlayRect = null;
-    this.canvas.width = Math.round(this.page.width * scale);
-    this.canvas.height = Math.round(this.page.height * scale);
-    this.cache.width = this.canvas.width;
-    this.cache.height = this.canvas.height;
-    this.rebuildCache();
-    this.draw();
+    if (paint) this.placeCanvas();
     this.updateStatus();
     if (this.editing) this.positionEditor();
     if (this.tool === "laser") this.renderLaser();
@@ -1946,8 +1950,79 @@ export class EditorScreen {
     }
   }
 
-  private get pixelScale() {
-    return this.canvas.width / this.page.width;
+  /** Device pixels per page unit. */
+  private pixelScale = 1;
+  /** The part of the page (page units) the canvas covers: all of it unless zoomed in far. */
+  private view = { x: 0, y: 0, w: 1, h: 1 };
+  private windowed = false;
+
+  /** Chooses what part of the page the canvas covers, then sizes and paints it. */
+  private placeCanvas() {
+    const full = this.zoom * (window.devicePixelRatio || 1);
+    if (this.page.width * this.page.height * full * full <= FULL_CANVAS_PIXELS) {
+      this.view = { x: 0, y: 0, w: this.page.width, h: this.page.height };
+      this.windowed = false;
+    } else {
+      // Zoomed in far: draw only the part of the page in view (plus a margin),
+      // so each repaint touches a screenful of pixels, not the whole page.
+      this.view = this.visibleWindow();
+      this.windowed = true;
+    }
+    this.sizeCanvas(Math.min(full, 8192 / Math.max(this.view.w, this.view.h)));
+  }
+
+  /** Sizes and places the canvas over `this.view`, then repaints it. */
+  private sizeCanvas(scale: number) {
+    const v = this.view;
+    this.pixelScale = scale;
+    Object.assign(this.canvas.style, { width: `${v.w * this.zoom}px`, height: `${v.h * this.zoom}px`, left: `${v.x * this.zoom}px`, top: `${v.y * this.zoom}px` });
+    this.overlayRect = null;
+    this.canvas.width = Math.max(1, Math.round(v.w * scale));
+    this.canvas.height = Math.max(1, Math.round(v.h * scale));
+    this.cache.width = this.canvas.width;
+    this.cache.height = this.canvas.height;
+    this.rebuildCache();
+    this.draw();
+  }
+
+  /** The visible part of the page, grown by a margin so small scrolls need no repaint. */
+  private visibleWindow() {
+    const page = this.pageWrap.getBoundingClientRect();
+    const sc = this.scroller.getBoundingClientRect();
+    const z = this.zoom;
+    const vw = this.scroller.clientWidth / z;
+    const vh = this.scroller.clientHeight / z;
+    const mx = vw * 0.35;
+    const my = vh * 0.35;
+    const x0 = Math.max(0, (sc.left - page.left) / z - mx);
+    const y0 = Math.max(0, (sc.top - page.top) / z - my);
+    const x1 = Math.min(this.page.width, (sc.left - page.left) / z + vw + mx);
+    const y1 = Math.min(this.page.height, (sc.top - page.top) / z + vh + my);
+    if (x1 <= x0 || y1 <= y0) return { x: 0, y: 0, w: Math.min(this.page.width, vw), h: Math.min(this.page.height, vh) };
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
+
+  /** After scrolling while zoomed in: moves the canvas window if the view left it. */
+  private followView() {
+    if (!this.windowed || !this.page || this.gesture || this.editing) return;
+    const page = this.pageWrap.getBoundingClientRect();
+    const sc = this.scroller.getBoundingClientRect();
+    const z = this.zoom;
+    const v = this.view;
+    const x0 = Math.max(0, (sc.left - page.left) / z);
+    const y0 = Math.max(0, (sc.top - page.top) / z);
+    const x1 = Math.min(this.page.width, (sc.left - page.left) / z + this.scroller.clientWidth / z);
+    const y1 = Math.min(this.page.height, (sc.top - page.top) / z + this.scroller.clientHeight / z);
+    if (x1 <= x0 || y1 <= y0) return; // the page is out of sight
+    const eps = 0.5;
+    if (x0 >= v.x - eps && y0 >= v.y - eps && x1 <= v.x + v.w + eps && y1 <= v.y + v.h + eps) return;
+    this.placeCanvas();
+  }
+
+  /** Page units to the canvas's device pixels. */
+  private pageTransform(c: CanvasRenderingContext2D) {
+    const k = this.pixelScale;
+    c.setTransform(k, 0, 0, k, -this.view.x * k, -this.view.y * k);
   }
 
   /** Re-renders the committed content (paper + elements) into the cache. */
@@ -1956,7 +2031,7 @@ export class EditorScreen {
     const c = this.cache.getContext("2d")!;
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.clearRect(0, 0, this.cache.width, this.cache.height);
-    c.setTransform(this.pixelScale, 0, 0, this.pixelScale, 0, 0);
+    this.pageTransform(c);
     drawTemplate(c, this.page.template, this.page.width, this.page.height, this.page.paperColor);
     const page = this.page;
     const bg = this.background(page, this.pixelScale, () => {
@@ -2017,11 +2092,12 @@ export class EditorScreen {
     if (this.tool === "eraser" && this.cursor) add(this.cursor[0], this.cursor[1], this.widths.eraser / 2 + 3 / this.zoom);
     const k = this.pixelScale;
     if (x1 < x0) return { x0: 0, y0: 0, x1: 0, y1: 0 }; // nothing over the page
+    const ox = this.view.x, oy = this.view.y;
     return {
-      x0: Math.max(0, Math.floor(x0 * k)),
-      y0: Math.max(0, Math.floor(y0 * k)),
-      x1: Math.min(this.canvas.width, Math.ceil(x1 * k)),
-      y1: Math.min(this.canvas.height, Math.ceil(y1 * k)),
+      x0: Math.max(0, Math.floor((x0 - ox) * k)),
+      y0: Math.max(0, Math.floor((y0 - oy) * k)),
+      x1: Math.min(this.canvas.width, Math.ceil((x1 - ox) * k)),
+      y1: Math.min(this.canvas.height, Math.ceil((y1 - oy) * k)),
     };
   }
 
@@ -2045,7 +2121,7 @@ export class EditorScreen {
     while (g.points.length - (g.frozen ?? 0) > CHUNK + KEEP) {
       const from = g.frozen ?? 0;
       const to = g.points.length - KEEP;
-      c.setTransform(this.pixelScale, 0, 0, this.pixelScale, 0, 0);
+      this.pageTransform(c);
       drawStroke(
         c,
         { id: "live", z: 0, kind: "stroke", tool: "pen", style: this.penStyle, color: this.colors.pen, width: this.widths.pen, points: smooth.slice(from, to + 1) },
@@ -2079,14 +2155,14 @@ export class EditorScreen {
       ctx.clip();
       ctx.clearRect(x0, y0, x1 - x0, y1 - y0);
       ctx.drawImage(this.cache, x0, y0, x1 - x0, y1 - y0, x0, y0, x1 - x0, y1 - y0);
-      ctx.setTransform(this.pixelScale, 0, 0, this.pixelScale, 0, 0);
+      this.pageTransform(ctx);
       this.drawOverlay(ctx);
       ctx.restore();
       return;
     }
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     ctx.drawImage(this.cache, 0, 0);
-    ctx.setTransform(this.pixelScale, 0, 0, this.pixelScale, 0, 0);
+    this.pageTransform(ctx);
     this.drawOverlay(ctx);
   }
 
@@ -2163,7 +2239,7 @@ export class EditorScreen {
     const layer = this.laserLayer;
     const area = layer.parentElement!.getBoundingClientRect();
     const view = this.scroller.getBoundingClientRect();
-    const page = this.canvas.getBoundingClientRect();
+    const page = this.pageWrap.getBoundingClientRect();
     // Cover only the visible part of the scroller (scrollbars excluded).
     const w = this.scroller.clientWidth;
     const hgt = this.scroller.clientHeight;
@@ -2218,7 +2294,7 @@ export class EditorScreen {
       return;
     }
     const area = dot.parentElement!.getBoundingClientRect();
-    const page = this.canvas.getBoundingClientRect();
+    const page = this.pageWrap.getBoundingClientRect();
     const z = page.width / this.page.width;
     dot.hidden = false;
     dot.style.setProperty("--laser", this.colors.laser);
@@ -2366,7 +2442,7 @@ export class EditorScreen {
   }
 
   private point(e: { clientX: number; clientY: number }): P2 {
-    const r = this.canvas.getBoundingClientRect();
+    const r = this.pageWrap.getBoundingClientRect();
     return [(e.clientX - r.left) / this.zoom, (e.clientY - r.top) / this.zoom];
   }
 

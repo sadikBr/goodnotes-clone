@@ -1414,6 +1414,9 @@ kbd {
   inset: 0;
 }
 .page-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
   display: block;
   touch-action: none;
   cursor: crosshair;
