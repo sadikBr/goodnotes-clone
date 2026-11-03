@@ -1,7 +1,6 @@
 // The app window: the library, or a notebook open in the editor.
 import QtQuick
 import QtQuick.Controls
-import Qt.labs.settings
 import Inkleaf
 
 ApplicationWindow {
@@ -18,7 +17,7 @@ ApplicationWindow {
     property string openNotebook: ""
     property string openTitle: ""
 
-    Settings {
+    Prefs {
         id: prefs
         category: "app"
         property bool dark: false

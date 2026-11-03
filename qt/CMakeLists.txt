@@ -48,6 +48,15 @@ qt_add_executable(inkleaf
 
 # Theme is a singleton (must be set before the module is declared).
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+
+# Prefs.qml wraps Settings from QtCore (Qt 6.5+) or Qt.labs.settings (6.4).
+if(Qt6_VERSION VERSION_GREATER_EQUAL 6.5)
+  set(INKLEAF_SETTINGS_IMPORT QtCore)
+else()
+  set(INKLEAF_SETTINGS_IMPORT Qt.labs.settings)
+endif()
+configure_file(qml/Prefs.qml.in ${CMAKE_CURRENT_BINARY_DIR}/gen/Prefs.qml @ONLY)
+set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen/Prefs.qml PROPERTIES QT_RESOURCE_ALIAS qml/Prefs.qml)
 qt_add_qml_module(inkleaf
   URI Inkleaf
   VERSION 1.0
@@ -60,6 +69,7 @@ qt_add_qml_module(inkleaf
     qml/IconButton.qml
     qml/Icon.qml
     qml/IconData.js
+    ${CMAKE_CURRENT_BINARY_DIR}/gen/Prefs.qml
   RESOURCES
     assets/icon.svg
     assets/fonts/inter-latin-400-normal.woff

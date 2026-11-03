@@ -4,7 +4,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import Qt.labs.settings
 import Inkleaf
 
 Rectangle {
@@ -14,7 +13,7 @@ Rectangle {
     property string title
     signal back()
 
-    Settings {
+    Prefs {
         id: toolPrefs
         category: "tools"
         property string tool: "pen"

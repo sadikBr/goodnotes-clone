@@ -13,11 +13,13 @@ int main(int argc, char* argv[]) {
   fmt.setSamples(4);
   QSurfaceFormat::setDefaultFormat(fmt);
 
-  QGuiApplication app(argc, argv);
+  // Set before the application exists, so the desktop portal is told the
+  // app's id once, at start-up.
   QGuiApplication::setApplicationName("Inkleaf");
   QGuiApplication::setOrganizationName("Inkleaf");
   QGuiApplication::setApplicationVersion(QStringLiteral(INKLEAF_VERSION));
   QGuiApplication::setDesktopFileName("inkleaf");
+  QGuiApplication app(argc, argv);
   QGuiApplication::setWindowIcon(QIcon(":/qt/qml/Inkleaf/assets/icon.svg"));
 
   for (const char* f : {"inter-latin-400-normal.woff", "inter-latin-600-normal.woff", "inter-latin-700-normal.woff", "inter-latin-ext-400-normal.woff"})
