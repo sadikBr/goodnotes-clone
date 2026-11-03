@@ -256,6 +256,9 @@ const FULL_CANVAS_PIXELS = 9_000_000;
 /** A tablet in portrait or a small window: the page sidebar slides over the page. */
 const narrowScreen = () => window.matchMedia("(max-width: 900px)").matches;
 
+/** How far (screen pixels) the ink may trail the pen tip; see the lazy pen in onMove. */
+const LAZY_PEN = 1.1;
+
 /** Lesson outlines the teacher wrote (JSON Outline[]). */
 const OUTLINES_KEY = "inkleaf-daftar-outlines";
 
@@ -2847,8 +2850,21 @@ export class EditorScreen {
         }
         for (const s of samples) {
           let [x, y] = this.point(s);
-          if (g.ruler) [x, y] = Ruler.project(g.ruler.edge, [x, y], g.ruler.offset);
           const last = g.points[g.points.length - 1];
+          if (g.ruler) [x, y] = Ruler.project(g.ruler.edge, [x, y], g.ruler.offset);
+          else {
+            // Lazy pen: the ink trails the pen tip by at most about a screen
+            // pixel and moves only once the tip is further away. Tablets on
+            // Linux report whole pixels and every pen trembles a little; this
+            // takes out that staircase and tremor (finer than a hand can
+            // aim) while the line still goes exactly where you write. It
+            // applies at every smoothing level, including Off.
+            const lazy = LAZY_PEN / this.zoom;
+            const d = Math.hypot(x - last[0], y - last[1]);
+            if (d <= lazy) continue;
+            x = last[0] + ((x - last[0]) * (d - lazy)) / d;
+            y = last[1] + ((y - last[1]) * (d - lazy)) / d;
+          }
           if (Math.hypot(x - last[0], y - last[1]) < 0.4 / this.zoom) continue;
           g.points.push([x, y, this.inkPressure(g.ink ?? null, x, y, s)]);
           g.times.push(s.timeStamp);

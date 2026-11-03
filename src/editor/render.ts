@@ -203,6 +203,25 @@ function flatEndFillers(ctx: CanvasRenderingContext2D, pts: [number, number][], 
   piece(pts[pts.length - 1], pts[pts.length - 2]);
 }
 
+/**
+ * A tap (all points within a fraction of the line width): a round dot as
+ * wide as the line, centred where the pen touched. The outline of a single
+ * point would only be a speck.
+ */
+function tapDot(el: StrokeEl): { x: number; y: number; r: number } | null {
+  const pts = el.points;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const [x, y] of pts) {
+    x0 = Math.min(x0, x);
+    y0 = Math.min(y0, y);
+    x1 = Math.max(x1, x);
+    y1 = Math.max(y1, y);
+  }
+  if (Math.max(x1 - x0, y1 - y0) > el.width * 0.6) return null;
+  const k = el.style === "brush" ? 0.6 : el.style === "ballpoint" || el.style === "pencil" ? 0.42 : 0.5;
+  return { x: (x0 + x1) / 2, y: (y0 + y1) / 2, r: Math.max(0.6, el.width * k) };
+}
+
 export function drawStroke(ctx: CanvasRenderingContext2D, el: StrokeEl, live = false, part?: { first: boolean; last: boolean }) {
   const pts = el.points;
   if (pts.length === 0) return;
@@ -230,6 +249,15 @@ export function drawStroke(ctx: CanvasRenderingContext2D, el: StrokeEl, live = f
     return;
   }
   const style = el.style ?? "fountain";
+  const dot = tapDot(el);
+  if (dot && style === "calligraphy") {
+    ctx.fillStyle = el.color;
+    ctx.beginPath();
+    ctx.arc(dot.x, dot.y, dot.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
   if (style === "calligraphy") {
     drawCalligraphy(ctx, el);
     ctx.restore();
@@ -237,7 +265,8 @@ export function drawStroke(ctx: CanvasRenderingContext2D, el: StrokeEl, live = f
   }
   // Every other pen is one smooth filled outline (no beads or steps).
   ctx.beginPath();
-  for (const outline of strokeOutline(pts, style, el.width, !live, part, el.smooth)) outlinePath(ctx, outline);
+  if (dot) ctx.arc(dot.x, dot.y, dot.r, 0, Math.PI * 2);
+  else for (const outline of strokeOutline(pts, style, el.width, !live, part, el.smooth)) outlinePath(ctx, outline);
   if (style === "pencil") {
     const avg = pts.reduce((s, p) => s + p[2], 0) / pts.length;
     ctx.fillStyle = el.color; // what vector export uses
