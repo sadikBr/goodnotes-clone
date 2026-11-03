@@ -109,7 +109,7 @@ Popup {
             Image {
                 anchors.fill: parent
                 sourceSize: Qt.size(330, Math.max(1, Math.round(parent.height)))
-                source: "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="330" height="' + Math.max(1, Math.round(parent.height)) + '"><defs><radialGradient id="g" gradientUnits="userSpaceOnUse" cx="99" cy="' + Math.round(0.2 * parent.height) + '" r="' + Math.round(0.8 * parent.height) + '"><stop offset="0" stop-color="' + Theme.accent + '" stop-opacity="0.10"/><stop offset="0.6" stop-color="' + Theme.accent + '" stop-opacity="0"/></radialGradient></defs><rect width="330" height="' + Math.max(1, Math.round(parent.height)) + '" fill="url(#g)"/></svg>')
+                source: !root.visible || !root.aside || parent.height < 10 ? "" : "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="330" height="' + Math.max(1, Math.round(parent.height)) + '"><defs><radialGradient id="g" gradientUnits="userSpaceOnUse" cx="99" cy="' + Math.round(0.2 * parent.height) + '" r="' + Math.round(0.8 * parent.height) + '"><stop offset="0" stop-color="' + Theme.accent + '" stop-opacity="0.10"/><stop offset="0.6" stop-color="' + Theme.accent + '" stop-opacity="0"/></radialGradient></defs><rect width="330" height="' + Math.max(1, Math.round(parent.height)) + '" fill="url(#g)"/></svg>')
             }
             Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Theme.border }
             Loader { anchors.centerIn: parent; sourceComponent: root.aside; active: root.visible && root.aside !== null }
