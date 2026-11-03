@@ -35,6 +35,16 @@ class InkCanvas : public QQuickItem {
   Q_PROPERTY(qreal eraserWidth READ eraserWidth WRITE setEraserWidth NOTIFY eraserWidthChanged)
   Q_PROPERTY(qreal smoothing READ smoothing WRITE setSmoothing NOTIFY smoothingChanged)
   Q_PROPERTY(bool penOnly READ penOnly WRITE setPenOnly NOTIFY penOnlyChanged)
+  // Settings screen: "light" | "normal" | "firm" (how hard to press for a full line).
+  Q_PROPERTY(QString pressureCurve MEMBER m_pressureCurve NOTIFY settingsChanged)
+  // The pen's eraser end erases.
+  Q_PROPERTY(bool eraserEnd MEMBER m_eraserEndOn NOTIFY settingsChanged)
+  // What the pen's side button does while held: "eraser" | "lasso" | "none".
+  Q_PROPERTY(QString sideButton MEMBER m_sideButton NOTIFY settingsChanged)
+  // Touches just after pen activity (a resting hand) are ignored.
+  Q_PROPERTY(bool palmRejection MEMBER m_palmRejection NOTIFY settingsChanged)
+  // The cursor for drawing tools: "cross" | "dot" | "none".
+  Q_PROPERTY(QString penCursor READ penCursor WRITE setPenCursor NOTIFY settingsChanged)
   Q_PROPERTY(qreal zoom READ zoom NOTIFY viewChanged)
   Q_PROPERTY(int pageCount READ pageCount NOTIFY pagesChanged)
   Q_PROPERTY(int currentPage READ currentPage NOTIFY viewChanged)
@@ -66,6 +76,8 @@ public:
   void setSmoothing(qreal s);
   bool penOnly() const { return m_penOnly; }
   void setPenOnly(bool on);
+  QString penCursor() const { return m_penCursor; }
+  void setPenCursor(const QString& c);
   qreal zoom() const { return m_zoom; }
   int pageCount() const { return int(m_pages.size()); }
   int currentPage() const;
@@ -93,6 +105,7 @@ signals:
   void eraserWidthChanged();
   void smoothingChanged();
   void penOnlyChanged();
+  void settingsChanged();
   void viewChanged();
   void pagesChanged();
   void historyChanged();
@@ -153,7 +166,12 @@ private:
     std::vector<Stroke> erased;
     QPointF lastScreen;
     int pointerId = 0;
+    bool touch = false;  // drawn with a finger (a palm, if the pen comes down)
   };
+  /// Stylus pressure through the chosen curve (Light makes light touches bolder).
+  float curved(qreal pressure) const;
+  /// The cursor for the current tool.
+  void updateCursor();
 
   void loadNotebook();
   void refresh();
@@ -182,6 +200,12 @@ private:
   qreal m_penWidth = 3, m_hlWidth = 18, m_eraserWidth = 14;
   qreal m_smoothing = ink::kSmoothNormal;
   bool m_penOnly = false;
+  QString m_pressureCurve = "normal";
+  bool m_eraserEndOn = true;
+  QString m_sideButton = "eraser";
+  bool m_palmRejection = true;
+  QString m_penCursor = "cross";
+  double m_lastPenMs = -1e9;
 
   std::vector<Page> m_pages;
   qreal m_zoom = 1;

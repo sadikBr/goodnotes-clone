@@ -9,7 +9,12 @@ Rectangle {
     property var options: []
     property var value
     signal picked(var value)
-    implicitWidth: row.implicitWidth + 6
+    // The natural width (from the labels, not the stretched segments: no layout loop).
+    implicitWidth: {
+        let w = 6 + 2 * Math.max(0, options.length - 1)
+        for (let i = 0; i < row.children.length; i++) w += row.children[i].implicitWidth || 0
+        return w
+    }
     implicitHeight: 34
     radius: 10
     color: Theme.surface3

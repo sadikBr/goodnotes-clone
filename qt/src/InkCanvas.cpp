@@ -1,6 +1,8 @@
 #include "InkCanvas.h"
 
 #include <QCursor>
+#include <QPainter>
+#include <QPixmap>
 #include <QJsonDocument>
 #include <QMatrix4x4>
 #include <QQuickWindow>
@@ -108,7 +110,7 @@ InkCanvas::InkCanvas(QQuickItem* parent) : QQuickItem(parent) {
   setAcceptedMouseButtons(Qt::AllButtons);
   setAcceptTouchEvents(true);
   setAcceptHoverEvents(true);
-  setCursor(Qt::CrossCursor);
+  updateCursor();
   m_saveTimer.setSingleShot(true);
   m_saveTimer.setInterval(600);
   connect(&m_saveTimer, &QTimer::timeout, this, &InkCanvas::saveNow);
@@ -137,9 +139,40 @@ void InkCanvas::setNotebookId(const QString& id) {
 void InkCanvas::setTool(const QString& t) {
   if (t == m_tool) return;
   m_tool = t;
-  setCursor(t == "eraser" ? Qt::BlankCursor : Qt::CrossCursor);
+  updateCursor();
   emit toolChanged();
   refresh();
+}
+
+void InkCanvas::setPenCursor(const QString& c) {
+  if (c == m_penCursor) return;
+  m_penCursor = c;
+  updateCursor();
+  emit settingsChanged();
+}
+
+void InkCanvas::updateCursor() {
+  // The eraser draws its own ring.
+  if (m_tool == "eraser" || m_penCursor == "none") return setCursor(Qt::BlankCursor);
+  if (m_penCursor == "dot") {
+    static const QCursor dot = [] {
+      QPixmap pm(12, 12);
+      pm.fill(Qt::transparent);
+      QPainter p(&pm);
+      p.setRenderHint(QPainter::Antialiasing);
+      p.setPen(QPen(QColor(255, 255, 255, 230), 1.5));
+      p.setBrush(QColor(20, 20, 20));
+      p.drawEllipse(QPointF(6, 6), 3, 3);
+      return QCursor(pm, 6, 6);
+    }();
+    return setCursor(dot);
+  }
+  setCursor(Qt::CrossCursor);
+}
+
+float InkCanvas::curved(qreal pressure) const {
+  const qreal gamma = m_pressureCurve == "light" ? 0.6 : m_pressureCurve == "firm" ? 1.6 : 1.0;
+  return float(std::pow(std::clamp<qreal>(pressure, 0, 1), gamma));
 }
 void InkCanvas::setPenStyle(const QString& s) {
   const ink::Pen p = ink::penFromName(s, false);
@@ -556,13 +589,17 @@ bool InkCanvas::eventFilter(QObject* watched, QEvent* event) {
   auto* te = static_cast<QTabletEvent*>(event);
   const QPointF local = mapFromScene(te->position());
   const bool inside = contains(local);
-  const bool eraserEnd = te->pointerType() == QPointingDevice::PointerType::Eraser;
-  // The side (barrel) button erases while held.
-  const bool sideButton = te->buttons() & (Qt::RightButton | Qt::MiddleButton);
+  m_lastPenMs = nowMs();
+  // The eraser end and the side (barrel) button erase, when the settings say so.
+  // (The side button as a lasso comes with the lasso tool.)
+  const bool eraserEnd = m_eraserEndOn && te->pointerType() == QPointingDevice::PointerType::Eraser;
+  const bool sideButton = m_sideButton == "eraser" && (te->buttons() & (Qt::RightButton | Qt::MiddleButton));
   if (type == QEvent::TabletPress) {
     if (!inside || !isVisible()) return false;
     emit penUsed();
-    begin(local, float(te->pressure()), nowMs(), true, eraserEnd || sideButton);
+    // The pen coming down while a resting palm "writes": drop the palm's stroke.
+    if (m_g.touch && m_palmRejection) m_g = Gesture();
+    begin(local, curved(te->pressure()), nowMs(), true, eraserEnd || sideButton);
     te->accept();
     return true;
   }
@@ -574,7 +611,7 @@ bool InkCanvas::eventFilter(QObject* watched, QEvent* event) {
       return false;
     }
     m_hover = local;
-    extend(local, float(te->pressure()), nowMs(), true);
+    extend(local, curved(te->pressure()), nowMs(), true);
     te->accept();
     return true;
   }
@@ -616,7 +653,7 @@ void InkCanvas::mouseReleaseEvent(QMouseEvent* e) {
   if (e->device() && e->device()->type() == QInputDevice::DeviceType::Stylus) return e->ignore();
   if (m_g.kind == Gesture::Pan) {
     m_g = Gesture();
-    setCursor(m_tool == "eraser" ? Qt::BlankCursor : Qt::CrossCursor);
+    updateCursor();
     return;
   }
   end();
@@ -671,14 +708,25 @@ void InkCanvas::touchEvent(QTouchEvent* e) {
   const QEventPoint& p = pts[0];
   const bool drawWithTouch = !m_penOnly;
   if (p.state() == QEventPoint::Pressed) {
-    if (drawWithTouch) begin(p.position(), 0.5f, nowMs(), false, false);
+    // A hand resting on the screen just after the pen: ignored.
+    if (m_palmRejection && nowMs() - m_lastPenMs < 1500) {
+      m_g = Gesture();
+      e->accept();
+      return;
+    }
+    if (drawWithTouch) {
+      begin(p.position(), 0.5f, nowMs(), false, false);
+      m_g.touch = true;
+    }
     else {
       m_g = Gesture();
       m_g.kind = Gesture::Pan;
       m_g.lastScreen = p.position();
     }
   } else if (p.state() == QEventPoint::Updated) {
-    if (m_g.kind == Gesture::Pan) {
+    if (m_g.kind == Gesture::None) {
+      // Ignored (a palm), or the stroke was dropped.
+    } else if (m_g.kind == Gesture::Pan) {
       m_scroll -= p.position() - m_g.lastScreen;
       m_g.lastScreen = p.position();
       clampScroll();

@@ -49,7 +49,7 @@ qt_add_executable(inkleaf
 )
 
 # Theme is a singleton (must be set before the module is declared).
-set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(qml/Theme.qml qml/AppSettings.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 # Prefs.qml wraps Settings from QtCore (Qt 6.5+) or Qt.labs.settings (6.4).
 if(Qt6_VERSION VERSION_GREATER_EQUAL 6.5)
@@ -66,6 +66,8 @@ qt_add_qml_module(inkleaf
   QML_FILES
     qml/Main.qml
     qml/Theme.qml
+    qml/AppSettings.qml
+    qml/SettingsDialog.qml
     qml/Library.qml
     qml/Editor.qml
     qml/IconButton.qml

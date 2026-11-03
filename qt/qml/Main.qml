@@ -17,12 +17,8 @@ ApplicationWindow {
     property string openNotebook: ""
     property string openTitle: ""
 
-    Prefs {
-        id: prefs
-        category: "app"
-        property bool dark: false
-    }
-    Component.onCompleted: Theme.dark = prefs.dark
+    Component.onCompleted: AppSettings.dark  // applies the theme
+    SettingsDialog { id: settings }
 
     function open(id, title) {
         openTitle = title
@@ -43,12 +39,9 @@ ApplicationWindow {
         id: libraryPage
         Library {
             onOpenRequested: (id, title) => win.open(id, title)
-            onToggleDark: {
-                Theme.dark = !Theme.dark
-                prefs.dark = Theme.dark
-            }
+            onToggleDark: AppSettings.store.theme = Theme.dark ? "light" : "dark"
             onNotify: (message, error) => toast.show(message, error)
-            onSettingsRequested: toast.show("Settings are coming to the native app next.", false)
+            onSettingsRequested: settings.open()
         }
     }
     Component {
@@ -57,6 +50,7 @@ ApplicationWindow {
             notebookId: win.openNotebook
             title: win.openTitle
             onBack: win.closeNotebook()
+            onSettingsRequested: settings.open()
         }
     }
 }
