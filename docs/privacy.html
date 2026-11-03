@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inkleaf privacy policy</title>
+<meta name="description" content="How Inkleaf handles your data, including Google Drive sync.">
+<link rel="icon" href="icon.png">
+<style>
+  :root { --bg: #f6f3ee; --text: #1d1f23; --muted: #6b665d; --accent: #1f7a4a; --card: #ffffff; --border: #e5e0d6; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #17181b; --text: #ecebe6; --muted: #a19c91; --accent: #4fbf86; --card: #202226; --border: #2f3237; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+  header img { width: 44px; height: 44px; border-radius: 10px; }
+  header > a { color: inherit; text-decoration: none; font-weight: 700; font-size: 20px; }
+  nav { margin-left: auto; display: flex; gap: 16px; font-size: 14px; }
+  nav a { color: var(--muted); font-weight: 500; }
+  h1 { font-size: 30px; line-height: 1.2; margin: 8px 0 12px; }
+  h2 { font-size: 20px; margin: 28px 0 8px; }
+  a { color: var(--accent); }
+  code { font-size: 0.9em; }
+  .muted { color: var(--muted); }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; margin: 16px 0; }
+  ul { padding-left: 22px; }
+  footer { margin-top: 40px; font-size: 14px; color: var(--muted); }
+  @media (max-width: 560px) { nav { display: none; } }
+</style>
+</head>
+<body>
+<main>
+<header><img src="icon.png" alt=""><a href="./">Inkleaf</a>
+<nav><a href="./">Home</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a></nav></header>
+<h1>Privacy policy</h1>
+<p class="muted">Last updated: 3 November 2026</p>
+<p>Inkleaf is a note-taking app for Windows, Linux and Android. This policy explains what data it handles and where that data goes. In short: your notes stay on your devices and, if you choose, in your own Google Drive. Inkleaf has no servers and collects nothing about you.</p>
+
+<h2>Data stored on your device</h2>
+<p>Your notebooks, pages, handwriting, typed text, imported PDFs and pictures, folders and settings are stored in a database on your device. If you use a daftar annossous, the details you enter (for example school, classes, timetable, holidays and student lists) are stored there too. Inkleaf does not send any of this anywhere unless you turn on one of the features below.</p>
+
+<h2>Google Drive sync (optional)</h2>
+<p>If you sign in to Google in Settings → Sync, Inkleaf uses your Google account to keep your notebooks the same on your devices. It asks Google for these permissions:</p>
+<ul>
+<li><strong>Its own app folder in your Google Drive</strong> (<code>drive.appdata</code>): Inkleaf stores copies of your notebooks, folders and imported PDFs in a hidden folder that only Inkleaf can access. It <strong>cannot see, open or change any of your other Drive files</strong>.</li>
+<li><strong>Your email address</strong> (<code>openid</code>, <code>email</code>): shown in Settings so you know which account you're signed in with.</li>
+</ul>
+<p>The data goes directly between your device and Google. Inkleaf has no server, and its developers never receive your notes, your email address or your Google sign-in. The access Google grants is stored only on your device. Signing out in Settings → Sync removes it from the device and asks Google to revoke it; you can also remove Inkleaf's access at any time at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>. To delete the synced copies, delete Inkleaf's hidden app data in Google Drive (Drive settings → Manage apps → Inkleaf → Delete hidden app data).</p>
+<p>Inkleaf's use and transfer of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements. Data from Google is used only to sync your notebooks between your own devices. It is not used for advertising, not sold, not shared with anyone, not used to train AI models, and not read by people.</p>
+
+<h2>Backups and exports</h2>
+<p>Backups and exports are files Inkleaf writes where you choose (for example a USB key, or a folder another app syncs). What happens to them afterwards depends on where you put them.</p>
+
+<h2>Updates</h2>
+<p>The installed app checks GitHub (github.com), where Inkleaf's releases are published, for new versions. That request carries only what any download from GitHub carries (such as your IP address, which GitHub receives); Inkleaf adds no personal data. See <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>.</p>
+
+<h2>No tracking</h2>
+<p>Inkleaf contains no analytics, advertising or tracking of any kind.</p>
+
+<h2>Students' information</h2>
+<p>Teachers may enter class lists in a daftar. That information stays on the teacher's devices and, with sync, in the teacher's own Google Drive. Inkleaf's developers never receive it.</p>
+
+<h2>Changes and contact</h2>
+<p>If this policy changes, the new version will be published on this page with a new date. Questions: please open an issue at <a href="https://github.com/sadikBr/goodnotes-clone/issues">github.com/sadikBr/goodnotes-clone/issues</a>.</p>
+<footer>Inkleaf · <a href="https://github.com/sadikBr/goodnotes-clone">Source code</a> · <a href="https://github.com/sadikBr/goodnotes-clone/issues">Contact</a> · <a href="privacy.html">Privacy policy</a> · <a href="terms.html">Terms of use</a></footer>
+</main>
+</body>
+</html>
