@@ -10893,11 +10893,12 @@ var Inkleaf = (() => {
         var pad2 = 14 * MM2;
         var b0 = r2.shape.box;
         var box = { x: b0.x - pad2, y: b0.y - pad2, w: b0.w + 2 * pad2, h: b0.h + 2 * pad2 };
-        var style = "<style>.ruler-body{fill:#f8fafc;fill-opacity:0.62;stroke:#0f172a;stroke-opacity:0.35;stroke-width:0.8}.ticks{stroke:#0f172a;stroke-opacity:0.7;stroke-width:0.35;fill:none}text{fill:#0f172a;fill-opacity:0.75;font-family:Inter;font-weight:600;font-size:7px;text-anchor:middle}text.inner{font-size:5.5px;fill-opacity:0.5}.cutout{fill:none;stroke:#0f172a;stroke-opacity:0.25;stroke-width:0.8}.arm{stroke:#db2777;stroke-width:1.2;fill:none}.arm-arc{stroke:#db2777;stroke-width:1;fill:#db2777;fill-opacity:0.08}</style>";
+        var style = "<style>.ruler-body{fill:#f8fafc;fill-opacity:0.62;stroke:#0f172a;stroke-opacity:0.35;stroke-width:0.8}.ticks{stroke:#0f172a;stroke-opacity:0.7;stroke-width:0.35;fill:none}text{fill:#0f172a;fill-opacity:0.75;font-family:Inter;font-weight:bold;font-size:7px;text-anchor:middle}text.inner{font-size:5.5px;fill-opacity:0.5}.cutout{fill:none;stroke:#0f172a;stroke-opacity:0.25;stroke-width:0.8}.arm{stroke:#db2777;stroke-width:1.2;fill:none}.arm-arc{stroke:#db2777;stroke-width:1;fill:#db2777;fill-opacity:0.08}</style>";
         var svg2 = String(r2.el.innerHTML).replace(/<svg ([^>]*)>/, function(_m, attrs) {
           var a3 = attrs.replace(/class="[^"]*"/, "").replace(/viewBox="[^"]*"/, 'viewBox="'.concat(box.x.toFixed(2), " ").concat(box.y.toFixed(2), " ").concat(box.w.toFixed(2), " ").concat(box.h.toFixed(2), '"'));
           return '<svg xmlns="http://www.w3.org/2000/svg" '.concat(a3, ">").concat(style);
         });
+        svg2 = svg2.replace(/<text class="inner"([^>]*) dy="0\.35em">/g, '<text class="inner"$1 y="1.93">').replace(/<text([^>]*) dy="0\.35em">/g, '<text$1 y="2.45">');
         if (r2.kind === "protractor") {
           var a2 = r2.armEnd(0);
           var b2 = r2.armEnd(1);

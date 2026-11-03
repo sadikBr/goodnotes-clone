@@ -11,7 +11,7 @@ Popup {
     parent: Overlay.overlay
     anchors.centerIn: parent
     width: Math.min(parent.width - 32, 640)
-    height: Math.min(parent.height - 32, 760)
+    height: parent.height - 32
     modal: true
     focus: true
     padding: 0
@@ -133,24 +133,24 @@ Popup {
                 }
                 SettingRow {
                     first: true
-                    visible: !!root.sync && !root.sync.available
+                    visible: !!(!!root.sync && !root.sync.available)
                     title: "Google Drive"; help: "This build of Inkleaf can't sign in to Google (it was built without a Google key)."
                 }
                 SettingRow {
                     first: true
-                    visible: !!root.sync && root.sync.available && !root.sync.signedIn
+                    visible: !!(!!root.sync && root.sync.available && !root.sync.signedIn)
                     title: "Google Drive"; help: "Keep your notebooks the same on your computer and tablet. Each device signs in once; everything syncs by itself."
                     UiButton { text: "Sign in…"; kind: "primary"; onClicked: root.services.signIn() }
                 }
                 SettingRow {
                     first: true
-                    visible: !!root.sync && root.sync.signedIn
+                    visible: !!(!!root.sync && root.sync.signedIn)
                     title: "Google Drive"
                     help: root.sync ? "Signed in as <b>" + root.esc(root.sync.email || "your Google account") + "</b>" + (root.sync.device ? " · this device: " + root.esc(root.sync.device) : "") : ""
                     UiButton { text: "Sign out"; kind: "ghost"; onClicked: root.services.signOut() }
                 }
                 SettingRow {
-                    visible: !!root.sync && root.sync.signedIn
+                    visible: !!(!!root.sync && root.sync.signedIn)
                     title: "Status"
                     help: !root.sync ? "" : root.sync.lastError ? "<font color='" + Theme.danger + "'>" + root.esc(root.sync.lastError) + "</font>" : root.sync.lastSyncAt ? "Last synced " + root.services.relativeTime(root.sync.lastSyncAt) : "Not synced yet"
                     UiButton { text: root.services.syncing ? "Syncing…" : "Sync now"; enabled: !root.services.syncing; onClicked: root.services.syncNow(true) }

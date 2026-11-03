@@ -28,7 +28,11 @@ AbstractButton {
             size: root.iconSize
         }
     }
-    ToolTip.visible: hovered && tip.length > 0
+    ToolTip.visible: !!(!!(hovered && tip.length > 0)) && !tipDismissed
+    // Tooltips go away once clicked (until the pointer leaves), as in the web app.
+    property bool tipDismissed: false
+    onPressedChanged: if (pressed) tipDismissed = true
+    onHoveredChanged: if (!hovered) tipDismissed = false
     ToolTip.delay: 500
     ToolTip.text: tip
 }

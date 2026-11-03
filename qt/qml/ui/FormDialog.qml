@@ -42,6 +42,7 @@ Popup {
         const v = {}
         for (const x of f) v[x.name] = x.value !== undefined ? x.value : (x.type === "swatches" ? (typeof x.colors[0] === "string" ? x.colors[0] : x.colors[0].color) : "")
         values = v
+        previewTitle = v.title || ""
         fields = f
         open()
     }
@@ -94,15 +95,22 @@ Popup {
         // Enter submits from anywhere in the form (e.g. after picking a colour).
         Keys.onReturnPressed: root.submit()
         Keys.onEnterPressed: root.submit()
-        // The side panel (e.g. a cover preview).
+        // The side panel (e.g. a cover preview): .modal-aside, surface-2 with a
+        // faint glow of the accent at the top left.
         Rectangle { antialiasing: true;
             visible: root.aside !== null
             Layout.preferredWidth: 330
             Layout.fillHeight: true
             radius: Theme.radiusXl
             color: Theme.surface2
+            clip: true
             // Square off the inner corners.
             Rectangle { anchors.right: parent.right; width: parent.radius; height: parent.height; color: parent.color }
+            Image {
+                anchors.fill: parent
+                sourceSize: Qt.size(330, Math.max(1, Math.round(parent.height)))
+                source: "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="330" height="' + Math.max(1, Math.round(parent.height)) + '"><defs><radialGradient id="g" gradientUnits="userSpaceOnUse" cx="99" cy="' + Math.round(0.2 * parent.height) + '" r="' + Math.round(0.8 * parent.height) + '"><stop offset="0" stop-color="' + Theme.accent + '" stop-opacity="0.10"/><stop offset="0.6" stop-color="' + Theme.accent + '" stop-opacity="0"/></radialGradient></defs><rect width="330" height="' + Math.max(1, Math.round(parent.height)) + '" fill="url(#g)"/></svg>')
+            }
             Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Theme.border }
             Loader { anchors.centerIn: parent; sourceComponent: root.aside; active: root.visible && root.aside !== null }
         }
@@ -166,7 +174,7 @@ Popup {
                     Layout.topMargin: 8
                     spacing: 8
                     Item { Layout.fillWidth: true }
-                    UiButton { text: "Cancel"; kind: "ghost"; onClicked: root.close() }
+                    UiButton { text: "Cancel"; onClicked: root.close() }
                     UiButton { text: root.okLabel; kind: root.danger ? "danger" : "primary"; onClicked: root.submit() }
                 }
             }
@@ -209,9 +217,14 @@ Popup {
     }
     Component {
         id: coverField
-        Flow {
+        // .cover-designs: tiles at least 76 wide filling the row, 8 apart.
+        Grid {
             id: coversFlow
             readonly property var field: parent.field
+            readonly property int cols: Math.max(1, Math.floor((width + 8) / 84))
+            readonly property real tileW: (width - (cols - 1) * 8) / cols
+            width: parent.width
+            columns: cols
             spacing: 8
             Repeater {
                 model: coversFlow.field.options
@@ -219,35 +232,52 @@ Popup {
                     id: cv
                     required property var modelData
                     readonly property bool on: root.values[coversFlow.field.name] === modelData.value
-                    width: 64
-                    height: 104
+                    width: coversFlow.tileW
+                    height: 90 + 5 + 16 + 11
                     hoverEnabled: true
                     onClicked: root.set(coversFlow.field.name, modelData.value)
-                    ToolTip.visible: hovered
-                    ToolTip.text: modelData.label
-                    background: Item {}
-                    contentItem: Column {
-                        spacing: 4
+                    background: Rectangle {
+                        antialiasing: true
+                        radius: 10
+                        color: cv.on ? Theme.accentSoft : cv.hovered ? Theme.surface2 : "transparent"
+                        border.width: 1.5
+                        border.color: cv.on ? Theme.accent : "transparent"
+                    }
+                    contentItem: Item {
                         Item {
-                            width: 64; height: 86
-                            Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: cv.on ? -3 : -1; radius: 6; color: cv.on ? Theme.accent : cv.hovered ? Theme.borderStrong : Theme.border }
-                            Rectangle { antialiasing: true;
+                            id: pic
+                            x: Math.round((cv.width - 64) / 2)
+                            y: 6
+                            width: 64; height: 90
+                            Shadow { anchors.fill: parent; radius: 4; level: 1 }
+                            Rectangle {
                                 visible: cv.modelData.value === "none"
                                 anchors.fill: parent
+                                antialiasing: true
                                 radius: 4
                                 color: Theme.surface2
-                                Label { anchors.centerIn: parent; text: "None"; color: Theme.muted; font.pixelSize: 12 }
+                                Label { anchors.centerIn: parent; text: "Aa"; color: Theme.muted; font.pixelSize: 18 }
                             }
                             Image {
                                 visible: cv.modelData.value !== "none"
                                 anchors.fill: parent
-                                sourceSize: Qt.size(128, 172)
+                                sourceSize: Qt.size(128, 180)
                                 fillMode: Image.PreserveAspectFit
                                 source: cv.modelData.value === "none" ? "" : root.coverUrl(cv.modelData.value)
                                 asynchronous: false
                             }
                         }
-                        Label { width: 64; text: cv.modelData.label; font.pixelSize: 11; color: cv.on ? Theme.accent : Theme.muted; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight }
+                        Label {
+                            anchors.top: pic.bottom
+                            anchors.topMargin: 5
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: cv.width - 8
+                            text: cv.modelData.label
+                            font.pixelSize: 12
+                            color: Theme.text
+                            horizontalAlignment: Text.AlignHCenter
+                            elide: Text.ElideRight
+                        }
                     }
                 }
             }

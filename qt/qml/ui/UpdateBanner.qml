@@ -33,7 +33,7 @@ Item {
             spacing: 4
             Label { text: root.update ? "Inkleaf " + root.update.version + " is available" : ""; font.pixelSize: 14; font.weight: Font.Bold; color: Theme.text; Layout.fillWidth: true; wrapMode: Text.Wrap }
             Label {
-                visible: !!root.update && root.update.notes.length > 0
+                visible: !!(!!root.update && root.update.notes.length > 0)
                 text: (root.notesOpen ? "▾ " : "▸ ") + "What's new"
                 font.pixelSize: 12
                 color: Theme.muted
@@ -41,7 +41,7 @@ Item {
                 HoverHandler { cursorShape: Qt.PointingHandCursor }
             }
             ScrollView {
-                visible: root.notesOpen && !!root.update
+                visible: !!(root.notesOpen && !!root.update)
                 Layout.fillWidth: true
                 Layout.preferredHeight: Math.min(160, notes.implicitHeight)
                 Label { id: notes; width: parent.width; text: root.update ? root.update.notes : ""; wrapMode: Text.Wrap; font.pixelSize: 12; color: Theme.text }

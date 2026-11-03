@@ -167,8 +167,8 @@ Rectangle {
         dialog.ask("New notebook", [
             { name: "title", label: "Title", value: "Untitled notebook" },
             { name: "template", label: "Paper", type: "select", value: "ruled", options: templates },
-            { name: "size", label: "Page size", type: "select", value: "a4", options: Theme.paperSizes.map(p => ({ value: p.id, label: p.label })) },
-            { name: "orientation", label: "Orientation", type: "segmented", value: "portrait", options: [{ value: "portrait", label: "Portrait" }, { value: "landscape", label: "Landscape" }] },
+            { name: "size", label: "Page size", type: "select", value: "a4", half: true, options: Theme.paperSizes.map(p => ({ value: p.id, label: p.label })) },
+            { name: "orientation", label: "Orientation", type: "select", value: "portrait", half: true, options: [{ value: "portrait", label: "Portrait" }, { value: "landscape", label: "Landscape" }] },
             { name: "paper", label: "Paper colour", type: "swatches", value: "#fffdf7", colors: Theme.paperColors },
             { name: "cover", label: "Cover colour", type: "swatches", colors: Theme.coverColors },
             { name: "design", label: "Cover design", type: "covers", value: "classic", options: coverDesigns }
@@ -184,7 +184,7 @@ Rectangle {
             }
             Js.run("setUpCover", [nb])
             root.openRequested(nb.id, nb.title)
-        }, { aside: coverPreview })
+        }, { aside: coverPreview, twoColumns: true })
     }
     function newFolder(parentId) {
         dialog.ask("New folder", [
@@ -361,7 +361,7 @@ Rectangle {
                 transform: Rotation { origin.x: 100; origin.y: 133; axis { x: 0; y: 1; z: 0 } angle: -8 }
             }
             Item {
-                visible: !!dialog.values.design && dialog.values.design !== "none"
+                visible: !!(!!dialog.values.design && dialog.values.design !== "none")
                 readonly property bool landscape: dialog.values.orientation === "landscape"
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: landscape ? 250 : 200
@@ -377,17 +377,19 @@ Rectangle {
             }
             Label {
                 anchors.horizontalCenter: parent.horizontalCenter
+                // .nb-preview-caption: the design's name.
                 text: {
-                    const s = Theme.paperSizes.find(p => p.id === dialog.values.size)
-                    return s ? s.label + " · " + (dialog.values.orientation === "landscape" ? "Landscape" : "Portrait") : ""
+                    const id = dialog.values.design && dialog.values.design !== "none" ? dialog.values.design : "classic"
+                    const d = root.coverDesigns.find(c => c.value === id)
+                    return (d ? d.label : "Classic") + " cover"
                 }
-                color: Theme.muted; font.pixelSize: 12; font.weight: Font.DemiBold
+                color: Theme.muted; font.pixelSize: 13; font.weight: Font.DemiBold
             }
         }
     }
 
     Shortcut { sequence: "/"; onActivated: search.forceActiveFocus() }
-    Shortcut { sequence: "N"; enabled: root.view.kind !== "trash" && !dialog.opened; onActivated: root.newNotebook(root.folderId || null) }
+    Shortcut { sequence: "N"; enabled: !!(root.view.kind !== "trash" && !dialog.opened); onActivated: root.newNotebook(root.folderId || null) }
 
     RowLayout {
         id: body
@@ -425,7 +427,11 @@ Rectangle {
                     onClicked: createMenu.show(newBtn, root.createOptions())
                     scale: pressed ? 0.98 : 1
                     Behavior on scale { NumberAnimation { duration: 90 } }
-                    ToolTip.visible: hovered && !createMenu.opened
+                    ToolTip.visible: !!(!!(hovered && !createMenu.opened)) && !tipDismissed
+                    // Tooltips go away once clicked (until the pointer leaves), as in the web app.
+                    property bool tipDismissed: false
+                    onPressedChanged: if (pressed) tipDismissed = true
+                    onHoveredChanged: if (!hovered) tipDismissed = false
                     ToolTip.delay: 600
                     ToolTip.text: "Create a notebook, daftar, PDF or folder"
                     background: Item {
@@ -500,7 +506,7 @@ Rectangle {
                                 iconName: "folder"
                                 dot: modelData.f.color
                                 indent: modelData.depth * 14
-                                active: root.view.kind === "folder" && root.view.id === modelData.f.id
+                                active: !!(root.view.kind === "folder" && root.view.id === modelData.f.id)
                                 onClicked: root.show({ kind: "folder", id: modelData.f.id })
                             }
                         }
@@ -598,7 +604,7 @@ Rectangle {
             // Search results.
             ListView {
                 id: results
-                visible: root.query.trim().length > 0 && root.view.kind !== "trash"
+                visible: !!(root.query.trim().length > 0 && root.view.kind !== "trash")
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.leftMargin: 36
@@ -644,7 +650,7 @@ Rectangle {
 
             // Nothing here: a picture, a line and what can be made.
             Flickable {
-                visible: !results.visible && root.shelf.length === 0
+                visible: !!(!results.visible && root.shelf.length === 0)
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 contentHeight: empty.implicitHeight + 140
@@ -695,7 +701,7 @@ Rectangle {
             // The shelf.
             GridView {
                 id: grid
-                visible: !results.visible && root.shelf.length > 0
+                visible: !!(!results.visible && root.shelf.length > 0)
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.leftMargin: 36

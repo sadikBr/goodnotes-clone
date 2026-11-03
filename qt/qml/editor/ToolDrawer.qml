@@ -13,6 +13,8 @@ Item {
     required property var prefs
     /// The active tool's button (the drawer's pointer aims at it).
     property Item anchorItem: null
+    /// Where the pointer aims, in the drawer's coordinates (set by the editor).
+    property real pointerX: width / 2
     readonly property string tool: canvas.tool
     readonly property var fav: prefs.get(tool)
     readonly property var spec: prefs.specs[tool]
@@ -69,14 +71,10 @@ Item {
         id: caret
         width: 12; height: 12; rotation: 45
         y: -6
-        x: {
-            if (!root.anchorItem) return root.width / 2 - 6
-            const p = root.anchorItem.mapToItem(root, root.anchorItem.width / 2, 0)
-            return Math.max(16, Math.min(root.width - 28, p.x - 6))
-        }
+        x: Math.round(Math.max(16, Math.min(root.width - 28, root.pointerX - 6)))
+        antialiasing: true
         color: Theme.surface
         border.color: Theme.border
-        Behavior on x { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
     }
     Rectangle { antialiasing: true;
         id: panel
@@ -129,25 +127,44 @@ Item {
         }
         RowLayout {
             visible: root.tool === "text" || root.tool === "sticky"
-            spacing: 6
-            Chip {
+            spacing: 12
+            // .font-picker: the font's name in its own face.
+            AbstractButton {
                 id: fontChip
                 readonly property string current: root.canvas.editing.font || root.canvas.textFont
-                label: Fonts.preset(current).label
-                tip: "Handwriting font"
-                onClicked: menu.show(fontChip, Fonts.presets.map(f => ({ label: f.label, font: f.face, fontSize: 16, checked: f.id === fontChip.current, action: () => { root.canvas.editFormat({ font: f.id }); root.prefs.store.textFont = f.id } })))
+                implicitHeight: 34
+                implicitWidth: Math.max(170, fontRow.implicitWidth + 22)
+                hoverEnabled: true
+                ToolTip.visible: hovered && !menu.opened && !tipDismissed
+                ToolTip.text: "Handwriting font"
+                property bool tipDismissed: false
+                onPressedChanged: if (pressed) tipDismissed = true
+                onHoveredChanged: if (!hovered) tipDismissed = false
+                onClicked: menu.show(fontChip, Fonts.presets.map(f => ({ label: f.label, font: f.face, fontSize: 18, checked: f.id === fontChip.current, action: () => { root.canvas.editFormat({ font: f.id }); root.prefs.store.textFont = f.id } })), 220)
+                background: Rectangle { antialiasing: true; radius: 9; color: Theme.surface; border.color: fontChip.hovered ? Theme.accent : Theme.border }
+                contentItem: Item {
+                    RowLayout {
+                        id: fontRow
+                        anchors.fill: parent
+                        anchors.leftMargin: 12
+                        anchors.rightMargin: 10
+                        spacing: 8
+                        Label { text: Fonts.preset(fontChip.current).label; font.family: Fonts.preset(fontChip.current).face; font.pixelSize: 18; color: Theme.text; Layout.fillWidth: true; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter }
+                        Icon { name: "down"; size: 16; color: Theme.muted }
+                    }
+                }
             }
             FormatButtons { canvas: root.canvas }
         }
-        Segmented {
+        ModeGroup {
             visible: root.tool === "eraser"
-            options: [{ value: "precise", label: "Precise" }, { value: "stroke", label: "Whole stroke" }]
+            options: [{ value: "precise", label: "Precise", tip: "Erase only the parts the eraser touches" }, { value: "stroke", label: "Whole stroke", tip: "Erase every stroke the eraser touches" }]
             value: root.canvas.eraserMode
             onPicked: v => root.prefs.store.eraserMode = v
         }
-        Segmented {
+        ModeGroup {
             visible: root.tool === "laser"
-            options: [{ value: "trail", label: "Trail" }, { value: "dot", label: "Dot" }]
+            options: [{ value: "trail", label: "Trail", tip: "Draw a glowing line that fades away" }, { value: "dot", label: "Dot", tip: "Just point with a glowing dot" }]
             value: root.canvas.laserMode
             onPicked: v => root.prefs.store.laserMode = v
         }
@@ -161,7 +178,7 @@ Item {
 
         // --- favourite colours ---
         RowLayout {
-            visible: !!root.fav && root.fav.colors.length > 0
+            visible: !!(!!root.fav && root.fav.colors.length > 0)
             spacing: 6
             Repeater {
                 model: root.fav ? root.fav.colors : []
@@ -174,7 +191,11 @@ Item {
                     hoverEnabled: true
                     scale: hovered ? 1.1 : 1
                     Behavior on scale { NumberAnimation { duration: 120 } }
-                    ToolTip.visible: hovered && on
+                    ToolTip.visible: !!(hovered && on) && !tipDismissed
+                    // Tooltips go away once clicked (until the pointer leaves), as in the web app.
+                    property bool tipDismissed: false
+                    onPressedChanged: if (pressed) tipDismissed = true
+                    onHoveredChanged: if (!hovered) tipDismissed = false
                     ToolTip.text: "Tap again to change this colour"
                     onClicked: on ? colorPop.show(sw, root.prefs.paletteFor(root.tool), modelData, c => root.prefs.setColor(root.tool, index, c)) : root.prefs.selectColor(root.tool, index)
                     background: Item {
@@ -189,7 +210,11 @@ Item {
                 hoverEnabled: true
                 rotation: hovered ? 30 : 0
                 Behavior on rotation { NumberAnimation { duration: 150 } }
-                ToolTip.visible: hovered
+                ToolTip.visible: !!(hovered) && !tipDismissed
+                // Tooltips go away once clicked (until the pointer leaves), as in the web app.
+                property bool tipDismissed: false
+                onPressedChanged: if (pressed) tipDismissed = true
+                onHoveredChanged: if (!hovered) tipDismissed = false
                 ToolTip.text: "More colours"
                 onClicked: colorPop.show(rainbow, root.prefs.paletteFor(root.tool), root.prefs.color(root.tool), c => root.prefs.setColor(root.tool, root.fav.color, c))
                 background: Image {
@@ -201,7 +226,7 @@ Item {
 
         // --- favourite sizes ---
         RowLayout {
-            visible: !!root.fav && root.fav.sizes.length > 0 && !!root.spec
+            visible: !!(!!root.fav && root.fav.sizes.length > 0 && !!root.spec)
             spacing: 6
             Rectangle { antialiasing: true;
                 implicitWidth: sizesRow.implicitWidth + 6
@@ -265,7 +290,11 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         width: 26; height: 26
         hoverEnabled: true
-        ToolTip.visible: hovered
+        ToolTip.visible: !!(hovered) && !tipDismissed
+        // Tooltips go away once clicked (until the pointer leaves), as in the web app.
+        property bool tipDismissed: false
+        onPressedChanged: if (pressed) tipDismissed = true
+        onHoveredChanged: if (!hovered) tipDismissed = false
         ToolTip.text: root.prefs.store.drawerPinned ? "Pinned open — unpin to tuck options away while you write" : "Keep options open"
         onClicked: root.prefs.store.drawerPinned = !root.prefs.store.drawerPinned
         background: Rectangle { antialiasing: true; radius: 8; color: root.prefs.store.drawerPinned ? Theme.accentSoft : parent.hovered ? Theme.surface2 : "transparent" }

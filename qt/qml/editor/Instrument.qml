@@ -35,20 +35,22 @@ Item {
     }
     function snap(rad, coarse) { return Js.run("snapAngle", [rad, coarse]) }
 
+    // The body and markings, drawn as vectors (sharp at any angle and zoom).
+    VectorSvg {
+        x: Math.round(root.pivot.x) - reach
+        y: Math.round(root.pivot.y) - reach
+        width: 2 * reach
+        height: 2 * reach
+        svg: root.shown ? root.ins.svg : ""
+        box: root.ins.box ? Qt.rect(root.ins.box.x, root.ins.box.y, root.ins.box.w, root.ins.box.h) : Qt.rect(0, 0, 0, 0)
+        angle: root.ins.angle || 0
+        pixelsPerUnit: root.zm
+    }
     Item {
         id: body
         x: root.pivot.x
         y: root.pivot.y
         rotation: (root.ins.angle || 0) * 180 / Math.PI
-        Image {
-            x: (root.ins.box ? root.ins.box.x : 0) * root.zm
-            y: (root.ins.box ? root.ins.box.y : 0) * root.zm
-            width: (root.ins.box ? root.ins.box.w : 0) * root.zm
-            height: (root.ins.box ? root.ins.box.h : 0) * root.zm
-            sourceSize: Qt.size(Math.min(4096, width * 2), Math.min(4096, height * 2))
-            source: root.shown ? "data:image/svg+xml;utf8," + encodeURIComponent(root.ins.svg) : ""
-            smooth: true
-        }
         // Rotation grips.
         Repeater {
             model: root.ins.grips || []

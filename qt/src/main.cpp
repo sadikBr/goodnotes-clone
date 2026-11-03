@@ -22,10 +22,10 @@
 #include "ShadowImage.h"
 
 int main(int argc, char* argv[]) {
-  // Antialiased ink: the GPU smooths stroke edges (4× multisampling).
-  QSurfaceFormat fmt = QSurfaceFormat::defaultFormat();
-  fmt.setSamples(4);
-  QSurfaceFormat::setDefaultFormat(fmt);
+  // No multisampling for the window: it turns off Qt Quick's own smooth
+  // edges (rounded corners, circles) and isn't always honoured by the
+  // driver, which left them jagged. The page canvas gets its own
+  // multisampled layer for smooth ink (Editor.qml).
 
   // Set before the application exists, so the desktop portal is told the
   // app's id once, at start-up.

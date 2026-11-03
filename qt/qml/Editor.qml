@@ -64,6 +64,17 @@ Rectangle {
     FormDialog { id: dialog }
     Daftar { id: daftarUi; dialog: dialog; onNotify: (m, e) => root.notify(m, e) }
 
+    /// The active tool button's centre in the page area (the drawer points at it).
+    /// The voids are what moves the button: mapToItem alone isn't re-evaluated.
+    readonly property real toolCenter: {
+        const a = drawer.anchorItem
+        if (!a) return area.width / 2
+        void (a.x + a.width + trays.x + trays.width + header.width + area.x + area.width)
+        void (a.parent ? a.parent.x : 0)
+        void (a.parent && a.parent.parent ? a.parent.parent.x : 0)
+        return a.mapToItem(area, a.width / 2, 0).x
+    }
+
     /** Saves everything (before a sync or a backup); returns this notebook's id. */
     function saveForSync() {
         canvas.finishEdit()
@@ -182,7 +193,11 @@ Rectangle {
                             implicitHeight: 32
                             implicitWidth: classRow.implicitWidth + 18
                             hoverEnabled: true
-                            ToolTip.visible: hovered
+                            ToolTip.visible: !!(hovered) && !tipDismissed
+                            // Tooltips go away once clicked (until the pointer leaves), as in the web app.
+                            property bool tipDismissed: false
+                            onPressedChanged: if (pressed) tipDismissed = true
+                            onHoveredChanged: if (!hovered) tipDismissed = false
                             ToolTip.text: "Switch class · القسم"
                             ToolTip.delay: 500
                             onClicked: menu.show(classChip, (root.daftar ? root.daftar.classes : []).map(c => ({ label: c, checked: c === root.daftarClass, action: () => canvas.daftar("goToClass", [c]) })))
@@ -204,7 +219,11 @@ Rectangle {
                             implicitHeight: 32
                             implicitWidth: lessonRow.implicitWidth + 24
                             hoverEnabled: true
-                            ToolTip.visible: hovered
+                            ToolTip.visible: !!(hovered) && !tipDismissed
+                            // Tooltips go away once clicked (until the pointer leaves), as in the web app.
+                            property bool tipDismissed: false
+                            onPressedChanged: if (pressed) tipDismissed = true
+                            onHoveredChanged: if (!hovered) tipDismissed = false
                             ToolTip.text: "Write today's date, the class and the lesson time on the next free line"
                             ToolTip.delay: 500
                             onClicked: root.newLesson()
@@ -224,7 +243,7 @@ Rectangle {
                         IconButton { id: daftarMore; iconName: "more"; tip: "Student list, class export, daftar settings"; implicitWidth: 34; implicitHeight: 34; onClicked: root.daftarMenu(daftarMore) }
                     }
                     Rectangle { antialiasing: true;
-                        visible: root.width > 1100 && !root.daftar
+                        visible: !!(root.width > 1100 && !root.daftar)
                         implicitHeight: 20
                         implicitWidth: chipLabel.implicitWidth + 18
                         radius: 10
@@ -287,7 +306,11 @@ Rectangle {
                             implicitHeight: 34
                             implicitWidth: paperRow.implicitWidth + 10
                             hoverEnabled: true
-                            ToolTip.visible: hovered && !paperPicker.opened
+                            ToolTip.visible: !!(!!(hovered && !paperPicker.opened)) && !tipDismissed
+                            // Tooltips go away once clicked (until the pointer leaves), as in the web app.
+                            property bool tipDismissed: false
+                            onPressedChanged: if (pressed) tipDismissed = true
+                            onHoveredChanged: if (!hovered) tipDismissed = false
                             ToolTip.text: cover ? "Cover design and colour" : "Page paper"
                             readonly property bool cover: String(meta.template || "").startsWith("cover")
                             onClicked: {
@@ -348,7 +371,11 @@ Rectangle {
                         implicitHeight: 36
                         implicitWidth: exportRow.implicitWidth + 24
                         hoverEnabled: true
-                        ToolTip.visible: hovered
+                        ToolTip.visible: !!(hovered) && !tipDismissed
+                        // Tooltips go away once clicked (until the pointer leaves), as in the web app.
+                        property bool tipDismissed: false
+                        onPressedChanged: if (pressed) tipDismissed = true
+                        onHoveredChanged: if (!hovered) tipDismissed = false
                         ToolTip.text: "Export as PDF, PowerPoint or image"
                         scale: pressed ? 0.96 : 1
                         onClicked: menu.show(exportBtn, [
@@ -407,6 +434,9 @@ Rectangle {
                 InkCanvas {
                     id: canvas
                     anchors.fill: parent
+                    // Smooth ink edges: the canvas is drawn 4× multisampled.
+                    layer.enabled: true
+                    layer.samples: 4
                     notebookId: root.notebookId
                     tool: prefs.store.tool
                     penStyle: prefs.store.penStyle
@@ -464,7 +494,7 @@ Rectangle {
                     }
                     // .laser-dot: 6px, with a grey and a white ring.
                     Item {
-                        visible: canvas.tool === "laser" && canvas.laserDot.x >= 0
+                        visible: !!(canvas.tool === "laser" && canvas.laserDot.x >= 0)
                         x: canvas.laserDot.x
                         y: canvas.laserDot.y
                         Rectangle { antialiasing: true; x: -6.5; y: -6.5; width: 13; height: 13; radius: 6.5; color: Qt.rgba(1, 1, 1, 0.5) }
@@ -480,14 +510,12 @@ Rectangle {
                     id: drawer
                     canvas: canvas
                     prefs: prefs
-                    visible: root.drawerOpen && !root.focusMode
+                    visible: !!(root.drawerOpen && !root.focusMode)
                     z: 9
                     y: 14
-                    x: {
-                        if (!anchorItem) return (area.width - width) / 2
-                        const c = anchorItem.mapToItem(area, anchorItem.width / 2, 0).x
-                        return Math.max(12, Math.min(c - width / 2, area.width - width - 12))
-                    }
+                    x: Math.round(Math.max(12, Math.min(root.toolCenter - width / 2, area.width - width - 12)))
+                    // The pointer stays on the tool while the drawer slides.
+                    pointerX: root.toolCenter - x
                     Behavior on x { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
                 }
 
@@ -561,7 +589,7 @@ Rectangle {
     Shortcut { sequences: [StandardKey.ZoomIn, "Ctrl+="]; onActivated: canvas.zoomBy(1.2) }
     Shortcut { sequences: [StandardKey.ZoomOut]; onActivated: canvas.zoomBy(1 / 1.2) }
     Shortcut { sequence: "Ctrl+0"; onActivated: canvas.fitWidth() }
-    Shortcut { sequences: ["Delete", "Backspace"]; enabled: !root.typing && (canvas.selection.count || 0) > 0; onActivated: canvas.deleteSelection() }
+    Shortcut { sequences: ["Delete", "Backspace"]; enabled: !!(!root.typing && (canvas.selection.count || 0) > 0); onActivated: canvas.deleteSelection() }
     Shortcut { sequence: "Esc"; enabled: !root.typing; onActivated: { if ((canvas.selection.count || 0) > 0) canvas.clearSelection(); else if (root.focusMode) root.focusMode = false; else root.drawerOpen = prefs.store.drawerPinned } }
     Shortcut { sequences: ["PgDown", "Right"]; enabled: !root.typing; onActivated: canvas.goToPage(canvas.currentPage + 1) }
     Shortcut { sequences: ["PgUp", "Left"]; enabled: !root.typing; onActivated: canvas.goToPage(canvas.currentPage - 1) }

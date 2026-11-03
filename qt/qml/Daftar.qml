@@ -93,7 +93,11 @@ Item {
         implicitWidth: 28
         implicitHeight: 28
         hoverEnabled: true
-        ToolTip.visible: hovered
+        ToolTip.visible: !!(hovered) && !tipDismissed
+        // Tooltips go away once clicked (until the pointer leaves), as in the web app.
+        property bool tipDismissed: false
+        onPressedChanged: if (pressed) tipDismissed = true
+        onHoveredChanged: if (!hovered) tipDismissed = false
         ToolTip.text: "Remove"
         ToolTip.delay: 400
         background: Rectangle { antialiasing: true; radius: 8; color: parent.hovered ? Theme.surface2 : "transparent" }
@@ -277,7 +281,11 @@ Item {
                 UiButton { kind: "ghost"; iconName: "plus"; text: "Add a holiday"; onClicked: hd.save(hd.items.concat([{ name: "", from: "", to: "" }]), false) }
                 UiButton {
                     kind: "ghost"; iconName: "star"; text: "Add national holidays"
-                    ToolTip.visible: hovered
+                    ToolTip.visible: !!(hovered) && !tipDismissed
+                    // Tooltips go away once clicked (until the pointer leaves), as in the web app.
+                    property bool tipDismissed: false
+                    onPressedChanged: if (pressed) tipDismissed = true
+                    onHoveredChanged: if (!hovered) tipDismissed = false
                     ToolTip.delay: 500
                     ToolTip.text: "Fixed-date public holidays for the school year (religious holidays and vacations are added by hand)"
                     onClicked: {

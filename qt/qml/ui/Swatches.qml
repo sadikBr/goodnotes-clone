@@ -21,7 +21,11 @@ Flow {
             width: root.size; height: root.size
             hoverEnabled: true
             onClicked: root.picked(c)
-            ToolTip.visible: hovered && typeof modelData !== "string"
+            ToolTip.visible: !!(hovered && typeof modelData !== "string") && !tipDismissed
+            // Tooltips go away once clicked (until the pointer leaves), as in the web app.
+            property bool tipDismissed: false
+            onPressedChanged: if (pressed) tipDismissed = true
+            onHoveredChanged: if (!hovered) tipDismissed = false
             ToolTip.text: typeof modelData === "string" ? "" : modelData.label
             ToolTip.delay: 400
             background: Item {

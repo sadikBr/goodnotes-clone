@@ -159,30 +159,38 @@ void InkleafCore::callAsync(const QString& cmd, const QVariantMap& args, const Q
     if (cb.isCallable()) cb.call({QJSValue(), QJSValue(m_lastError)});
     return;
   }
+  // Script values belong to the GUI thread: the callback waits here under an
+  // id, and the worker only ever sees plain bytes (copying a QJSValue on
+  // another thread corrupts the script engine).
+  const quint64 id = ++m_nextCall;
+  m_callbacks.insert(id, callback);
   const QByteArray a = QJsonDocument(QJsonObject::fromVariantMap(args)).toJson(QJsonDocument::Compact);
   const QByteArray name = cmd.toUtf8();
   const ::Core* core = m_core;
   QPointer<InkleafCore> self(this);
-  QThreadPool::globalInstance()->start([=]() {
+  QThreadPool::globalInstance()->start([core, a, name, id, self]() {
     InkleafResult r = inkleaf_call(core, name.constData(), a.constData(), nullptr, 0);
     const QByteArray out(reinterpret_cast<const char*>(r.data), int(r.len));
     const bool ok = r.ok;
     inkleaf_free(r);
-    QMetaObject::invokeMethod(qApp, [=]() {
-      if (!self) return;
-      const QJsonDocument doc = QJsonDocument::fromJson("[" + out + "]");
-      const QJsonValue v = doc.array().isEmpty() ? QJsonValue() : doc.array().first();
-      QJSValue cb = callback;
-      QJSEngine* js = self->m_engine ? self->m_engine.data() : qjsEngine(self);
-      if (!ok) {
-        const QString err = v.toObject().value("error").toString(QString::fromUtf8(out));
-        if (cb.isCallable()) cb.call({QJSValue(), QJSValue(err)});
-        return;
-      }
-      if (changesLibrary(QString::fromUtf8(name))) emit self->libraryChanged();
-      if (cb.isCallable()) cb.call({js ? js->toScriptValue(v.toVariant()) : QJSValue(), QJSValue(QString())});
+    QMetaObject::invokeMethod(qApp, [self, id, name, out, ok]() {
+      if (self) self->finishAsync(id, QString::fromUtf8(name), out, ok);
     }, Qt::QueuedConnection);
   });
+}
+
+void InkleafCore::finishAsync(quint64 id, const QString& cmd, const QByteArray& out, bool ok) {
+  QJSValue cb = m_callbacks.take(id);
+  const QJsonDocument doc = QJsonDocument::fromJson("[" + out + "]");
+  const QJsonValue v = doc.array().isEmpty() ? QJsonValue() : doc.array().first();
+  QJSEngine* js = m_engine ? m_engine.data() : qjsEngine(this);
+  if (!ok) {
+    const QString err = v.toObject().value("error").toString(QString::fromUtf8(out));
+    if (cb.isCallable()) cb.call({QJSValue(), QJSValue(err)});
+    return;
+  }
+  if (changesLibrary(cmd)) emit libraryChanged();
+  if (cb.isCallable()) cb.call({js ? js->toScriptValue(v.toVariant()) : QJSValue(), QJSValue(QString())});
 }
 
 QString InkleafCore::saveBytes(const QString& path, const QString& cmd, const QVariantMap& args) {

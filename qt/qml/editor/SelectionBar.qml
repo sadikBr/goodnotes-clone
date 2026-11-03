@@ -53,7 +53,11 @@ Item {
             implicitHeight: 30
             implicitWidth: afRow.implicitWidth + 16
             hoverEnabled: true
-            ToolTip.visible: hovered
+            ToolTip.visible: !!(hovered) && !tipDismissed
+            // Tooltips go away once clicked (until the pointer leaves), as in the web app.
+            property bool tipDismissed: false
+            onPressedChanged: if (pressed) tipDismissed = true
+            onHoveredChanged: if (!hovered) tipDismissed = false
             ToolTip.text: "Turn this handwriting into text in a handwriting font"
             onClicked: menu.show(applyFont, Fonts.presets.map(f => ({ label: f.label, font: f.face, fontSize: 16, action: () => root.canvas.applyFontToInk(f.id) })))
             background: Rectangle { antialiasing: true; radius: 8; color: parent.hovered ? Theme.surface2 : "transparent" }
@@ -81,10 +85,14 @@ Item {
                 from: 0.5; to: 20; stepSize: 0.5
                 value: root.s.shape ? root.s.shape.width : 3
                 onMoved: root.canvas.changeShape("width", value)
-                ToolTip.visible: hovered
+                ToolTip.visible: !!(hovered) && !tipDismissed
+                // Tooltips go away once clicked (until the pointer leaves), as in the web app.
+                property bool tipDismissed: false
+                onPressedChanged: if (pressed) tipDismissed = true
+                onHoveredChanged: if (!hovered) tipDismissed = false
                 ToolTip.text: "Line width"
             }
-            SmallTool { visible: !!root.s.shape && root.s.shape.closed; iconName: "fill"; active: !!root.s.shape && root.s.shape.fill; tip: root.s.shape && root.s.shape.fill ? "Remove fill" : "Fill shape"; onClicked: root.canvas.changeShape("fill") }
+            SmallTool { visible: !!(!!root.s.shape && root.s.shape.closed); iconName: "fill"; active: !!(!!root.s.shape && root.s.shape.fill); tip: root.s.shape && root.s.shape.fill ? "Remove fill" : "Fill shape"; onClicked: root.canvas.changeShape("fill") }
         }
         Rectangle { visible: !!root.s.shape; Layout.preferredWidth: 1; Layout.preferredHeight: 22; color: Theme.border }
 
@@ -97,7 +105,11 @@ Item {
                 implicitHeight: 30
                 implicitWidth: fbRow.implicitWidth + 14
                 hoverEnabled: true
-                ToolTip.visible: hovered
+                ToolTip.visible: !!(hovered) && !tipDismissed
+                // Tooltips go away once clicked (until the pointer leaves), as in the web app.
+                property bool tipDismissed: false
+                onPressedChanged: if (pressed) tipDismissed = true
+                onHoveredChanged: if (!hovered) tipDismissed = false
                 ToolTip.text: "Handwriting font for the selected text"
                 onClicked: menu.show(fontBtn, Fonts.presets.map(f => ({ label: f.label, font: f.face, fontSize: 16, checked: f.id === root.s.font, action: () => root.canvas.styleSelection({ font: f.id }) })))
                 background: Rectangle { antialiasing: true; radius: 8; color: Theme.surface; border.color: parent.hovered ? Theme.accent : Theme.border }

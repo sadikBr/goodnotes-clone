@@ -35,7 +35,7 @@ Item {
     }
     // The first page, inset.
     RoundImage {
-        visible: !root.full && root.thumbnail.length > 0
+        visible: !!(!root.full && root.thumbnail.length > 0)
         x: 18; y: 8; width: parent.width - 26; height: parent.height - 16
         source: visible ? root.thumbnail : ""
         radiusTopLeft: 2; radiusTopRight: 2; radiusBottomLeft: 2; radiusBottomRight: 2

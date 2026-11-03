@@ -14,7 +14,11 @@ AbstractButton {
     hoverEnabled: true
     implicitHeight: 34
     implicitWidth: row.implicitWidth + 19
-    ToolTip.visible: hovered && tip.length > 0 && !open
+    ToolTip.visible: !!(!!(hovered && tip.length > 0 && !open)) && !tipDismissed
+    // Tooltips go away once clicked (until the pointer leaves), as in the web app.
+    property bool tipDismissed: false
+    onPressedChanged: if (pressed) tipDismissed = true
+    onHoveredChanged: if (!hovered) tipDismissed = false
     ToolTip.text: tip
     background: Rectangle { antialiasing: true;
         radius: 11

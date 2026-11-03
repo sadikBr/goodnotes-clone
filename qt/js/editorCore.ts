@@ -865,11 +865,13 @@ export class EditorCore {
     // The body and markings (the web app's SVG), styled as in its CSS.
     // (Qt's SVG renderer has no rgba(): colours and opacities separately.)
     const style =
-      "<style>.ruler-body{fill:#f8fafc;fill-opacity:0.62;stroke:#0f172a;stroke-opacity:0.35;stroke-width:0.8}.ticks{stroke:#0f172a;stroke-opacity:0.7;stroke-width:0.35;fill:none}text{fill:#0f172a;fill-opacity:0.75;font-family:Inter;font-weight:600;font-size:7px;text-anchor:middle}text.inner{font-size:5.5px;fill-opacity:0.5}.cutout{fill:none;stroke:#0f172a;stroke-opacity:0.25;stroke-width:0.8}.arm{stroke:#db2777;stroke-width:1.2;fill:none}.arm-arc{stroke:#db2777;stroke-width:1;fill:#db2777;fill-opacity:0.08}</style>";
+      "<style>.ruler-body{fill:#f8fafc;fill-opacity:0.62;stroke:#0f172a;stroke-opacity:0.35;stroke-width:0.8}.ticks{stroke:#0f172a;stroke-opacity:0.7;stroke-width:0.35;fill:none}text{fill:#0f172a;fill-opacity:0.75;font-family:Inter;font-weight:bold;font-size:7px;text-anchor:middle}text.inner{font-size:5.5px;fill-opacity:0.5}.cutout{fill:none;stroke:#0f172a;stroke-opacity:0.25;stroke-width:0.8}.arm{stroke:#db2777;stroke-width:1.2;fill:none}.arm-arc{stroke:#db2777;stroke-width:1;fill:#db2777;fill-opacity:0.08}</style>";
     let svg = String(r.el.innerHTML).replace(/<svg ([^>]*)>/, (_m: string, attrs: string) => {
       const a = attrs.replace(/class="[^"]*"/, "").replace(/viewBox="[^"]*"/, `viewBox="${box.x.toFixed(2)} ${box.y.toFixed(2)} ${box.w.toFixed(2)} ${box.h.toFixed(2)}"`);
       return `<svg xmlns="http://www.w3.org/2000/svg" ${a}>${style}`;
     });
+    // Qt's SVG renderer ignores dy in em: the same shift as a plain offset (0.35 × the font size).
+    svg = svg.replace(/<text class="inner"([^>]*) dy="0\.35em">/g, '<text class="inner"$1 y="1.93">').replace(/<text([^>]*) dy="0\.35em">/g, '<text$1 y="2.45">');
     if (r.kind === "protractor") {
       const a = r.armEnd(0);
       const b = r.armEnd(1);

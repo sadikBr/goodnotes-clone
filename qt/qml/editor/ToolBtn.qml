@@ -21,7 +21,11 @@ AbstractButton {
     transform: Translate { y: root.active ? -1 : 0; Behavior on y { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } } }
     scale: pressed ? 0.95 : 1
     Behavior on scale { NumberAnimation { duration: 120 } }
-    ToolTip.visible: hovered && tip.length > 0
+    ToolTip.visible: !!(!!(hovered && tip.length > 0)) && !tipDismissed
+    // Tooltips go away once clicked (until the pointer leaves), as in the web app.
+    property bool tipDismissed: false
+    onPressedChanged: if (pressed) tipDismissed = true
+    onHoveredChanged: if (!hovered) tipDismissed = false
     ToolTip.text: tip
     background: Item {
         Shadow { anchors.fill: parent; radius: 11; level: root.active ? 2 : 0; opacity: root.active ? 1 : 0 }
@@ -31,16 +35,16 @@ AbstractButton {
             color: root.active ? root.dip : root.hovered ? Theme.alpha(Theme.surface, 0.55) : "transparent"
             Behavior on color { ColorAnimation { duration: 180 } }
         }
-        // The ink drop.
-        Rectangle { antialiasing: true;
-            visible: root.ink.length > 0 && !root.active
+        // The ink drop: 6px of the ink with a hairline halo (box-shadow 0 0 0 0.5px).
+        Item {
+            visible: !!(root.ink.length > 0 && !root.active)
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 2
-            width: 6; height: 6; radius: 3
-            color: root.ink
-            border.width: 0.5
-            border.color: Qt.rgba(0.5, 0.5, 0.5, 0.45)
+            width: 6; height: 6
+            opacity: 0.9
+            Rectangle { antialiasing: true; anchors.centerIn: parent; width: 7; height: 7; radius: 3.5; color: Qt.rgba(0.5, 0.5, 0.5, 0.45) }
+            Rectangle { antialiasing: true; anchors.fill: parent; radius: 3; color: root.ink }
         }
     }
     contentItem: Item {

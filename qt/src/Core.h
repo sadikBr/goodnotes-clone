@@ -4,6 +4,7 @@
 
 #include <QJSValue>
 #include <QJsonValue>
+#include <QHash>
 #include <QObject>
 #include <QPointer>
 #include <QJSEngine>
@@ -50,6 +51,9 @@ signals:
 
 private:
   ::Core* m_core = nullptr;
+  void finishAsync(quint64 id, const QString& cmd, const QByteArray& out, bool ok);
+  QHash<quint64, QJSValue> m_callbacks;  // callAsync's, by id (GUI thread only)
+  quint64 m_nextCall = 0;
   QPointer<QJSEngine> m_engine;
   QString m_dir;
   QString m_lastError;

@@ -36,7 +36,7 @@ Item {
                 text: PdfImporter.busy ? "Importing " + (root.counted === 1 ? "a PDF" : root.counted + " PDFs") + " · " + root.done + " of " + root.counted + " done"
                     : root.failed ? root.done + " imported, " + root.failed + " failed" : (root.done === 1 ? "PDF" : root.done + " PDFs") + " imported"
             }
-            UiButton { visible: PdfImporter.busy && root.jobs.some(j => j.state === "waiting"); kind: "ghost"; text: "Stop the rest"; implicitHeight: 28; onClicked: PdfImporter.cancelWaiting() }
+            UiButton { visible: !!(PdfImporter.busy && root.jobs.some(j => j.state === "waiting")); kind: "ghost"; text: "Stop the rest"; implicitHeight: 28; onClicked: PdfImporter.cancelWaiting() }
             IconButton { iconName: root.collapsed ? "up" : "down"; tip: root.collapsed ? "Show" : "Hide details"; implicitWidth: 28; implicitHeight: 28; iconSize: 16; onClicked: root.collapsed = !root.collapsed }
             IconButton { visible: !PdfImporter.busy; iconName: "close"; tip: "Close"; implicitWidth: 28; implicitHeight: 28; iconSize: 16; onClicked: PdfImporter.clearFinished() }
         }

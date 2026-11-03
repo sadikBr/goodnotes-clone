@@ -15,7 +15,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Network Quick QuickControls2)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Network Quick QuickControls2 Svg)
 # Qt PDF draws imported PDFs; where it isn't shipped (Android) the system's
 # PDF renderer is used instead.
 find_package(Qt6 6.4 QUIET OPTIONAL_COMPONENTS Pdf)
@@ -82,6 +82,7 @@ qt_add_executable(inkleaf
   src/PaperImage.h src/PaperImage.cpp
   src/Pdf.h src/Pdf.cpp
   src/LaserTrail.h src/LaserTrail.cpp
+  src/VectorSvg.h src/VectorSvg.cpp
 )
 
 # Theme is a singleton (must be set before the module is declared).
@@ -128,6 +129,7 @@ qt_add_qml_module(inkleaf
     qml/ui/Swatches.qml
     qml/ui/PopupMenu.qml
     qml/ui/FormDialog.qml
+    qml/ui/Kbd.qml
     qml/ui/Toast.qml
     qml/ui/Book.qml
     qml/ui/FolderArt.qml
@@ -143,6 +145,8 @@ qt_add_qml_module(inkleaf
     qml/editor/Chip.qml
     qml/editor/SmallTool.qml
     qml/editor/FormatButtons.qml
+    qml/editor/ToolGroup.qml
+    qml/editor/ModeGroup.qml
     qml/editor/Fonts.js
     qml/editor/ColorPopover.qml
     qml/editor/ToolDrawer.qml
@@ -170,7 +174,7 @@ qt_add_resources(inkleaf "inkleaf_style"
 )
 
 target_compile_definitions(inkleaf PRIVATE INKLEAF_VERSION="${PROJECT_VERSION}")
-target_link_libraries(inkleaf PRIVATE Qt6::Core Qt6::Gui Qt6::Network Qt6::Quick Qt6::QuickControls2 inkleaf_native)
+target_link_libraries(inkleaf PRIVATE Qt6::Core Qt6::Gui Qt6::Network Qt6::Svg Qt6::Quick Qt6::QuickControls2 inkleaf_native)
 if(TARGET Qt6::Pdf)
   target_link_libraries(inkleaf PRIVATE Qt6::Pdf)
   target_compile_definitions(inkleaf PRIVATE INKLEAF_HAVE_QTPDF)
