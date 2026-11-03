@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
   // Update checks (and anything else online) go through the system's proxy settings.
   QNetworkProxyFactory::setUseSystemConfiguration(true);
   // The bundled web code trips the QML compiler's style hints; they're noise here.
-  QLoggingCategory::setFilterRules(QStringLiteral("qt.qml.compiler=false"));
+  QLoggingCategory::setFilterRules(QStringLiteral("qt.qml.compiler=false\nqt.qml.usedbeforedeclared=false"));
   QGuiApplication::setWindowIcon(QIcon(":/qt/qml/Inkleaf/assets/icon.svg"));
 
   // The UI font and every handwriting face for text boxes and notes.

@@ -105,3 +105,57 @@ DP.toLocaleDateString = function (this: Date, locales?: any, options?: any) {
   }
   return nativeLocaleDate.call(this, locales, options);
 };
+
+// WeakMap and WeakSet without the engine's own: Qt's JavaScript engine can
+// free a key object that a WeakMap still points at, and the next lookup
+// then reads freed memory and crashes the app. Here the value lives on the
+// key itself, in a hidden property, so nothing outlives what it refers to
+// (and the entry goes away with the object, as a WeakMap's does).
+let weakIds = 0;
+class SafeWeakMap<K extends object, V> {
+  private readonly slot = `__weak${++weakIds}`;
+  // Keys that can't take a property (frozen objects): held strongly.
+  private readonly sealed = new Map<K, V>();
+  constructor(entries?: Iterable<readonly [K, V]> | null) {
+    if (entries) for (const [k, v] of entries as any) this.set(k, v);
+  }
+  get(k: K): V | undefined {
+    if (!k || (typeof k !== "object" && typeof k !== "function")) return undefined;
+    const own = Object.prototype.hasOwnProperty.call(k, this.slot);
+    return own ? (k as any)[this.slot] : this.sealed.get(k);
+  }
+  has(k: K): boolean {
+    if (!k || (typeof k !== "object" && typeof k !== "function")) return false;
+    return Object.prototype.hasOwnProperty.call(k, this.slot) || this.sealed.has(k);
+  }
+  set(k: K, v: V): this {
+    if (!k || (typeof k !== "object" && typeof k !== "function")) throw new TypeError("Invalid value used as weak map key");
+    if (Object.prototype.hasOwnProperty.call(k, this.slot)) (k as any)[this.slot] = v;
+    else if (Object.isExtensible(k)) Object.defineProperty(k, this.slot, { value: v, writable: true, configurable: true, enumerable: false });
+    else this.sealed.set(k, v);
+    return this;
+  }
+  delete(k: K): boolean {
+    if (!k || (typeof k !== "object" && typeof k !== "function")) return false;
+    if (Object.prototype.hasOwnProperty.call(k, this.slot)) return delete (k as any)[this.slot];
+    return this.sealed.delete(k);
+  }
+}
+class SafeWeakSet<T extends object> {
+  private readonly map = new SafeWeakMap<T, true>();
+  constructor(values?: Iterable<T> | null) {
+    if (values) for (const v of values as any) this.add(v);
+  }
+  add(v: T): this {
+    this.map.set(v, true);
+    return this;
+  }
+  has(v: T): boolean {
+    return this.map.has(v);
+  }
+  delete(v: T): boolean {
+    return this.map.delete(v);
+  }
+}
+G.WeakMap = SafeWeakMap;
+G.WeakSet = SafeWeakSet;

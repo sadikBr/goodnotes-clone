@@ -490,6 +490,99 @@ var Inkleaf = (() => {
     }
     return nativeLocaleDate.call(this, locales, options2);
   };
+  var weakIds = 0;
+  var SafeWeakMap = (
+    /** @class */
+    (function() {
+      function SafeWeakMap2(entries) {
+        var e_2, _a;
+        this.slot = "__weak".concat(++weakIds);
+        this.sealed = /* @__PURE__ */ new Map();
+        if (entries)
+          try {
+            for (var _b = __values(entries), _c = _b.next(); !_c.done; _c = _b.next()) {
+              var _d = __read(_c.value, 2), k2 = _d[0], v2 = _d[1];
+              this.set(k2, v2);
+            }
+          } catch (e_2_1) {
+            e_2 = { error: e_2_1 };
+          } finally {
+            try {
+              if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
+            } finally {
+              if (e_2) throw e_2.error;
+            }
+          }
+      }
+      SafeWeakMap2.prototype.get = function(k2) {
+        if (!k2 || typeof k2 !== "object" && typeof k2 !== "function")
+          return void 0;
+        var own = Object.prototype.hasOwnProperty.call(k2, this.slot);
+        return own ? k2[this.slot] : this.sealed.get(k2);
+      };
+      SafeWeakMap2.prototype.has = function(k2) {
+        if (!k2 || typeof k2 !== "object" && typeof k2 !== "function")
+          return false;
+        return Object.prototype.hasOwnProperty.call(k2, this.slot) || this.sealed.has(k2);
+      };
+      SafeWeakMap2.prototype.set = function(k2, v2) {
+        if (!k2 || typeof k2 !== "object" && typeof k2 !== "function")
+          throw new TypeError("Invalid value used as weak map key");
+        if (Object.prototype.hasOwnProperty.call(k2, this.slot))
+          k2[this.slot] = v2;
+        else if (Object.isExtensible(k2))
+          Object.defineProperty(k2, this.slot, { value: v2, writable: true, configurable: true, enumerable: false });
+        else
+          this.sealed.set(k2, v2);
+        return this;
+      };
+      SafeWeakMap2.prototype.delete = function(k2) {
+        if (!k2 || typeof k2 !== "object" && typeof k2 !== "function")
+          return false;
+        if (Object.prototype.hasOwnProperty.call(k2, this.slot))
+          return delete k2[this.slot];
+        return this.sealed.delete(k2);
+      };
+      return SafeWeakMap2;
+    })()
+  );
+  var SafeWeakSet = (
+    /** @class */
+    (function() {
+      function SafeWeakSet2(values2) {
+        var e_3, _a;
+        this.map = new SafeWeakMap();
+        if (values2)
+          try {
+            for (var _b = __values(values2), _c = _b.next(); !_c.done; _c = _b.next()) {
+              var v2 = _c.value;
+              this.add(v2);
+            }
+          } catch (e_3_1) {
+            e_3 = { error: e_3_1 };
+          } finally {
+            try {
+              if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
+            } finally {
+              if (e_3) throw e_3.error;
+            }
+          }
+      }
+      SafeWeakSet2.prototype.add = function(v2) {
+        this.map.set(v2, true);
+        return this;
+      };
+      SafeWeakSet2.prototype.has = function(v2) {
+        return this.map.has(v2);
+      };
+      SafeWeakSet2.prototype.delete = function(v2) {
+        return this.map.delete(v2);
+      };
+      return SafeWeakSet2;
+    })()
+  );
+  G.WeakMap = SafeWeakMap;
+  G.WeakSet = SafeWeakSet;
 
   // qt/js/shims.ts
   var __read2 = globalThis.__fast && globalThis.__fast.__read || function(o2, n2) {
