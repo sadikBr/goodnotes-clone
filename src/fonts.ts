@@ -5,19 +5,29 @@ import "@fontsource/inter/400.css";
 import "@fontsource/inter/400-italic.css";
 import "@fontsource/inter/700.css";
 import "@fontsource/inter/700-italic.css";
-import "@fontsource/caveat/400.css";
-import "@fontsource/patrick-hand/400.css";
-import "@fontsource/kalam/400.css";
-import "@fontsource/indie-flower/400.css";
-import "@fontsource/shadows-into-light/400.css";
-import "@fontsource/dancing-script/400.css";
-import "@fontsource/architects-daughter/400.css";
+// Handwriting faces (Latin and Latin Extended subsets: French, Spanish… accents).
+import "@fontsource/playpen-sans/latin-400.css";
+import "@fontsource/playpen-sans/latin-ext-400.css";
+import "@fontsource/playpen-sans/latin-700.css";
+import "@fontsource/playpen-sans/latin-ext-700.css";
+import "@fontsource/mynerve/latin-400.css";
+import "@fontsource/mynerve/latin-ext-400.css";
+import "@fontsource/andika/latin-400.css";
+import "@fontsource/andika/latin-ext-400.css";
+import "@fontsource/andika/latin-700.css";
+import "@fontsource/andika/latin-ext-700.css";
+import "@fontsource/playwrite-fr-moderne/latin-400.css";
+import "@fontsource/shantell-sans/latin-400.css";
+import "@fontsource/shantell-sans/latin-ext-400.css";
+import "@fontsource/shantell-sans/latin-700.css";
+import "@fontsource/shantell-sans/latin-ext-700.css";
+import "@fontsource/handlee/latin-400.css";
 // Arabic: every preset falls back to Noto Sans Arabic for Arabic letters
 // (only its Arabic subset, so Latin text keeps each preset's own look).
 import "@fontsource/noto-sans-arabic/arabic-400.css";
 import "@fontsource/noto-sans-arabic/arabic-700.css";
 
-export type FontId = "sans" | "caveat" | "patrick-hand" | "kalam" | "indie-flower" | "shadows" | "dancing" | "architect";
+export type FontId = "sans" | "playpen" | "mynerve" | "school" | "cursive-fr" | "marker" | "neat";
 
 export interface FontPreset {
   id: FontId;
@@ -26,28 +36,47 @@ export interface FontPreset {
   family: string;
   /** Primary face to wait for before drawing. */
   face: string | null;
+  /** The face has a real bold (others are emboldened by the browser). */
+  bold?: boolean;
 }
 
 /** Arabic fallback face, listed after each preset's own face. */
 export const ARABIC_FACE = "Noto Sans Arabic";
 const AR = `"${ARABIC_FACE}"`;
 const SANS = `"Inter", ${AR}, "Segoe UI", system-ui, -apple-system, sans-serif`;
-/** Faces of Inter that are bundled (handwriting fonts only have a regular face). */
+/**
+ * After a handwriting face: Arabic, then Inter for any other character the
+ * face lacks (², ½, ×…), so the screen and PDF export fill the gap alike.
+ */
+const HAND = `${AR}, "Inter", cursive`;
+/** Faces of Inter that are bundled. */
 const INTER_STYLES = ["", "bold ", "italic ", "italic bold "];
 
 export const FONT_PRESETS: FontPreset[] = [
   { id: "sans", label: "Clean", family: SANS, face: "Inter" },
-  { id: "caveat", label: "Quick notes", family: `"Caveat", ${AR}, cursive`, face: "Caveat" },
-  { id: "patrick-hand", label: "Neat print", family: `"Patrick Hand", ${AR}, cursive`, face: "Patrick Hand" },
-  { id: "kalam", label: "Casual", family: `"Kalam", ${AR}, cursive`, face: "Kalam" },
-  { id: "indie-flower", label: "Bubbly", family: `"Indie Flower", ${AR}, cursive`, face: "Indie Flower" },
-  { id: "shadows", label: "Light pencil", family: `"Shadows Into Light", ${AR}, cursive`, face: "Shadows Into Light" },
-  { id: "dancing", label: "Cursive", family: `"Dancing Script", ${AR}, cursive`, face: "Dancing Script" },
-  { id: "architect", label: "Architect", family: `"Architects Daughter", ${AR}, cursive`, face: "Architects Daughter" },
+  { id: "playpen", label: "Friendly", family: `"Playpen Sans", ${HAND}`, face: "Playpen Sans", bold: true },
+  { id: "mynerve", label: "Natural", family: `"Mynerve", ${HAND}`, face: "Mynerve" },
+  { id: "school", label: "School print", family: `"Andika", ${HAND}`, face: "Andika", bold: true },
+  { id: "cursive-fr", label: "French cursive", family: `"Playwrite FR Moderne", ${HAND}`, face: "Playwrite FR Moderne" },
+  { id: "marker", label: "Marker", family: `"Shantell Sans", ${HAND}`, face: "Shantell Sans", bold: true },
+  { id: "neat", label: "Neat", family: `"Handlee", ${HAND}`, face: "Handlee" },
 ];
 
+/** Earlier presets (their fonts were replaced): each shows as the closest new one. */
+const LEGACY: Record<string, FontId> = {
+  caveat: "mynerve",
+  "patrick-hand": "neat",
+  kalam: "playpen",
+  "indie-flower": "playpen",
+  shadows: "neat",
+  dancing: "cursive-fr",
+  architect: "school",
+  edu: "school",
+};
+
 export function fontPreset(id: string | undefined): FontPreset {
-  return FONT_PRESETS.find((f) => f.id === id) ?? FONT_PRESETS[0];
+  const key = id && LEGACY[id] ? LEGACY[id] : id;
+  return FONT_PRESETS.find((f) => f.id === key) ?? FONT_PRESETS[0];
 }
 
 /**
@@ -83,9 +112,10 @@ export async function ensureFonts(ids: Iterable<string | undefined>): Promise<bo
     );
   }
   for (const id of new Set(ids)) {
-    const face = fontPreset(id).face;
+    const preset = fontPreset(id);
+    const face = preset.face;
     if (!face || loaded.has(face)) continue;
-    const styles = face === "Inter" ? INTER_STYLES : [""];
+    const styles = face === "Inter" ? INTER_STYLES : preset.bold ? ["", "bold "] : [""];
     pending.push(
       Promise.all(styles.map((st) => document.fonts.load(`${st}24px "${face}"`, "Aa")))
         .then(() => loaded.add(face))

@@ -3,24 +3,25 @@
 // an exported PDF looks exactly like the text on the page.
 
 import { parse, type Font } from "opentype.js";
-import { arabicFirst, FONT_PRESETS, type FontId } from "../fonts";
+import { arabicFirst, FONT_PRESETS, fontPreset, type FontId } from "../fonts";
 
 /** @fontsource package per preset. */
 const PACKAGES: Record<FontId, string> = {
   sans: "inter",
-  caveat: "caveat",
-  "patrick-hand": "patrick-hand",
-  kalam: "kalam",
-  "indie-flower": "indie-flower",
-  shadows: "shadows-into-light",
-  dancing: "dancing-script",
-  architect: "architects-daughter",
+  playpen: "playpen-sans",
+  mynerve: "mynerve",
+  school: "andika",
+  "cursive-fr": "playwrite-fr-moderne",
+  marker: "shantell-sans",
+  neat: "handlee",
 };
 
-/** Presets with real bold/italic faces bundled (others are synthesized, as on screen). */
-const REAL_STYLES = new Set<FontId>(["sans"]);
+/** Presets with a real bold face bundled (others are emboldened, as on screen). */
+const REAL_BOLD = new Set<FontId>(["sans", "playpen", "school", "marker"]);
+/** Presets with a real italic face bundled. */
+const REAL_ITALIC = new Set<FontId>(["sans"]);
 
-const FILES = import.meta.glob(["../../node_modules/@fontsource/*/files/*-latin-400-*.woff", "../../node_modules/@fontsource/*/files/*-latin-ext-400-*.woff", "../../node_modules/@fontsource/inter/files/inter-latin-700-*.woff", "../../node_modules/@fontsource/inter/files/inter-latin-ext-700-*.woff", "../../node_modules/@fontsource/noto-sans-arabic/files/noto-sans-arabic-arabic-*-normal.woff"], {
+const FILES = import.meta.glob(["../../node_modules/@fontsource/*/files/*-latin-400-*.woff", "../../node_modules/@fontsource/*/files/*-latin-ext-400-*.woff", "../../node_modules/@fontsource/*/files/*-latin-700-*.woff", "../../node_modules/@fontsource/*/files/*-latin-ext-700-*.woff", "../../node_modules/@fontsource/noto-sans-arabic/files/noto-sans-arabic-arabic-*-normal.woff"], {
   query: "?url",
   import: "default",
   eager: true,
@@ -43,6 +44,8 @@ export interface LoadedFace {
   fonts: Font[];
   /** Noto Sans Arabic in the face's weight (the screen's Arabic fallback). */
   arabic: Font | null;
+  /** Inter in the face's weight, for characters the face lacks (as on screen). */
+  fallback: Font[];
   fakeBold: boolean;
   fakeItalic: boolean;
 }
@@ -69,17 +72,21 @@ export async function loadFaces(specs: Iterable<FaceSpec>): Promise<void> {
   for (const s of specs) {
     const key = faceKey(s);
     if (faces.has(key)) continue;
-    const real = REAL_STYLES.has(s.font);
-    const weight = real && s.bold ? 700 : 400;
-    const italic = real && s.italic;
-    const pkg = PACKAGES[s.font] ?? PACKAGES.sans;
+    const preset = fontPreset(s.font).id;
+    const realBold = REAL_BOLD.has(preset);
+    const realItalic = REAL_ITALIC.has(preset);
+    const weight = realBold && s.bold ? 700 : 400;
+    const italic = realItalic && s.italic;
+    const pkg = PACKAGES[preset] ?? PACKAGES.sans;
     jobs.push(
       (async () => {
         const urls = (["latin", "latin-ext"] as const).map((sub) => fileUrl(pkg, sub, weight, italic)).filter((u): u is string => !!u);
         const fonts = (await Promise.all(urls.map(loadFont))).filter((f): f is Font => !!f);
         const ar = Object.entries(FILES).find(([path]) => path.endsWith(`/noto-sans-arabic-arabic-${s.bold ? 700 : 400}-normal.woff`));
         const arabic = ar ? await loadFont(ar[1]) : null;
-        faces.set(key, { fonts, arabic, fakeBold: s.bold && !real, fakeItalic: s.italic && !real });
+        const fallbackUrls = pkg === PACKAGES.sans ? [] : (["latin", "latin-ext"] as const).map((sub) => fileUrl(PACKAGES.sans, sub, s.bold ? 700 : 400, false)).filter((u): u is string => !!u);
+        const fallback = (await Promise.all(fallbackUrls.map(loadFont))).filter((f): f is Font => !!f);
+        faces.set(key, { fonts, arabic, fallback, fakeBold: s.bold && !realBold, fakeItalic: s.italic && !realItalic });
       })(),
     );
   }

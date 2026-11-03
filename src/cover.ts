@@ -40,7 +40,7 @@ export function coverTextElements(design: CoverDesign, title: string, date: stri
 /** Draws and stores a cover page's thumbnail (for the library). */
 export async function refreshCoverThumbnail(page: Page): Promise<void> {
   const els = fromStored(await api.elements(page.id));
-  await ensureFonts(["sans", "caveat", "kalam"]);
+  await ensureFonts(["sans", "mynerve", "playpen"]);
   const scale = 420 / page.width; // sharp: the library shows covers full-size
   const thumb = renderPage(page.template, page.paperColor, page.width, page.height, els, scale, new Map()).toDataURL("image/jpeg", 0.85);
   await api.setPageThumbnail(page.id, thumb);
@@ -52,7 +52,7 @@ const monthYear = () => new Date().toLocaleDateString(undefined, { month: "long"
 export async function setUpCover(nb: Notebook): Promise<void> {
   const [page] = await api.pages(nb.id);
   if (!page || !isCoverTemplate(page.template)) return;
-  await ensureFonts(["sans", "caveat", "kalam"]);
+  await ensureFonts(["sans", "mynerve", "playpen"]);
   await api.saveElements(page.id, coverTextElements(coverDesignOf(page.template), nb.title, monthYear(), page.width, page.height).map(toStored));
   await refreshCoverThumbnail(page);
 }
@@ -64,7 +64,7 @@ export async function setUpCover(nb: Notebook): Promise<void> {
  */
 export async function applyCover(nb: Notebook, design: CoverDesign, color: string): Promise<void> {
   await api.setNotebookCover(nb.id, color);
-  await ensureFonts(["sans", "caveat", "kalam"]);
+  await ensureFonts(["sans", "mynerve", "playpen"]);
   const template = coverTemplate(design);
   const pages = await api.pages(nb.id);
   let page = pages[0];
@@ -145,7 +145,7 @@ export function coverPickerField(initial: CoverDesign | "none", allowNone = fals
         cancelAnimationFrame(pending);
         pending = requestAnimationFrame(draw);
       });
-      void ensureFonts(["sans", "caveat", "kalam"]).then(draw);
+      void ensureFonts(["sans", "mynerve", "playpen"]).then(draw);
       draw();
       return row;
     },
@@ -173,7 +173,7 @@ export function coverPreviewPanel(ctx: { values: Record<string, string>; onChang
     cancelAnimationFrame(pending);
     pending = requestAnimationFrame(draw);
   });
-  void ensureFonts(["sans", "caveat", "kalam"]).then(draw);
+  void ensureFonts(["sans", "mynerve", "playpen"]).then(draw);
   draw();
   return h("div", { class: "nb-preview" }, stage, caption);
 }

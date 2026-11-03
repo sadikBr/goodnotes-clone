@@ -3522,7 +3522,7 @@ export class EditorScreen {
     const ink = this.selectedInk();
     if (!ink.length) return;
     const recognition = api.recognizeHandwriting(ink.map((s) => s.points.map((p) => [p[0], p[1]] as P2)));
-    const result = await inkToTextDialog(recognition, this.textFont === "sans" ? "caveat" : this.textFont);
+    const result = await inkToTextDialog(recognition, this.textFont === "sans" ? "mynerve" : this.textFont);
     if (!result) return;
     await ensureFonts([result.font]);
     const box = unionRects(ink.map(bounds))!;

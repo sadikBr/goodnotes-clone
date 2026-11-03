@@ -433,7 +433,11 @@ export class PdfPainter {
         const pieces: { font: Font; text: string }[] = [];
         for (const ch of run.text) {
           const last = pieces[pieces.length - 1];
-          const font = /\s/.test(ch) ? (last?.font ?? face.fonts[0]) : (face.fonts.find((f) => f.charToGlyphIndex(ch) > 0) ?? (face.arabic && face.arabic.charToGlyphIndex(ch) > 0 ? face.arabic : undefined));
+          const font = /\s/.test(ch)
+            ? (last?.font ?? face.fonts[0])
+            : (face.fonts.find((f) => f.charToGlyphIndex(ch) > 0) ??
+              (face.arabic && face.arabic.charToGlyphIndex(ch) > 0 ? face.arabic : undefined) ??
+              face.fallback.find((f) => f.charToGlyphIndex(ch) > 0));
           if (!font) return false;
           if (last?.font === font) last.text += ch;
           else pieces.push({ font, text: ch });
@@ -448,7 +452,7 @@ export class PdfPainter {
       // comes before its letter once reversed; it's centred over that letter.
       const glyphs: { font: Font; glyph: Glyph; mark: boolean }[] = [];
       for (const ch of shapeArabic(run.text)) {
-        const font = face.arabic && face.arabic.charToGlyphIndex(ch) > 0 ? face.arabic : face.fonts.find((f) => f.charToGlyphIndex(ch) > 0);
+        const font = face.arabic && face.arabic.charToGlyphIndex(ch) > 0 ? face.arabic : (face.fonts.find((f) => f.charToGlyphIndex(ch) > 0) ?? face.fallback.find((f) => f.charToGlyphIndex(ch) > 0));
         if (!font) return false;
         glyphs.push({ font, glyph: font.charToGlyph(ch), mark: isMark(ch.codePointAt(0)!) });
       }

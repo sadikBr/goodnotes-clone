@@ -206,7 +206,7 @@ export function coverText(design: CoverDesign, w: number, h: number): CoverText 
     }
     case "marble": {
       const p = marblePlate(w, h);
-      return { title: { x: p.x + 24, y: p.y + 40, w: p.w - 48, h: p.h * 0.55 - 40 }, date: { x: p.x + 24, y: p.y + p.h * 0.72 - 18, w: p.w - 48 }, align: "center", titleColor: "#111827", dateColor: "#4b5563", font: "caveat", maxSize: 40, dateSize: 20 };
+      return { title: { x: p.x + 24, y: p.y + 40, w: p.w - 48, h: p.h * 0.55 - 40 }, date: { x: p.x + 24, y: p.y + p.h * 0.72 - 18, w: p.w - 48 }, align: "center", titleColor: "#111827", dateColor: "#4b5563", font: "mynerve", maxSize: 40, dateSize: 20 };
     }
     case "leather": {
       const y = h * 0.36;
@@ -215,7 +215,7 @@ export function coverText(design: CoverDesign, w: number, h: number): CoverText 
     }
     case "kraft": {
       const p = kraftLabel(w, h);
-      return { title: { x: p.x + 22, y: p.y + 22, w: p.w - 44, h: p.h * 0.62 - 22 }, date: { x: p.x + 22, y: p.y + p.h * 0.66, w: p.w - 44 }, align: "center", titleColor: "#3f2d1c", dateColor: "#7a6047", font: "kalam", maxSize: 38, dateSize: 17 };
+      return { title: { x: p.x + 22, y: p.y + 22, w: p.w - 44, h: p.h * 0.62 - 22 }, date: { x: p.x + 22, y: p.y + p.h * 0.66, w: p.w - 44 }, align: "center", titleColor: "#3f2d1c", dateColor: "#7a6047", font: "playpen", maxSize: 38, dateSize: 17 };
     }
     case "zellige": {
       const p = zelligePanel(w, h);
