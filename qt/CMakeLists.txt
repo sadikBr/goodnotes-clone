@@ -7,6 +7,8 @@ file(READ ${CMAKE_CURRENT_SOURCE_DIR}/../package.json INKLEAF_PACKAGE_JSON)
 string(JSON INKLEAF_VERSION_FROM_PACKAGE GET ${INKLEAF_PACKAGE_JSON} version)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../package.json)
 project(Inkleaf VERSION ${INKLEAF_VERSION_FROM_PACKAGE} LANGUAGES CXX)
+# Android's version number: 0.8.1 → 801 (major*10000 + minor*100 + patch).
+math(EXPR INKLEAF_VERSION_CODE "${PROJECT_VERSION_MAJOR} * 10000 + ${PROJECT_VERSION_MINOR} * 100 + ${PROJECT_VERSION_PATCH}")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -26,13 +28,36 @@ else()
   set(CARGO_FLAGS --release)
 endif()
 set(CARGO_TARGET_DIR ${CMAKE_CURRENT_BINARY_DIR}/cargo)
+set(CARGO_ENV "")
+set(CARGO_OUT ${CARGO_TARGET_DIR}/${CARGO_PROFILE})
+if(ANDROID)
+  # Cross-compiled with the NDK for the ABI being built.
+  set(RUST_TARGET_arm64-v8a aarch64-linux-android)
+  set(RUST_TARGET_armeabi-v7a armv7-linux-androideabi)
+  set(RUST_TARGET_x86_64 x86_64-linux-android)
+  set(RUST_TARGET ${RUST_TARGET_${ANDROID_ABI}})
+  string(TOUPPER ${RUST_TARGET} RUST_TARGET_ENV)
+  string(REPLACE "-" "_" RUST_TARGET_ENV ${RUST_TARGET_ENV})
+  set(CLANG_TRIPLE ${RUST_TARGET})
+  if(ANDROID_ABI STREQUAL "armeabi-v7a")
+    set(CLANG_TRIPLE armv7a-linux-androideabi)
+  endif()
+  set(NDK_BIN ${ANDROID_NDK}/toolchains/llvm/prebuilt/${ANDROID_HOST_TAG}/bin)
+  set(NDK_CC ${NDK_BIN}/${CLANG_TRIPLE}${ANDROID_PLATFORM_LEVEL}-clang)
+  set(CARGO_ENV ${CMAKE_COMMAND} -E env
+    CARGO_TARGET_${RUST_TARGET_ENV}_LINKER=${NDK_CC}
+    CC_${RUST_TARGET}=${NDK_CC}
+    AR_${RUST_TARGET}=${NDK_BIN}/llvm-ar)
+  set(CARGO_FLAGS ${CARGO_FLAGS} --target ${RUST_TARGET})
+  set(CARGO_OUT ${CARGO_TARGET_DIR}/${RUST_TARGET}/${CARGO_PROFILE})
+endif()
 if(WIN32)
-  set(NATIVE_LIB ${CARGO_TARGET_DIR}/${CARGO_PROFILE}/inkleaf_native.lib)
+  set(NATIVE_LIB ${CARGO_OUT}/inkleaf_native.lib)
 else()
-  set(NATIVE_LIB ${CARGO_TARGET_DIR}/${CARGO_PROFILE}/libinkleaf_native.a)
+  set(NATIVE_LIB ${CARGO_OUT}/libinkleaf_native.a)
 endif()
 add_custom_target(inkleaf_native_build
-  COMMAND cargo build -p inkleaf-native ${CARGO_FLAGS} --target-dir ${CARGO_TARGET_DIR}
+  COMMAND ${CARGO_ENV} cargo build -p inkleaf-native ${CARGO_FLAGS} --target-dir ${CARGO_TARGET_DIR}
   WORKING_DIRECTORY ${REPO_ROOT}
   BYPRODUCTS ${NATIVE_LIB}
   COMMENT "Building the Rust core"
@@ -142,7 +167,18 @@ qt_add_resources(inkleaf "inkleaf_style"
 
 target_compile_definitions(inkleaf PRIVATE INKLEAF_VERSION="${PROJECT_VERSION}")
 target_link_libraries(inkleaf PRIVATE Qt6::Core Qt6::Gui Qt6::Network Qt6::Quick Qt6::QuickControls2 Qt6::Pdf inkleaf_native)
-if(UNIX AND NOT APPLE)
+if(ANDROID)
+  target_link_libraries(inkleaf PRIVATE dl m log)
+  # A separate app for now (the current Android app keeps its own library).
+  set_target_properties(inkleaf PROPERTIES
+    QT_ANDROID_PACKAGE_NAME app.inkleaf.qt
+    QT_ANDROID_APP_NAME Inkleaf
+    QT_ANDROID_VERSION_NAME ${PROJECT_VERSION}
+    QT_ANDROID_VERSION_CODE ${INKLEAF_VERSION_CODE}
+    QT_ANDROID_MIN_SDK_VERSION 28
+    QT_ANDROID_TARGET_SDK_VERSION 35
+    QT_ANDROID_PACKAGE_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/android)
+elseif(UNIX AND NOT APPLE)
   target_link_libraries(inkleaf PRIVATE dl pthread m)
 endif()
 if(WIN32)

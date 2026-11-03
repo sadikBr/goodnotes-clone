@@ -36,7 +36,9 @@ InkleafCore* g_instance = nullptr;
 /// Windows %APPDATA%\app.inkleaf.desktop).
 QString libraryDir() {
   if (const QByteArray env = qgetenv("INKLEAF_DATA_DIR"); !env.isEmpty()) return QString::fromUtf8(env);
-#ifdef Q_OS_WIN
+#if defined(Q_OS_ANDROID)
+  return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);  // the app's private storage
+#elif defined(Q_OS_WIN)
   const QString base = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);  // %APPDATA% (roaming)
   const QString roaming = qEnvironmentVariable("APPDATA", base);
   return QDir(roaming).filePath("app.inkleaf.desktop");
