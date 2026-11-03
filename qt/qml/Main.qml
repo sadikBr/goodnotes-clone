@@ -38,6 +38,14 @@ ApplicationWindow {
         openTitle = title
         openNotebook = id
     }
+    // Android's back gesture closes the window: from a notebook it goes back to the library.
+    onClosing: close => {
+        if (Qt.platform.os === "android" && openNotebook) {
+            close.accepted = false
+            if (loader.item && loader.item.saveForSync) loader.item.saveForSync()
+            closeNotebook()
+        }
+    }
     function closeNotebook() {
         openNotebook = ""
         // Send what was written in it.

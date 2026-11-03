@@ -96,7 +96,7 @@ std::unique_ptr<PdfFile> PdfFile::open(const QString& path, Error* error) {
   QJniEnvironment env;
   auto jarr = arr.object<jfloatArray>();
   const jsize n = env->GetArrayLength(jarr);
-  std::vector<jfloat> v(size_t(n));
+  std::vector<jfloat> v(static_cast<size_t>(n));
   env->GetFloatArrayRegion(jarr, 0, n, v.data());
   auto f = std::make_unique<AndroidPdfFile>();
   f->path = path;
