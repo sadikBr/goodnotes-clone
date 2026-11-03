@@ -72,7 +72,8 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
           APPIMAGE_EXTRACT_AND_RUN: 1
-        run: INKLEAF_DATA_DIR=$RUNNER_TEMP/library ./Inkleaf_*_qt_x86_64.AppImage --smoke
+        # Without the Qt installed here, so a module missing from the AppImage fails.
+        run: env -u QML_IMPORT_PATH -u QML2_IMPORT_PATH -u QT_PLUGIN_PATH -u LD_LIBRARY_PATH INKLEAF_DATA_DIR=$RUNNER_TEMP/library ./Inkleaf_*_qt_x86_64.AppImage --smoke
       - uses: actions/upload-artifact@v4
         with:
           name: inkleaf-qt-linux
@@ -113,8 +114,9 @@ jobs:
           mkdir -p dist/Inkleaf
           cp build/qt/inkleaf.exe dist/Inkleaf/Inkleaf.exe
           windeployqt --release --qmldir qt/qml --no-translations --compiler-runtime dist/Inkleaf/Inkleaf.exe
-          # It starts (window, scripts and dialogs load).
-          INKLEAF_DATA_DIR="$RUNNER_TEMP/library" ./dist/Inkleaf/Inkleaf.exe --smoke
+          # It starts (window, scripts and dialogs load), without the Qt
+          # installed here, so a module missing from the folder fails.
+          env -u QML_IMPORT_PATH -u QML2_IMPORT_PATH -u QT_PLUGIN_PATH INKLEAF_DATA_DIR="$RUNNER_TEMP/library" ./dist/Inkleaf/Inkleaf.exe --smoke
           version=$(node -p "require('./package.json').version")
           cd dist && 7z a "../Inkleaf_${version}_qt_windows_x64.zip" Inkleaf > /dev/null
       - uses: actions/upload-artifact@v4
