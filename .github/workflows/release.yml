@@ -13,6 +13,9 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # Or Actions → Release → Run workflow: releases the version in package.json
+  # (GitHub creates the tag when the release is published).
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -22,19 +25,26 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       id: ${{ steps.release.outputs.id }}
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
+      - name: Which version
+        id: tag
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then tag="${{ github.ref_name }}"; else tag="v$(node -p "require('./package.json').version")"; fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - name: Tag matches the app version
         run: node scripts/check-version.mjs
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ steps.tag.outputs.tag }}
       - name: Create a draft release
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          gh release create "${{ github.ref_name }}" --draft --title "Inkleaf ${{ github.ref_name }}" --generate-notes
-          echo "id=$(gh release view "${{ github.ref_name }}" --json databaseId -q .databaseId)" >> "$GITHUB_OUTPUT"
+          gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "Inkleaf $TAG" --generate-notes
+          echo "id=$(gh release view "$TAG" --json databaseId -q .databaseId)" >> "$GITHUB_OUTPUT"
 
   desktop:
     needs: create-release
@@ -124,11 +134,12 @@ jobs:
       - name: Attach the APK to the release
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.create-release.outputs.tag }}
         run: |
           apk=$(find src-tauri/gen/android/app/build/outputs/apk -name '*release*.apk' | head -n 1)
           test -n "$apk"
-          cp "$apk" "Inkleaf_${GITHUB_REF_NAME#v}_android.apk"
-          gh release upload "$GITHUB_REF_NAME" "Inkleaf_${GITHUB_REF_NAME#v}_android.apk" --clobber
+          cp "$apk" "Inkleaf_${TAG#v}_android.apk"
+          gh release upload "$TAG" "Inkleaf_${TAG#v}_android.apk" --clobber
 
   publish:
     needs: [create-release, desktop, android]
@@ -137,4 +148,4 @@ jobs:
       - name: Publish the release (updates go live)
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release edit "${{ github.ref_name }}" --repo "${{ github.repository }}" --draft=false --latest
+        run: gh release edit "${{ needs.create-release.outputs.tag }}" --repo "${{ github.repository }}" --draft=false --latest
