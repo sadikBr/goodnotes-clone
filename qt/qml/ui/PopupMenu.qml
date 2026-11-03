@@ -20,6 +20,7 @@ Popup {
         items = list
         const p = anchor.mapToItem(parent, 0, 0)
         const h = list.length * 36 + 12
+        menuWidth = list.some(i => !!i.image) ? 240 : 220
         const below = p.y + anchor.height + 6 + h < parent.height
         x = Math.max(8, Math.min(parent.width - menuWidth - 8, p.x + anchor.width - menuWidth))
         y = below ? p.y + anchor.height + 6 : Math.max(8, p.y - 6 - h)
@@ -63,7 +64,8 @@ Popup {
                     spacing: 10
                     Item { Layout.preferredWidth: 2 }
                     Icon { visible: !!it.modelData.icon; name: it.modelData.icon || ""; size: 18; color: it.modelData.danger ? Theme.danger : Theme.muted }
-                    Label { text: it.modelData.label; color: it.fg; font.pixelSize: 14; font.weight: it.modelData.checked ? Font.DemiBold : Font.Normal; Layout.fillWidth: true; elide: Text.ElideRight }
+                    Image { visible: !!it.modelData.image; source: it.modelData.image || ""; sourceSize: Qt.size(112, 44); Layout.preferredWidth: 56; Layout.preferredHeight: 22; cache: false }
+                    Label { text: it.modelData.label; color: it.fg; font.pixelSize: it.modelData.fontSize || 14; font.family: it.modelData.font || Theme.font; font.weight: it.modelData.checked ? Font.DemiBold : Font.Normal; Layout.fillWidth: true; elide: Text.ElideRight }
                     Label { visible: !!it.modelData.checked; text: "✓"; color: Theme.accent; font.weight: Font.DemiBold }
                     Label { visible: !!it.modelData.key; text: it.modelData.key || ""; color: Theme.muted; font.pixelSize: 12 }
                     Item { Layout.preferredWidth: 4 }

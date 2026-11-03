@@ -51,6 +51,7 @@ ApplicationWindow {
             title: win.openTitle
             onBack: win.closeNotebook()
             onSettingsRequested: settings.open()
+            onNotify: (message, error) => toast.show(message, error)
         }
     }
 }

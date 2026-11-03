@@ -14,6 +14,7 @@
 #include <QSurfaceFormat>
 
 #include "Js.h"
+#include "PaperImage.h"
 #include "ShadowImage.h"
 
 int main(int argc, char* argv[]) {
@@ -52,7 +53,11 @@ int main(int argc, char* argv[]) {
   // Developer check: evaluates a script with the bridge loaded and prints
   // the result (inkleaf --js "<expression>").
   if (const int i = QCoreApplication::arguments().indexOf("--js"); i > 0 && i + 1 < argc) {
-    const QJSValue r = Js::instance().engine().evaluate(QCoreApplication::arguments().at(i + 1));
+    QJSValue r = Js::instance().engine().evaluate(QCoreApplication::arguments().at(i + 1));
+    // Promises settle after the script returns; __after() reads their results.
+    QCoreApplication::processEvents();
+    const QJSValue after = Js::instance().engine().globalObject().property("__after");
+    if (after.isCallable()) r = after.call();
     qInfo().noquote() << (r.isError() ? "error: " + r.toString() : Js::instance().engine().evaluate("JSON.stringify").call({r}).toString());
     return 0;
   }
@@ -81,6 +86,8 @@ int main(int argc, char* argv[]) {
   QQuickStyle::setStyle("InkleafStyle");
   QQmlApplicationEngine engine;
   engine.addImageProvider("shadow", new ShadowImage);
+  engine.addImageProvider("paper", new PaperImage);
+  engine.addImageProvider("ink", new InkSampleImage);
   engine.addImportPath(QStringLiteral("qrc:/qt/qml"));  // the default from Qt 6.5 on
   QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app, [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
   engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Inkleaf/qml/Main.qml")));

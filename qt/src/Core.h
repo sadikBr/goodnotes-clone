@@ -24,8 +24,16 @@ public:
   Q_INVOKABLE QVariant call(const QString& cmd, const QVariantMap& args = {});
   /// The same from C++: the answer as JSON, `error` set on failure.
   QJsonValue callJson(const QString& cmd, const QJsonObject& args, QString* error = nullptr, const QByteArray& bytes = {});
+  /// The answer's JSON text as it comes from the core (no parsing): for the scripts.
+  QByteArray callRaw(const QString& cmd, const QByteArray& argsJson, QString* error = nullptr);
   /// For commands that return a file (assetBytes, buildDocument, ...).
   QByteArray callBytes(const QString& cmd, const QJsonObject& args, QString* error = nullptr);
+
+  /// Runs a command that makes a file (buildDocument…) and writes it to `path`
+  /// (a path or file: URL); returns the path, or throws.
+  Q_INVOKABLE QString saveBytes(const QString& path, const QString& cmd, const QVariantMap& args = {});
+  /// The folder documents are usually saved in (for save dialogs).
+  Q_INVOKABLE QString documentsFolder() const;
 
   QString dataDir() const { return m_dir; }
   Q_INVOKABLE QString lastError() const { return m_lastError; }

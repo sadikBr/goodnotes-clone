@@ -4,6 +4,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QElapsedTimer>
 #include <QUuid>
 #include <QDebug>
 
@@ -16,16 +17,23 @@ QObject* JsNative::canvas(int w, int h) { return new JsCanvas(w, h); }
 
 QObject* JsNative::image(const QString& src) { return Js::instance().imageFor(src); }
 
+double JsNative::now() const {
+  static QElapsedTimer t = [] {
+    QElapsedTimer e;
+    e.start();
+    return e;
+  }();
+  return double(t.nsecsElapsed()) / 1e6;
+}
+
 QString JsNative::uuid() const { return QUuid::createUuid().toString(QUuid::WithoutBraces); }
 
 QString JsNative::call(const QString& cmd, const QString& argsJson) {
   QString error;
-  const QJsonObject args = QJsonDocument::fromJson(argsJson.toUtf8()).object();
-  const QJsonValue v = InkleafCore::instance()->callJson(cmd, args, &error);
-  QJsonObject out;
-  if (!error.isEmpty()) out["error"] = error;
-  else out["ok"] = v;
-  return QString::fromUtf8(QJsonDocument(out).toJson(QJsonDocument::Compact));
+  const QByteArray raw = InkleafCore::instance()->callRaw(cmd, argsJson.toUtf8(), &error);
+  if (!error.isEmpty()) return QString::fromUtf8(QJsonDocument(QJsonObject{{"error", error}}).toJson(QJsonDocument::Compact));
+  // {"ok": <answer>} without parsing the answer here.
+  return QStringLiteral("{\"ok\":") + QString::fromUtf8(raw.isEmpty() ? QByteArray("null") : raw) + QStringLiteral("}");
 }
 
 void JsNative::log(const QString& s) const { qInfo().noquote() << "[js]" << s; }

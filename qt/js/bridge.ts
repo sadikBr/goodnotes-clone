@@ -21,3 +21,6 @@ export { TEMPLATES, TEMPLATE_CATEGORIES, PAPER_SIZES, PAPER_COLORS } from "../..
 export { PEN_STYLES } from "../../src/editor/model";
 export { PALETTES } from "../../src/editor/toolkit";
 export { INSTRUMENTS, MM, snapAngle } from "../../src/editor/ruler";
+export { createEditor } from "./editorCore";
+export { renderPage, drawSelection } from "../../src/editor/render";
+export * as samples from "./samples";

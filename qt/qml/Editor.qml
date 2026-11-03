@@ -1,10 +1,12 @@
-// The editor: the notebook's pages on the canvas, with the tool trays on top
-// (the same layout as the web app: writing tools in the middle, undo/redo
-// on the right; tapping the active tool opens its options).
+// The editor (src/editor/editor.ts): the header with the tool trays, the page
+// sidebar, the pages, and the floating tool drawer, selection bar, text
+// editor and page controls.
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import Inkleaf
+import "editor"
 
 Rectangle {
     id: root
@@ -13,271 +15,385 @@ Rectangle {
     property string title
     signal back()
     signal settingsRequested()
+    signal notify(string message, bool error)
 
-    Prefs {
-        id: toolPrefs
-        category: "tools"
-        property string tool: "pen"
-        property string penStyle: "fountain"
-        property string penColor: "#111827"
-        property string highlighterColor: "#facc15"
-        property real penWidth: 3
-        property real highlighterWidth: 18
-        property real eraserWidth: 14
-    }
+    ToolPrefs { id: prefs }
 
-    property bool drawerOpen: false
+    readonly property var tools: [
+        { id: "pen", label: "Pen", key: "P", tray: 0, icon: "pen" },
+        { id: "highlighter", label: "Highlighter", key: "H", tray: 0, icon: "highlighter" },
+        { id: "eraser", label: "Eraser", key: "E", tray: 0, icon: "eraser" },
+        { id: "lasso", label: "Lasso select", key: "L", tray: 1, icon: "lasso" },
+        { id: "shape", label: "Shape", key: "S", tray: 1, icon: "shape" },
+        { id: "text", label: "Text box", key: "T", tray: 1, icon: "text" },
+        { id: "sticky", label: "Sticky note", key: "N", tray: 1, icon: "sticky" },
+        { id: "laser", label: "Laser pointer", key: "K", tray: 2, icon: "laser" },
+        { id: "hand", label: "Pan", key: "", tray: 2, icon: "hand" }
+    ]
+    property bool drawerOpen: prefs.store.drawerPinned
+    property bool sidebarShown: prefs.store.sidebar
+    property bool focusMode: false
+    property bool tipShown: false
+
     function pick(tool) {
-        if (canvas.tool === tool) drawerOpen = !drawerOpen
-        else {
-            canvas.tool = tool
-            drawerOpen = false
+        if (canvas.tool === tool) {
+            drawerOpen = !drawerOpen
+            return
         }
-        toolPrefs.tool = tool
+        canvas.tool = tool
+        prefs.store.tool = tool
+        if (!prefs.store.drawerPinned) drawerOpen = false
+        if (!tipShown && !prefs.store.drawerPinned && tool !== "hand") {
+            tipShown = true
+            root.notify("Tip: tap the selected tool again for its colours and sizes", false)
+        }
+    }
+    function toggleSidebar() {
+        prefs.store.sidebar = !prefs.store.sidebar
     }
 
-    // --- header -----------------------------------------------------------------
-    Rectangle {
-        id: header
-        anchors.left: parent.left
-        anchors.right: parent.right
-        height: 58
-        color: Theme.surface
-        z: 2
-        Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.border }
+    FileDialog {
+        id: imageDialog
+        title: "Insert image"
+        nameFilters: ["Images (*.png *.jpg *.jpeg *.gif *.webp *.bmp)"]
+        onAccepted: canvas.insertImage(selectedFile.toString())
+    }
+    PopupMenu { id: menu }
+    PaperPicker { id: paperPicker; canvas: canvas }
+    FormDialog { id: dialog }
 
+    ColumnLayout {
+        anchors.fill: parent
+        spacing: 0
+
+        // --- header ---------------------------------------------------------------
+        Rectangle {
+            id: header
+            Layout.fillWidth: true
+            Layout.preferredHeight: root.focusMode ? 0 : 58
+            visible: !root.focusMode
+            z: 5
+            color: Theme.surface
+            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.border }
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 10
+                anchors.rightMargin: 10
+                spacing: 16
+
+                // Left: back, pages, title, page chip.
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1
+                    spacing: 2
+                    IconButton { iconName: "back"; tip: "Library"; implicitWidth: 36; implicitHeight: 36; onClicked: { canvas.finishEdit(); canvas.flush(); root.back() } }
+                    IconButton { iconName: "sidebar"; tip: "Pages sidebar"; implicitWidth: 36; implicitHeight: 36; iconColor: Theme.muted; onClicked: root.toggleSidebar() }
+                    AbstractButton {
+                        id: titleBtn
+                        Layout.maximumWidth: 260
+                        implicitHeight: 32
+                        implicitWidth: titleLabel.implicitWidth + 16
+                        hoverEnabled: true
+                        onClicked: dialog.ask("Rename notebook", [{ name: "title", label: "Title", value: root.title }], "Save", r => {
+                            try {
+                                InkleafCore.call("renameNotebook", { id: root.notebookId, title: r.title.trim() })
+                                root.title = r.title.trim()
+                            } catch (e) { root.notify(String(e.message || e), true) }
+                        })
+                        background: Rectangle { radius: 8; color: titleBtn.hovered ? Theme.surface2 : "transparent" }
+                        contentItem: Label { id: titleLabel; text: root.title; font.pixelSize: 15; font.weight: Font.DemiBold; color: Theme.text; elide: Text.ElideRight; leftPadding: 8; rightPadding: 8; verticalAlignment: Text.AlignVCenter }
+                    }
+                    Rectangle {
+                        visible: root.width > 1100
+                        implicitHeight: 20
+                        implicitWidth: chipLabel.implicitWidth + 18
+                        radius: 10
+                        color: Theme.surface2
+                        Label { id: chipLabel; anchors.centerIn: parent; text: "Page " + (canvas.currentPage + 1) + " of " + canvas.pageCount; font.pixelSize: 12; font.weight: Font.DemiBold; color: Theme.muted }
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+
+                // Middle: the tool trays.
+                RowLayout {
+                    id: trays
+                    spacing: 10
+                    Repeater {
+                        model: 3
+                        delegate: Rectangle {
+                            id: tray
+                            required property int index
+                            implicitWidth: trayRow.implicitWidth + 8
+                            implicitHeight: 46
+                            radius: 14
+                            color: Theme.surface2
+                            RowLayout {
+                                id: trayRow
+                                anchors.centerIn: parent
+                                spacing: 2
+                                Repeater {
+                                    model: root.tools.filter(t => t.tray === tray.index)
+                                    delegate: ToolBtn {
+                                        required property var modelData
+                                        objectName: "tool-" + modelData.id
+                                        iconName: modelData.icon
+                                        active: canvas.tool === modelData.id
+                                        ink: modelData.id === "sticky" || modelData.id === "lasso" || modelData.id === "hand" || modelData.id === "eraser" ? "" : (canvas.colors[modelData.id] || "")
+                                        tip: active ? modelData.label + " — tap again to " + (root.drawerOpen ? "hide" : "show") + " its options" : modelData.label + (modelData.key ? " (" + modelData.key + ")" : "")
+                                        onClicked: root.pick(modelData.id)
+                                        onActiveChanged: if (active) drawer.anchorItem = this
+                                        Component.onCompleted: if (active) drawer.anchorItem = this
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Right: history, page, export, more.
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1
+                    spacing: 8
+                    Item { Layout.fillWidth: true }
+                    Pill {
+                        IconButton { iconName: "undo"; tip: "Undo (Ctrl+Z)"; implicitWidth: 34; implicitHeight: 34; enabled: canvas.canUndo; onClicked: canvas.undo() }
+                        IconButton { iconName: "redo"; tip: "Redo (Ctrl+Shift+Z)"; implicitWidth: 34; implicitHeight: 34; enabled: canvas.canRedo; onClicked: canvas.redo() }
+                    }
+                    Pill {
+                        AbstractButton {
+                            id: paperBtn
+                            readonly property var meta: canvas.pages[canvas.currentPage] || ({})
+                            implicitHeight: 34
+                            implicitWidth: paperRow.implicitWidth + 10
+                            hoverEnabled: true
+                            ToolTip.visible: hovered && !paperPicker.opened
+                            ToolTip.text: "Page paper"
+                            onClicked: paperPicker.opened ? paperPicker.close() : paperPicker.show(paperBtn, canvas.currentPage)
+                            background: Rectangle { radius: 10; color: paperBtn.hovered || paperPicker.opened ? Theme.surface : "transparent" }
+                            contentItem: RowLayout {
+                                id: paperRow
+                                spacing: 6
+                                Rectangle {
+                                    Layout.preferredWidth: 22; Layout.preferredHeight: 28; Layout.leftMargin: 4
+                                    radius: 3
+                                    color: Theme.border
+                                    Image {
+                                        anchors.fill: parent; anchors.margins: 1
+                                        sourceSize: Qt.size(44, 56)
+                                        source: "image://paper/" + (paperBtn.meta.template || "blank") + "/" + (paperBtn.meta.paperColor || "#fffdf7").replace("#", "") + "/whole"
+                                    }
+                                }
+                                Label {
+                                    visible: root.width > 1320
+                                    text: {
+                                        const id = paperBtn.meta.template || "blank"
+                                        return String(id).startsWith("cover") ? "Cover" : (paperPicker.all.find(x => x.id === id) || { label: id }).label
+                                    }
+                                    color: Theme.text; font.weight: Font.Medium
+                                }
+                                Icon { name: "down"; size: 14; color: Theme.muted; Layout.rightMargin: 4 }
+                            }
+                        }
+                        IconButton { iconName: "image"; tip: "Insert image"; implicitWidth: 34; implicitHeight: 34; onClicked: imageDialog.open() }
+                        IconButton { iconName: "ruler"; tip: "Ruler (R)"; implicitWidth: 34; implicitHeight: 34; active: canvas.rulerVisible; activeColor: Theme.accentSoft; iconColor: canvas.rulerVisible ? Theme.accent : Theme.text; onClicked: canvas.rulerVisible = !canvas.rulerVisible }
+                        IconButton {
+                            iconName: "stylus"
+                            tip: AppSettings.store.penOnly ? "Pen-only mode is on: touch and mouse scroll" : "Pen-only mode"
+                            implicitWidth: 34; implicitHeight: 34
+                            active: AppSettings.store.penOnly
+                            activeColor: Theme.accentSoft
+                            iconColor: AppSettings.store.penOnly ? Theme.accent : Theme.muted
+                            onClicked: AppSettings.store.penOnly = !AppSettings.store.penOnly
+                        }
+                    }
+                    AbstractButton {
+                        id: exportBtn
+                        implicitHeight: 36
+                        implicitWidth: exportRow.implicitWidth + 24
+                        hoverEnabled: true
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Export as PDF, PowerPoint or image"
+                        scale: pressed ? 0.96 : 1
+                        onClicked: menu.show(exportBtn, [
+                            { label: "PDF — whole notebook", action: () => exporter.run("pdf", "all") },
+                            { label: "PDF — this page", action: () => exporter.run("pdf", "current") },
+                            { label: "PowerPoint (.pptx) — whole notebook", action: () => exporter.run("pptx", "all") },
+                            { label: "PowerPoint (.pptx) — this page", action: () => exporter.run("pptx", "current") },
+                            { label: "PNG image — this page", action: () => exporter.run("png", "current") }
+                        ])
+                        background: Rectangle { radius: 12; color: exportBtn.hovered ? Qt.lighter(Theme.accent, 1.08) : Theme.accent }
+                        contentItem: Item {
+                            RowLayout {
+                                id: exportRow
+                                anchors.centerIn: parent
+                                spacing: 6
+                                Icon { name: "download"; size: 16; color: Theme.dark ? "#0d1f17" : "#ffffff" }
+                                Label { visible: root.width > 1320; text: "Export"; font.pixelSize: 13; font.weight: Font.DemiBold; color: Theme.dark ? "#0d1f17" : "#ffffff" }
+                            }
+                        }
+                    }
+                    IconButton {
+                        id: moreBtn
+                        iconName: "more"; tip: "More"; implicitWidth: 36; implicitHeight: 36
+                        onClicked: menu.show(moreBtn, [
+                            { label: "Focus mode", key: "F", action: () => root.focusMode = !root.focusMode },
+                            { label: root.sidebarShown ? "Hide pages" : "Show pages", key: "[", action: () => root.toggleSidebar() },
+                            { label: "Settings…", action: () => root.settingsRequested() },
+                            { label: "Keyboard shortcuts", key: "?", action: () => shortcuts.open() },
+                            { label: Theme.dark ? "Light mode" : "Dark mode", action: () => AppSettings.store.theme = Theme.dark ? "light" : "dark" }
+                        ])
+                    }
+                }
+            }
+        }
+
+        // --- body: pages sidebar and the pages -------------------------------------------
         RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: 10
-            anchors.rightMargin: 10
-            spacing: 16
-
-            RowLayout {
-                Layout.fillWidth: true
-                Layout.preferredWidth: 1
-                spacing: 4
-                IconButton { iconName: "back"; tip: "Library"; onClicked: { canvas.flush(); root.back() } }
-                Label {
-                    text: root.title
-                    font.pixelSize: 15; font.weight: Font.DemiBold; color: Theme.text
-                    elide: Text.ElideRight; Layout.fillWidth: true; Layout.leftMargin: 6
-                }
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            spacing: 0
+            PageSidebar {
+                canvas: canvas
+                Layout.fillHeight: true
+                Layout.preferredWidth: root.sidebarShown && !root.focusMode ? 168 : 0
+                visible: Layout.preferredWidth > 0
+                Behavior on Layout.preferredWidth { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
             }
+            Item {
+                id: area
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
 
-            // Tool trays
-            Row {
-                spacing: 10
-                Rectangle {
-                    radius: 14; color: Theme.surface2
-                    width: tray1.width + 8; height: 46
-                    Row {
-                        id: tray1
+                InkCanvas {
+                    id: canvas
+                    anchors.fill: parent
+                    notebookId: root.notebookId
+                    tool: prefs.store.tool
+                    penStyle: prefs.store.penStyle
+                    colors: prefs.colors
+                    widths: prefs.widths
+                    shapeKind: prefs.store.shapeKind
+                    eraserMode: prefs.store.eraserMode
+                    laserMode: prefs.store.laserMode
+                    textFont: prefs.store.textFont
+                    smoothing: AppSettings.streamline
+                    penOnly: AppSettings.store.penOnly
+                    pressureCurve: AppSettings.store.pressure
+                    eraserEnd: AppSettings.store.eraserEnd
+                    sideButton: AppSettings.store.sideButton
+                    palmRejection: AppSettings.store.palmRejection
+                    penCursor: AppSettings.store.penCursor
+                    property bool penSeen: false
+                    onPenUsed: if (!AppSettings.store.penOnly && !penSeen) { penSeen = true; AppSettings.store.penOnly = true }
+                    onMessage: (text, error) => root.notify(text, error)
+                    onToolChanged: if (tool !== prefs.store.tool) prefs.store.tool = tool
+                }
+
+                TextEditor { anchors.fill: parent; canvas: canvas }
+                SelectionBar { id: selectionBar; canvas: canvas; z: 6 }
+
+                // The active tool's options.
+                ToolDrawer {
+                    id: drawer
+                    canvas: canvas
+                    prefs: prefs
+                    visible: root.drawerOpen && !root.focusMode
+                    z: 9
+                    y: 14
+                    x: {
+                        if (!anchorItem) return (area.width - width) / 2
+                        const c = anchorItem.mapToItem(area, anchorItem.width / 2, 0).x
+                        return Math.max(12, Math.min(c - width / 2, area.width - width - 12))
+                    }
+                    Behavior on x { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+                }
+
+                // Page and zoom controls.
+                Item {
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.margins: 16
+                    z: 8
+                    width: status.implicitWidth + 10
+                    height: 40
+                    Shadow { anchors.fill: parent; radius: 20; level: 2 }
+                    Rectangle { anchors.fill: parent; radius: 20; color: Theme.surface; border.color: Theme.border }
+                    RowLayout {
+                        id: status
                         anchors.centerIn: parent
                         spacing: 2
-                        IconButton {
-                            iconName: "pen"; tip: "Pen (P) — tap again for colours and sizes"
-                            active: canvas.tool === "pen"
-                            onClicked: root.pick("pen")
-                            Rectangle { anchors.horizontalCenter: parent.horizontalCenter; anchors.bottom: parent.bottom; anchors.bottomMargin: 3; width: 6; height: 6; radius: 3; color: canvas.penColor; visible: !parent.active }
-                        }
-                        IconButton {
-                            iconName: "highlighter"; tip: "Highlighter (H)"
-                            active: canvas.tool === "highlighter"
-                            onClicked: root.pick("highlighter")
-                            Rectangle { anchors.horizontalCenter: parent.horizontalCenter; anchors.bottom: parent.bottom; anchors.bottomMargin: 3; width: 6; height: 6; radius: 3; color: canvas.highlighterColor; visible: !parent.active }
-                        }
-                        IconButton { iconName: "eraser"; tip: "Eraser (E)"; active: canvas.tool === "eraser"; onClicked: root.pick("eraser") }
+                        IconButton { iconName: "up"; tip: "Previous page"; implicitWidth: 30; implicitHeight: 30; iconSize: 16; enabled: canvas.currentPage > 0; onClicked: canvas.goToPage(canvas.currentPage - 1) }
+                        Label { text: (canvas.currentPage + 1) + " / " + canvas.pageCount; color: Theme.muted; font.pixelSize: 13; font.weight: Font.DemiBold; Layout.preferredWidth: 46; horizontalAlignment: Text.AlignHCenter }
+                        IconButton { iconName: "down"; tip: "Next page"; implicitWidth: 30; implicitHeight: 30; iconSize: 16; enabled: canvas.currentPage < canvas.pageCount - 1; onClicked: canvas.goToPage(canvas.currentPage + 1) }
+                        Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 16; color: Theme.border; Layout.leftMargin: 4; Layout.rightMargin: 4 }
+                        IconButton { iconName: "zoomOut"; tip: "Zoom out (Ctrl+−)"; implicitWidth: 30; implicitHeight: 30; iconSize: 16; onClicked: canvas.zoomBy(1 / 1.2) }
+                        Label { text: Math.round(canvas.zoom * 100) + "%"; color: Theme.muted; font.pixelSize: 13; font.weight: Font.DemiBold; Layout.preferredWidth: 46; horizontalAlignment: Text.AlignHCenter }
+                        IconButton { iconName: "zoomIn"; tip: "Zoom in (Ctrl+=)"; implicitWidth: 30; implicitHeight: 30; iconSize: 16; onClicked: canvas.zoomBy(1.2) }
+                        IconButton { iconName: "fit"; tip: "Fit width (Ctrl+0)"; implicitWidth: 30; implicitHeight: 30; iconSize: 16; onClicked: canvas.fitWidth() }
                     }
                 }
-                Rectangle {
-                    radius: 14; color: Theme.surface2
-                    width: tray2.width + 8; height: 46
-                    Row {
-                        id: tray2
-                        anchors.centerIn: parent
-                        spacing: 2
-                        IconButton { iconName: "stylus"; tip: canvas.penOnly ? "Pen-only mode is on: touch and mouse scroll" : "Pen-only mode"; active: canvas.penOnly; onClicked: AppSettings.store.penOnly = !AppSettings.store.penOnly }
-                    }
-                }
-            }
 
-            RowLayout {
-                Layout.fillWidth: true
-                Layout.preferredWidth: 1
-                spacing: 2
-                Item { Layout.fillWidth: true }
-                Rectangle {
-                    radius: 14; color: Theme.surface2
-                    implicitWidth: undoRow.width + 8; implicitHeight: 46
-                    Row {
-                        id: undoRow
-                        anchors.centerIn: parent
-                        IconButton { iconName: "undo"; tip: "Undo (Ctrl+Z)"; enabled: canvas.canUndo; onClicked: canvas.undo() }
-                        IconButton { iconName: "redo"; tip: "Redo (Ctrl+Shift+Z)"; enabled: canvas.canRedo; onClicked: canvas.redo() }
+                // Leaving focus mode.
+                AbstractButton {
+                    visible: root.focusMode
+                    anchors.top: parent.top
+                    anchors.right: parent.right
+                    anchors.margins: 14
+                    z: 8
+                    implicitHeight: 34
+                    implicitWidth: focusRow.implicitWidth + 24
+                    hoverEnabled: true
+                    onClicked: root.focusMode = false
+                    background: Item {
+                        Shadow { anchors.fill: parent; radius: 17; level: 2 }
+                        Rectangle { anchors.fill: parent; radius: 17; color: Theme.surface; border.color: Theme.border }
+                    }
+                    contentItem: Item {
+                        RowLayout {
+                            id: focusRow
+                            anchors.centerIn: parent
+                            spacing: 6
+                            Icon { name: "focus"; size: 16; color: Theme.muted }
+                            Label { text: "Exit focus"; font.weight: Font.DemiBold; color: Theme.muted }
+                        }
                     }
                 }
-                IconButton { iconName: "plus"; tip: "Add a page at the end"; onClicked: canvas.addPage() }
             }
         }
     }
 
-    // --- the pages ------------------------------------------------------------------
-    InkCanvas {
-        id: canvas
-        anchors.top: header.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        focus: true
-        notebookId: root.notebookId
-        tool: toolPrefs.tool
-        penStyle: toolPrefs.penStyle
-        penColor: toolPrefs.penColor
-        highlighterColor: toolPrefs.highlighterColor
-        penWidth: toolPrefs.penWidth
-        highlighterWidth: toolPrefs.highlighterWidth
-        eraserWidth: toolPrefs.eraserWidth
-        smoothing: AppSettings.streamline
-        penOnly: AppSettings.store.penOnly
-        pressureCurve: AppSettings.store.pressure
-        eraserEnd: AppSettings.store.eraserEnd
-        sideButton: AppSettings.store.sideButton
-        palmRejection: AppSettings.store.palmRejection
-        penCursor: AppSettings.store.penCursor
-        onPenUsed: if (!AppSettings.store.penOnly && !penSeen) { penSeen = true; AppSettings.store.penOnly = true }
-        property bool penSeen: false
-        onError: (message) => console.warn(message)
+    // Export (PDF, PowerPoint, PNG).
+    Exporter { id: exporter; canvas: canvas; title: root.title; onNotify: (m, e) => root.notify(m, e) }
+    ShortcutsSheet { id: shortcuts }
 
-        TapHandler { onTapped: root.drawerOpen = false; acceptedDevices: PointerDevice.AllDevices; gesturePolicy: TapHandler.DragThreshold; enabled: root.drawerOpen }
-    }
-
-    // Keyboard shortcuts (wherever the focus is).
-    Shortcut { sequences: [StandardKey.Undo]; onActivated: canvas.undo() }
-    Shortcut { sequences: [StandardKey.Redo, "Ctrl+Shift+Z"]; onActivated: canvas.redo() }
+    // Keyboard shortcuts (src/editor/editor.ts handleKey).
+    readonly property bool typing: !!canvas.editing.id
+    Shortcut { sequences: [StandardKey.Undo]; enabled: !root.typing; onActivated: canvas.undo() }
+    Shortcut { sequences: [StandardKey.Redo, "Ctrl+Shift+Z", "Ctrl+Y"]; enabled: !root.typing; onActivated: canvas.redo() }
+    Shortcut { sequences: [StandardKey.Copy]; enabled: !root.typing; onActivated: { const n = canvas.copySelection(); if (n) root.notify("Copied " + n + " item" + (n > 1 ? "s" : ""), false) } }
+    Shortcut { sequences: [StandardKey.Cut]; enabled: !root.typing; onActivated: canvas.cutSelection() }
+    Shortcut { sequences: [StandardKey.Paste]; enabled: !root.typing; onActivated: canvas.paste() }
+    Shortcut { sequence: "Ctrl+D"; enabled: !root.typing; onActivated: canvas.duplicateSelection() }
+    Shortcut { sequences: [StandardKey.SelectAll]; enabled: !root.typing; onActivated: canvas.selectAll() }
     Shortcut { sequences: [StandardKey.ZoomIn, "Ctrl+="]; onActivated: canvas.zoomBy(1.2) }
     Shortcut { sequences: [StandardKey.ZoomOut]; onActivated: canvas.zoomBy(1 / 1.2) }
     Shortcut { sequence: "Ctrl+0"; onActivated: canvas.fitWidth() }
-    Shortcut { sequence: "P"; onActivated: root.pick("pen") }
-    Shortcut { sequence: "H"; onActivated: root.pick("highlighter") }
-    Shortcut { sequence: "E"; onActivated: root.pick("eraser") }
-    Shortcut { sequence: "PgDown"; onActivated: canvas.goToPage(canvas.currentPage + 1) }
-    Shortcut { sequence: "PgUp"; onActivated: canvas.goToPage(canvas.currentPage - 1) }
-    Shortcut { sequence: "Esc"; onActivated: root.drawerOpen = false }
-
-    // --- the active tool's options (hangs under the trays) --------------------------
-    Item {
-        id: drawer
-        visible: root.drawerOpen
-        z: 3
-        anchors.top: header.bottom
-        anchors.topMargin: 8
-        anchors.horizontalCenter: parent.horizontalCenter
-        width: drawerCol.implicitWidth + 32
-        height: drawerCol.implicitHeight + 28
-        readonly property bool hl: canvas.tool === "highlighter"
-        readonly property bool eraser: canvas.tool === "eraser"
-        Shadow { anchors.fill: parent; radius: 16; level: 3 }
-        Rectangle { anchors.fill: parent; radius: 16; color: Theme.surface; border.color: Theme.border }
-        // Taps inside don't fall through to the page.
-        MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons }
-        ColumnLayout {
-            id: drawerCol
-            anchors.centerIn: parent
-            spacing: 14
-
-            Segmented {
-                visible: canvas.tool === "pen"
-                Layout.fillWidth: true
-                options: [{ value: "fountain", label: "Fountain" }, { value: "ballpoint", label: "Ballpoint" }, { value: "pencil", label: "Pencil" }, { value: "brush", label: "Brush" }]
-                value: canvas.penStyle
-                onPicked: v => toolPrefs.penStyle = v
-            }
-            Swatches {
-                visible: !drawer.eraser
-                Layout.preferredWidth: 9 * 26 + 8 * 8
-                size: 26
-                colors: drawer.hl ? Theme.highlighterColors : Theme.inkColors
-                value: String(drawer.hl ? canvas.highlighterColor : canvas.penColor)
-                onPicked: c => drawer.hl ? toolPrefs.highlighterColor = c : toolPrefs.penColor = c
-            }
-            RowLayout {
-                spacing: 12
-                Label { text: "Size"; color: Theme.muted; font.pixelSize: 13 }
-                UiSlider {
-                    Layout.fillWidth: true
-                    Layout.preferredWidth: 220
-                    from: drawer.hl ? 6 : drawer.eraser ? 6 : 0.5
-                    to: drawer.hl ? 40 : drawer.eraser ? 60 : 14
-                    stepSize: 0.5
-                    value: drawer.hl ? canvas.highlighterWidth : drawer.eraser ? canvas.eraserWidth : canvas.penWidth
-                    onMoved: {
-                        if (drawer.hl) toolPrefs.highlighterWidth = value
-                        else if (drawer.eraser) toolPrefs.eraserWidth = value
-                        else toolPrefs.penWidth = value
-                    }
-                }
-                Label {
-                    text: (drawer.hl ? canvas.highlighterWidth : drawer.eraser ? canvas.eraserWidth : canvas.penWidth).toFixed(1)
-                    color: Theme.text; font.pixelSize: 13; Layout.preferredWidth: 32; horizontalAlignment: Text.AlignRight
-                }
-            }
-            RowLayout {
-                visible: canvas.tool === "pen"
-                spacing: 12
-                Label { text: "Smoothing"; color: Theme.muted; font.pixelSize: 13; Layout.fillWidth: true }
-                Segmented {
-                    options: [{ value: "off", label: "Off" }, { value: "light", label: "Light" }, { value: "normal", label: "Normal" }, { value: "strong", label: "Strong" }]
-                    value: AppSettings.store.smoothing
-                    onPicked: v => AppSettings.store.smoothing = v
-                }
-            }
-        }
-    }
-
-    // --- page and zoom controls (bottom right) -------------------------------------
-    Rectangle {
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.margins: 18
-        z: 2
-        radius: 14
-        color: Theme.surface
-        border.color: Theme.border
-        width: pager.implicitWidth + 12
-        height: 44
-        RowLayout {
-            id: pager
-            anchors.centerIn: parent
-            spacing: 2
-            IconButton { iconName: "up"; tip: "Previous page"; implicitWidth: 34; enabled: canvas.currentPage > 0; onClicked: canvas.goToPage(canvas.currentPage - 1) }
-            Label { text: (canvas.currentPage + 1) + " / " + canvas.pageCount; color: Theme.text; font.weight: Font.DemiBold; Layout.leftMargin: 4; Layout.rightMargin: 4 }
-            IconButton { iconName: "down"; tip: "Next page"; implicitWidth: 34; enabled: canvas.currentPage < canvas.pageCount - 1; onClicked: canvas.goToPage(canvas.currentPage + 1) }
-            Rectangle { width: 1; height: 22; color: Theme.border; Layout.leftMargin: 4; Layout.rightMargin: 4 }
-            Label {
-                text: Math.round(canvas.zoom * 100) + "%"
-                color: Theme.text; Layout.preferredWidth: 44; horizontalAlignment: Text.AlignHCenter
-            }
-            IconButton { iconName: "fit"; tip: "Fit width (Ctrl+0)"; implicitWidth: 34; onClicked: canvas.fitWidth() }
-        }
-    }
-
-    // What this preview doesn't show yet.
-    Rectangle {
-        visible: canvas.hiddenElements > 0
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 18
-        z: 2
-        radius: 12
-        color: Theme.surface
-        border.color: Theme.border
-        width: notice.implicitWidth + 28
-        height: 36
-        Label {
-            id: notice
-            anchors.centerIn: parent
-            text: "Text, shapes and pictures on these pages aren't shown in the native app yet; they're kept as they are."
-            color: Theme.muted; font.pixelSize: 13
+    Shortcut { sequences: ["Delete", "Backspace"]; enabled: !root.typing && (canvas.selection.count || 0) > 0; onActivated: canvas.deleteSelection() }
+    Shortcut { sequence: "Esc"; enabled: !root.typing; onActivated: { if ((canvas.selection.count || 0) > 0) canvas.clearSelection(); else if (root.focusMode) root.focusMode = false; else root.drawerOpen = prefs.store.drawerPinned } }
+    Shortcut { sequences: ["PgDown", "Right"]; enabled: !root.typing; onActivated: canvas.goToPage(canvas.currentPage + 1) }
+    Shortcut { sequences: ["PgUp", "Left"]; enabled: !root.typing; onActivated: canvas.goToPage(canvas.currentPage - 1) }
+    Shortcut { sequence: "R"; enabled: !root.typing; onActivated: canvas.rulerVisible = !canvas.rulerVisible }
+    Shortcut { sequence: "F"; enabled: !root.typing; onActivated: root.focusMode = !root.focusMode }
+    Shortcut { sequence: "["; enabled: !root.typing; onActivated: root.toggleSidebar() }
+    Shortcut { sequence: "?"; enabled: !root.typing; onActivated: shortcuts.open() }
+    Repeater {
+        model: root.tools.filter(t => t.key.length > 0)
+        delegate: Item {
+            required property var modelData
+            Shortcut { sequence: modelData.key; enabled: !root.typing; onActivated: root.pick(modelData.id) }
         }
     }
 }

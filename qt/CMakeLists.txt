@@ -42,12 +42,12 @@ qt_add_executable(inkleaf
   src/main.cpp
   src/Core.h src/Core.cpp
   src/Ink.h src/Ink.cpp
-  src/Paper.h src/Paper.cpp
   src/InkCanvas.h src/InkCanvas.cpp
   src/RoundImage.h src/RoundImage.cpp
   src/ShadowImage.h src/ShadowImage.cpp
   src/JsCanvas.h src/JsCanvas.cpp
   src/Js.h src/Js.cpp
+  src/PaperImage.h src/PaperImage.cpp
 )
 
 # Theme is a singleton (must be set before the module is declared).
@@ -95,6 +95,22 @@ qt_add_qml_module(inkleaf
     qml/ui/NewTile.qml
     qml/ui/CreateMenu.qml
     qml/ui/CreateItem.qml
+    qml/ui/DashedBox.qml
+    qml/editor/ToolPrefs.qml
+    qml/editor/ToolBtn.qml
+    qml/editor/Pill.qml
+    qml/editor/Chip.qml
+    qml/editor/SmallTool.qml
+    qml/editor/FormatButtons.qml
+    qml/editor/Fonts.js
+    qml/editor/ColorPopover.qml
+    qml/editor/ToolDrawer.qml
+    qml/editor/SelectionBar.qml
+    qml/editor/PageSidebar.qml
+    qml/editor/PaperPicker.qml
+    qml/editor/TextEditor.qml
+    qml/editor/Exporter.qml
+    qml/editor/ShortcutsSheet.qml
     ${CMAKE_CURRENT_BINARY_DIR}/gen/Prefs.qml
   RESOURCES
     assets/icon.svg

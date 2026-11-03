@@ -37,11 +37,33 @@ g.addEventListener = noop;
 g.removeEventListener = noop;
 g.matchMedia = () => ({ matches: false, addEventListener: noop, removeEventListener: noop });
 g.navigator = { userAgent: "Inkleaf-Qt", language: "en" };
-g.performance = { now: () => Date.now() };
+g.performance = { now: () => N.now() };
 g.requestAnimationFrame = (fn: () => void) => (fn(), 0);
 g.cancelAnimationFrame = noop;
-g.setTimeout = (fn: () => void) => (Promise.resolve().then(fn), 0);
-g.clearTimeout = noop;
+// Timers: run by the app (it calls __runTimers while __timersPending()).
+const timers = new Map<number, { due: number; fn: () => void }>();
+let nextTimer = 1;
+g.setTimeout = (fn: () => void, ms = 0) => {
+  const id = nextTimer++;
+  timers.set(id, { due: N.now() + ms, fn });
+  return id;
+};
+g.clearTimeout = (id: number) => void timers.delete(id);
+g.setInterval = () => 0;
+g.clearInterval = noop;
+g.__timersPending = () => timers.size > 0;
+g.__runTimers = () => {
+  const now = N.now();
+  for (const [id, t] of [...timers]) {
+    if (t.due > now) continue;
+    timers.delete(id);
+    try {
+      t.fn();
+    } catch (e) {
+      N.log(String(e));
+    }
+  }
+};
 g.crypto = { randomUUID: () => N.uuid(), getRandomValues: (a: Uint8Array) => (a.forEach((_, i) => (a[i] = Math.floor(Math.random() * 256))), a) };
 
 const store = new Map<string, string>();

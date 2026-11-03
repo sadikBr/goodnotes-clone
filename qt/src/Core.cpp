@@ -1,5 +1,9 @@
 #include "Core.h"
 
+#include <QSaveFile>
+#include <QStandardPaths>
+#include <QUrl>
+
 #include <QDir>
 #include <QJSEngine>
 #include <QJsonArray>
@@ -63,7 +67,10 @@ InkleafCore::~InkleafCore() {
   if (g_instance == this) g_instance = nullptr;
 }
 
-InkleafCore* InkleafCore::instance() { return g_instance; }
+InkleafCore* InkleafCore::instance() {
+  if (!g_instance) new InkleafCore();
+  return g_instance;
+}
 
 InkleafCore* InkleafCore::create(QQmlEngine*, QJSEngine*) {
   // One core for the whole app; QML must not delete it.
@@ -93,6 +100,24 @@ QJsonValue InkleafCore::callJson(const QString& cmd, const QJsonObject& args, QS
   return v;
 }
 
+QByteArray InkleafCore::callRaw(const QString& cmd, const QByteArray& argsJson, QString* error) {
+  if (!m_core) {
+    if (error) *error = m_lastError;
+    return {};
+  }
+  InkleafResult r = inkleaf_call(m_core, cmd.toUtf8().constData(), argsJson.constData(), nullptr, 0);
+  QByteArray out(reinterpret_cast<const char*>(r.data), int(r.len));
+  const bool ok = r.ok;
+  inkleaf_free(r);
+  if (!ok) {
+    m_lastError = QJsonDocument::fromJson(out).object().value("error").toString(QString::fromUtf8(out));
+    if (error) *error = m_lastError;
+    return {};
+  }
+  if (changesLibrary(cmd)) emit libraryChanged();
+  return out;
+}
+
 QByteArray InkleafCore::callBytes(const QString& cmd, const QJsonObject& args, QString* error) {
   if (!m_core) {
     if (error) *error = m_lastError;
@@ -120,3 +145,20 @@ QVariant InkleafCore::call(const QString& cmd, const QVariantMap& args) {
   }
   return v.toVariant();
 }
+
+QString InkleafCore::saveBytes(const QString& path, const QString& cmd, const QVariantMap& args) {
+  const QString file = QUrl(path).isLocalFile() ? QUrl(path).toLocalFile() : path;
+  QString err;
+  const QByteArray bytes = callBytes(cmd, QJsonObject::fromVariantMap(args), &err);
+  if (err.isEmpty()) {
+    QSaveFile f(file);
+    if (!f.open(QIODevice::WriteOnly) || f.write(bytes) != bytes.size() || !f.commit()) err = "Couldn't write " + file + ": " + f.errorString();
+  }
+  if (!err.isEmpty()) {
+    if (QJSEngine* js = qjsEngine(this)) js->throwError(err);
+    return {};
+  }
+  return file;
+}
+
+QString InkleafCore::documentsFolder() const { return QUrl::fromLocalFile(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)).toString(); }

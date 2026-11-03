@@ -46,3 +46,44 @@ if (!O.fromEntries) O.fromEntries = (entries: Iterable<[string, any]>) => { cons
 if (!O.hasOwn) O.hasOwn = (o: object, k: string) => Object.prototype.hasOwnProperty.call(o, k);
 const G = (function (this: any) { return this; })() as any;
 if (!G.structuredClone) G.structuredClone = (v: any) => JSON.parse(JSON.stringify(v));
+
+// Fast array paths for TypeScript's iteration helpers (see scripts/qt-bridge.mjs).
+G.__fast = {
+  __values(o: any) {
+    if (Array.isArray(o)) {
+      let i = 0;
+      const r = { value: undefined as any, done: false };
+      return {
+        next() {
+          if (i < o.length) r.value = o[i++];
+          else {
+            r.value = undefined;
+            r.done = true;
+          }
+          return r;
+        },
+      };
+    }
+    const s = typeof Symbol === "function" && o[Symbol.iterator];
+    if (s) return s.call(o);
+    if (o && typeof o.length === "number") {
+      let i = 0;
+      return { next: () => ({ value: o && o[i++], done: !o || i > o.length }) };
+    }
+    throw new TypeError(s ? "Object is not iterable." : "Symbol.iterator is not defined.");
+  },
+  __read(o: any, n?: number) {
+    if (Array.isArray(o)) return o;
+    const m = typeof Symbol === "function" && o[Symbol.iterator];
+    if (!m) return o;
+    const it = m.call(o);
+    const ar: any[] = [];
+    let r;
+    while ((n === void 0 || n-- > 0) && !(r = it.next()).done) ar.push(r.value);
+    return ar;
+  },
+  __spreadArray(to: any[], from: any, pack?: boolean) {
+    if (Array.isArray(from)) return to.concat(pack ? Array.prototype.slice.call(from) : from);
+    return to.concat(Array.prototype.slice.call(from));
+  },
+};

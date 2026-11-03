@@ -1,5 +1,6 @@
 #include "JsCanvas.h"
 
+#include <QBuffer>
 #include <QFontDatabase>
 #include <QFontMetricsF>
 #include <QJSEngine>
@@ -171,9 +172,15 @@ JsCanvas::JsCanvas(int w, int h, QObject* parent) : QObject(parent) {
   reset(w, h);
 }
 
-JsCanvas::~JsCanvas() { m_painter.reset(); }
+JsCanvas::~JsCanvas() {
+  if (m_painter)
+    for (size_t i = 1; i < m_states.size(); ++i) m_painter->restore();
+  m_painter.reset();
+}
 
 void JsCanvas::reset(int w, int h) {
+  if (m_painter)
+    for (size_t i = 1; i < m_states.size(); ++i) m_painter->restore();
   m_painter.reset();
   m_img = QImage(std::clamp(w, 1, 16384), std::clamp(h, 1, 16384), QImage::Format_ARGB32_Premultiplied);
   m_img.fill(Qt::transparent);
@@ -187,7 +194,10 @@ void JsCanvas::reset(int w, int h) {
 }
 
 QImage JsCanvas::image() {
-  m_painter.reset();  // ends painting; it starts again on the next call
+  // Ends painting (it starts again on the next call), balancing saved states.
+  if (m_painter)
+    for (size_t i = 1; i < m_states.size(); ++i) m_painter->restore();
+  m_painter.reset();
   return m_img;
 }
 
@@ -706,6 +716,26 @@ void JsCanvas::putImageData(const QJSValue& data, int x, int y) {
   const int w = data.property("width").toInt(), h = data.property("height").toInt();
   const QByteArray bytes = data.property("data").property("buffer").toVariant().toByteArray();
   putPixels(bytes, x, y, w, h);
+}
+
+QString JsCanvas::toDataURL(const QString& type, double quality) {
+  QByteArray bytes;
+  QBuffer buf(&bytes);
+  buf.open(QIODevice::WriteOnly);
+  const bool jpeg = type == "image/jpeg";
+  QImage img = image();
+  if (jpeg) {
+    // JPEG has no alpha: on white, as browsers do.
+    QImage flat(img.size(), QImage::Format_RGB32);
+    flat.fill(Qt::white);
+    QPainter p(&flat);
+    p.drawImage(0, 0, img);
+    p.end();
+    flat.save(&buf, "JPEG", int(std::clamp(quality, 0.0, 1.0) * 100));
+  } else {
+    img.save(&buf, "PNG");
+  }
+  return QStringLiteral("data:") + (jpeg ? "image/jpeg" : "image/png") + ";base64," + QString::fromLatin1(bytes.toBase64());
 }
 
 QByteArray JsCanvas::pixels(int x, int y, int w, int h) {

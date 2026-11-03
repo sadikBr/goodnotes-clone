@@ -153,6 +153,7 @@ public:
   Q_INVOKABLE QJSValue getImageData(int x, int y, int w, int h);
   Q_INVOKABLE void putImageData(const QJSValue& data, int x, int y);
   Q_INVOKABLE QByteArray pixels(int x, int y, int w, int h);
+  Q_INVOKABLE QString toDataURL(const QString& type = QStringLiteral("image/png"), double quality = 0.92);
   Q_INVOKABLE void putPixels(const QByteArray& rgba, int x, int y, int w, int h);
 
   // Styles

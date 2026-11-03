@@ -23,6 +23,8 @@ public:
   Q_INVOKABLE QObject* canvas(int w, int h);
   Q_INVOKABLE QObject* image(const QString& src);
   Q_INVOKABLE QString uuid() const;
+  /// Milliseconds on the app's clock (the same as pointer event times).
+  Q_INVOKABLE double now() const;
   /// A core command; answers {"ok": …} or {"error": "…"} as JSON.
   Q_INVOKABLE QString call(const QString& cmd, const QString& argsJson);
   Q_INVOKABLE void log(const QString& s) const;
