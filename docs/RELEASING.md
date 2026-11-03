@@ -24,7 +24,7 @@ Choose a password when asked. This makes `inkleaf.key` (private) and
 |---|---|---|
 | Secret | `TAURI_SIGNING_PRIVATE_KEY` | contents of `~/.tauri/inkleaf.key` |
 | Secret | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | the password |
-| Variable | `TAURI_UPDATER_PUBKEY` | contents of `~/.tauri/inkleaf.key.pub` |
+| Variable (or secret) | `TAURI_UPDATER_PUBKEY` | contents of `~/.tauri/inkleaf.key.pub` |
 
 Apps only install updates signed with this key.
 
@@ -89,6 +89,9 @@ git commit -am "v0.8.1"
 git tag v0.8.1
 git push origin main v0.8.1
 ```
+
+Or, without a tag: **Actions → Release → Run workflow** releases the version in
+`package.json`.
 
 The **Release** workflow checks the versions match, builds the Windows
 installer, the Linux AppImage and the Android APK, signs them, and publishes
