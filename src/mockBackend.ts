@@ -4,6 +4,9 @@
 // freehand in the browser preview.
 
 import type {
+  DeviceCode,
+  SyncReport,
+  SyncStatus,
   BackupConfig,
   BackupSummary,
   Backend,
@@ -436,5 +439,23 @@ export class MockBackend implements Backend {
   }
   async restoreBackup(): Promise<BackupSummary> {
     return fail("backups are available in the desktop app");
+  }
+
+  // Sync needs the installed app.
+  async syncStatus(): Promise<SyncStatus> {
+    return { available: false, signedIn: false, email: null, device: "", lastSyncAt: null, lastError: null };
+  }
+  async syncSignInStart(): Promise<DeviceCode> {
+    return fail("sync is available in the installed app");
+  }
+  async syncSignInWait(): Promise<SyncStatus> {
+    return fail("sync is available in the installed app");
+  }
+  async syncSignInCancel(): Promise<void> {}
+  async syncSignOut(): Promise<SyncStatus> {
+    return this.syncStatus();
+  }
+  async syncNow(): Promise<SyncReport> {
+    return { uploaded: 0, downloaded: 0, deleted: 0, conflicts: [], deferred: [] };
   }
 }

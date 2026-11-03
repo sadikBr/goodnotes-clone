@@ -7,6 +7,7 @@ import { setTheme, themeMode } from "./theme";
 import { h, icon } from "./ui";
 import { backupSection } from "./backupSettings";
 import { updatesSection } from "./updates";
+import { syncSection } from "./syncSettings";
 
 type Choice<T extends string> = { value: T; label: string };
 
@@ -71,6 +72,7 @@ export function openSettings() {
   const body = h(
     "div",
     { class: "set-body" },
+    syncSection(),
     section(
       "pen",
       "Writing",

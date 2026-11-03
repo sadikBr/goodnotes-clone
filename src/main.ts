@@ -6,6 +6,7 @@ import { applyStoredTheme } from "./theme";
 import { isRestoring, onFlushRequest } from "./appLifecycle";
 import { startBackupTimer } from "./backupSettings";
 import { startUpdateChecks } from "./updates";
+import { startSync, syncNow } from "./syncSettings";
 
 const app = document.getElementById("app")!;
 
@@ -19,12 +20,15 @@ const library = new LibraryScreen({
 });
 
 async function showLibrary() {
+  const closing = editor !== null;
   if (editor) {
     await editor.flush();
     editor = null;
   }
   app.replaceChildren(library.root);
   await library.show();
+  // Send what was just written, and take in changes the open notebook held back.
+  if (closing) void syncNow();
 }
 
 async function openEditor(id: string, pageId: string | null) {
@@ -50,3 +54,12 @@ onFlushRequest(async () => {
 void showLibrary();
 startBackupTimer();
 startUpdateChecks();
+startSync({
+  prepare: async () => {
+    await editor?.flush();
+    return editor?.notebookId ?? null;
+  },
+  changed: () => {
+    if (!editor) void library.show();
+  },
+});

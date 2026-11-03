@@ -289,6 +289,39 @@ export interface Backend {
   chooseBackupFile(): Promise<string | null>;
   inspectBackup(path: string): Promise<BackupSummary>;
   restoreBackup(path: string): Promise<BackupSummary>;
+  // Google Drive sync.
+  syncStatus(): Promise<SyncStatus>;
+  syncSignInStart(): Promise<DeviceCode>;
+  /** Resolves once the user approved on Google's page; `device` names this device. */
+  syncSignInWait(device: string): Promise<SyncStatus>;
+  syncSignInCancel(): Promise<void>;
+  syncSignOut(): Promise<SyncStatus>;
+  /** `open`: the notebook in the editor, which sync leaves alone. */
+  syncNow(open: string | null): Promise<SyncReport>;
+}
+
+export interface SyncStatus {
+  /** This build can sign in to Google. */
+  available: boolean;
+  signedIn: boolean;
+  email: string | null;
+  device: string;
+  lastSyncAt: number | null;
+  lastError: string | null;
+}
+
+export interface DeviceCode {
+  userCode: string;
+  verificationUrl: string;
+  expiresIn: number;
+}
+
+export interface SyncReport {
+  uploaded: number;
+  downloaded: number;
+  deleted: number;
+  conflicts: string[];
+  deferred: string[];
 }
 
 export interface BackupConfig {
@@ -393,6 +426,12 @@ class TauriBackend implements Backend {
     const r = await open({ title: "Restore from a backup", multiple: false, filters: [BACKUP_FILTER] });
     return typeof r === "string" ? r : null;
   };
+  syncStatus = () => invoke<SyncStatus>("sync_status");
+  syncSignInStart = () => invoke<DeviceCode>("sync_sign_in_start");
+  syncSignInWait = (device: string) => invoke<SyncStatus>("sync_sign_in_wait", { device });
+  syncSignInCancel = () => invoke<void>("sync_sign_in_cancel");
+  syncSignOut = () => invoke<SyncStatus>("sync_sign_out");
+  syncNow = (open: string | null) => invoke<SyncReport>("sync_now", { open });
   inspectBackup = async (path: string) => (isAndroid ? invoke<BackupSummary>("inspect_backup_bytes", await readPicked(path)) : invoke<BackupSummary>("inspect_backup", { path }));
   restoreBackup = async (path: string) => (isAndroid ? invoke<BackupSummary>("restore_backup_bytes", await readPicked(path)) : invoke<BackupSummary>("restore_backup", { path }));
 }

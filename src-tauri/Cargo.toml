@@ -23,6 +23,8 @@ base64 = "0.22"
 tauri-plugin-dialog = "=2.8.3"
 tauri-plugin-opener = "=2.7.2"
 tauri-plugin-fs = "=2.7.1"
+# Google Drive sync (HTTPS with rustls, which the build already has).
+ureq = "=2.12.1"
 zip = { version = "9.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 # Desktop only: in-app updates (signed, from GitHub Releases) and restart.

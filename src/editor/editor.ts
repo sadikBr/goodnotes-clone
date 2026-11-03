@@ -433,6 +433,11 @@ export class EditorScreen {
   }
 
   /** Persists pending edits; call before leaving the editor. */
+  /** The notebook being edited (sync leaves it alone while it's open). */
+  get notebookId(): string | null {
+    return this.notebook?.id ?? null;
+  }
+
   async flush() {
     this.finishTextEdit();
     if (this.dirty) await this.saveNow();

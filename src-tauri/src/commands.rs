@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager, State};
 
 use crate::backup::{self, BackupConfig, Backups};
+use crate::sync::{DeviceCode, SyncManager, SyncReport, SyncStatus};
 use crate::db::{
     BackupSummary, Db, Element, Folder, Library, NewNotebook, NewPdfNotebook, Notebook, Page, SearchHit,
     TrashContents,
@@ -491,4 +492,44 @@ pub fn restore_backup_bytes(app: AppHandle, db: State<'_, Db>, request: tauri::i
     let r = db.restore_from(&tmp);
     let _ = std::fs::remove_file(&tmp);
     r
+}
+
+// --- Google Drive sync ----------------------------------------------------------
+// Network work runs on a background thread so the window never freezes.
+
+async fn blocking<T: Send + 'static>(app: AppHandle, f: impl FnOnce(&AppHandle) -> AppResult<T> + Send + 'static) -> AppResult<T> {
+    tauri::async_runtime::spawn_blocking(move || f(&app)).await.map_err(|e| AppError::Invalid(e.to_string()))?
+}
+
+#[tauri::command]
+pub fn sync_status(sync: State<'_, SyncManager>) -> SyncStatus {
+    sync.status()
+}
+
+/// Starts signing in: a code to enter at google.com/device.
+#[tauri::command]
+pub async fn sync_sign_in_start(app: AppHandle) -> AppResult<DeviceCode> {
+    blocking(app, |a| a.state::<SyncManager>().sign_in_start()).await
+}
+
+/// Waits until the user has approved on Google's page; `device` names this device.
+#[tauri::command]
+pub async fn sync_sign_in_wait(app: AppHandle, device: String) -> AppResult<SyncStatus> {
+    blocking(app, move |a| a.state::<SyncManager>().sign_in_wait(&device)).await
+}
+
+#[tauri::command]
+pub fn sync_sign_in_cancel(sync: State<'_, SyncManager>) {
+    sync.sign_in_cancel();
+}
+
+#[tauri::command]
+pub async fn sync_sign_out(app: AppHandle) -> AppResult<SyncStatus> {
+    blocking(app, |a| a.state::<SyncManager>().sign_out(&a.state::<Db>())).await
+}
+
+/// Syncs with Google Drive; `open` is the notebook in the editor (left alone).
+#[tauri::command]
+pub async fn sync_now(app: AppHandle, open: Option<String>) -> AppResult<SyncReport> {
+    blocking(app, move |a| a.state::<SyncManager>().sync_now(&a.state::<Db>(), open.as_deref())).await
 }

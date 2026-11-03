@@ -14,7 +14,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::error::{AppError, AppResult};
 
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 
 pub fn now_ms() -> i64 {
     SystemTime::now()
@@ -276,6 +276,12 @@ impl Db {
         })
     }
 
+    /// Runs `f` with the database connection (for sync, which works on raw rows).
+    pub fn with_conn<T>(&self, f: impl FnOnce(&mut Connection) -> AppResult<T>) -> AppResult<T> {
+        let mut conn = self.conn();
+        f(&mut conn)
+    }
+
     /// Writes a consistent copy of the whole library (notebooks, pages, ink,
     /// imported PDFs) to `dest` as one SQLite file. It is written under a
     /// temporary name first, so a synced folder never uploads half a file.
@@ -345,6 +351,14 @@ impl Db {
         })();
         match swap {
             Ok(next) => {
+                // The restored library replaces what's in the cloud too: send
+                // all of it on the next sync.
+                let _ = next.execute_batch(
+                    "DELETE FROM sync_state;
+                     DELETE FROM sync_tombstones;
+                     INSERT OR IGNORE INTO sync_changes SELECT id FROM notebooks;
+                     INSERT OR IGNORE INTO sync_changes VALUES ('__folders__');",
+                );
                 *conn = next;
                 Ok(summary)
             }
@@ -438,6 +452,64 @@ impl Db {
             conn.execute_batch(
                 "ALTER TABLE notebooks ADD COLUMN meta TEXT;
                 ALTER TABLE pages ADD COLUMN section TEXT;",
+            )?;
+            conn.pragma_update(None, "user_version", 3)?;
+        }
+        if version < 4 {
+            // v4: sync bookkeeping. Triggers note which notebooks changed (any
+            // real edit; not thumbnails, which every device redraws itself) and
+            // what was deleted for good, so sync knows what to send.
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS sync_changes (notebook_id TEXT PRIMARY KEY);
+                CREATE TABLE IF NOT EXISTS sync_tombstones (
+                    kind TEXT NOT NULL,
+                    id TEXT NOT NULL,
+                    deleted_at INTEGER NOT NULL,
+                    PRIMARY KEY (kind, id)
+                );
+                CREATE TABLE IF NOT EXISTS sync_state (
+                    item TEXT PRIMARY KEY,
+                    file_id TEXT NOT NULL,
+                    version TEXT NOT NULL
+                );
+                CREATE TRIGGER IF NOT EXISTS sync_nb_ins AFTER INSERT ON notebooks BEGIN
+                    INSERT OR IGNORE INTO sync_changes VALUES (NEW.id);
+                END;
+                CREATE TRIGGER IF NOT EXISTS sync_nb_upd AFTER UPDATE ON notebooks BEGIN
+                    INSERT OR IGNORE INTO sync_changes VALUES (NEW.id);
+                END;
+                CREATE TRIGGER IF NOT EXISTS sync_nb_del AFTER DELETE ON notebooks BEGIN
+                    INSERT OR REPLACE INTO sync_tombstones VALUES ('notebook', OLD.id, CAST(strftime('%s', 'now') AS INTEGER) * 1000);
+                    DELETE FROM sync_changes WHERE notebook_id = OLD.id;
+                END;
+                CREATE TRIGGER IF NOT EXISTS sync_pg_ins AFTER INSERT ON pages BEGIN
+                    INSERT OR IGNORE INTO sync_changes VALUES (NEW.notebook_id);
+                END;
+                CREATE TRIGGER IF NOT EXISTS sync_pg_upd AFTER UPDATE OF notebook_id, position, template, paper_color, width, height, favourite, background_asset, background_page, section ON pages BEGIN
+                    INSERT OR IGNORE INTO sync_changes VALUES (NEW.notebook_id);
+                END;
+                CREATE TRIGGER IF NOT EXISTS sync_pg_del AFTER DELETE ON pages BEGIN
+                    INSERT OR IGNORE INTO sync_changes SELECT OLD.notebook_id WHERE EXISTS (SELECT 1 FROM notebooks WHERE id = OLD.notebook_id);
+                END;
+                CREATE TRIGGER IF NOT EXISTS sync_el_ins AFTER INSERT ON elements BEGIN
+                    INSERT OR IGNORE INTO sync_changes SELECT notebook_id FROM pages WHERE id = NEW.page_id;
+                END;
+                CREATE TRIGGER IF NOT EXISTS sync_el_upd AFTER UPDATE ON elements BEGIN
+                    INSERT OR IGNORE INTO sync_changes SELECT notebook_id FROM pages WHERE id = NEW.page_id;
+                END;
+                CREATE TRIGGER IF NOT EXISTS sync_el_del AFTER DELETE ON elements BEGIN
+                    INSERT OR IGNORE INTO sync_changes SELECT notebook_id FROM pages WHERE id = OLD.page_id;
+                END;
+                CREATE TRIGGER IF NOT EXISTS sync_f_ins AFTER INSERT ON folders BEGIN
+                    INSERT OR IGNORE INTO sync_changes VALUES ('__folders__');
+                END;
+                CREATE TRIGGER IF NOT EXISTS sync_f_upd AFTER UPDATE ON folders BEGIN
+                    INSERT OR IGNORE INTO sync_changes VALUES ('__folders__');
+                END;
+                CREATE TRIGGER IF NOT EXISTS sync_f_del AFTER DELETE ON folders BEGIN
+                    INSERT OR REPLACE INTO sync_tombstones VALUES ('folder', OLD.id, CAST(strftime('%s', 'now') AS INTEGER) * 1000);
+                    INSERT OR IGNORE INTO sync_changes VALUES ('__folders__');
+                END;",
             )?;
             conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         }

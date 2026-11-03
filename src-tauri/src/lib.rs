@@ -5,6 +5,7 @@ pub mod error;
 pub mod export;
 pub mod handwriting;
 pub mod ink;
+pub mod sync;
 
 use tauri::Manager;
 
@@ -27,6 +28,7 @@ pub fn run() {
             let database = db::Db::open(&dir.join("inkleaf.db"))?;
             app.manage(database);
             app.manage(backup::Backups::load(dir.join("backup.json")));
+            app.manage(sync::SyncManager::load(dir.join("sync.json")));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -81,6 +83,12 @@ pub fn run() {
             commands::library_snapshot,
             commands::inspect_backup_bytes,
             commands::restore_backup_bytes,
+            commands::sync_status,
+            commands::sync_sign_in_start,
+            commands::sync_sign_in_wait,
+            commands::sync_sign_in_cancel,
+            commands::sync_sign_out,
+            commands::sync_now,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Inkleaf");
