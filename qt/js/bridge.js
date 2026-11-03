@@ -9920,6 +9920,9 @@ var Inkleaf = (() => {
       throw new Error(r2.error);
     return r2.ok;
   }
+  var isTextish = function(el) {
+    return el.kind === "text" || el.kind === "sticky";
+  };
   var boundsCache = /* @__PURE__ */ new WeakMap();
   function boxOfEl(el) {
     var r2 = boundsCache.get(el);
@@ -10312,6 +10315,7 @@ var Inkleaf = (() => {
         return { meta: JSON.stringify(meta), pts: buf.buffer };
       };
       EditorCore2.prototype.down = function(pi, x2, y2, p2, t2, tool, shift) {
+        var e_7, _a;
         var _this = this;
         this.shift = shift;
         if (this.gesture)
@@ -10327,7 +10331,7 @@ var Inkleaf = (() => {
             var edge = this.ruler.edgeNear([x2, y2], 26 / this.zoom);
             if (edge) {
               var offset = this.widths[tool] / 2 + 0.5 / this.zoom;
-              var _a = __read18(Ruler.project(edge, [x2, y2], offset), 2), px = _a[0], py = _a[1];
+              var _b = __read18(Ruler.project(edge, [x2, y2], offset), 2), px = _b[0], py = _b[1];
               this.gesture = { type: "draw", tool, points: [[px, py, p2]], times: [t2], preview: null, holdTimer: 0, held: null, ruler: { edge, offset } };
               return "ruler";
             }
@@ -10360,7 +10364,24 @@ var Inkleaf = (() => {
               var originals = this.elements.filter(function(el2) {
                 return _this.selection.has(el2.id);
               });
-              this.gesture = { type: "transform", handle: gh, start: [x2, y2], box: tbox, originals, previews: originals, m: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }, sx: 1, sy: 1, angle: 0 };
+              this.gesture = { type: "transform", handle: gh, start: [x2, y2], box: tbox, originals, previews: [], m: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }, sx: 1, sy: 1, angle: 0 };
+              try {
+                for (var originals_1 = __values18(originals), originals_1_1 = originals_1.next(); !originals_1_1.done; originals_1_1 = originals_1.next()) {
+                  var el = originals_1_1.value;
+                  if (isTextish(el))
+                    this.hiddenIds.add(el.id);
+                }
+              } catch (e_7_1) {
+                e_7 = { error: e_7_1 };
+              } finally {
+                try {
+                  if (originals_1_1 && !originals_1_1.done && (_a = originals_1.return)) _a.call(originals_1);
+                } finally {
+                  if (e_7) throw e_7.error;
+                }
+              }
+              if (originals.some(isTextish))
+                this.rev++;
               break;
             }
             var sel = this.selectionBounds();
@@ -10452,11 +10473,15 @@ var Inkleaf = (() => {
             g3.preview = resizeElement(g3.original, g3.handle, [x2, y2], shift);
             break;
           case "transform": {
-            var tr = groupTransform(g3.box, g3.handle, g3.start, [x2, y2], shift);
+            var allText = g3.originals.every(isTextish);
+            var tr = groupTransform(g3.box, g3.handle, g3.start, [x2, y2], shift || allText && g3.handle !== "e" && g3.handle !== "w");
             g3.m = tr.m;
             g3.sx = tr.sx;
             g3.sy = tr.sy;
             g3.angle = tr.angle;
+            g3.previews = g3.originals.filter(isTextish).map(function(el) {
+              return transformElement(el, g3.m, g3.sx, g3.sy, g3.angle);
+            });
             break;
           }
           case "shape": {
@@ -10497,9 +10522,9 @@ var Inkleaf = (() => {
         return "";
       };
       EditorCore2.prototype.up = function() {
-        var e_7, _a, e_8, _b;
+        var e_8, _a, e_9, _b, e_10, _c;
         var _this = this;
-        var _c;
+        var _d;
         var g3 = this.gesture;
         if (!g3)
           return;
@@ -10524,20 +10549,20 @@ var Inkleaf = (() => {
               this.addElement(__assign10(__assign10({}, this.straightHighlight(g3, shape.shape.points)), { id: newId(), z: nextZ(this.elements) }));
             } else if (shape) {
               shape.z = nextZ(this.elements);
-              if ((_c = g3.absorb) === null || _c === void 0 ? void 0 : _c.length) {
+              if ((_d = g3.absorb) === null || _d === void 0 ? void 0 : _d.length) {
                 var gone_2 = new Set(g3.absorb);
                 try {
                   for (var gone_1 = __values18(gone_2), gone_1_1 = gone_1.next(); !gone_1_1.done; gone_1_1 = gone_1.next()) {
                     var id = gone_1_1.value;
                     this.hiddenIds.delete(id);
                   }
-                } catch (e_7_1) {
-                  e_7 = { error: e_7_1 };
+                } catch (e_8_1) {
+                  e_8 = { error: e_8_1 };
                 } finally {
                   try {
                     if (gone_1_1 && !gone_1_1.done && (_a = gone_1.return)) _a.call(gone_1);
                   } finally {
-                    if (e_7) throw e_7.error;
+                    if (e_8) throw e_8.error;
                   }
                 }
                 this.recentInk = this.recentInk.filter(function(r2) {
@@ -10581,7 +10606,7 @@ var Inkleaf = (() => {
             });
             var tap = Math.max.apply(Math, __spreadArray14([], __read18(xs), false)) - Math.min.apply(Math, __spreadArray14([], __read18(xs), false)) < 6 / this.zoom && Math.max.apply(Math, __spreadArray14([], __read18(ys), false)) - Math.min.apply(Math, __spreadArray14([], __read18(ys), false)) < 6 / this.zoom;
             if (tap) {
-              var _d = __read18(g3.points[0], 2), tx_1 = _d[0], ty_1 = _d[1];
+              var _e = __read18(g3.points[0], 2), tx_1 = _e[0], ty_1 = _e[1];
               var hit = __spreadArray14([], __read18(this.elements), false).reverse().find(function(el2) {
                 return near(boxOfEl(el2), tx_1, ty_1, 8 / _this.zoom) && hitForSelect(el2, tx_1, ty_1, 6 / _this.zoom);
               });
@@ -10590,18 +10615,18 @@ var Inkleaf = (() => {
             } else {
               var box = rectOfPts(g3.points);
               try {
-                for (var _e = __values18(this.elements), _f = _e.next(); !_f.done; _f = _e.next()) {
-                  var el = _f.value;
+                for (var _f = __values18(this.elements), _g = _f.next(); !_g.done; _g = _f.next()) {
+                  var el = _g.value;
                   if (overlaps(boxOfEl(el), box) && insideLasso(el, g3.points))
                     this.selection.add(el.id);
                 }
-              } catch (e_8_1) {
-                e_8 = { error: e_8_1 };
+              } catch (e_9_1) {
+                e_9 = { error: e_9_1 };
               } finally {
                 try {
-                  if (_f && !_f.done && (_b = _e.return)) _b.call(_e);
+                  if (_g && !_g.done && (_b = _f.return)) _b.call(_f);
                 } finally {
-                  if (e_8) throw e_8.error;
+                  if (e_9) throw e_9.error;
                 }
               }
             }
@@ -10610,6 +10635,22 @@ var Inkleaf = (() => {
           }
           case "transform": {
             this.gesture = null;
+            try {
+              for (var _h = __values18(g3.originals), _j = _h.next(); !_j.done; _j = _h.next()) {
+                var el = _j.value;
+                this.hiddenIds.delete(el.id);
+              }
+            } catch (e_10_1) {
+              e_10 = { error: e_10_1 };
+            } finally {
+              try {
+                if (_j && !_j.done && (_c = _h.return)) _c.call(_h);
+              } finally {
+                if (e_10) throw e_10.error;
+              }
+            }
+            if (g3.originals.some(isTextish))
+              this.rev++;
             if (g3.m.a !== 1 || g3.m.b !== 0 || g3.m.c !== 0 || g3.m.d !== 1 || g3.m.e !== 0 || g3.m.f !== 0) {
               var next_1 = new Map(g3.originals.map(function(el2) {
                 return [el2.id, transformElement(el2, g3.m, g3.sx, g3.sy, g3.angle)];
@@ -10659,8 +10700,8 @@ var Inkleaf = (() => {
         this.selectionRev++;
       };
       EditorCore2.prototype.cancel = function() {
-        var e_9, _a;
-        var _b;
+        var e_11, _a, e_12, _b;
+        var _c;
         var g3 = this.gesture;
         if (!g3)
           return;
@@ -10669,22 +10710,37 @@ var Inkleaf = (() => {
           if (g3.held)
             clearTimeout(g3.held.stillTimer);
           try {
-            for (var _c = __values18((_b = g3.absorb) !== null && _b !== void 0 ? _b : []), _d = _c.next(); !_d.done; _d = _c.next()) {
-              var id = _d.value;
+            for (var _d = __values18((_c = g3.absorb) !== null && _c !== void 0 ? _c : []), _e = _d.next(); !_e.done; _e = _d.next()) {
+              var id = _e.value;
               this.hiddenIds.delete(id);
             }
-          } catch (e_9_1) {
-            e_9 = { error: e_9_1 };
+          } catch (e_11_1) {
+            e_11 = { error: e_11_1 };
           } finally {
             try {
-              if (_d && !_d.done && (_a = _c.return)) _a.call(_c);
+              if (_e && !_e.done && (_a = _d.return)) _a.call(_d);
             } finally {
-              if (e_9) throw e_9.error;
+              if (e_11) throw e_11.error;
             }
           }
         }
         if (g3.type === "handle")
           this.hiddenIds.delete(g3.original.id);
+        if (g3.type === "transform")
+          try {
+            for (var _f = __values18(g3.originals), _g = _f.next(); !_g.done; _g = _f.next()) {
+              var el = _g.value;
+              this.hiddenIds.delete(el.id);
+            }
+          } catch (e_12_1) {
+            e_12 = { error: e_12_1 };
+          } finally {
+            try {
+              if (_g && !_g.done && (_b = _f.return)) _b.call(_f);
+            } finally {
+              if (e_12) throw e_12.error;
+            }
+          }
         if (g3.type === "erase" && g3.changed)
           this.changed();
         this.gesture = null;
@@ -10702,7 +10758,9 @@ var Inkleaf = (() => {
             return e2.id;
           }), m: { a: 1, b: 0, c: 0, d: 1, e: g3.dx, f: g3.dy } };
         if ((g3 === null || g3 === void 0 ? void 0 : g3.type) === "transform")
-          return { ids: g3.originals.map(function(e2) {
+          return { ids: g3.originals.filter(function(e2) {
+            return !isTextish(e2);
+          }).map(function(e2) {
             return e2.id;
           }), m: g3.m };
         return null;
@@ -10714,7 +10772,7 @@ var Inkleaf = (() => {
           return;
         clearTimeout(g3.holdTimer);
         g3.holdTimer = setTimeout(function() {
-          var e_10, _a;
+          var e_13, _a;
           var _b, _c, _d;
           if (_this.gesture !== g3 || g3.preview || g3.points.length < 4)
             return;
@@ -10733,13 +10791,13 @@ var Inkleaf = (() => {
               var id = _f.value;
               _this.hiddenIds.add(id);
             }
-          } catch (e_10_1) {
-            e_10 = { error: e_10_1 };
+          } catch (e_13_1) {
+            e_13 = { error: e_13_1 };
           } finally {
             try {
               if (_f && !_f.done && (_a = _e.return)) _a.call(_e);
             } finally {
-              if (e_10) throw e_10.error;
+              if (e_13) throw e_13.error;
             }
           }
           if ((_d = g3.absorb) === null || _d === void 0 ? void 0 : _d.length)
@@ -10823,7 +10881,7 @@ var Inkleaf = (() => {
         this.instrumentRev++;
       };
       EditorCore2.prototype.guidedReadout = function(g3) {
-        var e_11, _a;
+        var e_14, _a;
         var edge = g3.ruler.edge;
         if (edge.kind === "line") {
           var _b = __read18(this.rulerExtent(g3), 2), a2 = _b[0], b2 = _b[1];
@@ -10847,19 +10905,19 @@ var Inkleaf = (() => {
             hi = Math.max(hi, acc);
             prev = a2;
           }
-        } catch (e_11_1) {
-          e_11 = { error: e_11_1 };
+        } catch (e_14_1) {
+          e_14 = { error: e_14_1 };
         } finally {
           try {
             if (_d && !_d.done && (_a = _c.return)) _a.call(_c);
           } finally {
-            if (e_11) throw e_11.error;
+            if (e_14) throw e_14.error;
           }
         }
         return "".concat(Math.round((hi - lo) * 180 / Math.PI), "°");
       };
       EditorCore2.prototype.rulerExtent = function(g3) {
-        var e_12, _a;
+        var e_15, _a;
         var edge = g3.ruler.edge;
         var dir = edge.kind === "line" ? edge.dir : [1, 0];
         var lo = g3.points[0];
@@ -10875,13 +10933,13 @@ var Inkleaf = (() => {
             if (t2(p2) > t2(hi))
               hi = p2;
           }
-        } catch (e_12_1) {
-          e_12 = { error: e_12_1 };
+        } catch (e_15_1) {
+          e_15 = { error: e_15_1 };
         } finally {
           try {
             if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
           } finally {
-            if (e_12) throw e_12.error;
+            if (e_15) throw e_15.error;
           }
         }
         return [[lo[0], lo[1]], [hi[0], hi[1]]];
@@ -11042,7 +11100,7 @@ var Inkleaf = (() => {
         g3.preview = __assign10(__assign10({}, h3.base), { shape });
       };
       EditorCore2.prototype.buildSnap = function(moving) {
-        var e_13, _a;
+        var e_16, _a;
         var texts = moving.filter(function(el2) {
           return el2.kind === "text" && el2.text.trim().length > 0 && !el2.rotation;
         });
@@ -11058,13 +11116,13 @@ var Inkleaf = (() => {
             if (!ids.has(el.id) && el.kind === "text" && el.text.trim() && !el.rotation)
               targets.push.apply(targets, __spreadArray14([], __read18(anchorsAsTargets(textAnchors(el))), false));
           }
-        } catch (e_13_1) {
-          e_13 = { error: e_13_1 };
+        } catch (e_16_1) {
+          e_16 = { error: e_16_1 };
         } finally {
           try {
             if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
           } finally {
-            if (e_13) throw e_13.error;
+            if (e_16) throw e_16.error;
           }
         }
         var paper = paperLayout(this.page.template, this.page.width, this.page.height);
@@ -11089,7 +11147,7 @@ var Inkleaf = (() => {
         g3.last = p2;
       };
       EditorCore2.prototype.eraseAt = function(x2, y2) {
-        var e_14, _a;
+        var e_17, _a;
         var _b;
         var g3 = this.gesture;
         if ((g3 === null || g3 === void 0 ? void 0 : g3.type) !== "erase")
@@ -11119,13 +11177,13 @@ var Inkleaf = (() => {
               next.push.apply(next, __spreadArray14([], __read18(pieces), false));
             }
           }
-        } catch (e_14_1) {
-          e_14 = { error: e_14_1 };
+        } catch (e_17_1) {
+          e_17 = { error: e_17_1 };
         } finally {
           try {
             if (_d && !_d.done && (_a = _c.return)) _a.call(_c);
           } finally {
-            if (e_14) throw e_14.error;
+            if (e_17) throw e_17.error;
           }
         }
         if (!changed)
@@ -11163,19 +11221,19 @@ var Inkleaf = (() => {
         this.selectionRev++;
       };
       EditorCore2.prototype.selectAll = function() {
-        var e_15, _a;
+        var e_18, _a;
         try {
           for (var _b = __values18(this.elements), _c = _b.next(); !_c.done; _c = _b.next()) {
             var el = _c.value;
             this.selection.add(el.id);
           }
-        } catch (e_15_1) {
-          e_15 = { error: e_15_1 };
+        } catch (e_18_1) {
+          e_18 = { error: e_18_1 };
         } finally {
           try {
             if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
           } finally {
-            if (e_15) throw e_15.error;
+            if (e_18) throw e_18.error;
           }
         }
         this.touchOverlay();
@@ -11192,9 +11250,10 @@ var Inkleaf = (() => {
         return el && el.kind === "shape" && (el.shape.kind === "line" || el.shape.kind === "arrow") && isResizable(el) ? el : null;
       };
       EditorCore2.prototype.transformBox = function() {
-        if (!this.selection.size)
+        if (!this.selection.size || this.singleSegment())
           return null;
-        return this.selectionBounds();
+        var sel = this.selectionBounds();
+        return sel ? { x: sel.x - 6, y: sel.y - 6, w: sel.w + 12, h: sel.h + 12 } : null;
       };
       EditorCore2.prototype.selectionInfo = function() {
         var els = this.selected().list;
@@ -11380,6 +11439,69 @@ var Inkleaf = (() => {
         }));
         this.changed();
       };
+      EditorCore2.prototype.selectedInkStrokes = function() {
+        return this.selectedInk().map(function(s2) {
+          return s2.points.map(function(p2) {
+            return [p2[0], p2[1]];
+          });
+        });
+      };
+      EditorCore2.prototype.inkToText = function(textIn, font, keepInk) {
+        var e_19, _a;
+        var _b;
+        var ink = this.selectedInk();
+        var value = String(textIn || "").trim();
+        if (!ink.length || !value)
+          return false;
+        var box = unionRects(ink.map(bounds));
+        var _c = fitTextToBox(value, font, box), fontSize = _c.fontSize, width = _c.width;
+        var counts = /* @__PURE__ */ new Map();
+        try {
+          for (var ink_1 = __values18(ink), ink_1_1 = ink_1.next(); !ink_1_1.done; ink_1_1 = ink_1.next()) {
+            var s2 = ink_1_1.value;
+            counts.set(s2.color, ((_b = counts.get(s2.color)) !== null && _b !== void 0 ? _b : 0) + s2.points.length);
+          }
+        } catch (e_19_1) {
+          e_19 = { error: e_19_1 };
+        } finally {
+          try {
+            if (ink_1_1 && !ink_1_1.done && (_a = ink_1.return)) _a.call(ink_1);
+          } finally {
+            if (e_19) throw e_19.error;
+          }
+        }
+        var color = __spreadArray14([], __read18(counts.entries()), false).sort(function(a2, b2) {
+          return b2[1] - a2[1];
+        })[0][0];
+        var lines2 = value.split("\n").length;
+        var text2 = {
+          id: newId(),
+          z: nextZ(this.elements),
+          kind: "text",
+          x: box.x,
+          y: box.y + (box.h - lines2 * fontSize * 1.35) / 2,
+          w: Math.min(width, Math.max(60, this.page.width - box.x)),
+          text: value,
+          fontSize,
+          color,
+          font
+        };
+        this.snapshot();
+        if (!keepInk) {
+          var gone_3 = new Set(ink.map(function(s3) {
+            return s3.id;
+          }));
+          this.elements = this.elements.filter(function(el) {
+            return !gone_3.has(el.id);
+          });
+        }
+        this.elements = this.elements.concat([text2]);
+        this.selection = /* @__PURE__ */ new Set([text2.id]);
+        this.selectionRev++;
+        this.textFont = font;
+        this.changed();
+        return true;
+      };
       EditorCore2.prototype.selectedInk = function() {
         var _this = this;
         return this.elements.filter(function(el) {
@@ -11482,6 +11604,7 @@ var Inkleaf = (() => {
         this.changed();
       };
       EditorCore2.prototype.drawOverlay = function(ctx, pi) {
+        var e_20, _a;
         if (pi !== this.active)
           return;
         var g3 = this.gesture;
@@ -11508,10 +11631,22 @@ var Inkleaf = (() => {
           drawElement(ctx, g3.preview, this.images, function() {
           });
         } else if ((g3 === null || g3 === void 0 ? void 0 : g3.type) === "transform") {
-          var b2 = g3.box;
-          drawTransformedBox(ctx, [[b2.x, b2.y], [b2.x + b2.w, b2.y], [b2.x + b2.w, b2.y + b2.h], [b2.x, b2.y + b2.h]].map(function(p2) {
-            return applyAffine(g3.m, p2);
-          }), this.zoom);
+          try {
+            for (var _b = __values18(g3.previews), _c = _b.next(); !_c.done; _c = _b.next()) {
+              var el = _c.value;
+              drawElement(ctx, el, this.images, function() {
+              });
+            }
+          } catch (e_20_1) {
+            e_20 = { error: e_20_1 };
+          } finally {
+            try {
+              if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
+            } finally {
+              if (e_20) throw e_20.error;
+            }
+          }
+          drawTransformedBox(ctx, this.transformOutline(g3), this.zoom);
         }
         var sel = (g3 === null || g3 === void 0 ? void 0 : g3.type) === "handle" ? bounds(g3.preview) : (g3 === null || g3 === void 0 ? void 0 : g3.type) === "transform" ? null : this.selectionBounds();
         if (sel) {
@@ -11527,7 +11662,23 @@ var Inkleaf = (() => {
             drawGroupHandles(ctx, box, this.zoom);
         }
       };
+      EditorCore2.prototype.transformOutline = function(g3) {
+        if (g3.previews.length && g3.previews.length === g3.originals.length && !g3.angle) {
+          var u2 = unionRects(g3.previews.map(function(el) {
+            return bounds(el);
+          }));
+          if (u2) {
+            var b_1 = { x: u2.x - 6, y: u2.y - 6, w: u2.w + 12, h: u2.h + 12 };
+            return [[b_1.x, b_1.y], [b_1.x + b_1.w, b_1.y], [b_1.x + b_1.w, b_1.y + b_1.h], [b_1.x, b_1.y + b_1.h]];
+          }
+        }
+        var b2 = g3.box;
+        return [[b2.x, b2.y], [b2.x + b2.w, b2.y], [b2.x + b2.w, b2.y + b2.h], [b2.x, b2.y + b2.h]].map(function(p2) {
+          return applyAffine(g3.m, p2);
+        });
+      };
       EditorCore2.prototype.overlayBounds = function() {
+        var e_21, _a;
         var g3 = this.gesture;
         var parts = [];
         var sel = this.selectionBounds();
@@ -11552,10 +11703,21 @@ var Inkleaf = (() => {
         if ((g3 === null || g3 === void 0 ? void 0 : g3.type) === "move" && g3.guides.length)
           parts.push({ x: 0, y: 0, w: this.page.width, h: this.page.height });
         if ((g3 === null || g3 === void 0 ? void 0 : g3.type) === "transform") {
-          var b2 = g3.box;
-          parts.push(rectOfPts([[b2.x, b2.y], [b2.x + b2.w, b2.y], [b2.x + b2.w, b2.y + b2.h], [b2.x, b2.y + b2.h]].map(function(p2) {
-            return applyAffine(g3.m, p2);
-          })));
+          try {
+            for (var _b = __values18(g3.previews), _c = _b.next(); !_c.done; _c = _b.next()) {
+              var el = _c.value;
+              parts.push(bounds(el));
+            }
+          } catch (e_21_1) {
+            e_21 = { error: e_21_1 };
+          } finally {
+            try {
+              if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
+            } finally {
+              if (e_21) throw e_21.error;
+            }
+          }
+          parts.push(rectOfPts(this.transformOutline(g3)));
         }
         var u2 = unionRects(parts);
         if (!u2)

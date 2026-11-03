@@ -100,15 +100,27 @@ InkCanvas::InkCanvas(QQuickItem* parent) : QQuickItem(parent) {
   connect(&m_saveTimer, &QTimer::timeout, this, &InkCanvas::flush);
   // Imported PDF pages get their thumbnails in the background, one at a time.
   m_scrollGlide.setInterval(8);
+  m_scrollGlide.setTimerType(Qt::PreciseTimer);
   connect(&m_scrollGlide, &QTimer::timeout, this, [this] {
     const QPointF before = m_scroll;
-    m_scroll += (m_glideTarget - m_scroll) * 0.28;
+    // Eases out over about a tenth of a second, however often this runs.
+    const double now = nowMs();
+    const double dt = std::clamp(now - m_glideLast, 1.0, 50.0);
+    m_glideLast = now;
+    m_scroll += (m_glideTarget - m_scroll) * (1.0 - std::exp(-dt / 32.0));
     if (QLineF(m_scroll, m_glideTarget).length() < 0.75) m_scroll = m_glideTarget;
     clampScroll();
     if (m_scroll == before || m_scroll == m_glideTarget) m_scrollGlide.stop();
     m_overlayDirty = true;
     emit viewChanged();
     refresh();
+  });
+  // While nothing happens, the pages around the view (several screens either
+  // way) are loaded and drawn one at a time, so scrolling never waits for them.
+  m_prefetch.setSingleShot(true);
+  m_prefetch.setInterval(180);
+  connect(&m_prefetch, &QTimer::timeout, this, [this] {
+    if (prefetchStep()) m_prefetch.start(15);
   });
   m_thumbFill.setSingleShot(true);
   m_thumbFill.setInterval(250);
@@ -983,40 +995,14 @@ void InkCanvas::changeShape(const QString& change, qreal value) {
   afterCore();
 }
 
-void InkCanvas::applyFontToInk(const QString& font) {
-  Js& js = Js::instance();
-  QJSValue ink = core("selectedInk");
-  const int n = ink.property("length").toInt();
-  if (!n) return;
-  // Recognise the handwriting (the Rust core), then place it as text where it was.
-  QJsonArray strokes;
-  QJsonArray ids;
-  double x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-  QString color = "#111827";
-  for (int k = 0; k < n; ++k) {
-    const QJsonObject el = js.toJson(ink.property(k)).toObject();
-    ids.append(el["id"]);
-    color = el["color"].toString(color);
-    QJsonArray pts;
-    for (const auto& p : el["points"].toArray()) {
-      const QJsonArray a = p.toArray();
-      pts.append(QJsonArray{a.at(0), a.at(1)});
-      x0 = std::min(x0, a.at(0).toDouble()), x1 = std::max(x1, a.at(0).toDouble());
-      y0 = std::min(y0, a.at(1).toDouble()), y1 = std::max(y1, a.at(1).toDouble());
-    }
-    strokes.append(pts);
-  }
-  QString err;
-  const QJsonObject r = InkleafCore::instance()->callJson("recognizeHandwriting", {{"strokes", strokes}}, &err).toObject();
-  const QString text = r["text"].toString().trimmed();
-  if (!err.isEmpty() || text.isEmpty()) return emit message(err.isEmpty() ? "Couldn't read that handwriting" : err, true);
-  // Text the height of the writing (one line per recognised line).
-  const int lines = std::max<int>(1, int(text.count('\n')) + 1);
-  const double size = std::clamp((y1 - y0) / lines / 1.15, 10.0, 96.0);
-  const QJsonObject el{{"id", QUuid::createUuid().toString(QUuid::WithoutBraces)}, {"z", 0}, {"kind", "text"}, {"x", x0}, {"y", y0}, {"w", std::max(60.0, x1 - x0 + size)},
-                       {"text", text}, {"fontSize", std::round(size)}, {"color", color}, {"font", font}};
-  core("replaceElements", {js.toJs(ids), js.toJs(QJsonArray{el})});
+QVariantList InkCanvas::selectedInkStrokes() { return core("selectedInkStrokes").toVariant(QJSValue::ConvertJSObjects).toList(); }
+
+bool InkCanvas::applyFontToInk(const QString& text, const QString& font, bool keepInk) {
+  const bool done = core("inkToText", {QJSValue(text), QJSValue(font), QJSValue(keepInk)}).toBool();
+  syncSelection();
   afterCore();
+  if (done) emit message("Handwriting replaced with text. Use the font menu above it to try other fonts, or Ctrl+Z to undo", false);
+  return done;
 }
 
 void InkCanvas::insertImage(const QString& fileUrl) {
@@ -1196,11 +1182,72 @@ double InkCanvas::renderScale() const {
 void InkCanvas::refresh() {
   polish();
   update();
+  m_prefetch.start(180);
+}
+
+bool InkCanvas::prefetchStep() {
+  if (m_core.isUndefined() || m_pages.empty() || m_g.kind != Gesture::None || m_scrollGlide.isActive()) return false;
+  const QPointF o = origin();
+  const qreal screen = height() / m_zoom;
+  const qreal viewTop = -o.y() / m_zoom, viewBottom = (height() - o.y()) / m_zoom;
+  const qreal reach = std::max<qreal>(screen * 10, 8000);
+  // The nearest page not ready yet: near the view, loaded and drawn; further
+  // off, only loaded (its pictures are made as it comes near).
+  int best = -1;
+  qreal bestDist = 0;
+  for (int i = 0; i < int(m_pages.size()); ++i) {
+    const Page& p = m_pages[i];
+    const qreal d = p.top > viewBottom ? p.top - viewBottom : p.top + p.h < viewTop ? viewTop - (p.top + p.h) : 0;
+    bool ready = p.synced;
+    if (ready && d <= reach) {
+      ready = p.paperScale > 0;
+      for (const auto& it : p.items)
+        if (ready && !it->mesh && it->scale <= 0) ready = false;
+    }
+    if (ready) continue;
+    if (best < 0 || d < bestDist) {
+      best = i;
+      bestDist = d;
+    }
+  }
+  if (best < 0) return false;
+  static const bool trace = qEnvironmentVariableIsSet("INKLEAF_TRACE");
+  Page& p = m_pages[best];
+  if (!p.synced) syncPage(best);
+  if (bestDist > reach) return true;
+  const double s = renderScale();
+  if (p.paperScale <= 0) {
+    const double full = std::min(s, kMaxTexture / double(std::max(p.w, p.h)));
+    p.paperImg = paperWithBackground(p, full, {});
+    p.paperScale = full;
+    p.paperDirty = true;
+  }
+  Js& js = Js::instance();
+  for (auto& it : p.items) {
+    if (it->mesh || it->scale > 0) continue;
+    const double cap = kMaxTexture / std::max(1.0, std::max(it->rect.width(), it->rect.height()));
+    const double want = std::min(s, cap);
+    it->image = js.elements(QJsonArray{it->data}, want, it->rect);
+    it->scale = want;
+    it->imageDirty = true;
+    p.version++;
+  }
+  update();
+  return true;
 }
 
 void InkCanvas::updatePolish() {
   // GUI thread, before the frame: elements and pictures for pages coming into view.
   if (m_core.isUndefined()) return;
+  static const bool trace = qEnvironmentVariableIsSet("INKLEAF_TRACE");
+  QElapsedTimer pt;
+  pt.start();
+  struct PolishDone {
+    QElapsedTimer& t;
+    ~PolishDone() {
+      if (trace && t.nsecsElapsed() > 4e6) qInfo("polish %.1f ms", t.nsecsElapsed() / 1e6);
+    }
+  } polishDone{pt};
   const QPointF o = origin();
   const qreal screen = height() / m_zoom;
   const qreal top = -o.y() / m_zoom - screen, bottom = (height() - o.y()) / m_zoom + screen;
@@ -1215,7 +1262,9 @@ void InkCanvas::updatePolish() {
   }
   if (any) update();
   // Missing pictures at once; sharper ones once the zoom settles.
+  const qint64 beforePictures = pt.nsecsElapsed();
   renderPictures(m_settle.isActive());
+  if (trace && pt.nsecsElapsed() - beforePictures > 4e6) qInfo("pictures %.1f ms", (pt.nsecsElapsed() - beforePictures) / 1e6);
   if (m_overlayDirty) {
     QElapsedTimer ot;
     ot.start();
@@ -1578,16 +1627,18 @@ void InkCanvas::wheelEvent(QWheelEvent* e) {
   // in a browser (on Wayland a wheel also reports a few pixels per notch,
   // which would barely move the page).
   const QPoint px = e->pixelDelta();
-  const bool touchpad = e->phase() != Qt::NoScrollPhase || (e->pointingDevice() && e->pointingDevice()->type() == QInputDevice::DeviceType::TouchPad);
-  // A notch moves a good step, and notches that come quickly (a flick of the
-  // wheel) move further and further: two quick flicks pass a page.
+  const bool touchpad = !px.isNull() && (e->phase() != Qt::NoScrollPhase || (e->pointingDevice() && e->pointingDevice()->type() == QInputDevice::DeviceType::TouchPad));
+  // A notch moves a good step, and notches that follow quickly (a flick of the
+  // wheel) move further and further: a flick of four notches passes a page.
   const double now = nowMs();
   if (!touchpad) {
-    m_wheelBoost = now - m_lastWheel < 90 ? std::min(4.0, m_wheelBoost * 1.25) : 1.0;
+    m_wheelBoost = now - m_lastWheel < 200 ? std::min(5.0, m_wheelBoost * 1.35) : 1.0;
     m_lastWheel = now;
   }
-  const QPointF d = touchpad && !px.isNull() ? QPointF(px) : QPointF(e->angleDelta()) / 120.0 * 160.0 * m_wheelBoost;
+  const QPointF d = touchpad && !px.isNull() ? QPointF(px) : QPointF(e->angleDelta()) / 120.0 * 240.0 * m_wheelBoost;
   const QPointF step = (e->modifiers() & Qt::ShiftModifier) ? QPointF(d.y(), 0) : d;
+  static const bool trace = qEnvironmentVariableIsSet("INKLEAF_TRACE");
+  if (trace) qInfo("wheel angle %d px %d phase %d touchpad %d boost %.2f step %.0f", e->angleDelta().y(), px.y(), int(e->phase()), int(touchpad), m_wheelBoost, step.y());
   if (touchpad) {
     m_scrollGlide.stop();
     m_scroll -= step;
@@ -1598,9 +1649,18 @@ void InkCanvas::wheelEvent(QWheelEvent* e) {
     return;
   }
   // A notch glides there over a few frames (several notches add up).
-  if (!m_scrollGlide.isActive()) m_glideTarget = m_scroll;
+  if (!m_scrollGlide.isActive()) {
+    m_glideTarget = m_scroll;
+    m_glideLast = now - 8;
+  }
   m_glideTarget -= step;
-  m_scrollGlide.start();
+  // Not past the ends (else the glide would wait there).
+  const QPointF keep = m_scroll;
+  m_scroll = m_glideTarget;
+  clampScroll();
+  m_glideTarget = m_scroll;
+  m_scroll = keep;
+  if (!m_scrollGlide.isActive()) m_scrollGlide.start();
 }
 
 void InkCanvas::touchEvent(QTouchEvent* e) {

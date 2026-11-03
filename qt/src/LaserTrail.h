@@ -33,8 +33,11 @@ protected:
 
 private:
   QPointer<InkCanvas> m_canvas;
-  // Triangles of the trail built so far (grown as it's drawn).
+  // Triangles of the trail's newest part (grown as it's drawn); older parts
+  // are sealed into GPU chunks of their own and never touched again, so a
+  // long trail costs no more per frame than a short one.
   std::vector<QPointF> m_tris;
+  int m_sealed = 0;  // sealed chunk nodes (the first children)
   size_t m_runs = 0;     // runs (strokes) started in m_tris
   size_t m_points = 0;   // points of the last of them in m_tris
   qreal m_builtRadius = -1;

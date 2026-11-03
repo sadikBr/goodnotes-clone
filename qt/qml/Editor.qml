@@ -579,6 +579,8 @@ Rectangle {
 
     // Keyboard shortcuts (src/editor/editor.ts handleKey).
     readonly property bool typing: !!canvas.editing.id
+    // Done typing: the keyboard goes back to the page (tool shortcuts work again).
+    onTypingChanged: if (!typing) canvas.forceActiveFocus()
     Shortcut { sequences: [StandardKey.Undo]; enabled: !root.typing; onActivated: canvas.undo() }
     Shortcut { sequences: [StandardKey.Redo, "Ctrl+Shift+Z", "Ctrl+Y"]; enabled: !root.typing; onActivated: canvas.redo() }
     Shortcut { sequences: [StandardKey.Copy]; enabled: !root.typing; onActivated: { const n = canvas.copySelection(); if (n) root.notify("Copied " + n + " item" + (n > 1 ? "s" : ""), false) } }

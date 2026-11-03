@@ -152,7 +152,10 @@ public:
   /// "width" (with value), "fill", or a shape kind to convert to.
   Q_INVOKABLE void changeShape(const QString& change, qreal value = 0);
   /// Turns the selected handwriting into text in a handwriting font.
-  Q_INVOKABLE void applyFontToInk(const QString& font);
+  /// The selected pen strokes ([[x, y], …] each), for handwriting recognition.
+  Q_INVOKABLE QVariantList selectedInkStrokes();
+  /// Replaces the selected handwriting with `text` in `font` (keeping the ink if asked).
+  Q_INVOKABLE bool applyFontToInk(const QString& text, const QString& font, bool keepInk);
   Q_INVOKABLE void insertImage(const QString& fileUrl);
 
   // Text editor
@@ -300,6 +303,7 @@ private:
   void refresh();
   double renderScale() const;
   void renderPictures(bool missingOnly = false);
+  bool prefetchStep();
   /// The page's paper picture, with its imported PDF page on top (if any).
   QImage paperWithBackground(const Page& p, double scale, QRectF region);
   /// The library picture of page `i` (paper and items as drawn), stored with the page.
@@ -346,7 +350,9 @@ private:
   QTimer m_settle;  // the zoom stopped changing: sharper pictures
   QTimer m_saveTimer;
   QTimer m_thumbFill;  // missing PDF page thumbnails
+  QTimer m_prefetch;  // idle: pages further off loaded and drawn ahead of scrolling
   QTimer m_scrollGlide;  // a wheel notch's eased scroll
+  double m_glideLast = 0;
   QPointF m_glideTarget;
   double m_lastWheel = -1e9, m_wheelBoost = 1;
   bool m_dismissOnPress = false;  // missing PDF page thumbnails

@@ -36,7 +36,7 @@ import {
 } from "../../src/editor/geometry";
 import { beautify, recognizeShape } from "../../src/editor/beautify";
 import { matchSymbol, symbolShape } from "../../src/editor/symbols";
-import { drawElement, drawGroupHandles, drawGuides, drawHandles, drawLasso, drawSelection, drawStroke, drawTransformedBox, naturalTextWidth, paperLayout, renderPage, steadyHighlight, textAnchors, type ImageCache } from "../../src/editor/render";
+import { fitTextToBox, drawElement, drawGroupHandles, drawGuides, drawHandles, drawLasso, drawSelection, drawStroke, drawTransformedBox, naturalTextWidth, paperLayout, renderPage, steadyHighlight, textAnchors, type ImageCache } from "../../src/editor/render";
 import { thinPoints, smoothPoints } from "../../src/editor/ink";
 import { anchorsAsTargets, paperTargets, snapMove, type Anchor, type Guide, type Target } from "../../src/editor/snap";
 import { continueList, currentList, toggleList, type ListKind } from "../../src/editor/textFormat";
@@ -90,6 +90,9 @@ type Gesture =
   | { type: "shape"; start: P2; preview: ShapeEl | null }
   | { type: "handle"; handle: Handle; original: El; preview: El }
   | { type: "transform"; handle: GroupHandle; start: P2; box: Rect; originals: El[]; previews: El[]; m: Affine; sx: number; sy: number; angle: number };
+
+/** Text boxes and sticky notes: re-laid out, not stretched, when resized. */
+const isTextish = (el: El) => el.kind === "text" || el.kind === "sticky";
 
 /** Bounds of elements, remembered per element object (elements are never changed in place). */
 const boundsCache = new WeakMap<El, Rect>();
@@ -468,7 +471,11 @@ export class EditorCore {
         const gh = tbox ? groupHandleAt(tbox, x, y, this.zoom) : null;
         if (tbox && gh) {
           const originals = this.elements.filter((el) => this.selection.has(el.id));
-          this.gesture = { type: "transform", handle: gh, start: [x, y], box: tbox, originals, previews: originals, m: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }, sx: 1, sy: 1, angle: 0 };
+          this.gesture = { type: "transform", handle: gh, start: [x, y], box: tbox, originals, previews: [], m: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }, sx: 1, sy: 1, angle: 0 };
+          // Text is shown as it will be (re-wrapped, resized) while dragging,
+          // not as its old picture stretched: hidden on the page meanwhile.
+          for (const el of originals) if (isTextish(el)) this.hiddenIds.add(el.id);
+          if (originals.some(isTextish)) this.rev++;
           break;
         }
         const sel = this.selectionBounds();
@@ -554,11 +561,16 @@ export class EditorCore {
         g.preview = resizeElement(g.original, g.handle, [x, y], shift);
         break;
       case "transform": {
-        const tr = groupTransform(g.box, g.handle, g.start, [x, y], shift);
+        // Text only: the sides change the width it wraps to; the corners and
+        // the top and bottom scale it evenly (a taller font in the same
+        // narrow box would just wrap).
+        const allText = g.originals.every(isTextish);
+        const tr = groupTransform(g.box, g.handle, g.start, [x, y], shift || (allText && g.handle !== "e" && g.handle !== "w"));
         g.m = tr.m;
         g.sx = tr.sx;
         g.sy = tr.sy;
         g.angle = tr.angle;
+        g.previews = g.originals.filter(isTextish).map((el) => transformElement(el, g.m, g.sx, g.sy, g.angle));
         break;
       }
       case "shape": {
@@ -669,6 +681,8 @@ export class EditorCore {
       }
       case "transform": {
         this.gesture = null;
+        for (const el of g.originals) this.hiddenIds.delete(el.id);
+        if (g.originals.some(isTextish)) this.rev++;
         if (g.m.a !== 1 || g.m.b !== 0 || g.m.c !== 0 || g.m.d !== 1 || g.m.e !== 0 || g.m.f !== 0) {
           const next = new Map(g.originals.map((el) => [el.id, transformElement(el, g.m, g.sx, g.sy, g.angle)]));
           this.snapshot();
@@ -717,6 +731,7 @@ export class EditorCore {
       for (const id of g.absorb ?? []) this.hiddenIds.delete(id);
     }
     if (g.type === "handle") this.hiddenIds.delete(g.original.id);
+    if (g.type === "transform") for (const el of g.originals) this.hiddenIds.delete(el.id);
     if (g.type === "erase" && g.changed) this.changed();
     this.gesture = null;
     this.rev++;
@@ -733,7 +748,7 @@ export class EditorCore {
   liveTransform(): { ids: string[]; m: Affine } | null {
     const g = this.gesture;
     if (g?.type === "move") return { ids: g.original.map((e) => e.id), m: { a: 1, b: 0, c: 0, d: 1, e: g.dx, f: g.dy } };
-    if (g?.type === "transform") return { ids: g.originals.map((e) => e.id), m: g.m };
+    if (g?.type === "transform") return { ids: g.originals.filter((e) => !isTextish(e)).map((e) => e.id), m: g.m };
     return null;
   }
 
@@ -1120,9 +1135,11 @@ export class EditorCore {
     return el && el.kind === "shape" && (el.shape.kind === "line" || el.shape.kind === "arrow") && isResizable(el) ? el : null;
   }
 
+  /** The handles' box: just outside the content, so pressing a handle never moves instead. */
   private transformBox(): Rect | null {
-    if (!this.selection.size) return null;
-    return this.selectionBounds();
+    if (!this.selection.size || this.singleSegment()) return null;
+    const sel = this.selectionBounds();
+    return sel ? { x: sel.x - 6, y: sel.y - 6, w: sel.w + 12, h: sel.h + 12 } : null;
   }
 
   /** What the selection bar shows. */
@@ -1255,6 +1272,50 @@ export class EditorCore {
     this.changed();
   }
 
+  /** The selected pen strokes' points, for handwriting recognition. */
+  selectedInkStrokes(): P2[][] {
+    return this.selectedInk().map((s) => s.points.map((p) => [p[0], p[1]] as P2));
+  }
+
+  /**
+   * Replaces the selected handwriting with text in a handwriting font, sized
+   * to where it was written (src/editor/editor.ts applyFontToInk).
+   */
+  inkToText(textIn: string, font: FontId, keepInk: boolean): boolean {
+    const ink = this.selectedInk();
+    const value = String(textIn || "").trim();
+    if (!ink.length || !value) return false;
+    const box = unionRects(ink.map(bounds))!;
+    const { fontSize, width } = fitTextToBox(value, font, box);
+    const counts = new Map<string, number>();
+    for (const s of ink) counts.set(s.color, (counts.get(s.color) ?? 0) + s.points.length);
+    const color = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    const lines = value.split("\n").length;
+    const text: TextEl = {
+      id: newId(),
+      z: nextZ(this.elements),
+      kind: "text",
+      x: box.x,
+      y: box.y + (box.h - lines * fontSize * 1.35) / 2,
+      w: Math.min(width, Math.max(60, this.page.width - box.x)),
+      text: value,
+      fontSize,
+      color,
+      font,
+    };
+    this.snapshot();
+    if (!keepInk) {
+      const gone = new Set(ink.map((s) => s.id));
+      this.elements = this.elements.filter((el) => !gone.has(el.id));
+    }
+    this.elements = this.elements.concat([text]);
+    this.selection = new Set([text.id]);
+    this.selectionRev++;
+    this.textFont = font;
+    this.changed();
+    return true;
+  }
+
   /** Selected pen strokes, for "Apply font" (handwriting recognition). */
   selectedInk(): StrokeEl[] {
     return this.elements.filter((el): el is StrokeEl => this.selection.has(el.id) && el.kind === "stroke" && el.tool === "pen");
@@ -1364,8 +1425,8 @@ export class EditorCore {
     } else if (g?.type === "handle") {
       drawElement(ctx, g.preview, this.images, () => {});
     } else if (g?.type === "transform") {
-      const b = g.box;
-      drawTransformedBox(ctx, ([[b.x, b.y], [b.x + b.w, b.y], [b.x + b.w, b.y + b.h], [b.x, b.y + b.h]] as P2[]).map((p) => applyAffine(g.m, p)), this.zoom);
+      for (const el of g.previews) drawElement(ctx, el, this.images, () => {});
+      drawTransformedBox(ctx, this.transformOutline(g), this.zoom);
     }
     const sel = g?.type === "handle" ? bounds(g.preview) : g?.type === "transform" ? null : this.selectionBounds();
     if (sel) {
@@ -1378,6 +1439,23 @@ export class EditorCore {
       const box = this.transformBox();
       if (box) drawGroupHandles(ctx, box, this.zoom);
     }
+  }
+
+  /**
+   * The box shown while transforming: the handles' box carried along, or,
+   * for text being re-wrapped (not turned), its new lines' box (it grows and
+   * shrinks with the wrapping).
+   */
+  private transformOutline(g: Extract<Gesture, { type: "transform" }>): P2[] {
+    if (g.previews.length && g.previews.length === g.originals.length && !g.angle) {
+      const u = unionRects(g.previews.map((el) => bounds(el)));
+      if (u) {
+        const b = { x: u.x - 6, y: u.y - 6, w: u.w + 12, h: u.h + 12 };
+        return [[b.x, b.y], [b.x + b.w, b.y], [b.x + b.w, b.y + b.h], [b.x, b.y + b.h]];
+      }
+    }
+    const b = g.box;
+    return ([[b.x, b.y], [b.x + b.w, b.y], [b.x + b.w, b.y + b.h], [b.x, b.y + b.h]] as P2[]).map((p) => applyAffine(g.m, p));
   }
 
   /** Where the overlay draws on the active page (page units), or null when there's nothing. */
@@ -1396,8 +1474,8 @@ export class EditorCore {
     if (g?.type === "move" && sel) parts.push({ ...sel, x: sel.x + g.dx, y: sel.y + g.dy });
     if (g?.type === "move" && g.guides.length) parts.push({ x: 0, y: 0, w: this.page.width, h: this.page.height });
     if (g?.type === "transform") {
-      const b = g.box;
-      parts.push(rectOfPts(([[b.x, b.y], [b.x + b.w, b.y], [b.x + b.w, b.y + b.h], [b.x, b.y + b.h]] as P2[]).map((p) => applyAffine(g.m, p))));
+      for (const el of g.previews) parts.push(bounds(el));
+      parts.push(rectOfPts(this.transformOutline(g)));
     }
     const u = unionRects(parts);
     if (!u) return null;

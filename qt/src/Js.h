@@ -3,6 +3,7 @@
 // core behind it. One engine for the app, on the GUI thread.
 #pragma once
 
+#include <list>
 #include <QHash>
 #include <QImage>
 #include <QJSEngine>
@@ -73,4 +74,5 @@ private:
   QJSValue m_images;
   QJSValue m_parse, m_stringify;  // Map src → native image, for drawElement
   QHash<QString, QObject*> m_imageCache;
+  std::list<std::pair<QString, QImage>> m_papers;  // recent papers, newest first
 };

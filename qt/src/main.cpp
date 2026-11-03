@@ -121,7 +121,8 @@ int main(int argc, char* argv[]) {
   engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Inkleaf/qml/Main.qml")));
   if (smoke) {
     QQmlComponent extra(&engine);
-    extra.setData("import QtQuick\nimport QtQuick.Dialogs\nimport Qt.labs.folderlistmodel\nItem { FolderDialog {} FileDialog {} FolderListModel {} }", QUrl("smoke.qml"));
+    // The dialogs' modules, and the editor (it loads only when a notebook opens).
+    extra.setData("import QtQuick\nimport QtQuick.Dialogs\nimport Qt.labs.folderlistmodel\nimport Inkleaf\nItem { FolderDialog {} FileDialog {} FolderListModel {} Editor { notebookId: \"\" } }", QUrl("smoke.qml"));
     std::unique_ptr<QObject> made(extra.create());
     if (!made) {
       qWarning().noquote() << "smoke: dialogs module missing:" << extra.errorString();

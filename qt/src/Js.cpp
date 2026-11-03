@@ -34,7 +34,11 @@ QString JsNative::uuid() const { return QUuid::createUuid().toString(QUuid::With
 
 QString JsNative::call(const QString& cmd, const QString& argsJson) {
   QString error;
+  static const bool trace = qEnvironmentVariableIsSet("INKLEAF_TRACE");
+  QElapsedTimer t;
+  t.start();
   const QByteArray raw = InkleafCore::instance()->callRaw(cmd, argsJson.toUtf8(), &error);
+  if (trace && t.nsecsElapsed() > 3e6) qInfo("native %s %.1f ms (%lld bytes)", qPrintable(cmd), t.nsecsElapsed() / 1e6, qint64(raw.size()));
   if (!error.isEmpty()) return QString::fromUtf8(QJsonDocument(QJsonObject{{"error", error}}).toJson(QJsonDocument::Compact));
   // {"ok": <answer>} without parsing the answer here.
   return QStringLiteral("{\"ok\":") + QString::fromUtf8(raw.isEmpty() ? QByteArray("null") : raw) + QStringLiteral("}");
@@ -156,11 +160,22 @@ QObject* Js::imageFor(const QString& src) {
 
 QImage Js::paper(const QString& tmpl, const QString& color, double w, double h, double scale, QRectF region) {
   if (region.isEmpty()) region = QRectF(0, 0, w, h);
+  // The paper depends only on these: pages alike share one picture (drawn once).
+  const QString key = tmpl + QLatin1Char('|') + color + QStringLiteral("|%1|%2|%3|%4|%5|%6|%7").arg(w).arg(h).arg(scale).arg(region.x()).arg(region.y()).arg(region.width()).arg(region.height());
+  for (auto it = m_papers.begin(); it != m_papers.end(); ++it)
+    if (it->first == key) {
+      QImage hit = it->second;
+      m_papers.erase(it);
+      m_papers.push_front({key, hit});
+      return hit;
+    }
   auto* canvas = new JsCanvas(std::max(1, int(std::ceil(region.width() * scale))), std::max(1, int(std::ceil(region.height() * scale))));
   QJSValue ctx = m_engine.newQObject(canvas);
   canvas->setTransform(scale, 0, 0, scale, -region.x() * scale, -region.y() * scale);
   call("drawTemplate", {ctx, tmpl, w, h, color});
   QImage out = canvas->image();
+  m_papers.push_front({key, out});
+  if (m_papers.size() > 10) m_papers.pop_back();
   return out;
 }
 

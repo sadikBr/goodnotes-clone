@@ -147,6 +147,7 @@ qt_add_qml_module(inkleaf
     qml/editor/FormatButtons.qml
     qml/editor/ToolGroup.qml
     qml/editor/ModeGroup.qml
+    qml/editor/InkToText.qml
     qml/editor/Fonts.js
     qml/editor/ColorPopover.qml
     qml/editor/ToolDrawer.qml

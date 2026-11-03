@@ -35,6 +35,7 @@ Item {
     }
 
     PopupMenu { id: menu }
+    InkToText { id: inkToText; canvas: root.canvas }
     ColorPopover { id: colorPop }
 
     Shadow { anchors.fill: parent; radius: 14; level: 3 }
@@ -59,7 +60,7 @@ Item {
             onPressedChanged: if (pressed) tipDismissed = true
             onHoveredChanged: if (!hovered) tipDismissed = false
             ToolTip.text: "Turn this handwriting into text in a handwriting font"
-            onClicked: menu.show(applyFont, Fonts.presets.map(f => ({ label: f.label, font: f.face, fontSize: 16, action: () => root.canvas.applyFontToInk(f.id) })))
+            onClicked: inkToText.start()
             background: Rectangle { antialiasing: true; radius: 8; color: parent.hovered ? Theme.surface2 : "transparent" }
             contentItem: RowLayout {
                 id: afRow
