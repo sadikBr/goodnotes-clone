@@ -72,6 +72,7 @@ export const ICONS = {
   down: svg('<path d="M6 9l6 6 6-6"/>'),
   moon: svg('<path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/>'),
   docs: svg('<path d="M8 3h7l4 4v11a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4"/><path d="M4 7v13a1 1 0 0 0 1 1h10"/>'),
+  check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
   close: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
   pin: svg('<path d="M9 4h6l-1 6 3 3v2H7v-2l3-3z"/><path d="M12 15v6"/>'),
   stylus: svg('<path d="M15 4l5 5-9.5 9.5-6 1.5 1.5-6z"/><path d="M13 6l5 5"/><path d="M3 21l2-2"/>'),

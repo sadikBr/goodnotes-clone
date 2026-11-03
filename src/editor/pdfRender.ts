@@ -38,8 +38,8 @@ async function load(data: Uint8Array) {
   });
 }
 
-/** Page sizes of a PDF file, in Inkleaf units. */
-export async function pdfPageSizes(data: Uint8Array): Promise<{ width: number; height: number }[]> {
+/** Page sizes of a PDF file, in Inkleaf units (`onPage` follows the progress). */
+export async function pdfPageSizes(data: Uint8Array, onPage?: (done: number, total: number) => void): Promise<{ width: number; height: number }[]> {
   const task = await load(data);
   const doc = await task.promise;
   try {
@@ -47,8 +47,51 @@ export async function pdfPageSizes(data: Uint8Array): Promise<{ width: number; h
     for (let i = 1; i <= doc.numPages; i++) {
       const vp = (await doc.getPage(i)).getViewport({ scale: 1 });
       sizes.push({ width: Math.round(vp.width * PT_TO_UNITS), height: Math.round(vp.height * PT_TO_UNITS) });
+      onPage?.(i, doc.numPages);
     }
     return sizes;
+  } finally {
+    void task.destroy();
+  }
+}
+
+/**
+ * For importing: page sizes (as pdfPageSizes) and a thumbnail of the first
+ * page `thumbWidth` units wide (JPEG data URL; null if it can't be drawn),
+ * from one load of the file.
+ */
+export async function pdfImportInfo(
+  data: Uint8Array,
+  thumbWidth: number,
+  onPage?: (done: number, total: number) => void,
+): Promise<{ sizes: { width: number; height: number }[]; thumbnail: string | null }> {
+  const task = await load(data);
+  const doc = await task.promise;
+  try {
+    const sizes: { width: number; height: number }[] = [];
+    let thumbnail: string | null = null;
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      const vp = page.getViewport({ scale: 1 });
+      sizes.push({ width: Math.round(vp.width * PT_TO_UNITS), height: Math.round(vp.height * PT_TO_UNITS) });
+      if (i === 1 && typeof document !== "undefined") {
+        try {
+          const view = page.getViewport({ scale: thumbWidth / vp.width });
+          const c = document.createElement("canvas");
+          c.width = Math.ceil(view.width);
+          c.height = Math.ceil(view.height);
+          const ctx = c.getContext("2d")!;
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, c.width, c.height);
+          await page.render({ canvasContext: ctx, viewport: view, canvas: c } as Parameters<typeof page.render>[0]).promise;
+          thumbnail = c.toDataURL("image/jpeg", 0.82);
+        } catch {
+          thumbnail = null; // the library shows the plain cover instead
+        }
+      }
+      onPage?.(i, doc.numPages);
+    }
+    return { sizes, thumbnail };
   } finally {
     void task.destroy();
   }
