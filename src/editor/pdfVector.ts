@@ -6,6 +6,8 @@
 // `PdfDocument` assembles pages into a compressed PDF file.
 
 import { faceFor, parseFontCss, type LoadedFace } from "./pdfFonts";
+import type { Font, Glyph } from "opentype.js";
+import { bidiRuns, isMark, needsBidi, shapeArabic } from "./arabicShape";
 
 type M = [number, number, number, number, number, number];
 
@@ -410,59 +412,108 @@ export class PdfPainter {
       this.textAsImage(text, x, baseY);
       return;
     }
-    this.invisibleText(text, x, baseY, spec.size);
+    // The selectable layer is WinAnsi only: Arabic stays drawn but not selectable.
+    if (!needsBidi(text)) this.invisibleText(text, x, baseY, spec.size);
   }
 
-  /** Draws text from glyph outlines; false if a character has no glyph. */
+  /**
+   * Draws text from glyph outlines; false if a character has no glyph.
+   * Arabic is joined (see arabicShape) and laid out right to left; a line
+   * mixing Arabic and Latin is split into runs in display order.
+   */
   private glyphText(text: string, x: number, baseY: number, size: number, face: LoadedFace, paint: string): boolean {
-    // Split into runs by which font file (Latin / Latin Extended) has the glyph.
-    const runs: { font: LoadedFace["fonts"][number]; text: string }[] = [];
-    for (const ch of text) {
-      const font = /\s/.test(ch) ? (runs[runs.length - 1]?.font ?? face.fonts[0]) : face.fonts.find((f) => f.charToGlyphIndex(ch) > 0);
-      if (!font) return false;
-      if (runs[runs.length - 1]?.font === font) runs[runs.length - 1].text += ch;
-      else runs.push({ font, text: ch });
-    }
-    const out: string[] = [];
-    const skew = face.fakeItalic ? 0.25 : 0;
-    let pen = x;
+    type Item = { font: Font; dx: number; latin: boolean } & ({ text: string } | { glyph: Glyph });
+    const items: Item[] = [];
+    const rtlLine = this.st.direction === "rtl";
+    const runs = rtlLine || needsBidi(text) ? bidiRuns(text, rtlLine) : [{ text, rtl: false }];
+    let pen = 0;
     for (const run of runs) {
-      const path = run.font.getPath(run.text, pen, baseY, size, { kerning: true });
-      const pt = (px: number, py: number) => {
-        const p = this.tp(px - skew * (py - baseY), py);
-        return `${num(p[0])} ${num(p[1])}`;
-      };
+      if (!run.rtl) {
+        // Split into pieces by which font file (Latin / Latin Extended / Arabic) has the glyph.
+        const pieces: { font: Font; text: string }[] = [];
+        for (const ch of run.text) {
+          const last = pieces[pieces.length - 1];
+          const font = /\s/.test(ch) ? (last?.font ?? face.fonts[0]) : (face.fonts.find((f) => f.charToGlyphIndex(ch) > 0) ?? (face.arabic && face.arabic.charToGlyphIndex(ch) > 0 ? face.arabic : undefined));
+          if (!font) return false;
+          if (last?.font === font) last.text += ch;
+          else pieces.push({ font, text: ch });
+        }
+        for (const piece of pieces) {
+          items.push({ font: piece.font, text: piece.text, dx: pen, latin: piece.font !== face.arabic });
+          pen += piece.font.getAdvanceWidth(piece.text, size, { kerning: true });
+        }
+        continue;
+      }
+      // Right to left: joined forms, drawn from the end of the run. A mark
+      // comes before its letter once reversed; it's centred over that letter.
+      const glyphs: { font: Font; glyph: Glyph; mark: boolean }[] = [];
+      for (const ch of shapeArabic(run.text)) {
+        const font = face.arabic && face.arabic.charToGlyphIndex(ch) > 0 ? face.arabic : face.fonts.find((f) => f.charToGlyphIndex(ch) > 0);
+        if (!font) return false;
+        glyphs.push({ font, glyph: font.charToGlyph(ch), mark: isMark(ch.codePointAt(0)!) });
+      }
+      glyphs.reverse();
+      let marks: typeof glyphs = [];
+      for (const g of glyphs) {
+        if (g.mark) {
+          marks.push(g);
+          continue;
+        }
+        const k = size / g.font.unitsPerEm;
+        const adv = (g.glyph.advanceWidth ?? 0) * k;
+        items.push({ font: g.font, glyph: g.glyph, dx: pen, latin: g.font !== face.arabic });
+        for (const m of marks) {
+          const bb = m.glyph.getBoundingBox();
+          const mw = (bb.x2 - bb.x1) * k;
+          items.push({ font: m.font, glyph: m.glyph, dx: pen + (adv - mw) / 2 - bb.x1 * k, latin: false });
+        }
+        marks = [];
+        pen += adv;
+      }
+    }
+    // Right-to-left lines keep their right edge where the screen has it.
+    const left = rtlLine ? x + this.measurer.measure(this.st.font, text, "alphabetic").width - pen : x;
+    const out: string[] = [];
+    const outArabic: string[] = [];
+    const skew = face.fakeItalic ? 0.25 : 0;
+    const pt = (px: number, py: number) => {
+      const p = this.tp(px - skew * (py - baseY), py);
+      return `${num(p[0])} ${num(p[1])}`;
+    };
+    for (const it of items) {
+      const path = "text" in it ? it.font.getPath(it.text, left + it.dx, baseY, size, { kerning: true }) : it.glyph.getPath(left + it.dx, baseY, size);
+      const target = it.latin ? out : outArabic;
       // Glyph outlines in local coordinates; TrueType quadratics become cubics.
       let cx = 0, cy = 0, sx = 0, sy = 0;
       for (const c of path.commands) {
         if (c.type === "M") {
-          out.push(`${pt(c.x, c.y)} m`);
+          target.push(`${pt(c.x, c.y)} m`);
           [cx, cy, sx, sy] = [c.x, c.y, c.x, c.y];
         } else if (c.type === "L") {
-          out.push(`${pt(c.x, c.y)} l`);
+          target.push(`${pt(c.x, c.y)} l`);
           [cx, cy] = [c.x, c.y];
         } else if (c.type === "C") {
-          out.push(`${pt(c.x1, c.y1)} ${pt(c.x2, c.y2)} ${pt(c.x, c.y)} c`);
+          target.push(`${pt(c.x1, c.y1)} ${pt(c.x2, c.y2)} ${pt(c.x, c.y)} c`);
           [cx, cy] = [c.x, c.y];
         } else if (c.type === "Q") {
-          out.push(`${pt(cx + (2 / 3) * (c.x1 - cx), cy + (2 / 3) * (c.y1 - cy))} ${pt(c.x + (2 / 3) * (c.x1 - c.x), c.y + (2 / 3) * (c.y1 - c.y))} ${pt(c.x, c.y)} c`);
+          target.push(`${pt(cx + (2 / 3) * (c.x1 - cx), cy + (2 / 3) * (c.y1 - cy))} ${pt(c.x + (2 / 3) * (c.x1 - c.x), c.y + (2 / 3) * (c.y1 - c.y))} ${pt(c.x, c.y)} c`);
           [cx, cy] = [c.x, c.y];
         } else if (c.type === "Z") {
-          out.push("h");
+          target.push("h");
           [cx, cy] = [sx, sy];
         }
       }
-      pen += run.font.getAdvanceWidth(run.text, size, { kerning: true });
     }
-    if (!out.length) return true;
-    if (face.fakeBold) {
+    if (out.length && face.fakeBold) {
       // Synthetic bold like the browser: fill plus a thin outline.
       const ratio = size <= 9 ? 1 / 24 : size >= 36 ? 1 / 32 : 1 / 24 + ((size - 9) / 27) * (1 / 32 - 1 / 24);
       const stroke = paint.replace(/rg$/, "RG");
       this.emit(`${paint} ${stroke} ${num(size * ratio * this.scaleFactor())} w 1 j`, [...out, "B Q"]);
-    } else {
+    } else if (out.length) {
       this.emit(paint, [...out, "f Q"]);
     }
+    // The Arabic font has a real bold, so Arabic is never synthesized.
+    if (outArabic.length) this.emit(paint, [...outArabic, "f Q"]);
     return true;
   }
 

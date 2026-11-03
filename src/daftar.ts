@@ -367,13 +367,13 @@ export function termRange(meta: DaftarMeta, term: Term, now = new Date()): { fro
 }
 
 /**
- * The pages to export for a class: the front pages, its student list, and
+ * The pages to export for a class: the cover and front pages, its student list, and
  * its lesson pages — with a date range, only those with a lesson in it.
  */
 export function classExportPages<T extends { template: Template; section: string | null }>(pages: T[], cls: string, sessionsOf: (p: T) => string[], range: { from: string; to: string } | null): T[] {
   const FRONT = ["daftar-title", "daftar-profile", "daftar-profile-2", "daftar-timetable"];
   return pages.filter((p) => {
-    if (FRONT.includes(p.template)) return true;
+    if (FRONT.includes(p.template) || p.template.startsWith("cover")) return true;
     if (p.section !== cls) return false;
     if (p.template === "daftar-students") return true;
     if (!isLessonTemplate(p.template)) return false;

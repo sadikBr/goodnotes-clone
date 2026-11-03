@@ -20,7 +20,7 @@ const PACKAGES: Record<FontId, string> = {
 /** Presets with real bold/italic faces bundled (others are synthesized, as on screen). */
 const REAL_STYLES = new Set<FontId>(["sans"]);
 
-const FILES = import.meta.glob(["../../node_modules/@fontsource/*/files/*-latin-400-*.woff", "../../node_modules/@fontsource/*/files/*-latin-ext-400-*.woff", "../../node_modules/@fontsource/inter/files/inter-latin-700-*.woff", "../../node_modules/@fontsource/inter/files/inter-latin-ext-700-*.woff"], {
+const FILES = import.meta.glob(["../../node_modules/@fontsource/*/files/*-latin-400-*.woff", "../../node_modules/@fontsource/*/files/*-latin-ext-400-*.woff", "../../node_modules/@fontsource/inter/files/inter-latin-700-*.woff", "../../node_modules/@fontsource/inter/files/inter-latin-ext-700-*.woff", "../../node_modules/@fontsource/noto-sans-arabic/files/noto-sans-arabic-arabic-*-normal.woff"], {
   query: "?url",
   import: "default",
   eager: true,
@@ -41,6 +41,8 @@ export interface FaceSpec {
 /** Fonts for one face, in fallback order, plus what must be synthesized. */
 export interface LoadedFace {
   fonts: Font[];
+  /** Noto Sans Arabic in the face's weight (the screen's Arabic fallback). */
+  arabic: Font | null;
   fakeBold: boolean;
   fakeItalic: boolean;
 }
@@ -75,7 +77,9 @@ export async function loadFaces(specs: Iterable<FaceSpec>): Promise<void> {
       (async () => {
         const urls = (["latin", "latin-ext"] as const).map((sub) => fileUrl(pkg, sub, weight, italic)).filter((u): u is string => !!u);
         const fonts = (await Promise.all(urls.map(loadFont))).filter((f): f is Font => !!f);
-        faces.set(key, { fonts, fakeBold: s.bold && !real, fakeItalic: s.italic && !real });
+        const ar = Object.entries(FILES).find(([path]) => path.endsWith(`/noto-sans-arabic-arabic-${s.bold ? 700 : 400}-normal.woff`));
+        const arabic = ar ? await loadFont(ar[1]) : null;
+        faces.set(key, { fonts, arabic, fakeBold: s.bold && !real, fakeItalic: s.italic && !real });
       })(),
     );
   }
