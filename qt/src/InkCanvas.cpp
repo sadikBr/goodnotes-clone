@@ -34,7 +34,7 @@ constexpr qreal kPadBottom = 84;   // below them (room for the page controls)
 constexpr qreal kMinZoom = 0.25, kMaxZoom = 6;
 constexpr float kLazyPen = 1.1f;   // screen pixels the ink may trail the pen
 constexpr int kMaxTexture = 4096;  // pixels per side of one picture
-constexpr double kLaserHold = 900, kLaserFade = 300;
+constexpr double kLaserHold = 900, kLaserFade = 300, kLaserCoreFade = 480;
 
 double nowMs() {
   static QElapsedTimer t = [] {
@@ -136,7 +136,7 @@ InkCanvas::InkCanvas(QQuickItem* parent) : QQuickItem(parent) {
   connect(&m_laserTick, &QTimer::timeout, this, [this] {
     const double now = nowMs();
     // The trail stays while the pen is down and a moment after, then fades.
-    if (m_g.kind != Gesture::Laser && m_laserUp >= 0 && now - m_laserUp > kLaserHold + kLaserFade) {
+    if (m_g.kind != Gesture::Laser && m_laserUp >= 0 && now - m_laserUp > kLaserHold + kLaserCoreFade) {
       m_laser.clear();
       m_laserUp = -1;
     }
@@ -1810,35 +1810,75 @@ QSGNode* InkCanvas::updatePaintNode(QSGNode* old, UpdatePaintNodeData*) {
   }
   setMesh(ring, ringTris, QColor(90, 90, 90, 210));
 
-  // Laser: a glowing trail that fades after the pen lifts, and the dot.
-  std::vector<QPointF> laserTris;
-  QColor lc = JsCanvas::parseColor(m_colors.value("laser", "#ff1f1f").toString());
-  const double now = nowMs();
-  double fade = 1;
-  if (m_laserUp >= 0 && now - m_laserUp > kLaserHold) fade = std::max(0.0, 1 - (now - m_laserUp - kLaserHold) / kLaserFade);
-  auto disc = [&](QPointF c, double r) {
-    const int n = 20;
-    for (int k = 0; k < n; ++k) {
-      const double a0 = 2 * M_PI * k / n, a1 = 2 * M_PI * (k + 1) / n;
-      laserTris.insert(laserTris.end(), {c, c + QPointF(std::cos(a0), std::sin(a0)) * r, c + QPointF(std::cos(a1), std::sin(a1)) * r});
+  // Laser (src/editor/laser.ts): a soft glow, a saturated tube and a thin
+  // white core, each filled as one shape so overlaps never darken; after the
+  // pen lifts the colour fades first, then the core. Painted into a picture of
+  // just the part of the screen it covers. And the pointer dot.
+  clearChildren(laser);
+  setMesh(laser, {}, Qt::transparent);
+  {
+    const QColor lc = JsCanvas::parseColor(m_colors.value("laser", "#ff1f1f").toString());
+    const double now = nowMs();
+    double colorA = 1, coreA = 1;
+    if (m_laserUp >= 0 && now - m_laserUp > kLaserHold) {
+      const double t = now - m_laserUp - kLaserHold;
+      colorA = std::max(0.0, 1 - t / kLaserFade);
+      coreA = std::max(0.0, 1 - t / kLaserCoreFade);
     }
-  };
-  if (fade > 0)
-    for (const auto& run : m_laser) {
-      for (size_t k = 1; k < run.size(); ++k) {
-        const QPointF a = run[k - 1].p, b = run[k].p;
-        const QPointF d = b - a;
-        const double len = std::hypot(d.x(), d.y());
-        if (len < 0.01) continue;
-        const QPointF nn = QPointF(-d.y(), d.x()) / len * 2.2;
-        laserTris.insert(laserTris.end(), {a - nn, b - nn, b + nn, a - nn, b + nn, a + nn});
-        disc(b, 2.2);
+    const bool dot = m_tool == "laser" && m_laserDot.x() >= 0;
+    QRectF bounds;
+    for (const auto& run : m_laser)
+      for (const auto& q : run) bounds |= QRectF(q.p - QPointF(8, 8), QSizeF(16, 16));
+    if (dot) bounds |= QRectF(m_laserDot - QPointF(8, 8), QSizeF(16, 16));
+    bounds = bounds.intersected(QRectF(0, 0, width(), height()));
+    if (!bounds.isEmpty() && (coreA > 0 || dot)) {
+      const double dpr = win ? win->effectiveDevicePixelRatio() : 1.0;
+      const QRect r = bounds.toAlignedRect();
+      QImage img(r.size() * dpr, QImage::Format_ARGB32_Premultiplied);
+      img.setDevicePixelRatio(dpr);
+      img.fill(Qt::transparent);
+      QPainter p(&img);
+      p.setRenderHint(QPainter::Antialiasing);
+      p.translate(-r.topLeft());
+      // All runs as one path, stroked once per layer: one stroke fills each
+      // pixel once, so crossings never darken.
+      QPainterPath line;
+      for (const auto& run : m_laser) {
+        if (run.empty()) continue;
+        line.moveTo(run.front().p);
+        if (run.size() == 1) line.lineTo(run.front().p + QPointF(0.01, 0));
+        for (size_t k = 1; k < run.size(); ++k) line.lineTo(run[k].p);
       }
+      auto layer = [&](const QColor& c, double w) {
+        p.strokePath(line, QPen(c, w, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+      };
+      if (!m_laser.empty() && coreA > 0) {
+        QColor glow = lc, body = lc;
+        glow.setAlphaF(float(0.28 * colorA));
+        body.setAlphaF(float(colorA));
+        layer(glow, 11);
+        layer(body, 6);
+        layer(QColor::fromRgbF(1, 1, 1, float(coreA)), 1.8);
+      }
+      if (dot) {
+        // A 6px dot with a grey and a white ring (.laser-dot).
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(255, 255, 255, 128));
+        p.drawEllipse(m_laserDot, 6.5, 6.5);
+        p.setBrush(QColor(120, 120, 120, 115));
+        p.drawEllipse(m_laserDot, 5.5, 5.5);
+        p.setBrush(lc);
+        p.drawEllipse(m_laserDot, 3, 3);
+      }
+      p.end();
+      auto* node = win->createImageNode();
+      node->setOwnsTexture(true);
+      node->setTexture(win->createTextureFromImage(img));
+      node->setRect(QRectF(r));
+      node->setFiltering(QSGTexture::Linear);
+      laser->appendChildNode(node);
     }
-  if (m_tool == "laser" && m_laserDot.x() >= 0) disc(m_laserDot, 5);
-  lc.setAlphaF(float(0.85 * fade));
-  if (m_tool == "laser" && m_laserDot.x() >= 0 && m_laser.empty()) lc.setAlphaF(0.85f);
-  setMesh(laser, laserTris, lc);
+  }
 
   if (profile) qInfo("scene update %.2f ms", timer.nsecsElapsed() / 1e6);
   return root;
