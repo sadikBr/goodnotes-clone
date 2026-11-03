@@ -25,6 +25,8 @@ jobs:
           sdkmanager=$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -n 1)
           yes | "$sdkmanager" --install "ndk;27.2.12479018" > /dev/null
           test -d "$ANDROID_HOME/ndk/27.2.12479018"
+          # For the later steps: the runner sets ANDROID_HOME, which workflow expressions cannot read.
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
@@ -34,8 +36,6 @@ jobs:
       - run: npm ci
       - name: Generate the Android project
         run: npx tauri android init --ci
-        env:
-          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
       - name: Signing
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/inkleaf.jks"
@@ -48,7 +48,6 @@ jobs:
       - name: Build the APK
         run: npx tauri android build --apk --target aarch64 armv7
         env:
-          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
           INKLEAF_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           INKLEAF_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
       - uses: actions/upload-artifact@v4

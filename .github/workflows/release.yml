@@ -46,6 +46,7 @@ jobs:
           # A draft left by an earlier, failed run is reused.
           if gh release view "$TAG" --json isDraft -q .isDraft 2>/dev/null | grep -q true; then
             echo "reusing the draft release $TAG"
+            gh release edit "$TAG" --target "$GITHUB_SHA"
           elif gh release view "$TAG" > /dev/null 2>&1; then
             echo "::error::$TAG is already published: run npm run set-version with a new version first"; exit 1
           else
@@ -115,6 +116,8 @@ jobs:
           sdkmanager=$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -n 1)
           yes | "$sdkmanager" --install "ndk;27.2.12479018" > /dev/null
           test -d "$ANDROID_HOME/ndk/27.2.12479018"
+          # For the later steps: the runner sets ANDROID_HOME, which workflow expressions cannot read.
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
@@ -124,8 +127,6 @@ jobs:
       - run: npm ci
       - name: Generate the Android project
         run: npx tauri android init --ci
-        env:
-          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
       - name: Signing
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/inkleaf.jks"
@@ -138,7 +139,6 @@ jobs:
       - name: "Build the APK (arm64 and armv7 tablets)"
         run: npx tauri android build --apk --target aarch64 armv7
         env:
-          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
           INKLEAF_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           INKLEAF_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
       - name: Attach the APK to the release
