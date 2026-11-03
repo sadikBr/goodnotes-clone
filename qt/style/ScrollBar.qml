@@ -9,7 +9,7 @@ T.ScrollBar {
     padding: 3
     visible: policy !== T.ScrollBar.AlwaysOff
     minimumSize: orientation === Qt.Horizontal ? height / width : width / height
-    contentItem: Rectangle {
+    contentItem: Rectangle { antialiasing: true;
         implicitWidth: control.interactive ? 8 : 4
         implicitHeight: control.interactive ? 8 : 4
         radius: width / 2

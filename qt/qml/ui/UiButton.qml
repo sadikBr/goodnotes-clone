@@ -19,7 +19,7 @@ AbstractButton {
     readonly property color fg: kind === "primary" ? Theme.accentContrast : kind === "danger" ? Theme.danger : Theme.text
     background: Item {
         Shadow { anchors.fill: parent; radius: Theme.radius; level: root.kind === "ghost" ? 0 : 1; visible: root.kind !== "ghost" }
-        Rectangle {
+        Rectangle { antialiasing: true;
             anchors.fill: parent
             radius: Theme.radius
             color: root.kind === "primary" ? (root.hovered ? Theme.accentHover : Theme.accent)
@@ -30,7 +30,7 @@ AbstractButton {
             border.color: root.kind === "danger" ? Theme.alpha(Theme.danger, 0.4) : (root.hovered ? Theme.borderStrong : Theme.border)
             Behavior on color { ColorAnimation { duration: 120 } }
         }
-        Rectangle {
+        Rectangle { antialiasing: true;
             anchors.fill: parent; anchors.margins: -3; radius: Theme.radius + 3
             color: "transparent"; border.width: 2; border.color: Theme.alpha(Theme.accent, 0.5)
             visible: root.visualFocus

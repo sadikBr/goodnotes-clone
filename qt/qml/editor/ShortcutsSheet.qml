@@ -21,7 +21,7 @@ Popup {
     ]
     background: Item {
         Shadow { anchors.fill: parent; radius: Theme.radiusXl; level: 3 }
-        Rectangle { anchors.fill: parent; radius: Theme.radiusXl; color: Theme.surface; border.color: Theme.border }
+        Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusXl; color: Theme.surface; border.color: Theme.border }
     }
     contentItem: ColumnLayout {
         spacing: 14
@@ -42,7 +42,7 @@ Popup {
                         delegate: RowLayout {
                             required property var modelData
                             spacing: 10
-                            Rectangle {
+                            Rectangle { antialiasing: true;
                                 Layout.preferredHeight: 22
                                 Layout.preferredWidth: keyLabel.implicitWidth + 12
                                 radius: 6

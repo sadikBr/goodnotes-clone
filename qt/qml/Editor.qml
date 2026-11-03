@@ -169,7 +169,7 @@ Rectangle {
                                 root.title = r.title.trim()
                             } catch (e) { root.notify(String(e.message || e), true) }
                         })
-                        background: Rectangle { radius: 8; color: titleBtn.hovered ? Theme.surface2 : "transparent" }
+                        background: Rectangle { antialiasing: true; radius: 8; color: titleBtn.hovered ? Theme.surface2 : "transparent" }
                         contentItem: Label { id: titleLabel; text: root.title; font.pixelSize: 15; font.weight: Font.DemiBold; color: Theme.text; elide: Text.ElideRight; horizontalAlignment: Text.AlignLeft; leftPadding: 8; rightPadding: 8; verticalAlignment: Text.AlignVCenter }
                     }
                     // A daftar's class (switches section), New lesson, outline and its menu.
@@ -186,7 +186,7 @@ Rectangle {
                             ToolTip.text: "Switch class · القسم"
                             ToolTip.delay: 500
                             onClicked: menu.show(classChip, (root.daftar ? root.daftar.classes : []).map(c => ({ label: c, checked: c === root.daftarClass, action: () => canvas.daftar("goToClass", [c]) })))
-                            background: Rectangle { radius: 10; color: classChip.hovered ? Theme.surface2 : Theme.surface; border.color: Theme.border }
+                            background: Rectangle { antialiasing: true; radius: 10; color: classChip.hovered ? Theme.surface2 : Theme.surface; border.color: Theme.border }
                             contentItem: Item {
                                 RowLayout {
                                     id: classRow
@@ -208,7 +208,7 @@ Rectangle {
                             ToolTip.text: "Write today's date, the class and the lesson time on the next free line"
                             ToolTip.delay: 500
                             onClicked: root.newLesson()
-                            background: Rectangle { radius: 10; color: Theme.accentSoft; Rectangle { anchors.fill: parent; radius: 10; color: "black"; opacity: lessonBtn.hovered ? 0.03 : 0 } }
+                            background: Rectangle { antialiasing: true; radius: 10; color: Theme.accentSoft; Rectangle { antialiasing: true; anchors.fill: parent; radius: 10; color: "black"; opacity: lessonBtn.hovered ? 0.03 : 0 } }
                             contentItem: Item {
                                 RowLayout {
                                     id: lessonRow
@@ -223,7 +223,7 @@ Rectangle {
                         IconButton { id: outlineBtn; iconName: "page"; tip: "Write a lesson outline (النشاط 1، النشاط 2…) on the lesson's lines"; implicitWidth: 34; implicitHeight: 34; onClicked: root.outlineMenu(outlineBtn) }
                         IconButton { id: daftarMore; iconName: "more"; tip: "Student list, class export, daftar settings"; implicitWidth: 34; implicitHeight: 34; onClicked: root.daftarMenu(daftarMore) }
                     }
-                    Rectangle {
+                    Rectangle { antialiasing: true;
                         visible: root.width > 1100 && !root.daftar
                         implicitHeight: 20
                         implicitWidth: chipLabel.implicitWidth + 18
@@ -240,7 +240,7 @@ Rectangle {
                     spacing: 10
                     Repeater {
                         model: 3
-                        delegate: Rectangle {
+                        delegate: Rectangle { antialiasing: true;
                             id: tray
                             required property int index
                             implicitWidth: trayRow.implicitWidth + 8
@@ -295,11 +295,11 @@ Rectangle {
                                 if (cover) coverPicker.show(paperBtn)
                                 else paperPicker.show(paperBtn, canvas.currentPage)
                             }
-                            background: Rectangle { radius: 10; color: paperBtn.hovered || paperPicker.opened ? Theme.surface : "transparent" }
+                            background: Rectangle { antialiasing: true; radius: 10; color: paperBtn.hovered || paperPicker.opened ? Theme.surface : "transparent" }
                             contentItem: RowLayout {
                                 id: paperRow
                                 spacing: 6
-                                Rectangle {
+                                Rectangle { antialiasing: true;
                                     Layout.preferredWidth: 22; Layout.preferredHeight: 28; Layout.leftMargin: 4
                                     radius: 3
                                     color: Theme.border
@@ -358,7 +358,7 @@ Rectangle {
                             { label: "PowerPoint (.pptx) — this page", action: () => exporter.run("pptx", "current") },
                             { label: "PNG image — this page", action: () => exporter.run("png", "current") }
                         ])
-                        background: Rectangle { radius: 12; color: exportBtn.hovered ? Qt.lighter(Theme.accent, 1.08) : Theme.accent }
+                        background: Rectangle { antialiasing: true; radius: 12; color: exportBtn.hovered ? Qt.lighter(Theme.accent, 1.08) : Theme.accent }
                         contentItem: Item {
                             RowLayout {
                                 id: exportRow
@@ -418,6 +418,8 @@ Rectangle {
                     textFont: prefs.store.textFont
                     smoothing: AppSettings.streamline
                     penOnly: AppSettings.store.penOnly
+                    dismissOnPress: drawer.visible && drawer.hasOptions && !prefs.store.drawerPinned
+                    onDismissed: root.drawerOpen = false
                     pressureCurve: AppSettings.store.pressure
                     eraserEnd: AppSettings.store.eraserEnd
                     sideButton: AppSettings.store.sideButton
@@ -458,7 +460,7 @@ Rectangle {
                     width: status.implicitWidth + 10
                     height: 40
                     Shadow { anchors.fill: parent; radius: 20; level: 2 }
-                    Rectangle { anchors.fill: parent; radius: 20; color: Theme.surface; border.color: Theme.border }
+                    Rectangle { antialiasing: true; anchors.fill: parent; radius: 20; color: Theme.surface; border.color: Theme.border }
                     RowLayout {
                         id: status
                         anchors.centerIn: parent
@@ -487,7 +489,7 @@ Rectangle {
                     onClicked: root.focusMode = false
                     background: Item {
                         Shadow { anchors.fill: parent; radius: 17; level: 2 }
-                        Rectangle { anchors.fill: parent; radius: 17; color: Theme.surface; border.color: Theme.border }
+                        Rectangle { antialiasing: true; anchors.fill: parent; radius: 17; color: Theme.surface; border.color: Theme.border }
                     }
                     contentItem: Item {
                         RowLayout {

@@ -27,7 +27,7 @@ Rectangle {
             Layout.rightMargin: 16
             Layout.bottomMargin: 6
             Label { text: "PAGES"; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 0.7; color: Theme.muted; Layout.fillWidth: true }
-            Rectangle {
+            Rectangle { antialiasing: true;
                 Layout.preferredHeight: 18
                 Layout.preferredWidth: countLabel.implicitWidth + 14
                 radius: 9
@@ -57,7 +57,7 @@ Rectangle {
                 width: list.width
                 height: thumb.height + 24 + thumb.y
                 HoverHandler { id: hover }
-                Rectangle {
+                Rectangle { antialiasing: true;
                     visible: cell.section !== ""
                     x: 22; y: 2
                     width: parent.width - 44
@@ -76,7 +76,7 @@ Rectangle {
                     onClicked: root.canvas.goToPage(cell.index)
                     transform: Translate { y: thumb.hovered && !cell.active ? -2 : 0; Behavior on y { NumberAnimation { duration: 200 } } }
                     background: Item {
-                        Rectangle { anchors.fill: parent; anchors.margins: cell.active ? -2.5 : -1; radius: 8; color: cell.active ? Theme.accent : Theme.border }
+                        Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: cell.active ? -2.5 : -1; radius: 8; color: cell.active ? Theme.accent : Theme.border }
                         Shadow { anchors.fill: parent; radius: 6; level: thumb.hovered ? 2 : 1 }
                         RoundImage {
                             anchors.fill: parent
@@ -97,7 +97,7 @@ Rectangle {
                     tip: "Page " + (cell.index + 1) + " options"
                     opacity: hover.hovered || menu.opened ? 1 : 0
                     Behavior on opacity { NumberAnimation { duration: 150 } }
-                    Rectangle { anchors.fill: parent; z: -1; radius: 10; color: Theme.surface }
+                    Rectangle { antialiasing: true; anchors.fill: parent; z: -1; radius: 10; color: Theme.surface }
                     onClicked: menu.show(more, [
                         { label: "Add page after", action: () => root.daftar && cell.modelData.section ? root.addDaftarPage() : root.canvas.addPage(cell.index + 1, "") },
                         { label: "Duplicate page", action: () => root.canvas.duplicatePage(cell.index) },

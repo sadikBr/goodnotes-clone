@@ -38,7 +38,7 @@ Item {
     ColorPopover { id: colorPop }
 
     Shadow { anchors.fill: parent; radius: 14; level: 3 }
-    Rectangle { anchors.fill: parent; radius: 14; color: Theme.surface; border.color: Theme.border }
+    Rectangle { antialiasing: true; anchors.fill: parent; radius: 14; color: Theme.surface; border.color: Theme.border }
     MouseArea { anchors.fill: parent }
 
     RowLayout {
@@ -56,7 +56,7 @@ Item {
             ToolTip.visible: hovered
             ToolTip.text: "Turn this handwriting into text in a handwriting font"
             onClicked: menu.show(applyFont, Fonts.presets.map(f => ({ label: f.label, font: f.face, fontSize: 16, action: () => root.canvas.applyFontToInk(f.id) })))
-            background: Rectangle { radius: 8; color: parent.hovered ? Theme.surface2 : "transparent" }
+            background: Rectangle { antialiasing: true; radius: 8; color: parent.hovered ? Theme.surface2 : "transparent" }
             contentItem: RowLayout {
                 id: afRow
                 spacing: 6
@@ -100,7 +100,7 @@ Item {
                 ToolTip.visible: hovered
                 ToolTip.text: "Handwriting font for the selected text"
                 onClicked: menu.show(fontBtn, Fonts.presets.map(f => ({ label: f.label, font: f.face, fontSize: 16, checked: f.id === root.s.font, action: () => root.canvas.styleSelection({ font: f.id }) })))
-                background: Rectangle { radius: 8; color: Theme.surface; border.color: parent.hovered ? Theme.accent : Theme.border }
+                background: Rectangle { antialiasing: true; radius: 8; color: Theme.surface; border.color: parent.hovered ? Theme.accent : Theme.border }
                 contentItem: RowLayout {
                     id: fbRow
                     spacing: 4
@@ -132,7 +132,7 @@ Item {
                 hoverEnabled: true
                 scale: hovered ? 1.1 : 1
                 onClicked: root.canvas.recolorSelection(modelData)
-                background: Rectangle { radius: 11; color: parent.modelData; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4) }
+                background: Rectangle { antialiasing: true; radius: 11; color: parent.modelData; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4) }
             }
         }
         AbstractButton {

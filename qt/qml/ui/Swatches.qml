@@ -25,8 +25,8 @@ Flow {
             ToolTip.text: typeof modelData === "string" ? "" : modelData.label
             ToolTip.delay: 400
             background: Item {
-                Rectangle { anchors.fill: parent; anchors.margins: -3; radius: width / 2; color: "transparent"; border.width: 2; border.color: Theme.accent; visible: sw.on }
-                Rectangle { anchors.fill: parent; radius: width / 2; color: sw.c; border.width: 1; border.color: Qt.rgba(0, 0, 0, 0.14) }
+                Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: -3; radius: width / 2; color: "transparent"; border.width: 2; border.color: Theme.accent; visible: sw.on }
+                Rectangle { antialiasing: true; anchors.fill: parent; radius: width / 2; color: sw.c; border.width: 1; border.color: Qt.rgba(0, 0, 0, 0.14) }
             }
             scale: hovered ? 1.08 : 1
             Behavior on scale { NumberAnimation { duration: 100 } }

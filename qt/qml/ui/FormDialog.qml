@@ -86,7 +86,7 @@ Popup {
 
     background: Item {
         Shadow { anchors.fill: parent; radius: Theme.radiusXl; level: 3 }
-        Rectangle { anchors.fill: parent; radius: Theme.radiusXl; color: Theme.surface; border.color: Theme.border }
+        Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusXl; color: Theme.surface; border.color: Theme.border }
     }
 
     contentItem: RowLayout {
@@ -95,7 +95,7 @@ Popup {
         Keys.onReturnPressed: root.submit()
         Keys.onEnterPressed: root.submit()
         // The side panel (e.g. a cover preview).
-        Rectangle {
+        Rectangle { antialiasing: true;
             visible: root.aside !== null
             Layout.preferredWidth: 330
             Layout.fillHeight: true
@@ -230,8 +230,8 @@ Popup {
                         spacing: 4
                         Item {
                             width: 64; height: 86
-                            Rectangle { anchors.fill: parent; anchors.margins: cv.on ? -3 : -1; radius: 6; color: cv.on ? Theme.accent : cv.hovered ? Theme.borderStrong : Theme.border }
-                            Rectangle {
+                            Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: cv.on ? -3 : -1; radius: 6; color: cv.on ? Theme.accent : cv.hovered ? Theme.borderStrong : Theme.border }
+                            Rectangle { antialiasing: true;
                                 visible: cv.modelData.value === "none"
                                 anchors.fill: parent
                                 radius: 4

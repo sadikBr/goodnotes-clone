@@ -52,7 +52,7 @@ Item {
         // Rotation grips.
         Repeater {
             model: root.ins.grips || []
-            delegate: Rectangle {
+            delegate: Rectangle { antialiasing: true;
                 id: grip
                 required property var modelData
                 x: modelData[0] * root.zm - 11
@@ -61,7 +61,7 @@ Item {
                 color: Qt.rgba(1, 1, 1, 0.9)
                 border.width: 1.5
                 border.color: Qt.rgba(15 / 255, 23 / 255, 42 / 255, 0.45)
-                Rectangle { anchors.centerIn: parent; width: 10; height: 10; radius: 5; color: "transparent"; border.width: 2; border.color: Qt.rgba(15 / 255, 23 / 255, 42 / 255, 0.18) }
+                Rectangle { antialiasing: true; anchors.centerIn: parent; width: 10; height: 10; radius: 5; color: "transparent"; border.width: 2; border.color: Qt.rgba(15 / 255, 23 / 255, 42 / 255, 0.18) }
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.CrossCursor
@@ -79,7 +79,7 @@ Item {
         // Protractor arm knobs.
         Repeater {
             model: root.ins.knobs || []
-            delegate: Rectangle {
+            delegate: Rectangle { antialiasing: true;
                 required property var modelData
                 required property int index
                 x: modelData[0] * root.zm - 9
@@ -135,7 +135,7 @@ Item {
     }
 
     // The angle (unrotated), and the length or angle being drawn.
-    component Pill: Rectangle {
+    component Pill: Rectangle { antialiasing: true;
         property string text
         property real lx: 0
         property real ly: 0

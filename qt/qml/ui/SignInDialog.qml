@@ -23,7 +23,7 @@ Popup {
     }
     background: Item {
         Shadow { anchors.fill: parent; radius: Theme.radiusXl; level: 3 }
-        Rectangle { anchors.fill: parent; radius: Theme.radiusXl; color: Theme.surface; border.color: Theme.border }
+        Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusXl; color: Theme.surface; border.color: Theme.border }
     }
     contentItem: ColumnLayout {
         spacing: 12
@@ -35,7 +35,7 @@ Popup {
             lineHeight: 1.2
             text: "On Google's page, sign in, enter this code and allow Inkleaf to keep its files in your Drive. Inkleaf only sees its own hidden folder there, not your other files."
         }
-        Rectangle {
+        Rectangle { antialiasing: true;
             Layout.alignment: Qt.AlignHCenter
             implicitWidth: codeText.implicitWidth + 36
             implicitHeight: codeText.implicitHeight + 20

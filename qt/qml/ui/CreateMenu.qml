@@ -12,6 +12,11 @@ Popup {
     width: 340
     padding: 6
     focus: true
+    // Modal without dimming: a press outside only closes it (it doesn't draw on the
+    // page or reopen it from its button), as in the web app.
+    modal: true
+    dim: false
+    Overlay.modal: Item {}
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
     function show(anchor, list) {
@@ -31,7 +36,7 @@ Popup {
     exit: Transition { NumberAnimation { property: "opacity"; to: 0; duration: 80 } }
     background: Item {
         Shadow { anchors.fill: parent; radius: 16; level: 3 }
-        Rectangle { anchors.fill: parent; radius: 16; color: Theme.surface; border.color: Theme.border }
+        Rectangle { antialiasing: true; anchors.fill: parent; radius: 16; color: Theme.surface; border.color: Theme.border }
     }
     contentItem: ColumnLayout {
         spacing: 0

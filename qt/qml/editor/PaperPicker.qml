@@ -17,6 +17,11 @@ Popup {
     padding: 14
     width: 452
     focus: true
+    // Modal without dimming: a press outside only closes it (it doesn't draw on the
+    // page or reopen it from its button), as in the web app.
+    modal: true
+    dim: false
+    Overlay.modal: Item {}
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
     readonly property var categories: [{ id: "basic", label: "Basic", short: "Basic" }, { id: "notes", label: "Notes", short: "Notes" }, { id: "science", label: "Maths & science", short: "Maths" }, { id: "writing", label: "Writing & art", short: "Writing" }, { id: "planner", label: "Planner", short: "Planner" }, { id: "teacher", label: "Teacher", short: "Teacher" }]
@@ -35,7 +40,7 @@ Popup {
 
     background: Item {
         Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 3 }
-        Rectangle { anchors.fill: parent; radius: Theme.radiusLg; color: Theme.surface; border.color: Theme.border }
+        Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusLg; color: Theme.surface; border.color: Theme.border }
     }
     contentItem: ColumnLayout {
         spacing: 10
@@ -67,7 +72,7 @@ Popup {
                             Layout.preferredWidth: 88
                             Layout.preferredHeight: 110
                             Layout.alignment: Qt.AlignHCenter
-                            Rectangle { anchors.fill: parent; anchors.margins: card.on ? -3 : -1; radius: 9; color: card.on ? Theme.accent : card.hovered ? Theme.borderStrong : Theme.border }
+                            Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: card.on ? -3 : -1; radius: 9; color: card.on ? Theme.accent : card.hovered ? Theme.borderStrong : Theme.border }
                             Image {
                                 anchors.fill: parent
                                 sourceSize: Qt.size(176, 220)

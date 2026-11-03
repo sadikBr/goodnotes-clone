@@ -35,11 +35,14 @@ Item {
         parent: Overlay.overlay
         padding: 14
         width: 260
+        modal: true
+        dim: false
+        Overlay.modal: Item {}
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         property int index: 0
         background: Item {
             Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 3 }
-            Rectangle { anchors.fill: parent; radius: Theme.radiusLg; color: Theme.surface; border.color: Theme.border }
+            Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusLg; color: Theme.surface; border.color: Theme.border }
         }
         contentItem: ColumnLayout {
             spacing: 10
@@ -75,7 +78,7 @@ Item {
         border.color: Theme.border
         Behavior on x { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
     }
-    Rectangle {
+    Rectangle { antialiasing: true;
         id: panel
         anchors.fill: parent
         radius: 18
@@ -175,8 +178,8 @@ Item {
                     ToolTip.text: "Tap again to change this colour"
                     onClicked: on ? colorPop.show(sw, root.prefs.paletteFor(root.tool), modelData, c => root.prefs.setColor(root.tool, index, c)) : root.prefs.selectColor(root.tool, index)
                     background: Item {
-                        Rectangle { anchors.fill: parent; anchors.margins: -4; radius: width / 2; color: "transparent"; border.width: 2; border.color: Theme.mix(sw.modelData, Theme.text, 0.2); visible: sw.on }
-                        Rectangle { anchors.fill: parent; radius: width / 2; color: sw.modelData; border.width: 1; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4) }
+                        Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: -4; radius: width / 2; color: "transparent"; border.width: 2; border.color: Theme.mix(sw.modelData, Theme.text, 0.2); visible: sw.on }
+                        Rectangle { antialiasing: true; anchors.fill: parent; radius: width / 2; color: sw.modelData; border.width: 1; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4) }
                     }
                 }
             }
@@ -200,7 +203,7 @@ Item {
         RowLayout {
             visible: !!root.fav && root.fav.sizes.length > 0 && !!root.spec
             spacing: 6
-            Rectangle {
+            Rectangle { antialiasing: true;
                 implicitWidth: sizesRow.implicitWidth + 6
                 implicitHeight: 36
                 radius: 12
@@ -221,11 +224,11 @@ Item {
                             onClicked: on ? (sizePop.index = index, sizePop.x = Math.max(8, sz.mapToItem(sizePop.parent, 0, 0).x - 110), sizePop.y = sz.mapToItem(sizePop.parent, 0, 0).y + 40, sizePop.open()) : root.prefs.selectSize(root.tool, index)
                             background: Item {
                                 Shadow { anchors.fill: parent; radius: 9; level: sz.on ? 1 : 0 }
-                                Rectangle { anchors.fill: parent; radius: 9; color: sz.on ? Theme.surface : "transparent" }
+                                Rectangle { antialiasing: true; anchors.fill: parent; radius: 9; color: sz.on ? Theme.surface : "transparent" }
                             }
                             contentItem: Item {
                                 readonly property bool letter: root.tool === "text" || root.tool === "sticky"
-                                Rectangle {
+                                Rectangle { antialiasing: true;
                                     visible: !parent.letter
                                     anchors.centerIn: parent
                                     readonly property real d: Math.max(4, Math.min(16, sz.index === 0 ? 5 : sz.index === 1 ? 9 : 14))
@@ -265,7 +268,7 @@ Item {
         ToolTip.visible: hovered
         ToolTip.text: root.prefs.store.drawerPinned ? "Pinned open — unpin to tuck options away while you write" : "Keep options open"
         onClicked: root.prefs.store.drawerPinned = !root.prefs.store.drawerPinned
-        background: Rectangle { radius: 8; color: root.prefs.store.drawerPinned ? Theme.accentSoft : parent.hovered ? Theme.surface2 : "transparent" }
+        background: Rectangle { antialiasing: true; radius: 8; color: root.prefs.store.drawerPinned ? Theme.accentSoft : parent.hovered ? Theme.surface2 : "transparent" }
         contentItem: Item { Icon { anchors.centerIn: parent; name: "pin"; size: 15; color: root.prefs.store.drawerPinned ? Theme.accent : Theme.muted } }
     }
 }

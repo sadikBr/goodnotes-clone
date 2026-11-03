@@ -47,6 +47,8 @@ class InkCanvas : public QQuickItem {
   Q_PROPERTY(QString laserMode MEMBER m_laserMode NOTIFY toolStateChanged)
   Q_PROPERTY(qreal smoothing READ smoothing WRITE setSmoothing NOTIFY toolStateChanged)
   Q_PROPERTY(bool penOnly READ penOnly WRITE setPenOnly NOTIFY penOnlyChanged)
+  /// While the (unpinned) tool drawer is open a press on the page only closes it.
+  Q_PROPERTY(bool dismissOnPress MEMBER m_dismissOnPress NOTIFY dismissOnPressChanged)
   // Settings screen: "light" | "normal" | "firm" (how hard to press for a full line).
   Q_PROPERTY(QString pressureCurve MEMBER m_pressureCurve NOTIFY settingsChanged)
   Q_PROPERTY(bool eraserEnd MEMBER m_eraserEndOn NOTIFY settingsChanged)
@@ -196,6 +198,9 @@ signals:
   /// The pen was seen (pen-only mode turns on the first time).
   void penUsed();
   void message(const QString& text, bool error);
+  void dismissOnPressChanged();
+  /// A press that only closed the drawer (see dismissOnPress).
+  void dismissed();
 
 protected:
   QSGNode* updatePaintNode(QSGNode* old, UpdatePaintNodeData*) override;
@@ -327,6 +332,9 @@ private:
   QTimer m_settle;  // the zoom stopped changing: sharper pictures
   QTimer m_saveTimer;
   QTimer m_thumbFill;  // missing PDF page thumbnails
+  QTimer m_scrollGlide;  // a wheel notch's eased scroll
+  QPointF m_glideTarget;
+  bool m_dismissOnPress = false;  // missing PDF page thumbnails
   QTimer m_timers;  // the scripts' timers (holding a stroke still)
   QTimer m_laserTick;
 

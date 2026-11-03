@@ -1075,9 +1075,22 @@ export class EditorCore {
 
   // ------------------------------------------------------------ selection
 
+  // The selected elements and their box, worked out once per change (a big
+  // selection is asked for them several times a frame while it moves).
+  private selCache: { els: El[]; elsLen: number; sel: Set<string>; size: number; rev: number; selRev: number; active: number; list: El[]; box: Rect | null } | null = null;
+  private selected(): { list: El[]; box: Rect | null } {
+    const c = this.selCache;
+    const els = this.elements;
+    if (c && c.els === els && c.elsLen === els.length && c.sel === this.selection && c.size === this.selection.size && c.rev === this.rev && c.selRev === this.selectionRev && c.active === this.active) return c;
+    const list = this.selection.size ? els.filter((el) => this.selection.has(el.id)) : [];
+    const next = { els, elsLen: els.length, sel: this.selection, size: this.selection.size, rev: this.rev, selRev: this.selectionRev, active: this.active, list, box: list.length ? unionRects(list.map(boxOfEl)) : null };
+    this.selCache = next;
+    return next;
+  }
+
   selectionBounds(): Rect | null {
     if (this.selection.size === 0) return null;
-    return unionRects(this.elements.filter((el) => this.selection.has(el.id)).map(boxOfEl));
+    return this.selected().box;
   }
 
   clearSelection() {
@@ -1095,7 +1108,7 @@ export class EditorCore {
 
   private singleShape(): El | null {
     if (this.selection.size !== 1) return null;
-    const el = this.elements.find((e) => this.selection.has(e.id));
+    const el = this.selected().list[0];
     return el && el.kind === "shape" ? el : null;
   }
 
@@ -1112,7 +1125,7 @@ export class EditorCore {
 
   /** What the selection bar shows. */
   selectionInfo(): any {
-    const els = this.elements.filter((el) => this.selection.has(el.id));
+    const els = this.selected().list;
     if (!els.length || this.gesture) return { count: els.length };
     const texts = els.filter((el): el is TextEl | StickyEl => el.kind === "text" || el.kind === "sticky");
     const single = this.singleShape() as ShapeEl | null;

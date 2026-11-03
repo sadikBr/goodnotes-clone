@@ -16,7 +16,7 @@ AbstractButton {
     implicitWidth: row.implicitWidth + 19
     ToolTip.visible: hovered && tip.length > 0 && !open
     ToolTip.text: tip
-    background: Rectangle {
+    background: Rectangle { antialiasing: true;
         radius: 11
         color: Theme.surface
         border.color: root.hovered || root.open ? Theme.accent : Theme.border

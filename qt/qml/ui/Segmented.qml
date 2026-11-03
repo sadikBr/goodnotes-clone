@@ -3,7 +3,7 @@ import QtQuick
 import QtQuick.Controls
 import Inkleaf
 
-Rectangle {
+Rectangle { antialiasing: true;
     id: root
     /// [{ value, label }]
     property var options: []
@@ -37,7 +37,7 @@ Rectangle {
                 onClicked: root.picked(modelData.value)
                 background: Item {
                     Shadow { anchors.fill: parent; radius: 7; level: b.on ? 1 : 0 }
-                    Rectangle { anchors.fill: parent; radius: 7; color: b.on ? Theme.surface : (b.hovered ? Theme.alpha(Theme.surface, 0.5) : "transparent") }
+                    Rectangle { antialiasing: true; anchors.fill: parent; radius: 7; color: b.on ? Theme.surface : (b.hovered ? Theme.alpha(Theme.surface, 0.5) : "transparent") }
                 }
                 contentItem: Label { id: lbl; text: b.modelData.label; color: Theme.text; font.pixelSize: 13; font.weight: b.on ? Font.DemiBold : Font.Normal; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
             }

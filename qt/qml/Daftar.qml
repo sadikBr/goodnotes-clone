@@ -71,7 +71,7 @@ Item {
         leftPadding: 8
         rightPadding: 8
         font.pixelSize: 13
-        background: Rectangle {
+        background: Rectangle { antialiasing: true;
             radius: 8
             color: Theme.surface
             border.width: parent.activeFocus ? 2 : 1
@@ -82,7 +82,7 @@ Item {
         implicitHeight: 34
         leftPadding: 8
         font.pixelSize: 13
-        background: Rectangle {
+        background: Rectangle { antialiasing: true;
             radius: 8
             color: Theme.surface
             border.width: parent.activeFocus || parent.popup.visible ? 2 : 1
@@ -96,7 +96,7 @@ Item {
         ToolTip.visible: hovered
         ToolTip.text: "Remove"
         ToolTip.delay: 400
-        background: Rectangle { radius: 8; color: parent.hovered ? Theme.surface2 : "transparent" }
+        background: Rectangle { antialiasing: true; radius: 8; color: parent.hovered ? Theme.surface2 : "transparent" }
         contentItem: Item { Icon { anchors.centerIn: parent; name: "close"; size: 15; color: Theme.muted } }
     }
 
@@ -309,7 +309,7 @@ Item {
             selectionColor: Theme.alpha(Theme.accent, 0.3)
             onTextChanged: area.edited()
             Component.onCompleted: forceActiveFocus()
-            background: Rectangle {
+            background: Rectangle { antialiasing: true;
                 radius: 10
                 color: Theme.surface
                 border.width: ta.activeFocus ? 2 : 1

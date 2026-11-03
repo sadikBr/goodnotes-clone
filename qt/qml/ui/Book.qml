@@ -41,7 +41,7 @@ Item {
         radiusTopLeft: 2; radiusTopRight: 2; radiusBottomLeft: 2; radiusBottomRight: 2
     }
     // No picture yet: the title on a label.
-    Rectangle {
+    Rectangle { antialiasing: true;
         visible: root.thumbnail.length === 0
         x: 22; y: parent.height * 0.22
         width: parent.width - 36
@@ -53,7 +53,7 @@ Item {
     // The spine.
     RoundImage { width: root.full ? 6 : 10; height: parent.height; color: Qt.rgba(0, 0, 0, 0.18); radiusTopLeft: 4; radiusBottomLeft: 4 }
     // Favourite.
-    Rectangle {
+    Rectangle { antialiasing: true;
         visible: root.favourite
         anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 8
         width: 26; height: 26; radius: 13

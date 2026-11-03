@@ -43,7 +43,7 @@ AbstractButton {
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: 48; height: 48
                 Shadow { anchors.fill: parent; radius: 24; level: 1 }
-                Rectangle { anchors.fill: parent; radius: 24; color: Theme.surface }
+                Rectangle { antialiasing: true; anchors.fill: parent; radius: 24; color: Theme.surface }
                 Icon { anchors.centerIn: parent; name: "plus"; color: Theme.accent; size: 22 }
             }
             Label { anchors.horizontalCenter: parent.horizontalCenter; text: "New…"; font.weight: Font.DemiBold; color: root.hovered ? Theme.accent : Theme.muted }

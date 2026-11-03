@@ -59,7 +59,7 @@ Popup {
     exit: Transition { NumberAnimation { property: "opacity"; to: 0; duration: 100 } }
     background: Item {
         Shadow { anchors.fill: parent; radius: Theme.radiusXl; level: 3 }
-        Rectangle { anchors.fill: parent; radius: Theme.radiusXl; color: Theme.surface; border.color: Theme.border }
+        Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusXl; color: Theme.surface; border.color: Theme.border }
     }
 
     component SectionHead: RowLayout {

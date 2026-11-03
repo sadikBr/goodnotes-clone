@@ -56,7 +56,7 @@ Item {
             rotation: root.open ? (second ? 7 : -6) : (second ? 5 : -4)
             Behavior on y { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
             Behavior on rotation { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
-            Rectangle { anchors.fill: parent; anchors.margins: -1; radius: 5; color: Qt.rgba(0, 0, 0, 0.12) }
+            Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: -1; radius: 5; color: Qt.rgba(0, 0, 0, 0.12) }
             RoundImage {
                 anchors.fill: parent
                 color: sheet.nb ? sheet.nb.coverColor : "#fbfaf6"
@@ -85,9 +85,9 @@ Item {
             angle: root.open ? -14 : 0
             Behavior on angle { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
         }
-        Rectangle { y: 2; width: parent.width; height: parent.height; radius: 11; color: Qt.rgba(0, 0, 0, 0.10); anchors.horizontalCenter: parent.horizontalCenter }
-        Rectangle { y: 1; width: parent.width; height: parent.height; radius: 11; color: Qt.rgba(0, 0, 0, 0.18) }
-        Rectangle {
+        Rectangle { antialiasing: true; y: 2; width: parent.width; height: parent.height; radius: 11; color: Qt.rgba(0, 0, 0, 0.10); anchors.horizontalCenter: parent.horizontalCenter }
+        Rectangle { antialiasing: true; y: 1; width: parent.width; height: parent.height; radius: 11; color: Qt.rgba(0, 0, 0, 0.18) }
+        Rectangle { antialiasing: true;
             anchors.fill: parent
             radius: 10
             gradient: Gradient {
@@ -100,7 +100,7 @@ Item {
         // The seam.
         Rectangle { x: parent.width * 0.08; y: parent.height * 0.18; width: parent.width * 0.84; height: 1; color: Qt.rgba(1, 1, 1, 0.22) }
         Rectangle { x: parent.width * 0.08; y: parent.height * 0.18 + 1; width: parent.width * 0.84; height: 1; color: Qt.rgba(0, 0, 0, 0.12) }
-        Rectangle {
+        Rectangle { antialiasing: true;
             visible: root.count > 0
             anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.rightMargin: 10; anchors.bottomMargin: 9
             height: 22; radius: 11

@@ -29,7 +29,7 @@ ComboBox {
     font.pixelSize: 14
     leftPadding: 12
 
-    background: Rectangle {
+    background: Rectangle { antialiasing: true;
         radius: Theme.radius
         color: Theme.surface2
         border.width: root.activeFocus || root.popup.visible ? 2 : 1
@@ -57,7 +57,7 @@ ComboBox {
         enabled: !modelData.heading
         hoverEnabled: true
         highlighted: root.highlightedIndex === index
-        background: Rectangle { radius: 8; color: !d.modelData.heading && (d.highlighted || d.hovered) ? Theme.surface2 : "transparent" }
+        background: Rectangle { antialiasing: true; radius: 8; color: !d.modelData.heading && (d.highlighted || d.hovered) ? Theme.surface2 : "transparent" }
         contentItem: Label {
             text: d.modelData.label
             leftPadding: d.modelData.heading ? 4 : 8
@@ -83,7 +83,7 @@ ComboBox {
         }
         background: Item {
             Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 3 }
-            Rectangle { anchors.fill: parent; radius: Theme.radiusLg; color: Theme.surface; border.color: Theme.border }
+            Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusLg; color: Theme.surface; border.color: Theme.border }
         }
     }
 }

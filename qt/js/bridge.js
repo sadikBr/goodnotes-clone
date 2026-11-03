@@ -9891,6 +9891,7 @@ var Inkleaf = (() => {
         this.instrumentRev = 0;
         this.revs = /* @__PURE__ */ new WeakMap();
         this.nextRev = 1;
+        this.selCache = null;
         this.pages = pages.map(function(meta) {
           return { meta, elements: null, dirty: false };
         });
@@ -11032,13 +11033,23 @@ var Inkleaf = (() => {
         this.pages[this.active].dirty = true;
         this.rev++;
       };
-      EditorCore2.prototype.selectionBounds = function() {
+      EditorCore2.prototype.selected = function() {
         var _this = this;
+        var c2 = this.selCache;
+        var els = this.elements;
+        if (c2 && c2.els === els && c2.elsLen === els.length && c2.sel === this.selection && c2.size === this.selection.size && c2.rev === this.rev && c2.selRev === this.selectionRev && c2.active === this.active)
+          return c2;
+        var list = this.selection.size ? els.filter(function(el) {
+          return _this.selection.has(el.id);
+        }) : [];
+        var next = { els, elsLen: els.length, sel: this.selection, size: this.selection.size, rev: this.rev, selRev: this.selectionRev, active: this.active, list, box: list.length ? unionRects(list.map(boxOfEl)) : null };
+        this.selCache = next;
+        return next;
+      };
+      EditorCore2.prototype.selectionBounds = function() {
         if (this.selection.size === 0)
           return null;
-        return unionRects(this.elements.filter(function(el) {
-          return _this.selection.has(el.id);
-        }).map(boxOfEl));
+        return this.selected().box;
       };
       EditorCore2.prototype.clearSelection = function() {
         if (!this.selection.size)
@@ -11067,12 +11078,9 @@ var Inkleaf = (() => {
         this.selectionRev++;
       };
       EditorCore2.prototype.singleShape = function() {
-        var _this = this;
         if (this.selection.size !== 1)
           return null;
-        var el = this.elements.find(function(e2) {
-          return _this.selection.has(e2.id);
-        });
+        var el = this.selected().list[0];
         return el && el.kind === "shape" ? el : null;
       };
       EditorCore2.prototype.singleSegment = function() {
@@ -11085,10 +11093,7 @@ var Inkleaf = (() => {
         return this.selectionBounds();
       };
       EditorCore2.prototype.selectionInfo = function() {
-        var _this = this;
-        var els = this.elements.filter(function(el) {
-          return _this.selection.has(el.id);
-        });
+        var els = this.selected().list;
         if (!els.length || this.gesture)
           return { count: els.length };
         var texts = els.filter(function(el) {

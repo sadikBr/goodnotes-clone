@@ -14,6 +14,11 @@ Popup {
     padding: 12
     width: 260
     focus: true
+    // Modal without dimming: a press outside only closes it (it doesn't draw on the
+    // page or reopen it from its button), as in the web app.
+    modal: true
+    dim: false
+    Overlay.modal: Item {}
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
     function show(anchor, colors, current, cb) {
@@ -40,7 +45,7 @@ Popup {
 
     background: Item {
         Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 3 }
-        Rectangle { anchors.fill: parent; radius: Theme.radiusLg; color: Theme.surface; border.color: Theme.border }
+        Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusLg; color: Theme.surface; border.color: Theme.border }
     }
     contentItem: ColumnLayout {
         spacing: 12
@@ -53,7 +58,7 @@ Popup {
             onPicked: c => { root.pick(c); root.close() }
         }
         // Saturation (across) and brightness (down) for the hue.
-        Rectangle {
+        Rectangle { antialiasing: true;
             id: sv
             Layout.fillWidth: true
             Layout.preferredHeight: 130
@@ -63,7 +68,7 @@ Popup {
                 GradientStop { position: 0; color: "#ffffff" }
                 GradientStop { position: 1; color: Qt.hsva(root.hue, 1, 1, 1) }
             }
-            Rectangle {
+            Rectangle { antialiasing: true;
                 anchors.fill: parent
                 radius: 8
                 gradient: Gradient {
@@ -71,7 +76,7 @@ Popup {
                     GradientStop { position: 1; color: "#000000" }
                 }
             }
-            Rectangle {
+            Rectangle { antialiasing: true;
                 x: root.sat * sv.width - 8; y: (1 - root.val) * sv.height - 8
                 width: 16; height: 16; radius: 8
                 color: "transparent"; border.color: "#ffffff"; border.width: 2
@@ -88,7 +93,7 @@ Popup {
             }
         }
         // Hue.
-        Rectangle {
+        Rectangle { antialiasing: true;
             id: hueBar
             Layout.fillWidth: true
             Layout.preferredHeight: 14
@@ -103,7 +108,7 @@ Popup {
                 GradientStop { position: 0.83; color: "#ff00ff" }
                 GradientStop { position: 1.0; color: "#ff0000" }
             }
-            Rectangle { x: root.hue * hueBar.width - 8; y: -2; width: 16; height: 18; radius: 8; color: "transparent"; border.color: "#ffffff"; border.width: 2 }
+            Rectangle { antialiasing: true; x: root.hue * hueBar.width - 8; y: -2; width: 16; height: 18; radius: 8; color: "transparent"; border.color: "#ffffff"; border.width: 2 }
             MouseArea {
                 anchors.fill: parent
                 function at(m) { root.hue = Math.max(0, Math.min(0.999, m.x / width)); root.fromHsv() }
@@ -113,7 +118,7 @@ Popup {
         }
         RowLayout {
             spacing: 8
-            Rectangle { Layout.preferredWidth: 28; Layout.preferredHeight: 28; radius: 14; color: root.value; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4) }
+            Rectangle { antialiasing: true; Layout.preferredWidth: 28; Layout.preferredHeight: 28; radius: 14; color: root.value; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4) }
             UiField {
                 Layout.fillWidth: true
                 implicitHeight: 34

@@ -7,16 +7,16 @@ Slider {
     id: root
     implicitWidth: 200
     implicitHeight: 24
-    background: Rectangle {
+    background: Rectangle { antialiasing: true;
         x: root.leftPadding
         y: root.topPadding + root.availableHeight / 2 - height / 2
         width: root.availableWidth
         height: 4
         radius: 2
         color: Theme.surface3
-        Rectangle { width: root.visualPosition * parent.width; height: parent.height; radius: 2; color: Theme.accent }
+        Rectangle { antialiasing: true; width: root.visualPosition * parent.width; height: parent.height; radius: 2; color: Theme.accent }
     }
-    handle: Rectangle {
+    handle: Rectangle { antialiasing: true;
         x: root.leftPadding + root.visualPosition * (root.availableWidth - width)
         y: root.topPadding + root.availableHeight / 2 - height / 2
         width: 18; height: 18; radius: 9

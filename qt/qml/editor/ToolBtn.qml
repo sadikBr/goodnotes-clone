@@ -25,14 +25,14 @@ AbstractButton {
     ToolTip.text: tip
     background: Item {
         Shadow { anchors.fill: parent; radius: 11; level: root.active ? 2 : 0; opacity: root.active ? 1 : 0 }
-        Rectangle {
+        Rectangle { antialiasing: true;
             anchors.fill: parent
             radius: 11
             color: root.active ? root.dip : root.hovered ? Theme.alpha(Theme.surface, 0.55) : "transparent"
             Behavior on color { ColorAnimation { duration: 180 } }
         }
         // The ink drop.
-        Rectangle {
+        Rectangle { antialiasing: true;
             visible: root.ink.length > 0 && !root.active
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: parent.bottom

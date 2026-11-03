@@ -15,7 +15,7 @@ TextField {
     font.pixelSize: 14
     // Left-aligned like the web app's inputs, whatever the script.
     horizontalAlignment: TextInput.AlignLeft
-    background: Rectangle {
+    background: Rectangle { antialiasing: true;
         radius: Theme.radius
         color: Theme.surface2
         border.width: root.activeFocus ? 2 : 1

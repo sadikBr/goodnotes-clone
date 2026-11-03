@@ -21,7 +21,7 @@ Item {
     NumberAnimation { id: pop; target: root; property: "opacity"; from: 0; to: 1; duration: 180 }
 
     Shadow { anchors.fill: parent; radius: Theme.radiusXl; level: 3 }
-    Rectangle { anchors.fill: parent; radius: Theme.radiusXl; color: Theme.surface; border.color: Theme.border }
+    Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusXl; color: Theme.surface; border.color: Theme.border }
     RowLayout {
         id: box
         x: 16; y: 14

@@ -11,8 +11,12 @@ Popup {
     property int menuWidth: 220
     parent: Overlay.overlay
     padding: 6
-    modal: false
     focus: true
+    // Modal without dimming: a press outside only closes it (it doesn't draw on the
+    // page or reopen it from its button), as in the web app.
+    modal: true
+    dim: false
+    Overlay.modal: Item {}
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
     /// Opens below `anchor` (or above it when there's no room).
@@ -36,7 +40,7 @@ Popup {
     background: Item {
         implicitWidth: root.menuWidth
         Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 3 }
-        Rectangle { anchors.fill: parent; radius: Theme.radiusLg; color: Theme.surface; border.color: Theme.border }
+        Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusLg; color: Theme.surface; border.color: Theme.border }
     }
     contentItem: ColumnLayout {
         spacing: 0
@@ -59,7 +63,7 @@ Popup {
                     if (modelData.action) Qt.callLater(modelData.action)
                 }
                 readonly property color fg: modelData.danger ? Theme.danger : modelData.checked ? Theme.accent : Theme.text
-                background: Rectangle { radius: 8; color: it.hovered || it.activeFocus ? Theme.surface2 : "transparent" }
+                background: Rectangle { antialiasing: true; radius: 8; color: it.hovered || it.activeFocus ? Theme.surface2 : "transparent" }
                 contentItem: RowLayout {
                     spacing: 10
                     Item { Layout.preferredWidth: 2 }

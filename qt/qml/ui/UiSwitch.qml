@@ -10,11 +10,11 @@ AbstractButton {
     implicitWidth: 34
     implicitHeight: 20
     hoverEnabled: true
-    background: Rectangle {
+    background: Rectangle { antialiasing: true;
         radius: height / 2
         color: root.checked ? Theme.accent : Theme.surface3
         Behavior on color { ColorAnimation { duration: 180 } }
-        Rectangle {
+        Rectangle { antialiasing: true;
             width: 16; height: 16; radius: 8
             y: 2
             x: root.checked ? parent.width - width - 2 : 2

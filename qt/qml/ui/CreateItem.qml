@@ -17,7 +17,7 @@ AbstractButton {
     transform: Translate { y: root.card && root.hovered ? -2 : 0; Behavior on y { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } } }
     background: Item {
         Shadow { anchors.fill: parent; radius: 12; level: root.card && root.hovered ? 2 : 0 }
-        Rectangle {
+        Rectangle { antialiasing: true;
             anchors.fill: parent
             radius: 12
             color: root.card ? Theme.surface : (root.hovered || root.activeFocus ? Theme.surface2 : "transparent")
@@ -28,7 +28,7 @@ AbstractButton {
     contentItem: RowLayout {
         spacing: 12
         Item { Layout.preferredWidth: root.card ? 4 : 0 }
-        Rectangle {
+        Rectangle { antialiasing: true;
             Layout.preferredWidth: 38; Layout.preferredHeight: 38; radius: 11
             color: root.option.tint ? Theme.alpha(root.tint, 0.14) : Theme.accentSoft
             Icon { anchors.centerIn: parent; name: root.option.icon || "plus"; size: 19; color: root.option.iconColor || root.tint }

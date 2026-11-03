@@ -19,7 +19,7 @@ QObject* JsNative::canvas(int w, int h) { return new JsCanvas(w, h); }
 
 QObject* JsNative::image(const QString& src) { return Js::instance().imageFor(src); }
 
-double JsNative::now() const {
+double Js::clockMs() {
   static QElapsedTimer t = [] {
     QElapsedTimer e;
     e.start();
@@ -27,6 +27,8 @@ double JsNative::now() const {
   }();
   return double(t.nsecsElapsed()) / 1e6;
 }
+
+double JsNative::now() const { return Js::clockMs(); }
 
 QString JsNative::uuid() const { return QUuid::createUuid().toString(QUuid::WithoutBraces); }
 

@@ -15,7 +15,7 @@ AbstractButton {
     hoverEnabled: true
     opacity: enabled ? 1 : 0.4
 
-    background: Rectangle {
+    background: Rectangle { antialiasing: true;
         radius: 10
         color: root.active ? root.activeColor : (root.hovered ? Theme.surface3 : "transparent")
         Behavior on color { ColorAnimation { duration: 120 } }

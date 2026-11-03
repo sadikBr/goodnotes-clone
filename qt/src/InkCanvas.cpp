@@ -36,14 +36,7 @@ constexpr float kLazyPen = 1.1f;   // screen pixels the ink may trail the pen
 constexpr int kMaxTexture = 4096;  // pixels per side of one picture
 constexpr double kLaserHold = 900, kLaserFade = 300, kLaserCoreFade = 480;
 
-double nowMs() {
-  static QElapsedTimer t = [] {
-    QElapsedTimer e;
-    e.start();
-    return e;
-  }();
-  return double(t.nsecsElapsed()) / 1e6;
-}
+double nowMs() { return Js::clockMs(); }
 
 QSGGeometryNode* meshNode(const std::vector<QPointF>& tris, const QColor& color) {
   auto* g = new QSGGeometry(QSGGeometry::defaultAttributes_Point2D(), int(tris.size()));
@@ -106,6 +99,17 @@ InkCanvas::InkCanvas(QQuickItem* parent) : QQuickItem(parent) {
   m_saveTimer.setInterval(600);
   connect(&m_saveTimer, &QTimer::timeout, this, &InkCanvas::flush);
   // Imported PDF pages get their thumbnails in the background, one at a time.
+  m_scrollGlide.setInterval(8);
+  connect(&m_scrollGlide, &QTimer::timeout, this, [this] {
+    const QPointF before = m_scroll;
+    m_scroll += (m_glideTarget - m_scroll) * 0.28;
+    if (QLineF(m_scroll, m_glideTarget).length() < 0.75) m_scroll = m_glideTarget;
+    clampScroll();
+    if (m_scroll == before || m_scroll == m_glideTarget) m_scrollGlide.stop();
+    m_overlayDirty = true;
+    emit viewChanged();
+    refresh();
+  });
   m_thumbFill.setSingleShot(true);
   m_thumbFill.setInterval(250);
   connect(&m_thumbFill, &QTimer::timeout, this, [this] {
@@ -794,6 +798,7 @@ void InkCanvas::setPenStyle(const QString& s) {
 void InkCanvas::setColors(const QVariantMap& c) {
   if (c == m_colors) return;
   m_colors = c;
+  if (m_tool == "laser") updateCursor();
   pushToolState();
   emit toolStateChanged();
 }
@@ -886,7 +891,26 @@ void InkCanvas::updateCursor() {
   if (m_tool == "hand") return setCursor(Qt::OpenHandCursor);
   if (m_tool == "lasso") return setCursor(Qt::ArrowCursor);
   if (m_tool == "text" || m_tool == "sticky") return setCursor(Qt::IBeamCursor);
-  if (m_tool == "laser") return setCursor(Qt::BlankCursor);
+  if (m_tool == "laser") {
+    // The pointer dot (.laser-dot) as the cursor itself: it follows the mouse
+    // or pen with no delay, unlike anything drawn on the page.
+    const QColor c = JsCanvas::parseColor(m_colors.value("laser", "#ff1f1f").toString());
+    const qreal dpr = window() ? window()->effectiveDevicePixelRatio() : 1.0;
+    QPixmap pm(QSize(16, 16) * dpr);
+    pm.setDevicePixelRatio(dpr);
+    pm.fill(Qt::transparent);
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(255, 255, 255, 128));
+    p.drawEllipse(QPointF(8, 8), 6.5, 6.5);
+    p.setBrush(QColor(120, 120, 120, 115));
+    p.drawEllipse(QPointF(8, 8), 5.5, 5.5);
+    p.setBrush(c);
+    p.drawEllipse(QPointF(8, 8), 3, 3);
+    p.end();
+    return setCursor(QCursor(pm, 8, 8));
+  }
   if (m_penCursor == "none") return setCursor(Qt::BlankCursor);
   if (m_penCursor == "dot") {
     static const QCursor dot = [] {
@@ -1159,6 +1183,7 @@ void InkCanvas::fitWidth() {
 
 void InkCanvas::goToPage(int i) {
   if (i < 0 || i >= int(m_pages.size())) return;
+  m_scrollGlide.stop();
   m_scroll.setY(m_pages[i].top * m_zoom);
   clampScroll();
   emit viewChanged();
@@ -1317,8 +1342,14 @@ bool InkCanvas::navigatesOnly(bool stylus) const { return m_penOnly && !stylus &
 
 void InkCanvas::press(QPointF s, float pressure, bool stylus, const QString& toolOverride, bool touch, Qt::KeyboardModifiers mods) {
   if (m_core.isUndefined()) return;
-  const QString tool = toolOverride.isEmpty() ? m_tool : toolOverride;
+  m_scrollGlide.stop();
   m_g = Gesture();
+  if (m_dismissOnPress) {
+    // Closes the drawer and does nothing else (the rest of this press is ignored).
+    emit dismissed();
+    return;
+  }
+  const QString tool = toolOverride.isEmpty() ? m_tool : toolOverride;
   m_g.lastScreen = s;
   m_g.touch = touch;
   m_g.stylus = stylus;
@@ -1468,10 +1499,6 @@ bool InkCanvas::eventFilter(QObject* watched, QEvent* event) {
     if (m_g.kind == Gesture::None) {
       m_hover = local;
       if (m_tool == "eraser") update();
-      if (m_tool == "laser") {
-        m_laserDot = inside ? local : QPointF(-1, -1);
-        m_laserTick.start();
-      }
       return false;
     }
     m_hover = local;
@@ -1512,10 +1539,6 @@ void InkCanvas::mouseReleaseEvent(QMouseEvent* e) {
 void InkCanvas::hoverMoveEvent(QHoverEvent* e) {
   m_hover = e->position();
   if (m_tool == "eraser") update();
-  if (m_tool == "laser") {
-    m_laserDot = e->position();
-    m_laserTick.start();
-  }
   if (m_tool == "lasso" && !m_core.isUndefined()) {
     int pi = -1;
     const QPointF p = toPage(e->position(), &pi);
@@ -1538,14 +1561,26 @@ void InkCanvas::wheelEvent(QWheelEvent* e) {
     zoomAt(m_zoom * std::exp(e->angleDelta().y() * 0.0025), e->position());
     return;
   }
+  // Touchpads scroll by their pixels; a mouse wheel by a step per notch, as
+  // in a browser (on Wayland a wheel also reports a few pixels per notch,
+  // which would barely move the page).
   const QPoint px = e->pixelDelta();
-  const QPointF d = !px.isNull() ? QPointF(px) : QPointF(e->angleDelta()) / 120.0 * 110.0;
-  if (e->modifiers() & Qt::ShiftModifier) m_scroll.rx() -= d.y();
-  else m_scroll -= d;
-  clampScroll();
-  m_overlayDirty = true;
-  emit viewChanged();
-  refresh();
+  const bool touchpad = e->phase() != Qt::NoScrollPhase || (e->pointingDevice() && e->pointingDevice()->type() == QInputDevice::DeviceType::TouchPad);
+  const QPointF d = touchpad && !px.isNull() ? QPointF(px) : QPointF(e->angleDelta()) / 120.0 * 110.0;
+  const QPointF step = (e->modifiers() & Qt::ShiftModifier) ? QPointF(d.y(), 0) : d;
+  if (touchpad) {
+    m_scrollGlide.stop();
+    m_scroll -= step;
+    clampScroll();
+    m_overlayDirty = true;
+    emit viewChanged();
+    refresh();
+    return;
+  }
+  // A notch glides there over a few frames (several notches add up).
+  if (!m_scrollGlide.isActive()) m_glideTarget = m_scroll;
+  m_glideTarget -= step;
+  m_scrollGlide.start();
 }
 
 void InkCanvas::touchEvent(QTouchEvent* e) {
@@ -1825,7 +1860,8 @@ QSGNode* InkCanvas::updatePaintNode(QSGNode* old, UpdatePaintNodeData*) {
       colorA = std::max(0.0, 1 - t / kLaserFade);
       coreA = std::max(0.0, 1 - t / kLaserCoreFade);
     }
-    const bool dot = m_tool == "laser" && m_laserDot.x() >= 0;
+    // Touch has no cursor: the dot is drawn under the finger while it's down.
+    const bool dot = m_tool == "laser" && m_laserDot.x() >= 0 && m_g.kind == Gesture::Laser && m_g.touch;
     QRectF bounds;
     for (const auto& run : m_laser)
       for (const auto& q : run) bounds |= QRectF(q.p - QPointF(8, 8), QSizeF(16, 16));

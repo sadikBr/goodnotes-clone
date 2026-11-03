@@ -39,6 +39,9 @@ public:
   static Js* create(class QQmlEngine*, class QJSEngine*);
 
   QJSEngine& engine() { return m_engine; }
+  /// The one clock for the app and its scripts (ms): pen samples and the
+  /// scripts' timers must agree (holding a stroke still).
+  static double clockMs();
   /// Inkleaf.<path> ("geometry.hitTest", "drawTemplate"…).
   QJSValue fn(const QString& path);
   /// Calls Inkleaf.<path>(args…); logs script errors.

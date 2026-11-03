@@ -3,7 +3,7 @@ import QtQuick
 import QtQuick.Layouts
 import Inkleaf
 
-Rectangle {
+Rectangle { antialiasing: true;
     default property alias content: row.data
     property int pad: 3
     implicitWidth: row.implicitWidth + pad * 2

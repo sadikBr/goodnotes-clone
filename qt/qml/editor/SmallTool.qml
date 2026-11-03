@@ -16,7 +16,7 @@ AbstractButton {
     hoverEnabled: true
     ToolTip.visible: hovered && tip.length > 0
     ToolTip.text: tip
-    background: Rectangle { radius: 8; color: root.active ? Theme.accentSoft : root.hovered ? Theme.surface2 : "transparent" }
+    background: Rectangle { antialiasing: true; radius: 8; color: root.active ? Theme.accentSoft : root.hovered ? Theme.surface2 : "transparent" }
     contentItem: Item {
         Icon { visible: root.iconName.length > 0; anchors.centerIn: parent; name: root.iconName; size: 17; color: root.active ? Theme.accent : Theme.text }
         Label {

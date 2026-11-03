@@ -25,5 +25,5 @@ T.ToolTip {
         color: "#f4f3ef"
         wrapMode: Text.Wrap
     }
-    background: Rectangle { radius: 8; color: "#22231f" }
+    background: Rectangle { antialiasing: true; radius: 8; color: "#22231f" }
 }

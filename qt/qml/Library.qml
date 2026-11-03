@@ -295,19 +295,19 @@ Rectangle {
         Layout.fillWidth: true
         implicitHeight: 38
         hoverEnabled: true
-        background: Rectangle { radius: Theme.radius; color: nav.active ? Theme.accentSoft : nav.hovered ? Theme.surface2 : "transparent"; Behavior on color { ColorAnimation { duration: 150 } } }
+        background: Rectangle { antialiasing: true; radius: Theme.radius; color: nav.active ? Theme.accentSoft : nav.hovered ? Theme.surface2 : "transparent"; Behavior on color { ColorAnimation { duration: 150 } } }
         contentItem: RowLayout {
             spacing: 11
             Item { Layout.preferredWidth: nav.indent }
             Icon { name: nav.iconName; size: 19; color: nav.active ? Theme.accent : Theme.muted }
             Label { text: nav.text; color: nav.active ? Theme.accent : Theme.text; font.weight: nav.active ? Font.DemiBold : Font.Normal; elide: Text.ElideRight; Layout.fillWidth: true }
-            Rectangle {
+            Rectangle { antialiasing: true;
                 visible: nav.dot.a > 0
                 Layout.preferredWidth: 13; Layout.preferredHeight: 13; radius: 6.5
                 color: Theme.surface
-                Rectangle { anchors.centerIn: parent; width: 9; height: 9; radius: 4.5; color: nav.dot }
+                Rectangle { antialiasing: true; anchors.centerIn: parent; width: 9; height: 9; radius: 4.5; color: nav.dot }
             }
-            Rectangle {
+            Rectangle { antialiasing: true;
                 visible: nav.count.length > 0
                 Layout.preferredHeight: 20
                 Layout.preferredWidth: Math.max(22, countText.implicitWidth + 12)
@@ -430,12 +430,12 @@ Rectangle {
                     ToolTip.text: "Create a notebook, daftar, PDF or folder"
                     background: Item {
                         Shadow { anchors.fill: parent; radius: 14; level: newBtn.hovered || createMenu.opened ? 2 : 1 }
-                        Rectangle { anchors.fill: parent; radius: 14; color: Theme.surface; border.color: newBtn.hovered || createMenu.opened ? Theme.mix(Theme.accent, Theme.border, 0.45) : Theme.border }
+                        Rectangle { antialiasing: true; anchors.fill: parent; radius: 14; color: Theme.surface; border.color: newBtn.hovered || createMenu.opened ? Theme.mix(Theme.accent, Theme.border, 0.45) : Theme.border }
                     }
                     contentItem: RowLayout {
                         spacing: 12
                         Item { Layout.preferredWidth: 0 }
-                        Rectangle {
+                        Rectangle { antialiasing: true;
                             Layout.preferredWidth: 36; Layout.preferredHeight: 36; radius: 10; color: Theme.accent
                             Icon { anchors.centerIn: parent; name: "plus"; size: 18; color: Theme.accentContrast }
                         }
@@ -544,9 +544,9 @@ Rectangle {
                     Layout.alignment: Qt.AlignBottom
                     implicitWidth: searchRow.implicitWidth + 22
                     implicitHeight: 38
-                    Rectangle { anchors.fill: parent; anchors.margins: -3; radius: height / 2; color: Theme.accentSoft; visible: search.activeFocus }
+                    Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: -3; radius: height / 2; color: Theme.accentSoft; visible: search.activeFocus }
                     Shadow { anchors.fill: parent; radius: 19; level: 1 }
-                    Rectangle { anchors.fill: parent; radius: 19; color: Theme.surface; border.color: search.activeFocus ? Theme.accent : Theme.border }
+                    Rectangle { antialiasing: true; anchors.fill: parent; radius: 19; color: Theme.surface; border.color: search.activeFocus ? Theme.accent : Theme.border }
                     RowLayout {
                         id: searchRow
                         anchors.fill: parent
@@ -568,7 +568,7 @@ Rectangle {
                             onTextEdited: { root.query = text; searchDelay.restart() }
                             Keys.onEscapePressed: { text = ""; root.query = ""; root.hits = []; focus = false }
                         }
-                        Rectangle {
+                        Rectangle { antialiasing: true;
                             visible: !search.activeFocus
                             Layout.preferredWidth: 20; Layout.preferredHeight: 20; radius: 5
                             color: Theme.surface2; border.color: Theme.border
@@ -626,7 +626,7 @@ Rectangle {
                     transform: Translate { x: hit.hovered ? 2 : 0; Behavior on x { NumberAnimation { duration: 200 } } }
                     background: Item {
                         Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 1 }
-                        Rectangle { anchors.fill: parent; radius: Theme.radiusLg; color: Theme.surface; border.color: hit.hovered ? Theme.accent : Theme.border }
+                        Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusLg; color: Theme.surface; border.color: hit.hovered ? Theme.accent : Theme.border }
                     }
                     contentItem: ColumnLayout {
                         id: hitCol

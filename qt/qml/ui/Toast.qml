@@ -3,7 +3,7 @@ import QtQuick
 import QtQuick.Controls
 import Inkleaf
 
-Rectangle {
+Rectangle { antialiasing: true;
     id: root
     property bool error: false
     function show(message, isError) {
