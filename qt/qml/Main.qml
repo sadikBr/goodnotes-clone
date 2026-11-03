@@ -18,7 +18,21 @@ ApplicationWindow {
     property string openTitle: ""
 
     Component.onCompleted: AppSettings.dark  // applies the theme
-    SettingsDialog { id: settings }
+    SettingsDialog { id: settings; services: services }
+    Services {
+        id: services
+        onNotify: (message, error) => toast.show(message, error)
+        // Saves the open notebook first; sync leaves it alone.
+        prepare: () => win.openNotebook && loader.item && loader.item.saveForSync ? loader.item.saveForSync() : ""
+        onLibraryReplaced: {
+            // Show what changed: the library again (a restored library has other notebooks).
+            let still = false
+            try { still = !!win.openNotebook && !!InkleafCore.call("notebook", { id: win.openNotebook }) } catch (e) {}
+            if (!still) win.openNotebook = ""
+            loader.active = false
+            loader.active = true
+        }
+    }
 
     function open(id, title) {
         openTitle = title
@@ -26,6 +40,8 @@ ApplicationWindow {
     }
     function closeNotebook() {
         openNotebook = ""
+        // Send what was written in it.
+        Qt.callLater(() => services.syncNow(false))
     }
 
     Loader {
@@ -34,6 +50,8 @@ ApplicationWindow {
         sourceComponent: win.openNotebook ? editorPage : libraryPage
     }
     Toast { id: toast }
+    SignInDialog { services: services }
+    UpdateBanner { services: services }
 
     Component {
         id: libraryPage

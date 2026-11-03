@@ -6,6 +6,7 @@
 #include <QStandardPaths>
 #include <QFontDatabase>
 #include <QGuiApplication>
+#include <QNetworkProxyFactory>
 #include <QIcon>
 #include <QLoggingCategory>
 #include <QQmlApplicationEngine>
@@ -31,6 +32,8 @@ int main(int argc, char* argv[]) {
   QGuiApplication::setApplicationVersion(QStringLiteral(INKLEAF_VERSION));
   QGuiApplication::setDesktopFileName("inkleaf");
   QGuiApplication app(argc, argv);
+  // Update checks (and anything else online) go through the system's proxy settings.
+  QNetworkProxyFactory::setUseSystemConfiguration(true);
   // The bundled web code trips the QML compiler's style hints; they're noise here.
   QLoggingCategory::setFilterRules(QStringLiteral("qt.qml.compiler=false"));
   QGuiApplication::setWindowIcon(QIcon(":/qt/qml/Inkleaf/assets/icon.svg"));

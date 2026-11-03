@@ -2,8 +2,11 @@
 // same names and arguments (see qt/native/src/lib.rs).
 #pragma once
 
+#include <QJSValue>
 #include <QJsonValue>
 #include <QObject>
+#include <QPointer>
+#include <QJSEngine>
 #include <QVariant>
 #include <QtQml/qqmlregistration.h>
 
@@ -22,6 +25,9 @@ public:
 
   /// Runs a command; returns its JSON answer (QVariant) or throws a QML error.
   Q_INVOKABLE QVariant call(const QString& cmd, const QVariantMap& args = {});
+  /// Runs a slow command (sync, backups) on a worker thread; then calls
+  /// `callback(answer, error)` on the GUI thread (error "" on success).
+  Q_INVOKABLE void callAsync(const QString& cmd, const QVariantMap& args, const QJSValue& callback);
   /// The same from C++: the answer as JSON, `error` set on failure.
   QJsonValue callJson(const QString& cmd, const QJsonObject& args, QString* error = nullptr, const QByteArray& bytes = {});
   /// The answer's JSON text as it comes from the core (no parsing): for the scripts.
@@ -44,6 +50,7 @@ signals:
 
 private:
   ::Core* m_core = nullptr;
+  QPointer<QJSEngine> m_engine;
   QString m_dir;
   QString m_lastError;
 };

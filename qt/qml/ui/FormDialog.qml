@@ -118,7 +118,7 @@ Popup {
                 x: 24; y: 24
                 width: parent.width - 48
                 spacing: 0
-                Label { text: root.title; font.pixelSize: 19; font.weight: Font.Bold; color: Theme.text; Layout.fillWidth: true; wrapMode: Text.Wrap; Layout.bottomMargin: 18 }
+                Label { text: root.title; horizontalAlignment: Text.AlignLeft; font.pixelSize: 19; font.weight: Font.Bold; color: Theme.text; Layout.fillWidth: true; wrapMode: Text.Wrap; Layout.bottomMargin: 18 }
                 Label { visible: root.message.length > 0; text: root.message; color: Theme.muted; wrapMode: Text.Wrap; lineHeight: 1.25; Layout.fillWidth: true; Layout.bottomMargin: 18 }
                 Flow {
                     id: fieldsFlow

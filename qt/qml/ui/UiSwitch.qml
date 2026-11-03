@@ -5,6 +5,7 @@ import Inkleaf
 
 AbstractButton {
     id: root
+    opacity: enabled ? 1 : 0.4
     checkable: true
     implicitWidth: 34
     implicitHeight: 20

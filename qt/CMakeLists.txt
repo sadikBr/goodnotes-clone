@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Quick QuickControls2 Pdf)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Network Quick QuickControls2 Pdf)
 qt_standard_project_setup()
 
 # --- the Rust core -------------------------------------------------------------
@@ -77,6 +77,9 @@ qt_add_qml_module(inkleaf
     qml/Library.qml
     qml/Editor.qml
     qml/Daftar.qml
+    qml/Services.qml
+    qml/ui/SignInDialog.qml
+    qml/ui/UpdateBanner.qml
     qml/IconButton.qml
     qml/Icon.qml
     qml/IconData.js
@@ -132,7 +135,7 @@ qt_add_resources(inkleaf "inkleaf_style"
 )
 
 target_compile_definitions(inkleaf PRIVATE INKLEAF_VERSION="${PROJECT_VERSION}")
-target_link_libraries(inkleaf PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::QuickControls2 Qt6::Pdf inkleaf_native)
+target_link_libraries(inkleaf PRIVATE Qt6::Core Qt6::Gui Qt6::Network Qt6::Quick Qt6::QuickControls2 Qt6::Pdf inkleaf_native)
 if(UNIX AND NOT APPLE)
   target_link_libraries(inkleaf PRIVATE dl pthread m)
 endif()

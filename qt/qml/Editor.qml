@@ -64,6 +64,13 @@ Rectangle {
     FormDialog { id: dialog }
     Daftar { id: daftarUi; dialog: dialog; onNotify: (m, e) => root.notify(m, e) }
 
+    /** Saves everything (before a sync or a backup); returns this notebook's id. */
+    function saveForSync() {
+        canvas.finishEdit()
+        canvas.flush()
+        return notebookId
+    }
+
     // --- daftar annossous --------------------------------------------------------
     /// The daftar's details when this notebook is one (else null).
     property var daftar: null
@@ -163,7 +170,7 @@ Rectangle {
                             } catch (e) { root.notify(String(e.message || e), true) }
                         })
                         background: Rectangle { radius: 8; color: titleBtn.hovered ? Theme.surface2 : "transparent" }
-                        contentItem: Label { id: titleLabel; text: root.title; font.pixelSize: 15; font.weight: Font.DemiBold; color: Theme.text; elide: Text.ElideRight; leftPadding: 8; rightPadding: 8; verticalAlignment: Text.AlignVCenter }
+                        contentItem: Label { id: titleLabel; text: root.title; font.pixelSize: 15; font.weight: Font.DemiBold; color: Theme.text; elide: Text.ElideRight; horizontalAlignment: Text.AlignLeft; leftPadding: 8; rightPadding: 8; verticalAlignment: Text.AlignVCenter }
                     }
                     // A daftar's class (switches section), New lesson, outline and its menu.
                     RowLayout {

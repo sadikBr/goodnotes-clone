@@ -1,7 +1,8 @@
-// The Settings screen: writing, stylus and touch, and appearance in one
-// place (src/settingsScreen.ts). Changes apply at once.
+// The Settings screen: sync, writing, stylus and touch, backups, updates and
+// appearance in one place (src/settingsScreen.ts). Changes apply at once.
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import Inkleaf
 
@@ -16,6 +17,39 @@ Popup {
     padding: 0
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     readonly property var s: AppSettings.store
+    required property Services services
+    readonly property var sync: services.syncStatus
+    readonly property var backup: services.backup
+    onOpened: { services.refreshSync(); services.refreshBackup() }
+    function esc(t) { return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") }
+    function urlPath(u) { const s = String(u); return s.startsWith("file://") ? decodeURIComponent(s.slice(7)) : s }
+
+    FolderDialog {
+        id: folderDialog
+        title: "Backup folder"
+        onAccepted: root.services.chooseFolder(root.urlPath(selectedFolder))
+    }
+    FileDialog {
+        id: exportDialog
+        title: "Export everything"
+        fileMode: FileDialog.SaveFile
+        nameFilters: ["Inkleaf library (*.inkleaf)"]
+        onAccepted: root.services.exportLibrary(root.urlPath(selectedFile))
+    }
+    FileDialog {
+        id: restoreDialog
+        title: "Restore from a backup"
+        fileMode: FileDialog.OpenFile
+        nameFilters: ["Inkleaf backups (*.inkleaf *.db)", "All files (*)"]
+        onAccepted: {
+            const path = root.urlPath(selectedFile)
+            root.services.inspectBackup(path, what => confirm.ask("Restore this backup?", [], "Restore", () => { root.close(); root.services.restore(path) }, {
+                danger: true,
+                message: root.services.fileName(path) + " holds " + what + ". Everything in Inkleaf now will be replaced by it (a safety copy of your current library is kept)."
+            }))
+        }
+    }
+    FormDialog { id: confirm }
 
     Overlay.modal: Rectangle { color: Qt.rgba(20 / 255, 18 / 255, 14 / 255, 0.45) }
     enter: Transition {
@@ -55,7 +89,7 @@ Popup {
             anchors.verticalCenter: parent.verticalCenter
             spacing: 2
             Label { text: row.title; font.weight: Font.Medium; color: Theme.text; Layout.fillWidth: true; wrapMode: Text.Wrap }
-            Label { text: row.help; font.pixelSize: 12; color: Theme.muted; Layout.fillWidth: true; wrapMode: Text.Wrap; lineHeight: 1.15 }
+            Label { text: row.help; textFormat: Text.StyledText; font.pixelSize: 12; color: Theme.muted; linkColor: Theme.text; Layout.fillWidth: true; wrapMode: Text.Wrap; lineHeight: 1.15 }
         }
         Item {
             id: holder
@@ -91,6 +125,37 @@ Popup {
                 width: parent.width - 48
                 spacing: 0
 
+                SectionHead { iconName: "docs"; text: "Sync" }
+                SettingRow {
+                    first: true
+                    visible: !root.sync
+                    title: "Google Drive"; help: "Loading…"
+                }
+                SettingRow {
+                    first: true
+                    visible: !!root.sync && !root.sync.available
+                    title: "Google Drive"; help: "This build of Inkleaf can't sign in to Google (it was built without a Google key)."
+                }
+                SettingRow {
+                    first: true
+                    visible: !!root.sync && root.sync.available && !root.sync.signedIn
+                    title: "Google Drive"; help: "Keep your notebooks the same on your computer and tablet. Each device signs in once; everything syncs by itself."
+                    UiButton { text: "Sign in…"; kind: "primary"; onClicked: root.services.signIn() }
+                }
+                SettingRow {
+                    first: true
+                    visible: !!root.sync && root.sync.signedIn
+                    title: "Google Drive"
+                    help: root.sync ? "Signed in as <b>" + root.esc(root.sync.email || "your Google account") + "</b>" + (root.sync.device ? " · this device: " + root.esc(root.sync.device) : "") : ""
+                    UiButton { text: "Sign out"; kind: "ghost"; onClicked: root.services.signOut() }
+                }
+                SettingRow {
+                    visible: !!root.sync && root.sync.signedIn
+                    title: "Status"
+                    help: !root.sync ? "" : root.sync.lastError ? "<font color='" + Theme.danger + "'>" + root.esc(root.sync.lastError) + "</font>" : root.sync.lastSyncAt ? "Last synced " + root.services.relativeTime(root.sync.lastSyncAt) : "Not synced yet"
+                    UiButton { text: root.services.syncing ? "Syncing…" : "Sync now"; enabled: !root.services.syncing; onClicked: root.services.syncNow(true) }
+                }
+
                 SectionHead { iconName: "pen"; text: "Writing" }
                 SettingRow {
                     first: true
@@ -125,6 +190,75 @@ Popup {
                     UiSwitch { checked: root.s.penOnly; onClicked: root.s.penOnly = checked }
                 }
 
+                SectionHead { iconName: "download"; text: "Backups" }
+                SettingRow {
+                    first: true
+                    visible: Qt.platform.os !== "android"
+                    title: "Backup folder"
+                    help: {
+                        const f = root.backup ? root.backup.folder : null
+                        if (!f) return "A USB key, or a folder that Google Drive, Dropbox or OneDrive keeps in sync."
+                        const parts = f.split(/[\\/]/).filter(x => x.length)
+                        return "Saving to <b>" + root.esc(parts.length > 2 ? "…/" + parts.slice(-2).join("/") : f) + "</b>"
+                    }
+                    UiButton { text: root.backup && root.backup.folder ? "Change…" : "Choose…"; onClicked: folderDialog.open() }
+                }
+                SettingRow {
+                    visible: Qt.platform.os !== "android"
+                    title: "Back up every day"; help: "While Inkleaf is open, once a day. Only the newest backups are kept in the folder."
+                    UiSwitch {
+                        enabled: !!(root.backup && root.backup.folder)
+                        checked: !!(root.backup && root.backup.daily)
+                        onClicked: root.services.setBackup(root.backup.folder, checked, root.backup.keep)
+                    }
+                }
+                SettingRow {
+                    visible: Qt.platform.os !== "android"
+                    title: "Keep"; help: "How many daily backups stay in the folder."
+                    Segmented {
+                        options: [{ value: 7, label: "7" }, { value: 14, label: "14" }, { value: 30, label: "30" }]
+                        value: root.backup ? root.backup.keep : 14
+                        onPicked: v => root.services.setBackup(root.backup ? root.backup.folder : null, root.backup ? root.backup.daily : true, v)
+                    }
+                }
+                SettingRow {
+                    visible: Qt.platform.os !== "android"
+                    title: "Status"
+                    help: {
+                        const c = root.backup
+                        if (!c) return "Loading…"
+                        if (c.lastError) return "<font color='" + Theme.danger + "'>" + root.esc(c.lastError) + "</font>"
+                        if (c.lastBackupAt && c.lastBackupFile) return "Last backup " + root.services.relativeTime(c.lastBackupAt) + ": " + root.esc(root.services.fileName(c.lastBackupFile))
+                        return c.folder ? "No backup made yet." : "Choose a folder to turn backups on."
+                    }
+                    UiButton { text: "Back up now"; enabled: !!(root.backup && root.backup.folder) && !root.services.backingUp; onClicked: root.services.backupNow() }
+                }
+                SettingRow {
+                    title: "Export everything"; help: "Your whole library (notebooks, PDFs, settings of each daftar) as one .inkleaf file."
+                    UiButton {
+                        text: "Export…"
+                        onClicked: {
+                            exportDialog.selectedFile = InkleafCore.documentsFolder() + "/Inkleaf " + root.services.backupLabel() + ".inkleaf"
+                            exportDialog.open()
+                        }
+                    }
+                }
+                SettingRow {
+                    title: "Restore from a backup"; help: "Replaces everything in Inkleaf with a backup or export. Your current library is kept as a safety copy."
+                    UiButton { text: "Restore…"; kind: "danger"; onClicked: restoreDialog.open() }
+                }
+
+                SectionHead { iconName: "download"; text: "Updates" }
+                SettingRow {
+                    first: true
+                    title: "Check for updates automatically"; help: "You're told when a new version is out, and it downloads in your browser."
+                    UiSwitch { checked: root.services.autoCheck; onClicked: root.services.setAutoCheck(checked) }
+                }
+                SettingRow {
+                    title: "Inkleaf"; help: "Version " + root.services.version
+                    UiButton { text: "Check now"; onClicked: root.services.checkForUpdates(true) }
+                }
+
                 SectionHead { iconName: "sun"; text: "Appearance" }
                 SettingRow {
                     first: true
@@ -132,16 +266,6 @@ Popup {
                     Segmented { options: [{ value: "light", label: "Light" }, { value: "dark", label: "Dark" }, { value: "system", label: "System" }]; value: root.s.theme; onPicked: v => root.s.theme = v }
                 }
 
-                SectionHead { iconName: "download"; text: "Sync, backups and updates" }
-                Label {
-                    Layout.fillWidth: true
-                    Layout.topMargin: 4
-                    text: "Google Drive sync, backups and updates come to the native app next. Until then, set them up in the current Inkleaf app — both apps share the same library."
-                    wrapMode: Text.Wrap
-                    color: Theme.muted
-                    font.pixelSize: 13
-                    lineHeight: 1.2
-                }
             }
         }
     }

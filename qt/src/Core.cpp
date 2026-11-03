@@ -1,6 +1,8 @@
 #include "Core.h"
 
+#include <QPointer>
 #include <QSaveFile>
+#include <QThreadPool>
 #include <QStandardPaths>
 #include <QUrl>
 
@@ -10,6 +12,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QQmlEngine>
+#include <QCoreApplication>
 #include <QStandardPaths>
 
 extern "C" {
@@ -72,9 +75,10 @@ InkleafCore* InkleafCore::instance() {
   return g_instance;
 }
 
-InkleafCore* InkleafCore::create(QQmlEngine*, QJSEngine*) {
+InkleafCore* InkleafCore::create(QQmlEngine*, QJSEngine* engine) {
   // One core for the whole app; QML must not delete it.
   if (!g_instance) new InkleafCore();
+  g_instance->m_engine = engine;
   QJSEngine::setObjectOwnership(g_instance, QJSEngine::CppOwnership);
   return g_instance;
 }
@@ -144,6 +148,38 @@ QVariant InkleafCore::call(const QString& cmd, const QVariantMap& args) {
     return {};
   }
   return v.toVariant();
+}
+
+void InkleafCore::callAsync(const QString& cmd, const QVariantMap& args, const QJSValue& callback) {
+  if (!m_core) {
+    QJSValue cb = callback;
+    if (cb.isCallable()) cb.call({QJSValue(), QJSValue(m_lastError)});
+    return;
+  }
+  const QByteArray a = QJsonDocument(QJsonObject::fromVariantMap(args)).toJson(QJsonDocument::Compact);
+  const QByteArray name = cmd.toUtf8();
+  const ::Core* core = m_core;
+  QPointer<InkleafCore> self(this);
+  QThreadPool::globalInstance()->start([=]() {
+    InkleafResult r = inkleaf_call(core, name.constData(), a.constData(), nullptr, 0);
+    const QByteArray out(reinterpret_cast<const char*>(r.data), int(r.len));
+    const bool ok = r.ok;
+    inkleaf_free(r);
+    QMetaObject::invokeMethod(qApp, [=]() {
+      if (!self) return;
+      const QJsonDocument doc = QJsonDocument::fromJson("[" + out + "]");
+      const QJsonValue v = doc.array().isEmpty() ? QJsonValue() : doc.array().first();
+      QJSValue cb = callback;
+      QJSEngine* js = self->m_engine ? self->m_engine.data() : qjsEngine(self);
+      if (!ok) {
+        const QString err = v.toObject().value("error").toString(QString::fromUtf8(out));
+        if (cb.isCallable()) cb.call({QJSValue(), QJSValue(err)});
+        return;
+      }
+      if (changesLibrary(QString::fromUtf8(name))) emit self->libraryChanged();
+      if (cb.isCallable()) cb.call({js ? js->toScriptValue(v.toVariant()) : QJSValue(), QJSValue(QString())});
+    }, Qt::QueuedConnection);
+  });
 }
 
 QString InkleafCore::saveBytes(const QString& path, const QString& cmd, const QVariantMap& args) {

@@ -58,6 +58,7 @@ Item {
         width: root.width - 32
         text: (root.isFolder && root.item.favourite ? "★ " : "") + (root.isFolder ? root.item.name : root.item.title)
         elide: Text.ElideRight
+        horizontalAlignment: Text.AlignLeft
         font.weight: Font.DemiBold
         color: Theme.text
     }

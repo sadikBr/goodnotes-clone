@@ -13,6 +13,8 @@ Rectangle {
         timer.restart()
     }
     property bool shown: false
+    // Above dialogs too (Settings reports there).
+    parent: Overlay.overlay
     anchors.horizontalCenter: parent.horizontalCenter
     y: parent.height - height - (shown ? 28 : 12)
     opacity: shown ? 1 : 0

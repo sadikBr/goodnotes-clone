@@ -99,7 +99,7 @@ Rectangle {
         if (view.kind === "trash") return nbs.length ? plural(nbs.length, "notebook", "notebooks") + " in the trash" : "Nothing in the trash"
         if (!nbs.length) return view.kind === "all" ? "Let's start something new" : "Nothing here yet"
         const latest = nbs.slice().sort((a, b) => b.updatedAt - a.updatedAt)[0]
-        return plural(nbs.length, "notebook", "notebooks") + " · last edited “" + latest.title + "” " + relative(latest.updatedAt)
+        return plural(nbs.length, "notebook", "notebooks") + " · last edited “" + latest.title + "”\u200E " + relative(latest.updatedAt)
     }
     function sorted(list) {
         const out = list.slice()
