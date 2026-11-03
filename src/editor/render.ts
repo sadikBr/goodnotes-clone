@@ -326,6 +326,8 @@ export interface LaidLine {
   width: number;
   /** The line belongs to a right-to-left (Arabic) paragraph. */
   rtl: boolean;
+  /** The canvas font it was measured with. */
+  font: string;
 }
 
 /**
@@ -334,10 +336,11 @@ export interface LaidLine {
  * by drawing, hit-testing, alignment guides and PDF export.
  */
 export function layoutText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, w: number, size: number, lineH: number, style: TextStyle): LaidLine[] {
-  ctx.font = fontCss(style.font, size, style);
   const out: LaidLine[] = [];
   let row = 0;
   for (const para of text.split("\n")) {
+    const font = fontCss(style.font, size, { ...style, rtl: isRtl(para) });
+    ctx.font = font;
     const m = LIST_MARKER.exec(para);
     const indent = m ? ctx.measureText(m[0]).width : 0;
     const body = m ? para.slice(m[0].length) : para;
@@ -351,7 +354,7 @@ export function layoutText(ctx: CanvasRenderingContext2D, text: string, x: numbe
       const baseX = i === 0 || rtl ? x : x + indent;
       const avail = i === 0 ? w : w - indent;
       const lx = align === "center" ? baseX + (avail - lw) / 2 : align === "right" ? baseX + avail - lw : baseX;
-      out.push({ text: t, x: lx, y: y + row * lineH, width: lw, rtl });
+      out.push({ text: t, x: lx, y: y + row * lineH, width: lw, rtl, font });
       row++;
     });
   }
@@ -362,8 +365,12 @@ export function layoutText(ctx: CanvasRenderingContext2D, text: string, x: numbe
 export function measureText(text: string, font: string | undefined, size: number): number {
   measureCtx ??= document.createElement("canvas").getContext("2d");
   if (!measureCtx) return text.length * size * 0.5;
-  measureCtx.font = fontCss(font, size);
-  return Math.max(...text.split("\n").map((line) => measureCtx!.measureText(line).width));
+  return Math.max(
+    ...text.split("\n").map((line) => {
+      measureCtx!.font = fontCss(font, size, { rtl: isRtl(line) });
+      return measureCtx!.measureText(line).width;
+    }),
+  );
 }
 
 /** Width a text box needs to show every paragraph on one line. */
@@ -403,6 +410,7 @@ export function textAnchors(el: TextEl): Anchor[] {
   let left = Infinity, right = -Infinity, top = Infinity, bottom = -Infinity;
   for (const line of lines) {
     if (!line.text.trim()) continue;
+    ctx.font = line.font;
     const m = ctx.measureText(line.text);
     const l = line.x - m.actualBoundingBoxLeft;
     const r = line.x + m.actualBoundingBoxRight;
@@ -453,6 +461,7 @@ export function drawGuides(ctx: CanvasRenderingContext2D, guides: Guide[], zoom:
 
 /** Draws a laid-out line, right to left for Arabic (x is always its left edge). */
 function fillLine(ctx: CanvasRenderingContext2D, line: LaidLine) {
+  ctx.font = line.font;
   ctx.direction = line.rtl ? "rtl" : "ltr";
   ctx.textAlign = "left";
   ctx.fillText(line.text, line.x, line.y);

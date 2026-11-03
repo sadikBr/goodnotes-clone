@@ -4,7 +4,7 @@
 // draws the screen, thumbnails and (through the PDF painter) vector exports.
 
 import type { Template } from "../api";
-import { fontCss } from "../fonts";
+import { fontCss, isRtl } from "../fonts";
 import { drawCoverDesign, isCoverTemplate } from "./covers";
 import { drawDaftarPage, isDaftarTemplate } from "./daftarPapers";
 
@@ -155,7 +155,7 @@ class Lines {
 
 function label(ctx: Ctx, text: string, x: number, y: number, ink: Inks, size = 13, bold = false) {
   ctx.save();
-  ctx.font = fontCss("sans", size, { bold });
+  ctx.font = fontCss("sans", size, { bold, rtl: isRtl(text) });
   ctx.fillStyle = ink.text;
   ctx.textBaseline = "alphabetic";
   ctx.fillText(text, x, y);

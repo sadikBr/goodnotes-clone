@@ -71,7 +71,7 @@ export function labelWidth(text: string, size: number, bold = false): number {
   if (typeof document !== "undefined") {
     measurer ??= document.createElement("canvas").getContext("2d");
     if (measurer) {
-      measurer.font = fontCss("sans", size, { bold });
+      measurer.font = fontCss("sans", size, { bold, rtl: isRtl(text) });
       return measurer.measureText(text).width;
     }
   }
@@ -88,7 +88,7 @@ interface TextOpts {
 
 function text(ctx: Ctx, s: string, x: number, y: number, o: TextOpts): number {
   ctx.save();
-  ctx.font = fontCss("sans", o.size, { bold: o.bold });
+  ctx.font = fontCss("sans", o.size, { bold: o.bold, rtl: isRtl(s) });
   ctx.fillStyle = o.color ?? INK;
   ctx.textBaseline = "alphabetic";
   ctx.textAlign = "left";

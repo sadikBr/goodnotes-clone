@@ -3,7 +3,7 @@
 // an exported PDF looks exactly like the text on the page.
 
 import { parse, type Font } from "opentype.js";
-import { FONT_PRESETS, type FontId } from "../fonts";
+import { arabicFirst, FONT_PRESETS, type FontId } from "../fonts";
 
 /** @fontsource package per preset. */
 const PACKAGES: Record<FontId, string> = {
@@ -97,7 +97,7 @@ export function parseFontCss(css: string): (FaceSpec & { size: number }) | null 
   const size = /(\d+(?:\.\d+)?)px/.exec(css);
   if (!size) return null;
   const family = css.slice(size.index + size[0].length).trim();
-  const preset = FONT_PRESETS.find((p) => p.family === family);
+  const preset = FONT_PRESETS.find((p) => p.family === family || arabicFirst(p.family) === family);
   if (!preset) return null;
   const head = css.slice(0, size.index);
   return { font: preset.id, size: Number(size[1]), bold: /\bbold\b/.test(head), italic: /\bitalic\b/.test(head) };

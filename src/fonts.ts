@@ -50,9 +50,20 @@ export function fontPreset(id: string | undefined): FontPreset {
   return FONT_PRESETS.find((f) => f.id === id) ?? FONT_PRESETS[0];
 }
 
-/** CSS / canvas font string, e.g. `24px "Caveat", cursive`. */
-export function fontCss(id: string | undefined, sizePx: number, style?: { bold?: boolean; italic?: boolean }): string {
-  return `${style?.italic ? "italic " : ""}${style?.bold ? "bold " : ""}${sizePx}px ${fontPreset(id).family}`;
+/**
+ * A family list with the Arabic face first. Used for right-to-left text: the
+ * spaces and punctuation between Arabic words then come from the Arabic
+ * face too, which keeps every word on one baseline (WebKitGTK puts runs from
+ * different fonts at different heights).
+ */
+export function arabicFirst(family: string): string {
+  return `${AR}, ${family.replace(`, ${AR}`, "")}`;
+}
+
+/** CSS / canvas font string, e.g. `24px "Caveat", cursive` (`rtl`: Arabic face first). */
+export function fontCss(id: string | undefined, sizePx: number, style?: { bold?: boolean; italic?: boolean; rtl?: boolean }): string {
+  const family = fontPreset(id).family;
+  return `${style?.italic ? "italic " : ""}${style?.bold ? "bold " : ""}${sizePx}px ${style?.rtl ? arabicFirst(family) : family}`;
 }
 
 const loaded = new Set<string>();
