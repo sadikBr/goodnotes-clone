@@ -15,7 +15,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Network Quick QuickControls2 Pdf)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Network Quick QuickControls2)
+# Qt PDF draws imported PDFs; where it isn't shipped (Android) the system's
+# PDF renderer is used instead.
+find_package(Qt6 6.4 QUIET OPTIONAL_COMPONENTS Pdf)
 qt_standard_project_setup()
 
 # --- the Rust core -------------------------------------------------------------
@@ -166,7 +169,13 @@ qt_add_resources(inkleaf "inkleaf_style"
 )
 
 target_compile_definitions(inkleaf PRIVATE INKLEAF_VERSION="${PROJECT_VERSION}")
-target_link_libraries(inkleaf PRIVATE Qt6::Core Qt6::Gui Qt6::Network Qt6::Quick Qt6::QuickControls2 Qt6::Pdf inkleaf_native)
+target_link_libraries(inkleaf PRIVATE Qt6::Core Qt6::Gui Qt6::Network Qt6::Quick Qt6::QuickControls2 inkleaf_native)
+if(TARGET Qt6::Pdf)
+  target_link_libraries(inkleaf PRIVATE Qt6::Pdf)
+  target_compile_definitions(inkleaf PRIVATE INKLEAF_HAVE_QTPDF)
+elseif(NOT ANDROID)
+  message(FATAL_ERROR "Qt PDF is needed (qt6-pdf / qt6-webengine)")
+endif()
 if(ANDROID)
   target_link_libraries(inkleaf PRIVATE dl m log)
   # A separate app for now (the current Android app keeps its own library).
@@ -182,6 +191,7 @@ elseif(UNIX AND NOT APPLE)
   target_link_libraries(inkleaf PRIVATE dl pthread m)
 endif()
 if(WIN32)
+  target_compile_definitions(inkleaf PRIVATE _USE_MATH_DEFINES)  # M_PI
   target_sources(inkleaf PRIVATE packaging/inkleaf.rc)  # the app icon
   target_link_libraries(inkleaf PRIVATE ws2_32 userenv bcrypt ntdll advapi32 ole32 oleaut32 runtimeobject propsys shell32 crypt32 secur32 ncrypt)
   set_target_properties(inkleaf PROPERTIES WIN32_EXECUTABLE ON)

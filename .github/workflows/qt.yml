@@ -151,8 +151,7 @@ jobs:
           version: ${{ env.QT_VERSION }}
           target: android
           arch: android_arm64_v8a
-          modules: qtpdf
-          autodesktop: true
+          extra: --autodesktop
           cache: true
       - run: npm ci
       - name: Scripts bundle (the web app's drawing code)

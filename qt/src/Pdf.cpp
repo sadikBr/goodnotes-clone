@@ -7,8 +7,13 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QPainter>
+#ifdef INKLEAF_HAVE_QTPDF
 #include <QPdfDocument>
 #include <QPdfDocumentRenderOptions>
+#elif defined(Q_OS_ANDROID)
+#include <QJniEnvironment>
+#include <QJniObject>
+#endif
 #include <QStandardPaths>
 #include <QTimer>
 #include <QUrl>
@@ -25,7 +30,89 @@ PdfDocs& PdfDocs::instance() {
   return docs;
 }
 
-QPdfDocument* PdfDocs::doc(const QString& asset) {
+// --- PDF files ------------------------------------------------------------------------
+
+#ifdef INKLEAF_HAVE_QTPDF
+namespace {
+class QtPdfFile : public PdfFile {
+public:
+  QPdfDocument doc;
+  int pageCount() const override { return doc.pageCount(); }
+  QSizeF pageSize(int page) const override { return doc.pagePointSize(page); }
+  QImage render(int page, QSize full, QRect clip) override {
+    QPdfDocumentRenderOptions opt;
+    opt.setRenderFlags(QPdfDocumentRenderOptions::RenderFlag::Annotations);
+    QImage img;
+    if (clip.isEmpty()) {
+      img = doc.render(page, full, opt);
+    } else {
+      opt.setScaledSize(full);
+      opt.setScaledClipRect(clip);
+      img = doc.render(page, clip.size(), opt);
+    }
+    return img;
+  }
+};
+}  // namespace
+
+std::unique_ptr<PdfFile> PdfFile::open(const QString& path, Error* error) {
+  auto f = std::make_unique<QtPdfFile>();
+  const auto err = f->doc.load(path);
+  if (error) *error = err == QPdfDocument::Error::None ? Error::None : err == QPdfDocument::Error::IncorrectPassword ? Error::Password : Error::Invalid;
+  if (err != QPdfDocument::Error::None) return nullptr;
+  return f;
+}
+#elif defined(Q_OS_ANDROID)
+namespace {
+// Android's PdfRenderer, through qt/android/src/app/inkleaf/qt/PdfPages.java.
+class AndroidPdfFile : public PdfFile {
+public:
+  QString path;
+  std::vector<QSizeF> sizes;
+  int pageCount() const override { return int(sizes.size()); }
+  QSizeF pageSize(int page) const override { return page >= 0 && page < int(sizes.size()) ? sizes[size_t(page)] : QSizeF(); }
+  QImage render(int page, QSize full, QRect clip) override {
+    if (clip.isEmpty()) clip = QRect(QPoint(0, 0), full);
+    QJniObject arr = QJniObject::callStaticObjectMethod("app/inkleaf/qt/PdfPages", "render", "(Ljava/lang/String;IIIIIII)[I",
+        QJniObject::fromString(path).object<jstring>(), jint(page), jint(full.width()), jint(full.height()), jint(clip.x()), jint(clip.y()), jint(clip.width()), jint(clip.height()));
+    if (!arr.isValid()) return {};
+    QJniEnvironment env;
+    auto jarr = arr.object<jintArray>();
+    const jsize n = env->GetArrayLength(jarr);
+    if (n != clip.width() * clip.height()) return {};
+    QImage img(clip.size(), QImage::Format_ARGB32);
+    env->GetIntArrayRegion(jarr, 0, n, reinterpret_cast<jint*>(img.bits()));
+    return img;
+  }
+};
+}  // namespace
+
+std::unique_ptr<PdfFile> PdfFile::open(const QString& path, Error* error) {
+  QJniObject arr = QJniObject::callStaticObjectMethod("app/inkleaf/qt/PdfPages", "sizes", "(Ljava/lang/String;)[F", QJniObject::fromString(path).object<jstring>());
+  if (!arr.isValid()) {
+    if (error) *error = Error::Invalid;
+    return nullptr;
+  }
+  QJniEnvironment env;
+  auto jarr = arr.object<jfloatArray>();
+  const jsize n = env->GetArrayLength(jarr);
+  std::vector<jfloat> v(size_t(n));
+  env->GetFloatArrayRegion(jarr, 0, n, v.data());
+  auto f = std::make_unique<AndroidPdfFile>();
+  f->path = path;
+  const int pages = n > 0 ? int(v[0]) : 0;
+  for (int i = 0; i < pages && 2 + 2 * i < n; ++i) f->sizes.emplace_back(v[size_t(1 + 2 * i)], v[size_t(2 + 2 * i)]);
+  if (error) *error = Error::None;
+  return f;
+}
+#else
+std::unique_ptr<PdfFile> PdfFile::open(const QString&, Error* error) {
+  if (error) *error = Error::Invalid;
+  return nullptr;
+}
+#endif
+
+PdfFile* PdfDocs::doc(const QString& asset) {
   if (auto it = m_docs.constFind(asset); it != m_docs.constEnd()) return it->get();
   const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/pdf";
   QDir().mkpath(dir);
@@ -38,31 +125,27 @@ QPdfDocument* PdfDocs::doc(const QString& asset) {
     if (!f.open(QIODevice::WriteOnly)) return nullptr;
     f.write(bytes);
   }
-  auto d = std::make_shared<QPdfDocument>();
-  if (d->load(file) != QPdfDocument::Error::None) return nullptr;
+  std::shared_ptr<PdfFile> d = PdfFile::open(file);
+  if (!d) return nullptr;
   m_docs.insert(asset, d);
   return d.get();
 }
 
 QSizeF PdfDocs::pageSize(const QString& asset, int page) {
-  QPdfDocument* d = doc(asset);
+  PdfFile* d = doc(asset);
   if (!d || page < 0 || page >= d->pageCount()) return {};
-  return d->pagePointSize(page) * kUnitsPerPoint;
+  return d->pageSize(page) * kUnitsPerPoint;
 }
 
 QImage PdfDocs::render(const QString& asset, int page, double scale, QRectF region) {
-  QPdfDocument* d = doc(asset);
+  PdfFile* d = doc(asset);
   if (!d || page < 0 || page >= d->pageCount()) return {};
-  const QSizeF units = d->pagePointSize(page) * kUnitsPerPoint;
+  const QSizeF units = d->pageSize(page) * kUnitsPerPoint;
   const QSize full(int(std::ceil(units.width() * scale)), int(std::ceil(units.height() * scale)));
-  QPdfDocumentRenderOptions opt;
-  opt.setRenderFlags(QPdfDocumentRenderOptions::RenderFlag::Annotations);
-  if (region.isEmpty()) return d->render(page, full, opt);
+  if (region.isEmpty()) return d->render(page, full);
   // Only the part asked for, at full sharpness.
   const QRect clip(int(region.x() * scale), int(region.y() * scale), int(std::ceil(region.width() * scale)), int(std::ceil(region.height() * scale)));
-  opt.setScaledSize(full);
-  opt.setScaledClipRect(clip);
-  return d->render(page, clip.size(), opt);
+  return d->render(page, full, clip);
 }
 
 // --- importing ------------------------------------------------------------------------
@@ -74,7 +157,7 @@ void PdfImporter::add(const QVariantList& files, const QString& folderId) {
     j.path = url.isLocalFile() ? url.toLocalFile() : v.toString();
     j.name = QFileInfo(j.path).fileName();
     j.folderId = folderId;
-    if (!j.path.endsWith(".pdf", Qt::CaseInsensitive)) j.state = "failed", j.label = "Not a PDF file";
+    if (!j.path.startsWith("content:") && !j.path.endsWith(".pdf", Qt::CaseInsensitive)) j.state = "failed", j.label = "Not a PDF file";
     else if (QFileInfo(j.path).size() > 300LL * 1024 * 1024) j.state = "failed", j.label = "Larger than 300 MB";
     m_jobs.append(j);
   }
@@ -125,24 +208,32 @@ void PdfImporter::runNext() {
   }
   // Pages.
   set(j, "pages", "Opening the PDF…", 0.3);
-  QPdfDocument pdf;
-  const auto err = pdf.load(j.path);
-  if (err != QPdfDocument::Error::None) {
-    set(j, "failed", err == QPdfDocument::Error::IncorrectPassword ? "Password-protected: can't be imported" : "Not a valid PDF", 1);
+  // Opened from a copy in the cache (the file may be an Android content: URL).
+  const QString tmp = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/pdf/import.pdf";
+  QDir().mkpath(QFileInfo(tmp).path());
+  {
+    QFile t(tmp);
+    if (t.open(QIODevice::WriteOnly)) t.write(bytes);
+  }
+  PdfFile::Error err = PdfFile::Error::None;
+  std::unique_ptr<PdfFile> pdfFile = PdfFile::open(tmp, &err);
+  if (!pdfFile) {
+    set(j, "failed", err == PdfFile::Error::Password ? "Password-protected: can't be imported" : "Not a valid PDF", 1);
     QTimer::singleShot(0, this, &PdfImporter::runNext);
     return;
   }
+  PdfFile& pdf = *pdfFile;
   const int n = pdf.pageCount();
   QJsonArray pages;
   for (int i = 0; i < n; ++i) {
-    const QSizeF s = pdf.pagePointSize(i) * kUnitsPerPoint;
+    const QSizeF s = pdf.pageSize(i) * kUnitsPerPoint;
     pages.append(QJsonObject{{"width", std::round(s.width())}, {"height", std::round(s.height())}});
     if (i % 20 == 0 || i == n - 1) set(j, "pages", QString("Reading pages… %1 of %2").arg(i + 1).arg(n), 0.3 + 0.25 * (i + 1) / std::max(1, n));
   }
   // The first page's picture, so the library shows the PDF before it's opened.
   QString thumb;
   if (n > 0) {
-    const QSizeF s = pdf.pagePointSize(0) * kUnitsPerPoint;
+    const QSizeF s = pdf.pageSize(0) * kUnitsPerPoint;
     const double scale = 200.0 / std::max(1.0, s.width());
     QImage img = pdf.render(0, QSize(int(s.width() * scale), int(s.height() * scale)));
     QImage flat(img.size(), QImage::Format_RGB32);

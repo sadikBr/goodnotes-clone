@@ -10,7 +10,18 @@
 #include <QtQml/qqmlregistration.h>
 #include <memory>
 
-class QPdfDocument;
+/// One open PDF file: Qt PDF, or Android's PdfRenderer where Qt PDF isn't shipped.
+class PdfFile {
+public:
+  enum class Error { None, Password, Invalid };
+  virtual ~PdfFile() = default;
+  static std::unique_ptr<PdfFile> open(const QString& path, Error* error = nullptr);
+  virtual int pageCount() const = 0;
+  /// In points.
+  virtual QSizeF pageSize(int page) const = 0;
+  /// The page drawn `full` pixels big; only `clip` of it when that isn't empty. White behind.
+  virtual QImage render(int page, QSize full, QRect clip = {}) = 0;
+};
 
 /// Open PDFs by asset id (copied to the cache folder once, then loaded from there).
 class PdfDocs {
@@ -23,8 +34,8 @@ public:
   QSizeF pageSize(const QString& asset, int page);
 
 private:
-  QPdfDocument* doc(const QString& asset);
-  QHash<QString, std::shared_ptr<QPdfDocument>> m_docs;
+  PdfFile* doc(const QString& asset);
+  QHash<QString, std::shared_ptr<PdfFile>> m_docs;
 };
 
 /// The PDF import queue with its progress (for the library's import panel).
