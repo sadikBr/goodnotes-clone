@@ -419,7 +419,9 @@ void InkCanvas::begin(QPointF s, float pressure, double t, bool stylus, bool era
   const bool erase = eraserEnd || m_tool == "eraser";
   if (erase) {
     m_g.kind = Gesture::Erase;
+    m_hover = s;
     eraseAt(pi, p);
+    refresh();
     return;
   }
   m_g.kind = Gesture::Draw;
@@ -442,7 +444,11 @@ void InkCanvas::extend(QPointF s, float pressure, double t, bool stylus) {
   const QPointF o = originFor(width(), m_maxPageW * m_zoom, m_scroll);
   QPointF p((s.x() - o.x()) / m_zoom - (m_maxPageW - pg.w) / 2, (s.y() - o.y()) / m_zoom - pg.top);
   if (m_g.kind == Gesture::Erase) {
+    m_hover = s;
     eraseAt(m_g.page, p);
+    // Redraw on every move, not only when something was erased: the
+    // eraser ring follows the pointer.
+    refresh();
     return;
   }
   Stroke& st = m_g.live;
@@ -567,6 +573,7 @@ bool InkCanvas::eventFilter(QObject* watched, QEvent* event) {
       if (m_tool == "eraser") refresh();
       return false;
     }
+    m_hover = local;
     extend(local, float(te->pressure()), nowMs(), true);
     te->accept();
     return true;
@@ -851,7 +858,8 @@ QSGNode* InkCanvas::buildScene(QSGNode* old, UpdatePaintNodeData*) {
 
   // Eraser ring under the pointer (screen pixels).
   std::vector<QPointF> ringTris;
-  if (m_tool == "eraser" && m_hover.x() >= 0) {
+  // Shown for the eraser tool, and while the pen's eraser end or side button erases.
+  if ((m_tool == "eraser" || m_g.kind == Gesture::Erase) && m_hover.x() >= 0) {
     const qreal r = m_eraserWidth / 2 * m_zoom, t = 1.0;
     const int n = 48;
     for (int k = 0; k < n; ++k) {
