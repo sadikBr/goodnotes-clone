@@ -203,7 +203,18 @@ Rectangle {
                             }
                         }
                         IconButton { iconName: "image"; tip: "Insert image"; implicitWidth: 34; implicitHeight: 34; onClicked: imageDialog.open() }
-                        IconButton { iconName: "ruler"; tip: "Ruler (R)"; implicitWidth: 34; implicitHeight: 34; active: canvas.rulerVisible; activeColor: Theme.accentSoft; iconColor: canvas.rulerVisible ? Theme.accent : Theme.text; onClicked: canvas.rulerVisible = !canvas.rulerVisible }
+                        IconButton {
+                            id: rulerBtn
+                            iconName: "ruler"; tip: "Ruler, protractor, set squares (R)"; implicitWidth: 34; implicitHeight: 34
+                            readonly property bool on: !!canvas.instrument.visible
+                            active: on; activeColor: Theme.accentSoft; iconColor: on ? Theme.accent : Theme.text
+                            onClicked: menu.show(rulerBtn, [
+                                { label: "Ruler", checked: on && canvas.instrument.kind === "ruler", action: () => canvas.showInstrument("ruler") },
+                                { label: "Protractor", checked: on && canvas.instrument.kind === "protractor", action: () => canvas.showInstrument("protractor") },
+                                { label: "Set square 45°", checked: on && canvas.instrument.kind === "square45", action: () => canvas.showInstrument("square45") },
+                                { label: "Set square 30°/60°", checked: on && canvas.instrument.kind === "square60", action: () => canvas.showInstrument("square60") }
+                            ].concat(on ? [{ label: "Hide", action: () => canvas.showInstrument("") }] : []))
+                        }
                         IconButton {
                             iconName: "stylus"
                             tip: AppSettings.store.penOnly ? "Pen-only mode is on: touch and mouse scroll" : "Pen-only mode"
@@ -298,7 +309,8 @@ Rectangle {
                     onToolChanged: if (tool !== prefs.store.tool) prefs.store.tool = tool
                 }
 
-                TextEditor { anchors.fill: parent; canvas: canvas }
+                Instrument { anchors.fill: parent; canvas: canvas; z: 4 }
+                TextEditor { anchors.fill: parent; canvas: canvas; z: 5 }
                 SelectionBar { id: selectionBar; canvas: canvas; z: 6 }
 
                 // The active tool's options.
@@ -391,7 +403,7 @@ Rectangle {
     Shortcut { sequence: "Esc"; enabled: !root.typing; onActivated: { if ((canvas.selection.count || 0) > 0) canvas.clearSelection(); else if (root.focusMode) root.focusMode = false; else root.drawerOpen = prefs.store.drawerPinned } }
     Shortcut { sequences: ["PgDown", "Right"]; enabled: !root.typing; onActivated: canvas.goToPage(canvas.currentPage + 1) }
     Shortcut { sequences: ["PgUp", "Left"]; enabled: !root.typing; onActivated: canvas.goToPage(canvas.currentPage - 1) }
-    Shortcut { sequence: "R"; enabled: !root.typing; onActivated: canvas.rulerVisible = !canvas.rulerVisible }
+    Shortcut { sequence: "R"; enabled: !root.typing; onActivated: canvas.instrument.visible ? canvas.showInstrument("") : canvas.showInstrument(canvas.instrument.kind || "ruler") }
     Shortcut { sequence: "F"; enabled: !root.typing; onActivated: root.focusMode = !root.focusMode }
     Shortcut { sequence: "["; enabled: !root.typing; onActivated: root.toggleSidebar() }
     Shortcut { sequence: "?"; enabled: !root.typing; onActivated: shortcuts.open() }

@@ -171,16 +171,7 @@ void InkCanvas::pushToolState() {
   m_core.setProperty("eraserMode", m_eraserMode);
   m_core.setProperty("textFont", m_textFont);
   m_core.setProperty("zoom", m_zoom);
-  if (m_rulerVisible) {
-    QJSValue edge = js.engine().newArray(2);
-    QJSValue a = js.engine().newArray(2), b = js.engine().newArray(2);
-    a.setProperty(0, m_rulerA.x()), a.setProperty(1, m_rulerA.y());
-    b.setProperty(0, m_rulerB.x()), b.setProperty(1, m_rulerB.y());
-    edge.setProperty(0, a), edge.setProperty(1, b);
-    m_core.setProperty("rulerEdge", edge);
-  } else {
-    m_core.setProperty("rulerEdge", QJSValue(QJSValue::NullValue));
-  }
+  m_core.setProperty("viewWidth", width());
 }
 
 void InkCanvas::afterCore() {
@@ -197,6 +188,12 @@ void InkCanvas::afterCore() {
   if (orev != m_overlayRev) {
     m_overlayRev = orev;
     m_overlayDirty = true;
+  }
+  const double irev = coreProp("instrumentRev").toNumber();
+  if (irev != m_instrumentRev) {
+    m_instrumentRev = irev;
+    m_instrument = core("instrument").toVariant(QJSValue::ConvertJSObjects).toMap();
+    emit instrumentChanged();
   }
   const double srev = coreProp("selectionRev").toNumber();
   if (srev != m_selectionRev) {
@@ -736,24 +733,36 @@ void InkCanvas::setPenCursor(const QString& c) {
   updateCursor();
   emit settingsChanged();
 }
-void InkCanvas::setRulerVisible(bool on) {
-  if (on == m_rulerVisible) return;
-  m_rulerVisible = on;
-  if (on) {
-    // Across the middle of the view, on the page in view.
+void InkCanvas::showInstrument(const QString& kind) {
+  if (m_core.isUndefined()) return;
+  const bool shown = m_instrument.value("visible").toBool();
+  if (kind.isEmpty() || (shown && m_instrument.value("kind").toString() == kind)) {
+    core("hideInstrument");
+  } else {
+    // In the middle of the view, on the page in view.
     const int pi = currentPage();
-    if (pi < int(m_pages.size())) {
-      const QPointF c = toPageOf(pi, QPointF(width() / 2, height() / 2));
-      const double half = std::min<double>(m_pages[pi].w * 0.42, 320);
-      m_rulerA = QPointF(m_pages[pi].w / 2 - half, std::clamp<double>(c.y(), 60, m_pages[pi].h - 60));
-      m_rulerB = QPointF(m_pages[pi].w / 2 + half, m_rulerA.y());
-      core("activate", {pi});
-    }
+    core("activate", {pi});
+    QPointF c = toPageOf(pi, QPointF(width() / 2, height() / 2));
+    if (pi < int(m_pages.size())) c = QPointF(std::clamp<qreal>(c.x(), 0, m_pages[pi].w), std::clamp<qreal>(c.y(), 0, m_pages[pi].h));
+    if (shown) core("hideInstrument");
+    core("showInstrument", {kind, c.x(), c.y()});
   }
-  pushToolState();
-  emit rulerChanged();
-  refresh();
+  afterCore();
 }
+
+void InkCanvas::placeInstrument(qreal cx, qreal cy, qreal angle) {
+  core("placeInstrument", {cx, cy, angle});
+  afterCore();
+}
+
+void InkCanvas::setInstrumentArm(int arm, qreal degrees) {
+  core("setArm", {arm, degrees});
+  afterCore();
+}
+
+bool InkCanvas::instrumentContains(qreal x, qreal y) { return core("instrumentContains", {x, y}).toBool(); }
+
+QPointF InkCanvas::itemToPage(QPointF p) const { return toPageOf(activePage(), p); }
 
 float InkCanvas::curved(qreal pressure) const {
   const qreal gamma = m_pressureCurve == "light" ? 0.6 : m_pressureCurve == "firm" ? 1.6 : 1.0;
@@ -933,6 +942,7 @@ void InkCanvas::layoutPages() {
 
 void InkCanvas::geometryChange(const QRectF& n, const QRectF& o) {
   QQuickItem::geometryChange(n, o);
+  if (!m_core.isUndefined()) m_core.setProperty("viewWidth", n.width());
   if (m_fitPending && n.width() > 0 && !m_pages.empty()) fitWidth();
   clampScroll();
   emit viewChanged();
@@ -1653,36 +1663,7 @@ QSGNode* InkCanvas::updatePaintNode(QSGNode* old, UpdatePaintNodeData*) {
     overlayT->appendChildNode(img);
   }
 
-  // Ruler: a translucent straight edge with millimetre ticks.
-  clearChildren(rulerT);
-  if (m_rulerVisible) {
-    const int pi = activePage();
-    if (pi >= 0 && pi < int(m_pages.size())) {
-      const Page& pg = m_pages[pi];
-      QMatrix4x4 rm = m;
-      rm.translate((m_maxPageW - pg.w) / 2, pg.top);
-      QSGTransformNode* rt = rulerT;
-      rt->setMatrix(rm);
-      rt->markDirty(QSGNode::DirtyMatrix);
-      const QLineF edge(m_rulerA, m_rulerB);
-      const QPointF dir = (m_rulerB - m_rulerA) / std::max(1e-6, edge.length());
-      const QPointF nrm(-dir.y(), dir.x());
-      const double depth = 64;
-      std::vector<QPointF> body{m_rulerA, m_rulerB, m_rulerB + nrm * depth, m_rulerA, m_rulerB + nrm * depth, m_rulerA + nrm * depth};
-      rt->appendChildNode(meshNode(body, QColor(230, 238, 245, 190)));
-      std::vector<QPointF> ticks;
-      const double mm = 96 / 25.4;
-      for (int k = 0; k * mm <= edge.length(); ++k) {
-        const double len = k % 10 == 0 ? 16 : k % 5 == 0 ? 11 : 7;
-        const QPointF a = m_rulerA + dir * (k * mm), b = a + nrm * len;
-        const QPointF w = dir * 0.35;
-        ticks.insert(ticks.end(), {a - w, a + w, b + w, a - w, b + w, b - w});
-      }
-      const QPointF w = nrm * 0.6;
-      ticks.insert(ticks.end(), {m_rulerA - w, m_rulerB - w, m_rulerB + w, m_rulerA - w, m_rulerB + w, m_rulerA + w});
-      rt->appendChildNode(meshNode(ticks, QColor(55, 65, 81, 200)));
-    }
-  }
+  clearChildren(rulerT);  // (instruments are drawn in QML)
 
   // Eraser ring under the pointer (screen pixels).
   std::vector<QPointF> ringTris;

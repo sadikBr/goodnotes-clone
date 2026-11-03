@@ -9752,6 +9752,7 @@ var Inkleaf = (() => {
     /** @class */
     (function() {
       function EditorCore2(pages) {
+        var _this = this;
         this.pages = [];
         this.active = 0;
         this.zoom = 1;
@@ -9781,7 +9782,18 @@ var Inkleaf = (() => {
         this.overlayRev = 0;
         this.selectionRev = 0;
         this.images = /* @__PURE__ */ new Map();
-        this.rulerEdge = null;
+        this.viewWidth = 1e3;
+        this.ruler = new Ruler({ toPage: function(x2, y2) {
+          return [x2, y2];
+        }, zoom: function() {
+          return _this.zoom;
+        }, viewWidth: function() {
+          return _this.viewWidth;
+        }, pageOrigin: function() {
+          return [0, 0];
+        } });
+        this.rulerReadout = null;
+        this.instrumentRev = 0;
         this.revs = /* @__PURE__ */ new WeakMap();
         this.nextRev = 1;
         this.pages = pages.map(function(meta) {
@@ -10113,14 +10125,12 @@ var Inkleaf = (() => {
           case "pen":
           case "highlighter":
           case "shape": {
-            if (this.rulerEdge) {
-              var proj = projectOn(this.rulerEdge, [x2, y2]);
-              if (proj && proj.dist < 26 / this.zoom) {
-                var off = this.widths[tool] / 2 + 0.5 / this.zoom;
-                var q = offsetFrom(this.rulerEdge, proj.p, [x2, y2], off);
-                this.gesture = { type: "draw", tool, points: [[q[0], q[1], p2]], times: [t2], preview: null, holdTimer: 0, held: null, ruler: { line: this.rulerEdge } };
-                return "ruler";
-              }
+            var edge = this.ruler.edgeNear([x2, y2], 26 / this.zoom);
+            if (edge) {
+              var offset = this.widths[tool] / 2 + 0.5 / this.zoom;
+              var _a = __read18(Ruler.project(edge, [x2, y2], offset), 2), px = _a[0], py = _a[1];
+              this.gesture = { type: "draw", tool, points: [[px, py, p2]], times: [t2], preview: null, holdTimer: 0, held: null, ruler: { edge, offset } };
+              return "ruler";
             }
             if (tool === "shape" && this.shapeKind !== "auto") {
               this.gesture = { type: "shape", start: [x2, y2], preview: null };
@@ -10207,12 +10217,13 @@ var Inkleaf = (() => {
               return;
             }
             if (g3.ruler) {
-              var proj = projectOn(g3.ruler.line, [x2, y2]);
-              if (proj) {
-                var q = offsetFrom(g3.ruler.line, proj.p, [g3.points[0][0], g3.points[0][1]], this.widths[g3.tool] / 2 + 0.5 / this.zoom);
-                g3.points.push([q[0], q[1], p2]);
+              var _a = __read18(Ruler.project(g3.ruler.edge, [x2, y2], g3.ruler.offset), 2), px = _a[0], py = _a[1];
+              var last = g3.points[g3.points.length - 1];
+              if (Math.hypot(px - last[0], py - last[1]) >= 0.4 / this.zoom) {
+                g3.points.push([px, py, p2]);
                 g3.times.push(t2);
               }
+              this.setReadout(this.guidedReadout(g3));
               this.touchOverlay();
               return;
             }
@@ -10299,9 +10310,14 @@ var Inkleaf = (() => {
             if (g3.held)
               clearTimeout(g3.held.stillTimer);
             var shape = g3.preview;
-            if (g3.ruler && g3.tool === "shape") {
-              var ext = extent(g3.points, g3.ruler.line);
-              shape = { id: newId(), z: 0, kind: "shape", shape: { kind: "line", points: ext }, color: this.colors.shape, width: this.widths.shape, fill: null };
+            if (g3.ruler) {
+              this.setReadout(null);
+              if (g3.tool === "shape") {
+                var geom = g3.ruler.edge.kind === "line" ? { kind: "line", points: this.rulerExtent(g3) } : { kind: "path", points: g3.points.map(function(p2) {
+                  return [p2[0], p2[1]];
+                }), closed: false };
+                shape = { id: newId(), z: 0, kind: "shape", shape: geom, color: this.colors.shape, width: this.widths.shape, fill: null };
+              }
             } else if (!shape && g3.tool === "shape")
               shape = this.refine(g3);
             this.gesture = null;
@@ -10601,6 +10617,176 @@ var Inkleaf = (() => {
         }
         return null;
       };
+      EditorCore2.prototype.setReadout = function(text2) {
+        if (text2 === this.rulerReadout)
+          return;
+        this.rulerReadout = text2;
+        this.instrumentRev++;
+      };
+      EditorCore2.prototype.guidedReadout = function(g3) {
+        var e_11, _a;
+        var edge = g3.ruler.edge;
+        if (edge.kind === "line") {
+          var _b = __read18(this.rulerExtent(g3), 2), a2 = _b[0], b2 = _b[1];
+          return "".concat((Math.hypot(b2[0] - a2[0], b2[1] - a2[1]) / (10 * MM2)).toFixed(1), " cm");
+        }
+        var prev = Math.atan2(g3.points[0][1] - edge.c[1], g3.points[0][0] - edge.c[0]);
+        var acc = 0;
+        var lo = 0;
+        var hi = 0;
+        try {
+          for (var _c = __values18(g3.points.slice(1)), _d = _c.next(); !_d.done; _d = _c.next()) {
+            var p2 = _d.value;
+            var a2 = Math.atan2(p2[1] - edge.c[1], p2[0] - edge.c[0]);
+            var d2 = a2 - prev;
+            if (d2 > Math.PI)
+              d2 -= 2 * Math.PI;
+            if (d2 < -Math.PI)
+              d2 += 2 * Math.PI;
+            acc += d2;
+            lo = Math.min(lo, acc);
+            hi = Math.max(hi, acc);
+            prev = a2;
+          }
+        } catch (e_11_1) {
+          e_11 = { error: e_11_1 };
+        } finally {
+          try {
+            if (_d && !_d.done && (_a = _c.return)) _a.call(_c);
+          } finally {
+            if (e_11) throw e_11.error;
+          }
+        }
+        return "".concat(Math.round((hi - lo) * 180 / Math.PI), "°");
+      };
+      EditorCore2.prototype.rulerExtent = function(g3) {
+        var e_12, _a;
+        var edge = g3.ruler.edge;
+        var dir = edge.kind === "line" ? edge.dir : [1, 0];
+        var lo = g3.points[0];
+        var hi = g3.points[0];
+        var t2 = function(p3) {
+          return p3[0] * dir[0] + p3[1] * dir[1];
+        };
+        try {
+          for (var _b = __values18(g3.points), _c = _b.next(); !_c.done; _c = _b.next()) {
+            var p2 = _c.value;
+            if (t2(p2) < t2(lo))
+              lo = p2;
+            if (t2(p2) > t2(hi))
+              hi = p2;
+          }
+        } catch (e_12_1) {
+          e_12 = { error: e_12_1 };
+        } finally {
+          try {
+            if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
+          } finally {
+            if (e_12) throw e_12.error;
+          }
+        }
+        return [[lo[0], lo[1]], [hi[0], hi[1]]];
+      };
+      EditorCore2.prototype.instrument = function() {
+        var r2 = this.ruler;
+        if (!r2.visible)
+          return { visible: false, kind: r2.kind, rev: this.instrumentRev };
+        var pad2 = 14 * MM2;
+        var b0 = r2.shape.box;
+        var box = { x: b0.x - pad2, y: b0.y - pad2, w: b0.w + 2 * pad2, h: b0.h + 2 * pad2 };
+        var style = "<style>.ruler-body{fill:#f8fafc;fill-opacity:0.62;stroke:#0f172a;stroke-opacity:0.35;stroke-width:0.8}.ticks{stroke:#0f172a;stroke-opacity:0.7;stroke-width:0.35;fill:none}text{fill:#0f172a;fill-opacity:0.75;font-family:Inter;font-weight:600;font-size:7px;text-anchor:middle}text.inner{font-size:5.5px;fill-opacity:0.5}.cutout{fill:none;stroke:#0f172a;stroke-opacity:0.25;stroke-width:0.8}.arm{stroke:#db2777;stroke-width:1.2;fill:none}.arm-arc{stroke:#db2777;stroke-width:1;fill:#db2777;fill-opacity:0.08}</style>";
+        var svg2 = String(r2.el.innerHTML).replace(/<svg ([^>]*)>/, function(_m, attrs) {
+          var a3 = attrs.replace(/class="[^"]*"/, "").replace(/viewBox="[^"]*"/, 'viewBox="'.concat(box.x.toFixed(2), " ").concat(box.y.toFixed(2), " ").concat(box.w.toFixed(2), " ").concat(box.h.toFixed(2), '"'));
+          return '<svg xmlns="http://www.w3.org/2000/svg" '.concat(a3, ">").concat(style);
+        });
+        if (r2.kind === "protractor") {
+          var a2 = r2.armEnd(0);
+          var b2 = r2.armEnd(1);
+          var rr = 14 * MM2;
+          var t0 = Math.min.apply(Math, __spreadArray14([], __read18(r2.arms), false)) * Math.PI / 180;
+          var t1 = Math.max.apply(Math, __spreadArray14([], __read18(r2.arms), false)) * Math.PI / 180;
+          var p0 = [Math.cos(t0) * rr, -Math.sin(t0) * rr];
+          var p1 = [Math.cos(t1) * rr, -Math.sin(t1) * rr];
+          var arms = '<path class="arm" d="M0 0L'.concat(a2[0].toFixed(2), " ").concat(a2[1].toFixed(2), "M0 0L").concat(b2[0].toFixed(2), " ").concat(b2[1].toFixed(2), '"/><path class="arm-arc" d="M').concat(p0[0].toFixed(2), " ").concat(p0[1].toFixed(2), "A").concat(rr.toFixed(2), " ").concat(rr.toFixed(2), " 0 0 0 ").concat(p1[0].toFixed(2), " ").concat(p1[1].toFixed(2), '"/>');
+          svg2 = svg2.replace('<g class="ruler-arms"></g>', "<g>".concat(arms, "</g>"));
+        }
+        var grips = r2.shape.grips;
+        if (r2.kind === "ruler") {
+          var z = this.zoom;
+          var gg = Math.max(40, Math.min(300 * MM2 * z / 2 - 24, this.viewWidth * 0.36)) / z;
+          grips = [[-gg, 0], [gg, 0]];
+        }
+        var label2;
+        if (r2.kind === "protractor")
+          label2 = "".concat(Math.round(Math.abs(r2.arms[0] - r2.arms[1])), "°");
+        else {
+          var deg = (Math.round(r2.angle * 180 / Math.PI) % 180 + 180) % 180;
+          if (deg > 90)
+            deg = 180 - deg;
+          label2 = "".concat(deg, "°");
+        }
+        return {
+          visible: true,
+          rev: this.instrumentRev,
+          kind: r2.kind,
+          cx: r2.cx,
+          cy: r2.cy,
+          angle: r2.angle,
+          box,
+          svg: svg2,
+          grips,
+          knobs: r2.kind === "protractor" ? [r2.armEnd(0), r2.armEnd(1)] : [],
+          labelAt: r2.shape.labelAt,
+          label: label2,
+          readout: this.rulerReadout,
+          page: this.active
+        };
+      };
+      EditorCore2.prototype.showInstrument = function(kind, cx, cy) {
+        var r2 = this.ruler;
+        r2.setKind(kind);
+        if (!r2.visible)
+          r2.show([cx, cy]);
+        this.instrumentRev++;
+      };
+      EditorCore2.prototype.hideInstrument = function() {
+        this.ruler.hide();
+        this.instrumentRev++;
+      };
+      EditorCore2.prototype.placeInstrument = function(cx, cy, angle) {
+        var r2 = this.ruler;
+        r2.cx = cx;
+        r2.cy = cy;
+        r2.angle = angle;
+        this.instrumentRev++;
+      };
+      EditorCore2.prototype.setArm = function(i2, deg) {
+        this.ruler.arms[i2] = Math.min(180, Math.max(0, deg));
+        this.instrumentRev++;
+      };
+      EditorCore2.prototype.instrumentContains = function(x2, y2) {
+        var r2 = this.ruler;
+        if (!r2.visible)
+          return false;
+        var _a = __read18(r2.toLocal([x2, y2]), 2), lx = _a[0], ly = _a[1];
+        var sh = r2.shape;
+        if (sh.arc)
+          return Math.hypot(lx, ly) <= sh.arc.r && ly <= sh.box.y + sh.box.h;
+        var poly = sh.lines.map(function(l2) {
+          return l2.a;
+        });
+        var inside = false;
+        for (var i2 = 0, j2 = poly.length - 1; i2 < poly.length; j2 = i2++) {
+          var _b = __read18(poly[i2], 2), xi = _b[0], yi = _b[1];
+          var _c = __read18(poly[j2], 2), xj = _c[0], yj = _c[1];
+          if (yi > ly !== yj > ly && lx < (xj - xi) * (ly - yi) / (yj - yi) + xi)
+            inside = !inside;
+        }
+        return inside || sh.lines.length === 2 && lx >= sh.box.x && lx <= sh.box.x + sh.box.w && ly >= sh.box.y && ly <= sh.box.y + sh.box.h;
+      };
+      EditorCore2.prototype.instrumentLocal = function(x2, y2) {
+        return this.ruler.toLocal([x2, y2]);
+      };
       EditorCore2.prototype.straightHighlight = function(g3, line2) {
         var a2 = line2[0];
         var b2 = line2[line2.length - 1];
@@ -10656,7 +10842,7 @@ var Inkleaf = (() => {
         g3.preview = __assign10(__assign10({}, h3.base), { shape });
       };
       EditorCore2.prototype.buildSnap = function(moving) {
-        var e_11, _a;
+        var e_13, _a;
         var texts = moving.filter(function(el2) {
           return el2.kind === "text" && el2.text.trim().length > 0 && !el2.rotation;
         });
@@ -10672,13 +10858,13 @@ var Inkleaf = (() => {
             if (!ids.has(el.id) && el.kind === "text" && el.text.trim() && !el.rotation)
               targets.push.apply(targets, __spreadArray14([], __read18(anchorsAsTargets(textAnchors(el))), false));
           }
-        } catch (e_11_1) {
-          e_11 = { error: e_11_1 };
+        } catch (e_13_1) {
+          e_13 = { error: e_13_1 };
         } finally {
           try {
             if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
           } finally {
-            if (e_11) throw e_11.error;
+            if (e_13) throw e_13.error;
           }
         }
         var paper = paperLayout(this.page.template, this.page.width, this.page.height);
@@ -10703,7 +10889,7 @@ var Inkleaf = (() => {
         g3.last = p2;
       };
       EditorCore2.prototype.eraseAt = function(x2, y2) {
-        var e_12, _a;
+        var e_14, _a;
         var _b;
         var g3 = this.gesture;
         if ((g3 === null || g3 === void 0 ? void 0 : g3.type) !== "erase")
@@ -10733,13 +10919,13 @@ var Inkleaf = (() => {
               next.push.apply(next, __spreadArray14([], __read18(pieces), false));
             }
           }
-        } catch (e_12_1) {
-          e_12 = { error: e_12_1 };
+        } catch (e_14_1) {
+          e_14 = { error: e_14_1 };
         } finally {
           try {
             if (_d && !_d.done && (_a = _c.return)) _a.call(_c);
           } finally {
-            if (e_12) throw e_12.error;
+            if (e_14) throw e_14.error;
           }
         }
         if (!changed)
@@ -10767,19 +10953,19 @@ var Inkleaf = (() => {
         this.selectionRev++;
       };
       EditorCore2.prototype.selectAll = function() {
-        var e_13, _a;
+        var e_15, _a;
         try {
           for (var _b = __values18(this.elements), _c = _b.next(); !_c.done; _c = _b.next()) {
             var el = _c.value;
             this.selection.add(el.id);
           }
-        } catch (e_13_1) {
-          e_13 = { error: e_13_1 };
+        } catch (e_15_1) {
+          e_15 = { error: e_15_1 };
         } finally {
           try {
             if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
           } finally {
-            if (e_13) throw e_13.error;
+            if (e_15) throw e_15.error;
           }
         }
         this.touchOverlay();
@@ -11195,55 +11381,6 @@ var Inkleaf = (() => {
       return EditorCore2;
     })()
   );
-  function projectOn(line2, p2) {
-    var _a = __read18(line2, 2), a2 = _a[0], b2 = _a[1];
-    var dx = b2[0] - a2[0];
-    var dy = b2[1] - a2[1];
-    var len2 = dx * dx + dy * dy;
-    if (len2 < 1e-9)
-      return null;
-    var t2 = ((p2[0] - a2[0]) * dx + (p2[1] - a2[1]) * dy) / len2;
-    var q = [a2[0] + dx * t2, a2[1] + dy * t2];
-    return { p: q, dist: Math.hypot(p2[0] - q[0], p2[1] - q[1]), t: t2 };
-  }
-  function offsetFrom(line2, q, side, off) {
-    var _a = __read18(line2, 2), a2 = _a[0], b2 = _a[1];
-    var len = Math.hypot(b2[0] - a2[0], b2[1] - a2[1]) || 1;
-    var nx = -(b2[1] - a2[1]) / len;
-    var ny = (b2[0] - a2[0]) / len;
-    if ((side[0] - q[0]) * nx + (side[1] - q[1]) * ny < 0) {
-      nx = -nx;
-      ny = -ny;
-    }
-    return [q[0] + nx * off, q[1] + ny * off];
-  }
-  function extent(points, line2) {
-    var e_14, _a;
-    var dir = [line2[1][0] - line2[0][0], line2[1][1] - line2[0][1]];
-    var lo = points[0];
-    var hi = points[0];
-    var t2 = function(p3) {
-      return p3[0] * dir[0] + p3[1] * dir[1];
-    };
-    try {
-      for (var points_1 = __values18(points), points_1_1 = points_1.next(); !points_1_1.done; points_1_1 = points_1.next()) {
-        var p2 = points_1_1.value;
-        if (t2(p2) < t2(lo))
-          lo = p2;
-        if (t2(p2) > t2(hi))
-          hi = p2;
-      }
-    } catch (e_14_1) {
-      e_14 = { error: e_14_1 };
-    } finally {
-      try {
-        if (points_1_1 && !points_1_1.done && (_a = points_1.return)) _a.call(points_1);
-      } finally {
-        if (e_14) throw e_14.error;
-      }
-    }
-    return [[lo[0], lo[1]], [hi[0], hi[1]]];
-  }
   function createEditor(pages) {
     return new EditorCore(pages);
   }

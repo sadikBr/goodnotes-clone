@@ -66,7 +66,7 @@ Popup {
                     Icon { visible: !!it.modelData.icon; name: it.modelData.icon || ""; size: 18; color: it.modelData.danger ? Theme.danger : Theme.muted }
                     Image { visible: !!it.modelData.image; source: it.modelData.image || ""; sourceSize: Qt.size(112, 44); Layout.preferredWidth: 56; Layout.preferredHeight: 22; cache: false }
                     Label { text: it.modelData.label; color: it.fg; font.pixelSize: it.modelData.fontSize || 14; font.family: it.modelData.font || Theme.font; font.weight: it.modelData.checked ? Font.DemiBold : Font.Normal; Layout.fillWidth: true; elide: Text.ElideRight }
-                    Label { visible: !!it.modelData.checked; text: "✓"; color: Theme.accent; font.weight: Font.DemiBold }
+                    Icon { visible: !!it.modelData.checked; name: "check"; size: 16; color: Theme.accent }
                     Label { visible: !!it.modelData.key; text: it.modelData.key || ""; color: Theme.muted; font.pixelSize: 12 }
                     Item { Layout.preferredWidth: 4 }
                 }

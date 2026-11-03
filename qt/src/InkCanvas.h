@@ -68,8 +68,8 @@ class InkCanvas : public QQuickItem {
   Q_PROPERTY(QVariantMap selection READ selection NOTIFY selectionChanged)
   /// The text box or note being typed into (its element), or empty.
   Q_PROPERTY(QVariantMap editing READ editing NOTIFY editingChanged)
-  /// Ruler on the page (a straight edge the pen follows).
-  Q_PROPERTY(bool rulerVisible READ rulerVisible WRITE setRulerVisible NOTIFY rulerChanged)
+  /// The drawing instrument (ruler, protractor, set squares): see editorCore instrument().
+  Q_PROPERTY(QVariantMap instrument READ instrument NOTIFY instrumentChanged)
 
 public:
   explicit InkCanvas(QQuickItem* parent = nullptr);
@@ -108,8 +108,15 @@ public:
   bool canRedo() const;
   QVariantMap selection() const { return m_selection; }
   QVariantMap editing() const { return m_editing; }
-  bool rulerVisible() const { return m_rulerVisible; }
-  void setRulerVisible(bool on);
+  QVariantMap instrument() const { return m_instrument; }
+  /// Shows `kind` in the middle of the view ("" hides it; the same kind again hides it).
+  Q_INVOKABLE void showInstrument(const QString& kind);
+  /// Moves and turns the instrument (page units, radians).
+  Q_INVOKABLE void placeInstrument(qreal cx, qreal cy, qreal angle);
+  Q_INVOKABLE void setInstrumentArm(int arm, qreal degrees);
+  Q_INVOKABLE bool instrumentContains(qreal x, qreal y);
+  /// A point in this item's coordinates as page units on the active page.
+  Q_INVOKABLE QPointF itemToPage(QPointF p) const;
 
   // View
   Q_INVOKABLE void zoomBy(qreal factor);
@@ -173,7 +180,7 @@ signals:
   void historyChanged();
   void selectionChanged();
   void editingChanged();
-  void rulerChanged();
+  void instrumentChanged();
   /// The pen was seen (pen-only mode turns on the first time).
   void penUsed();
   void message(const QString& text, bool error);
@@ -290,8 +297,8 @@ private:
   bool m_palmRejection = true;
   QString m_penCursor = "cross";
   double m_lastPenMs = -1e9;
-  bool m_rulerVisible = false;
-  QPointF m_rulerA{120, 420}, m_rulerB{680, 420};  // page units on the active page
+  QVariantMap m_instrument;
+  double m_instrumentRev = -1;
 
   QJSValue m_core;
   double m_coreRev = -1, m_overlayRev = -1, m_selectionRev = -1;

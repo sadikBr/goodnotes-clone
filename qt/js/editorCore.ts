@@ -42,6 +42,7 @@ import { anchorsAsTargets, paperTargets, snapMove, type Anchor, type Guide, type
 import { continueList, currentList, toggleList, type ListKind } from "../../src/editor/textFormat";
 import { isCoverTemplate } from "../../src/editor/covers";
 import { isRtl, type FontId } from "../../src/fonts";
+import { MM, Ruler, type Guide as EdgeGuide, type InstrumentKind } from "../../src/editor/ruler";
 
 const N = (globalThis as any).__native;
 const HOLD_MS = 550;
@@ -82,7 +83,7 @@ interface Held {
 }
 
 type Gesture =
-  | { type: "draw"; tool: "pen" | "highlighter" | "shape"; points: Pt[]; times: number[]; preview: ShapeEl | null; holdTimer: number; held: Held | null; absorb?: string[]; ruler?: { line: [P2, P2] } }
+  | { type: "draw"; tool: "pen" | "highlighter" | "shape"; points: Pt[]; times: number[]; preview: ShapeEl | null; holdTimer: number; held: Held | null; absorb?: string[]; ruler?: { edge: EdgeGuide; offset: number } }
   | { type: "erase"; changed: boolean; last: P2 | null }
   | { type: "lasso"; points: P2[] }
   | { type: "move"; start: P2; original: El[]; dx: number; dy: number; snap: { anchors: Anchor[]; targets: Target[] } | null; guides: Guide[] }
@@ -149,8 +150,12 @@ export class EditorCore {
   overlayRev = 0;
   selectionRev = 0;
   images: ImageCache = new Map();
-  /** Ruler edge for guided strokes, set by the app ([a, b] in page units of the active page). */
-  rulerEdge: [P2, P2] | null = null;
+  /** Width of the view in screen pixels (the ruler keeps its grips within reach). */
+  viewWidth = 1000;
+  /** The drawing instrument over the active page (ruler, protractor, set squares). */
+  ruler = new Ruler({ toPage: (x, y) => [x, y], zoom: () => this.zoom, viewWidth: () => this.viewWidth, pageOrigin: () => [0, 0] });
+  rulerReadout: string | null = null;
+  instrumentRev = 0;
 
   constructor(pages: PageMeta[]) {
     this.pages = pages.map((meta) => ({ meta, elements: null, dirty: false }));
@@ -428,14 +433,13 @@ export class EditorCore {
       case "pen":
       case "highlighter":
       case "shape": {
-        if (this.rulerEdge) {
-          const proj = projectOn(this.rulerEdge, [x, y]);
-          if (proj && proj.dist < 26 / this.zoom) {
-            const off = this.widths[tool] / 2 + 0.5 / this.zoom;
-            const q = offsetFrom(this.rulerEdge, proj.p, [x, y], off);
-            this.gesture = { type: "draw", tool, points: [[q[0], q[1], p]], times: [t], preview: null, holdTimer: 0, held: null, ruler: { line: this.rulerEdge } };
-            return "ruler";
-          }
+        // Starting next to the instrument: the stroke runs along its edge.
+        const edge = this.ruler.edgeNear([x, y], 26 / this.zoom);
+        if (edge) {
+          const offset = this.widths[tool] / 2 + 0.5 / this.zoom;
+          const [px, py] = Ruler.project(edge, [x, y], offset);
+          this.gesture = { type: "draw", tool, points: [[px, py, p]], times: [t], preview: null, holdTimer: 0, held: null, ruler: { edge, offset } };
+          return "ruler";
         }
         if (tool === "shape" && this.shapeKind !== "auto") {
           this.gesture = { type: "shape", start: [x, y], preview: null };
@@ -514,12 +518,13 @@ export class EditorCore {
           return;
         }
         if (g.ruler) {
-          const proj = projectOn(g.ruler.line, [x, y]);
-          if (proj) {
-            const q = offsetFrom(g.ruler.line, proj.p, [g.points[0][0], g.points[0][1]], this.widths[g.tool] / 2 + 0.5 / this.zoom);
-            g.points.push([q[0], q[1], p]);
+          const [px, py] = Ruler.project(g.ruler.edge, [x, y], g.ruler.offset);
+          const last = g.points[g.points.length - 1];
+          if (Math.hypot(px - last[0], py - last[1]) >= 0.4 / this.zoom) {
+            g.points.push([px, py, p]);
             g.times.push(t);
           }
+          this.setReadout(this.guidedReadout(g));
           this.touchOverlay();
           return;
         }
@@ -596,9 +601,14 @@ export class EditorCore {
         clearTimeout(g.holdTimer);
         if (g.held) clearTimeout(g.held.stillTimer);
         let shape = g.preview;
-        if (g.ruler && g.tool === "shape") {
-          const ext = extent(g.points, g.ruler.line);
-          shape = { id: newId(), z: 0, kind: "shape", shape: { kind: "line", points: ext }, color: this.colors.shape, width: this.widths.shape, fill: null };
+        if (g.ruler) {
+          this.setReadout(null);
+          // Along a straight edge the shape tool makes a clean line between
+          // the extremes; along the protractor's arc, the arc itself.
+          if (g.tool === "shape") {
+            const geom: RecognizedShape = g.ruler.edge.kind === "line" ? { kind: "line", points: this.rulerExtent(g) } : { kind: "path", points: g.points.map((p) => [p[0], p[1]] as P2), closed: false };
+            shape = { id: newId(), z: 0, kind: "shape", shape: geom, color: this.colors.shape, width: this.widths.shape, fill: null };
+          }
         } else if (!shape && g.tool === "shape") shape = this.refine(g);
         this.gesture = null;
         if (shape && g.tool === "highlighter" && shape.shape.kind === "line") {
@@ -796,6 +806,160 @@ export class EditorCore {
       return { shape: { id: newId(), z: nextZ(this.elements), kind: "shape", shape, color: this.colors.pen, width: this.widths.pen, fill: null }, absorb: used.map((u) => u.id) };
     }
     return null;
+  }
+
+  private setReadout(text: string | null) {
+    if (text === this.rulerReadout) return;
+    this.rulerReadout = text;
+    this.instrumentRev++;
+  }
+
+  /** Length (straight edge) or swept angle (protractor arc) of a guided stroke. */
+  private guidedReadout(g: Extract<Gesture, { type: "draw" }>): string {
+    const edge = g.ruler!.edge;
+    if (edge.kind === "line") {
+      const [a, b] = this.rulerExtent(g);
+      return `${(Math.hypot(b[0] - a[0], b[1] - a[1]) / (10 * MM)).toFixed(1)} cm`;
+    }
+    let prev = Math.atan2(g.points[0][1] - edge.c[1], g.points[0][0] - edge.c[0]);
+    let acc = 0;
+    let lo = 0;
+    let hi = 0;
+    for (const p of g.points.slice(1)) {
+      const a = Math.atan2(p[1] - edge.c[1], p[0] - edge.c[0]);
+      let d = a - prev;
+      if (d > Math.PI) d -= 2 * Math.PI;
+      if (d < -Math.PI) d += 2 * Math.PI;
+      acc += d;
+      lo = Math.min(lo, acc);
+      hi = Math.max(hi, acc);
+      prev = a;
+    }
+    return `${Math.round(((hi - lo) * 180) / Math.PI)}°`;
+  }
+
+  /** The two furthest points of a stroke drawn along a straight edge. */
+  private rulerExtent(g: Extract<Gesture, { type: "draw" }>): [P2, P2] {
+    const edge = g.ruler!.edge;
+    const dir = edge.kind === "line" ? edge.dir : [1, 0];
+    let lo = g.points[0];
+    let hi = g.points[0];
+    const t = (p: Pt) => p[0] * dir[0] + p[1] * dir[1];
+    for (const p of g.points) {
+      if (t(p) < t(lo)) lo = p;
+      if (t(p) > t(hi)) hi = p;
+    }
+    return [[lo[0], lo[1]], [hi[0], hi[1]]];
+  }
+
+  // ------------------------------------------------------------ instruments
+
+  /** Everything the app needs to show the instrument. */
+  instrument(): any {
+    const r = this.ruler as any;
+    if (!r.visible) return { visible: false, kind: r.kind, rev: this.instrumentRev };
+    // Drawn with room around the body (the protractor's arms reach beyond it).
+    const pad = 14 * MM;
+    const b0 = r.shape.box;
+    const box = { x: b0.x - pad, y: b0.y - pad, w: b0.w + 2 * pad, h: b0.h + 2 * pad };
+    // The body and markings (the web app's SVG), styled as in its CSS.
+    // (Qt's SVG renderer has no rgba(): colours and opacities separately.)
+    const style =
+      "<style>.ruler-body{fill:#f8fafc;fill-opacity:0.62;stroke:#0f172a;stroke-opacity:0.35;stroke-width:0.8}.ticks{stroke:#0f172a;stroke-opacity:0.7;stroke-width:0.35;fill:none}text{fill:#0f172a;fill-opacity:0.75;font-family:Inter;font-weight:600;font-size:7px;text-anchor:middle}text.inner{font-size:5.5px;fill-opacity:0.5}.cutout{fill:none;stroke:#0f172a;stroke-opacity:0.25;stroke-width:0.8}.arm{stroke:#db2777;stroke-width:1.2;fill:none}.arm-arc{stroke:#db2777;stroke-width:1;fill:#db2777;fill-opacity:0.08}</style>";
+    let svg = String(r.el.innerHTML).replace(/<svg ([^>]*)>/, (_m: string, attrs: string) => {
+      const a = attrs.replace(/class="[^"]*"/, "").replace(/viewBox="[^"]*"/, `viewBox="${box.x.toFixed(2)} ${box.y.toFixed(2)} ${box.w.toFixed(2)} ${box.h.toFixed(2)}"`);
+      return `<svg xmlns="http://www.w3.org/2000/svg" ${a}>${style}`;
+    });
+    if (r.kind === "protractor") {
+      const a = r.armEnd(0);
+      const b = r.armEnd(1);
+      const rr = 14 * MM;
+      const t0 = (Math.min(...r.arms) * Math.PI) / 180;
+      const t1 = (Math.max(...r.arms) * Math.PI) / 180;
+      const p0 = [Math.cos(t0) * rr, -Math.sin(t0) * rr];
+      const p1 = [Math.cos(t1) * rr, -Math.sin(t1) * rr];
+      const arms = `<path class="arm" d="M0 0L${a[0].toFixed(2)} ${a[1].toFixed(2)}M0 0L${b[0].toFixed(2)} ${b[1].toFixed(2)}"/><path class="arm-arc" d="M${p0[0].toFixed(2)} ${p0[1].toFixed(2)}A${rr.toFixed(2)} ${rr.toFixed(2)} 0 0 0 ${p1[0].toFixed(2)} ${p1[1].toFixed(2)}"/>`;
+      svg = svg.replace('<g class="ruler-arms"></g>', `<g>${arms}</g>`);
+    }
+    // The grips (the ruler's stay within reach), the arm knobs, the labels.
+    let grips: P2[] = r.shape.grips;
+    if (r.kind === "ruler") {
+      const z = this.zoom;
+      const gg = Math.max(40, Math.min((300 * MM * z) / 2 - 24, this.viewWidth * 0.36)) / z;
+      grips = [[-gg, 0], [gg, 0]];
+    }
+    let label: string;
+    if (r.kind === "protractor") label = `${Math.round(Math.abs(r.arms[0] - r.arms[1]))}°`;
+    else {
+      let deg = ((Math.round((r.angle * 180) / Math.PI) % 180) + 180) % 180;
+      if (deg > 90) deg = 180 - deg;
+      label = `${deg}°`;
+    }
+    return {
+      visible: true,
+      rev: this.instrumentRev,
+      kind: r.kind,
+      cx: r.cx,
+      cy: r.cy,
+      angle: r.angle,
+      box,
+      svg,
+      grips,
+      knobs: r.kind === "protractor" ? [r.armEnd(0), r.armEnd(1)] : [],
+      labelAt: r.shape.labelAt,
+      label,
+      readout: this.rulerReadout,
+      page: this.active,
+    };
+  }
+
+  showInstrument(kind: InstrumentKind, cx: number, cy: number) {
+    const r = this.ruler;
+    r.setKind(kind);
+    if (!r.visible) r.show([cx, cy]);
+    this.instrumentRev++;
+  }
+
+  hideInstrument() {
+    this.ruler.hide();
+    this.instrumentRev++;
+  }
+
+  /** Drags and twists from the app: centre, rotation (radians), protractor arms (degrees). */
+  placeInstrument(cx: number, cy: number, angle: number) {
+    const r = this.ruler;
+    r.cx = cx;
+    r.cy = cy;
+    r.angle = angle;
+    this.instrumentRev++;
+  }
+
+  setArm(i: 0 | 1, deg: number) {
+    this.ruler.arms[i] = Math.min(180, Math.max(0, deg));
+    this.instrumentRev++;
+  }
+
+  /** True when page point (x, y) is on the instrument's body. */
+  instrumentContains(x: number, y: number): boolean {
+    const r = this.ruler as any;
+    if (!r.visible) return false;
+    const [lx, ly] = r.toLocal([x, y]);
+    const sh = r.shape;
+    if (sh.arc) return Math.hypot(lx, ly) <= sh.arc.r && ly <= sh.box.y + sh.box.h;
+    // Inside every edge (the outline is convex).
+    const poly: P2[] = sh.lines.map((l: { a: P2 }) => l.a);
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [xi, yi] = poly[i];
+      const [xj, yj] = poly[j];
+      if (yi > ly !== yj > ly && lx < ((xj - xi) * (ly - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside || (sh.lines.length === 2 && lx >= sh.box.x && lx <= sh.box.x + sh.box.w && ly >= sh.box.y && ly <= sh.box.y + sh.box.h);
+  }
+
+  /** The instrument's local point (x, y) on the page. */
+  instrumentLocal(x: number, y: number): P2 {
+    return (this.ruler as any).toLocal([x, y]);
   }
 
   private straightHighlight(g: Extract<Gesture, { type: "draw" }>, line: P2[]): StrokeEl {
@@ -1246,44 +1410,6 @@ export class EditorCore {
     ctx.fillText(text, x + 8 / z, y + hgt / 2);
     ctx.restore();
   }
-}
-
-// --- ruler edges ---------------------------------------------------------------
-
-function projectOn(line: [P2, P2], p: P2): { p: P2; dist: number; t: number } | null {
-  const [a, b] = line;
-  const dx = b[0] - a[0];
-  const dy = b[1] - a[1];
-  const len2 = dx * dx + dy * dy;
-  if (len2 < 1e-9) return null;
-  const t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2;
-  const q: P2 = [a[0] + dx * t, a[1] + dy * t];
-  return { p: q, dist: Math.hypot(p[0] - q[0], p[1] - q[1]), t };
-}
-
-/** A point on the edge, moved `off` to the side of `side` (ink sits against the edge). */
-function offsetFrom(line: [P2, P2], q: P2, side: P2, off: number): P2 {
-  const [a, b] = line;
-  const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
-  let nx = -(b[1] - a[1]) / len;
-  let ny = (b[0] - a[0]) / len;
-  if ((side[0] - q[0]) * nx + (side[1] - q[1]) * ny < 0) {
-    nx = -nx;
-    ny = -ny;
-  }
-  return [q[0] + nx * off, q[1] + ny * off];
-}
-
-function extent(points: Pt[], line: [P2, P2]): [P2, P2] {
-  const dir = [line[1][0] - line[0][0], line[1][1] - line[0][1]];
-  let lo = points[0];
-  let hi = points[0];
-  const t = (p: Pt) => p[0] * dir[0] + p[1] * dir[1];
-  for (const p of points) {
-    if (t(p) < t(lo)) lo = p;
-    if (t(p) > t(hi)) hi = p;
-  }
-  return [[lo[0], lo[1]], [hi[0], hi[1]]];
 }
 
 export function createEditor(pages: PageMeta[]): EditorCore {
