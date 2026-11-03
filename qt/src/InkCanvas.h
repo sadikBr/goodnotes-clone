@@ -68,6 +68,8 @@ class InkCanvas : public QQuickItem {
   Q_PROPERTY(QVariantMap selection READ selection NOTIFY selectionChanged)
   /// The text box or note being typed into (its element), or empty.
   Q_PROPERTY(QVariantMap editing READ editing NOTIFY editingChanged)
+  /// Bold, italic and alignment for the next text box (the core's textFormat).
+  Q_PROPERTY(QVariantMap textFormat READ textFormat NOTIFY toolStateChanged)
   /// The drawing instrument (ruler, protractor, set squares): see editorCore instrument().
   Q_PROPERTY(QVariantMap instrument READ instrument NOTIFY instrumentChanged)
 
@@ -164,6 +166,7 @@ public:
   Q_INVOKABLE void reloadPages(bool elementsToo = false);
   /// Saves pending changes now (before leaving the notebook).
   Q_INVOKABLE void flush();
+  QVariantMap textFormat() { return coreProp("textFormat").toVariant().toMap(); }
   /**
    * Runs Inkleaf.daftarQt.<fn>(core, ...args) for the daftar bar and does
    * what it asks: reload the pages, go to a page (and a line on it).

@@ -6,7 +6,8 @@ import Inkleaf
 RowLayout {
     id: root
     required property InkCanvas canvas
-    readonly property var e: canvas.editing
+    // The text being typed, else the format new text gets.
+    readonly property var e: canvas.editing.id ? canvas.editing : canvas.textFormat
     readonly property bool bold: !!e.bold
     readonly property bool italic: !!e.italic
     readonly property string align: e.align || "left"
