@@ -22,7 +22,9 @@ export type SymbolName =
   | "greaterEqual"
   | "plusMinus"
   | "forAll"
-  | "exists";
+  | "exists"
+  | "leftBrace"
+  | "rightBrace";
 
 export const SYMBOL_GLYPHS: Record<SymbolName, string> = {
   integral: "∫",
@@ -41,6 +43,8 @@ export const SYMBOL_GLYPHS: Record<SymbolName, string> = {
   plusMinus: "±",
   forAll: "∀",
   exists: "∃",
+  leftBrace: "{",
+  rightBrace: "}",
 };
 
 // --- models -----------------------------------------------------------------------
@@ -76,8 +80,18 @@ const chevron = (x0: number, x1: number, y0: number, y1: number): P2[] => [
   [x0, y1],
 ];
 
+/** A curly brace opening to the right ({): two arcs meeting in a point at mid-height. */
+const LEFT_BRACE: P2[] = join(
+  cubic([0.6, 0], [0.32, 0], [0.32, 0.18], [0.31, 0.36]),
+  cubic([0.31, 0.36], [0.3, 0.46], [0.18, 0.5], [0.04, 0.5]),
+  cubic([0.04, 0.5], [0.18, 0.5], [0.3, 0.54], [0.31, 0.64]),
+  cubic([0.31, 0.64], [0.32, 0.82], [0.32, 1], [0.6, 1]),
+);
+
 /** Clean models: polylines in a box, y down. */
 const MODELS: Record<SymbolName, P2[][]> = {
+  leftBrace: [LEFT_BRACE],
+  rightBrace: [],
   integral: [
     join(
       cubic([0.42, 0.1], [0.4, -0.02], [0.27, -0.02], [0.25, 0.14]),
@@ -393,7 +407,7 @@ export function cornerCount(stroke: P2[], size: number): number {
 }
 
 /** The sharpest turn in a stroke (radians): near 0 for a straight line. */
-function sharpest(stroke: P2[], size: number): number {
+export function sharpest(stroke: P2[], size: number): number {
   return Math.max(0, ...turns(stroke, size));
 }
 
@@ -403,6 +417,15 @@ function cornerSignature(strokes: P2[][]): { corners: number; sharpest: number }
   const size = Math.max(b.w, b.h);
   return strokes.map((st) => ({ corners: cornerCount(st, size), sharpest: sharpest(st, size) })).sort((a, b) => a.corners - b.corners || a.sharpest - b.sharpest);
 }
+
+// The brace's mirror image.
+MODELS.rightBrace = [LEFT_BRACE.map(([x, y]) => [0.64 - x, y] as P2)];
+
+/**
+ * Symbols made of curves: their hooks and the brace's point aren't corners
+ * to be matched one by one (a round hook and a tight one are the same ∫).
+ */
+const CURVY: ReadonlySet<SymbolName> = new Set(["integral", "leftBrace", "rightBrace"]);
 
 const TEMPLATES = (Object.keys(MODELS) as SymbolName[]).map((name) => {
   const b = bboxOf(MODELS[name]);
@@ -433,6 +456,8 @@ const THRESHOLDS: Record<SymbolName, number> = {
   plusMinus: 1.7,
   forAll: 1.7,
   exists: 1.75,
+  leftBrace: 1.6,
+  rightBrace: 1.6,
 };
 
 export interface SymbolMatch {
@@ -455,6 +480,7 @@ export function matchSymbol(strokes: P2[][]): SymbolMatch | null {
   let best: SymbolMatch | null = null;
   for (const t of TEMPLATES) {
     if (!plausible(t, usable.length, corners, aspect)) continue;
+    if (!curvyFits(t.name, usable)) continue;
     const d = greedyMatch(cloud, t.cloud);
     if (d >= THRESHOLDS[t.name]) continue;
     // Closest relative to its own limit.
@@ -466,6 +492,12 @@ export function matchSymbol(strokes: P2[][]): SymbolMatch | null {
 /** Same number of strokes, about the same corners per stroke and similar proportions. */
 function plausible(t: (typeof TEMPLATES)[number], strokes: number, corners: { corners: number; sharpest: number }[], aspect: number): boolean {
   if (strokes !== t.strokes) return false;
+  if (CURVY.has(t.name)) {
+    // Hooks and the brace's point may read as corners or not; a zigzag can't.
+    if (corners.some((c) => c.corners > 3)) return false;
+    const ratio = aspect / t.aspect;
+    return ratio > 0.45 && ratio < 2.2;
+  }
   // Corners may be off by one, but a stroke that must be pointed (a chevron,
   // a V) needs a clear turn somewhere: a plain line isn't an arrowhead.
   const needPointed = t.corners.filter((c) => c.corners >= 1).length;
@@ -483,6 +515,30 @@ function plausible(t: (typeof TEMPLATES)[number], strokes: number, corners: { co
   }
   const ratio = aspect / t.aspect;
   return ratio > 0.45 && ratio < 2.2;
+}
+
+/**
+ * What tells the curvy symbols apart (and from brackets): an integral's ends
+ * are on opposite sides; a brace's are on the same side, with a sharp point
+ * half-way down on the other (a parenthesis is one smooth arc).
+ */
+function curvyFits(name: SymbolName, strokes: P2[][]): boolean {
+  if (!CURVY.has(name) || strokes.length !== 1) return true;
+  const st = strokes[0];
+  const b = bboxOf(strokes);
+  if (b.w <= 0 || b.h <= 0) return false;
+  const a = st[0];
+  const z = st[st.length - 1];
+  const apart = Math.abs(a[0] - z[0]) / b.w;
+  if (name === "integral") return apart > 0.3;
+  if (apart > 0.45) return false;
+  // The point: the far side's extreme, about half-way down, and sharp.
+  const left = name === "leftBrace";
+  let tip = st[0];
+  for (const p of st) if (left ? p[0] < tip[0] : p[0] > tip[0]) tip = p;
+  const at = (tip[1] - b.y) / b.h;
+  if (at < 0.28 || at > 0.72) return false;
+  return sharpest(st, Math.max(b.w, b.h)) > (85 * Math.PI) / 180;
 }
 
 /** The plausible symbols' distances (best first), for tuning and tests. */

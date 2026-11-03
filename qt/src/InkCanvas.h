@@ -45,6 +45,12 @@ class InkCanvas : public QQuickItem {
   Q_PROPERTY(QString eraserMode READ eraserMode WRITE setEraserMode NOTIFY toolStateChanged)
   Q_PROPERTY(QString textFont READ textFont WRITE setTextFont NOTIFY toolStateChanged)
   Q_PROPERTY(QString laserMode MEMBER m_laserMode NOTIFY toolStateChanged)
+  /// The laser pointer's position (x < 0: none) and how far the trail has faded.
+  Q_PROPERTY(QPointF laserDot READ laserDot NOTIFY laserChanged)
+  Q_PROPERTY(qreal laserColorAlpha READ laserColorAlpha NOTIFY laserChanged)
+  Q_PROPERTY(qreal laserCoreAlpha READ laserCoreAlpha NOTIFY laserChanged)
+  Q_PROPERTY(QColor laserColor READ laserColor NOTIFY laserChanged)
+  Q_PROPERTY(bool laserTrail READ laserTrail NOTIFY laserChanged)
   Q_PROPERTY(qreal smoothing READ smoothing WRITE setSmoothing NOTIFY toolStateChanged)
   Q_PROPERTY(bool penOnly READ penOnly WRITE setPenOnly NOTIFY penOnlyChanged)
   /// While the (unpinned) tool drawer is open a press on the page only closes it.
@@ -168,6 +174,13 @@ public:
   Q_INVOKABLE void reloadPages(bool elementsToo = false);
   /// Saves pending changes now (before leaving the notebook).
   Q_INVOKABLE void flush();
+  QPointF laserDot() const { return m_laserDot; }
+  qreal laserColorAlpha() const;
+  qreal laserCoreAlpha() const;
+  QColor laserColor() const;
+  bool laserTrail() const { return !m_laser.empty(); }
+  /// The trail so far, in item coordinates (one list per stroke).
+  const std::vector<std::vector<QPointF>>& laserRuns() const { return m_laser; }
   QVariantMap textFormat() { return coreProp("textFormat").toVariant().toMap(); }
   /**
    * Runs Inkleaf.daftarQt.<fn>(core, ...args) for the daftar bar and does
@@ -199,6 +212,7 @@ signals:
   void penUsed();
   void message(const QString& text, bool error);
   void dismissOnPressChanged();
+  void laserChanged();
   /// A press that only closed the drawer (see dismissOnPress).
   void dismissed();
 
@@ -334,6 +348,7 @@ private:
   QTimer m_thumbFill;  // missing PDF page thumbnails
   QTimer m_scrollGlide;  // a wheel notch's eased scroll
   QPointF m_glideTarget;
+  double m_lastWheel = -1e9, m_wheelBoost = 1;
   bool m_dismissOnPress = false;  // missing PDF page thumbnails
   QTimer m_timers;  // the scripts' timers (holding a stroke still)
   QTimer m_laserTick;
@@ -356,11 +371,7 @@ private:
   bool m_liveHidden = false;
 
   // Laser: recent points (item coordinates) with their times.
-  struct LaserPt {
-    QPointF p;
-    double t;
-  };
-  std::vector<std::vector<LaserPt>> m_laser;
+  std::vector<std::vector<QPointF>> m_laser;  // the trail, one list per stroke (item coordinates)
   double m_laserUp = -1;
   QPointF m_laserDot{-1, -1};
 

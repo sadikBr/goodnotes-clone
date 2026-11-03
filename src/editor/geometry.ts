@@ -171,17 +171,66 @@ export function hitTest(el: El, x: number, y: number, radius: number): boolean {
 }
 
 /** Lasso selection: strokes need most of their points inside; boxes their centre. */
+/** The lasso as flat coordinates, with points closer than a hair dropped (it's tested a lot). */
+function lassoPolygon(lasso: P2[]): { xs: Float64Array; ys: Float64Array } {
+  const xs: number[] = [];
+  const ys: number[] = [];
+  let px = Infinity;
+  let py = Infinity;
+  for (let i = 0; i < lasso.length; i++) {
+    const x = lasso[i][0];
+    const y = lasso[i][1];
+    if (Math.abs(x - px) + Math.abs(y - py) < 1.5) continue;
+    xs.push(x);
+    ys.push(y);
+    px = x;
+    py = y;
+  }
+  return { xs: new Float64Array(xs), ys: new Float64Array(ys) };
+}
+
+function insidePolygon(x: number, y: number, xs: Float64Array, ys: Float64Array): boolean {
+  let inside = false;
+  const n = xs.length;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const yi = ys[i];
+    const yj = ys[j];
+    if (yi > y !== yj > y && x < ((xs[j] - xs[i]) * (y - yi)) / (yj - yi) + xs[i]) inside = !inside;
+  }
+  return inside;
+}
+
+const lassoCache = new WeakMap<P2[], { xs: Float64Array; ys: Float64Array }>();
+
+/**
+ * Whether the lasso holds an element: 60% of a line's points inside it (up
+ * to ~96 of them, evenly spread, are looked at), else its centre.
+ */
 export function insideLasso(el: El, lasso: P2[]): boolean {
   if (lasso.length < 3) return false;
+  let poly = lassoCache.get(lasso);
+  if (!poly) {
+    poly = lassoPolygon(lasso);
+    lassoCache.set(lasso, poly);
+  }
+  const { xs, ys } = poly;
+  if (xs.length < 3) return false;
   const sample = (pts: ArrayLike<ArrayLike<number>>) => {
+    const n = pts.length;
+    if (!n) return false;
+    const step = Math.max(1, Math.floor(n / 96));
     let inside = 0;
-    for (let i = 0; i < pts.length; i++) if (pointInPolygon(pts[i][0], pts[i][1], lasso)) inside++;
-    return pts.length > 0 && inside / pts.length >= 0.6;
+    let seen = 0;
+    for (let i = 0; i < n; i += step) {
+      seen++;
+      if (insidePolygon(pts[i][0], pts[i][1], xs, ys)) inside++;
+    }
+    return inside / seen >= 0.6;
   };
   if (el.kind === "stroke") return sample(el.points);
   if (el.kind === "shape" && el.shape.kind !== "ellipse") return sample(el.shape.points);
   const r = bounds(el);
-  return pointInPolygon(r.x + r.w / 2, r.y + r.h / 2, lasso);
+  return insidePolygon(r.x + r.w / 2, r.y + r.h / 2, xs, ys);
 }
 
 export function translate(el: El, dx: number, dy: number): El {

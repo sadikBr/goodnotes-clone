@@ -433,6 +433,46 @@ Rectangle {
 
                 Instrument { anchors.fill: parent; canvas: canvas; z: 4 }
                 TextEditor { anchors.fill: parent; canvas: canvas; z: 5 }
+                // The laser pointer (src/editor/laser.ts): a soft glow, a saturated
+                // tube and a thin white core, each layer drawn once with its own
+                // opacity so crossings never darken; and the pointer dot.
+                Item {
+                    anchors.fill: canvas
+                    z: 5
+                    enabled: false
+                    visible: canvas.tool === "laser" || canvas.laserTrail
+                    Item {
+                        anchors.fill: parent
+                        visible: canvas.laserTrail
+                        layer.enabled: visible
+                        opacity: 0.28 * canvas.laserColorAlpha
+                        LaserTrail { anchors.fill: parent; canvas: canvas; radius: 5.5; color: canvas.laserColor }
+                    }
+                    Item {
+                        anchors.fill: parent
+                        visible: canvas.laserTrail
+                        layer.enabled: visible
+                        opacity: canvas.laserColorAlpha
+                        LaserTrail { anchors.fill: parent; canvas: canvas; radius: 3; color: canvas.laserColor }
+                    }
+                    Item {
+                        anchors.fill: parent
+                        visible: canvas.laserTrail
+                        layer.enabled: visible
+                        opacity: canvas.laserCoreAlpha
+                        LaserTrail { anchors.fill: parent; canvas: canvas; radius: 0.9; color: "white" }
+                    }
+                    // .laser-dot: 6px, with a grey and a white ring.
+                    Item {
+                        visible: canvas.tool === "laser" && canvas.laserDot.x >= 0
+                        x: canvas.laserDot.x
+                        y: canvas.laserDot.y
+                        Rectangle { antialiasing: true; x: -6.5; y: -6.5; width: 13; height: 13; radius: 6.5; color: Qt.rgba(1, 1, 1, 0.5) }
+                        Rectangle { antialiasing: true; x: -5.5; y: -5.5; width: 11; height: 11; radius: 5.5; color: Qt.rgba(120 / 255, 120 / 255, 120 / 255, 0.45) }
+                        Rectangle { antialiasing: true; x: -3; y: -3; width: 6; height: 6; radius: 3; color: canvas.laserColor }
+                    }
+                }
+
                 SelectionBar { id: selectionBar; canvas: canvas; z: 6 }
 
                 // The active tool's options.

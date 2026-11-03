@@ -3469,22 +3469,66 @@ var Inkleaf = (() => {
       }
     }
   }
+  function lassoPolygon(lasso) {
+    var xs = [];
+    var ys = [];
+    var px = Infinity;
+    var py = Infinity;
+    for (var i2 = 0; i2 < lasso.length; i2++) {
+      var x2 = lasso[i2][0];
+      var y2 = lasso[i2][1];
+      if (Math.abs(x2 - px) + Math.abs(y2 - py) < 1.5)
+        continue;
+      xs.push(x2);
+      ys.push(y2);
+      px = x2;
+      py = y2;
+    }
+    return { xs: new Float64Array(xs), ys: new Float64Array(ys) };
+  }
+  function insidePolygon(x2, y2, xs, ys) {
+    var inside = false;
+    var n2 = xs.length;
+    for (var i2 = 0, j2 = n2 - 1; i2 < n2; j2 = i2++) {
+      var yi = ys[i2];
+      var yj = ys[j2];
+      if (yi > y2 !== yj > y2 && x2 < (xs[j2] - xs[i2]) * (y2 - yi) / (yj - yi) + xs[i2])
+        inside = !inside;
+    }
+    return inside;
+  }
+  var lassoCache = /* @__PURE__ */ new WeakMap();
   function insideLasso(el, lasso) {
     if (lasso.length < 3)
       return false;
+    var poly = lassoCache.get(lasso);
+    if (!poly) {
+      poly = lassoPolygon(lasso);
+      lassoCache.set(lasso, poly);
+    }
+    var xs = poly.xs, ys = poly.ys;
+    if (xs.length < 3)
+      return false;
     var sample = function(pts) {
+      var n2 = pts.length;
+      if (!n2)
+        return false;
+      var step = Math.max(1, Math.floor(n2 / 96));
       var inside = 0;
-      for (var i2 = 0; i2 < pts.length; i2++)
-        if (pointInPolygon(pts[i2][0], pts[i2][1], lasso))
+      var seen = 0;
+      for (var i2 = 0; i2 < n2; i2 += step) {
+        seen++;
+        if (insidePolygon(pts[i2][0], pts[i2][1], xs, ys))
           inside++;
-      return pts.length > 0 && inside / pts.length >= 0.6;
+      }
+      return inside / seen >= 0.6;
     };
     if (el.kind === "stroke")
       return sample(el.points);
     if (el.kind === "shape" && el.shape.kind !== "ellipse")
       return sample(el.shape.points);
     var r2 = bounds(el);
-    return pointInPolygon(r2.x + r2.w / 2, r2.y + r2.h / 2, lasso);
+    return insidePolygon(r2.x + r2.w / 2, r2.y + r2.h / 2, xs, ys);
   }
   function translate(el, dx, dy) {
     switch (el.kind) {
@@ -6243,7 +6287,9 @@ var Inkleaf = (() => {
     greaterEqual: "≥",
     plusMinus: "±",
     forAll: "∀",
-    exists: "∃"
+    exists: "∃",
+    leftBrace: "{",
+    rightBrace: "}"
   };
   function cubic(p0, p1, p2, p3, n2) {
     if (n2 === void 0) {
@@ -6288,7 +6334,10 @@ var Inkleaf = (() => {
       [x0, y1]
     ];
   };
+  var LEFT_BRACE = join(cubic([0.6, 0], [0.32, 0], [0.32, 0.18], [0.31, 0.36]), cubic([0.31, 0.36], [0.3, 0.46], [0.18, 0.5], [0.04, 0.5]), cubic([0.04, 0.5], [0.18, 0.5], [0.3, 0.54], [0.31, 0.64]), cubic([0.31, 0.64], [0.32, 0.82], [0.32, 1], [0.6, 1]));
   var MODELS = {
+    leftBrace: [LEFT_BRACE],
+    rightBrace: [],
     integral: [
       join(cubic([0.42, 0.1], [0.4, -0.02], [0.27, -0.02], [0.25, 0.14]), cubic([0.25, 0.14], [0.24, 0.4], [0.21, 0.6], [0.2, 0.86]), cubic([0.2, 0.86], [0.18, 1.02], [0.05, 1.02], [0.03, 0.9]))
     ],
@@ -6649,6 +6698,11 @@ var Inkleaf = (() => {
       return a2.corners - b3.corners || a2.sharpest - b3.sharpest;
     });
   }
+  MODELS.rightBrace = [LEFT_BRACE.map(function(_a) {
+    var _b = __read11(_a, 2), x2 = _b[0], y2 = _b[1];
+    return [0.64 - x2, y2];
+  })];
+  var CURVY = /* @__PURE__ */ new Set(["integral", "leftBrace", "rightBrace"]);
   var TEMPLATES = Object.keys(MODELS).map(function(name) {
     var b2 = bboxOf(MODELS[name]);
     var straight = MODELS[name].filter(function(st) {
@@ -6672,7 +6726,9 @@ var Inkleaf = (() => {
     greaterEqual: 1.5,
     plusMinus: 1.7,
     forAll: 1.7,
-    exists: 1.75
+    exists: 1.75,
+    leftBrace: 1.6,
+    rightBrace: 1.6
   };
   function matchSymbol(strokes) {
     var e_5, _a;
@@ -6690,6 +6746,8 @@ var Inkleaf = (() => {
       for (var TEMPLATES_1 = __values11(TEMPLATES), TEMPLATES_1_1 = TEMPLATES_1.next(); !TEMPLATES_1_1.done; TEMPLATES_1_1 = TEMPLATES_1.next()) {
         var t2 = TEMPLATES_1_1.value;
         if (!plausible(t2, usable.length, corners, aspect))
+          continue;
+        if (!curvyFits(t2.name, usable))
           continue;
         var d2 = greedyMatch(cloud, t2.cloud);
         if (d2 >= THRESHOLDS[t2.name])
@@ -6711,6 +6769,14 @@ var Inkleaf = (() => {
   function plausible(t2, strokes, corners, aspect) {
     if (strokes !== t2.strokes)
       return false;
+    if (CURVY.has(t2.name)) {
+      if (corners.some(function(c2) {
+        return c2.corners > 3;
+      }))
+        return false;
+      var ratio_1 = aspect / t2.aspect;
+      return ratio_1 > 0.45 && ratio_1 < 2.2;
+    }
     var needPointed = t2.corners.filter(function(c2) {
       return c2.corners >= 1;
     }).length;
@@ -6733,6 +6799,43 @@ var Inkleaf = (() => {
     var ratio = aspect / t2.aspect;
     return ratio > 0.45 && ratio < 2.2;
   }
+  function curvyFits(name, strokes) {
+    var e_6, _a;
+    if (!CURVY.has(name) || strokes.length !== 1)
+      return true;
+    var st = strokes[0];
+    var b2 = bboxOf(strokes);
+    if (b2.w <= 0 || b2.h <= 0)
+      return false;
+    var a2 = st[0];
+    var z = st[st.length - 1];
+    var apart = Math.abs(a2[0] - z[0]) / b2.w;
+    if (name === "integral")
+      return apart > 0.3;
+    if (apart > 0.45)
+      return false;
+    var left = name === "leftBrace";
+    var tip = st[0];
+    try {
+      for (var st_2 = __values11(st), st_2_1 = st_2.next(); !st_2_1.done; st_2_1 = st_2.next()) {
+        var p2 = st_2_1.value;
+        if (left ? p2[0] < tip[0] : p2[0] > tip[0])
+          tip = p2;
+      }
+    } catch (e_6_1) {
+      e_6 = { error: e_6_1 };
+    } finally {
+      try {
+        if (st_2_1 && !st_2_1.done && (_a = st_2.return)) _a.call(st_2);
+      } finally {
+        if (e_6) throw e_6.error;
+      }
+    }
+    var at = (tip[1] - b2.y) / b2.h;
+    if (at < 0.28 || at > 0.72)
+      return false;
+    return sharpest(st, Math.max(b2.w, b2.h)) > 85 * Math.PI / 180;
+  }
   function rankSymbols(strokes) {
     var cloud = normalise(resample(strokes, N3));
     var corners = cornerSignature(strokes);
@@ -6747,37 +6850,37 @@ var Inkleaf = (() => {
     });
   }
   function symbolShape(name, box) {
-    var e_6, _a, e_7, _b, e_8, _c, e_9, _d;
+    var e_7, _a, e_8, _b, e_9, _c, e_10, _d;
     var model = MODELS[name];
     var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     try {
       for (var model_1 = __values11(model), model_1_1 = model_1.next(); !model_1_1.done; model_1_1 = model_1.next()) {
         var st = model_1_1.value;
         try {
-          for (var st_2 = (e_7 = void 0, __values11(st)), st_2_1 = st_2.next(); !st_2_1.done; st_2_1 = st_2.next()) {
-            var _e = __read11(st_2_1.value, 2), x2 = _e[0], y2 = _e[1];
+          for (var st_3 = (e_8 = void 0, __values11(st)), st_3_1 = st_3.next(); !st_3_1.done; st_3_1 = st_3.next()) {
+            var _e = __read11(st_3_1.value, 2), x2 = _e[0], y2 = _e[1];
             x0 = Math.min(x0, x2);
             y0 = Math.min(y0, y2);
             x1 = Math.max(x1, x2);
             y1 = Math.max(y1, y2);
           }
-        } catch (e_7_1) {
-          e_7 = { error: e_7_1 };
+        } catch (e_8_1) {
+          e_8 = { error: e_8_1 };
         } finally {
           try {
-            if (st_2_1 && !st_2_1.done && (_b = st_2.return)) _b.call(st_2);
+            if (st_3_1 && !st_3_1.done && (_b = st_3.return)) _b.call(st_3);
           } finally {
-            if (e_7) throw e_7.error;
+            if (e_8) throw e_8.error;
           }
         }
       }
-    } catch (e_6_1) {
-      e_6 = { error: e_6_1 };
+    } catch (e_7_1) {
+      e_7 = { error: e_7_1 };
     } finally {
       try {
         if (model_1_1 && !model_1_1.done && (_a = model_1.return)) _a.call(model_1);
       } finally {
-        if (e_6) throw e_6.error;
+        if (e_7) throw e_7.error;
       }
     }
     var mw = x1 - x0 || 1;
@@ -6793,27 +6896,27 @@ var Inkleaf = (() => {
         if (points.length)
           breaks.push(points.length);
         try {
-          for (var st_3 = (e_9 = void 0, __values11(st)), st_3_1 = st_3.next(); !st_3_1.done; st_3_1 = st_3.next()) {
-            var _f = __read11(st_3_1.value, 2), x2 = _f[0], y2 = _f[1];
+          for (var st_4 = (e_10 = void 0, __values11(st)), st_4_1 = st_4.next(); !st_4_1.done; st_4_1 = st_4.next()) {
+            var _f = __read11(st_4_1.value, 2), x2 = _f[0], y2 = _f[1];
             points.push([ox + x2 * scale, oy + y2 * scale]);
           }
-        } catch (e_9_1) {
-          e_9 = { error: e_9_1 };
+        } catch (e_10_1) {
+          e_10 = { error: e_10_1 };
         } finally {
           try {
-            if (st_3_1 && !st_3_1.done && (_d = st_3.return)) _d.call(st_3);
+            if (st_4_1 && !st_4_1.done && (_d = st_4.return)) _d.call(st_4);
           } finally {
-            if (e_9) throw e_9.error;
+            if (e_10) throw e_10.error;
           }
         }
       }
-    } catch (e_8_1) {
-      e_8 = { error: e_8_1 };
+    } catch (e_9_1) {
+      e_9 = { error: e_9_1 };
     } finally {
       try {
         if (model_2_1 && !model_2_1.done && (_c = model_2.return)) _c.call(model_2);
       } finally {
-        if (e_8) throw e_8.error;
+        if (e_9) throw e_9.error;
       }
     }
     return __assign7({ kind: "path", points, closed: false }, breaks.length ? { breaks } : {});

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { P2 } from "../api";
 import { MODELS_FOR_TESTS, matchSymbol, symbolShape, type SymbolName } from "./symbols";
-import { handDrawn, NOT_SYMBOLS, rng } from "./symbols.samples";
+import { handDrawn, HANDWRITTEN, NOT_SYMBOLS, rng } from "./symbols.samples";
 
 describe("maths symbol recognition", () => {
   const names = Object.keys(MODELS_FOR_TESTS) as SymbolName[];
@@ -42,6 +42,15 @@ describe("maths symbol recognition", () => {
     const r = rng(9);
     for (const [name, model] of Object.entries(NOT_SYMBOLS)) {
       for (let k = 0; k < 25; k++) expect(matchSymbol(handDrawn(model, r))?.name ?? null, name).toBeNull();
+    }
+  }, 60_000);
+
+  it("recognises the way people draw ∫ { } (round hooks, a soft point) and keeps them apart", () => {
+    const r = rng(23);
+    for (const { name, strokes } of HANDWRITTEN) {
+      let right = 0;
+      for (let k = 0; k < 40; k++) if (matchSymbol(handDrawn(strokes, r))?.name === name) right++;
+      expect(right, name).toBeGreaterThanOrEqual(36);
     }
   }, 60_000);
 

@@ -466,7 +466,7 @@ Rectangle {
                 }
                 Label {
                     visible: root.library.folders.length === 0
-                    text: "Group notebooks into folders with +"
+                    text: "Group notebooks into folders with\u00A0+"
                     color: Theme.muted; font.pixelSize: 12; wrapMode: Text.Wrap
                     Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.topMargin: 2
                 }
@@ -670,7 +670,10 @@ Rectangle {
                         visible: root.canCreate
                         Layout.alignment: Qt.AlignHCenter
                         Layout.topMargin: 32
+                        // At most 560 wide (.create-cards), centred.
+                        Layout.fillWidth: false
                         Layout.preferredWidth: Math.min(560, empty.width - 40)
+                        Layout.maximumWidth: Math.min(560, empty.width - 40)
                         columns: 2
                         columnSpacing: 10
                         rowSpacing: 10

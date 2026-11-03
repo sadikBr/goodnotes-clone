@@ -66,4 +66,21 @@ export const NOT_SYMBOLS: Record<string, P2[][]> = {
   K: [[[0, 0], [0, 1]], [[0.8, 0], [0, 0.55], [0.8, 1]]],
   scribble: [curve((t) => [t + 0.15 * Math.sin(t * 40), 0.5 + 0.4 * Math.sin(t * 17)], 60)],
   loop: [curve((t) => [0.5 + 0.5 * Math.cos(t * Math.PI * 2), 0.5 + 0.5 * Math.sin(t * Math.PI * 2)])],
+  // Brackets look like braces without their point.
+  parenLeft: [curve((t) => [0.4 - 0.4 * Math.sin(Math.PI * t), t])],
+  parenRight: [curve((t) => [0.4 * Math.sin(Math.PI * t), t])],
 };
+
+const bez = (p0: P2, p1: P2, p2: P2, p3: P2, n = 16): P2[] =>
+  curve((t) => {
+    const u = 1 - t;
+    return [u * u * u * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t * t * t * p3[0], u * u * u * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t * t * t * p3[1]];
+  }, n);
+const chain = (...parts: P2[][]): P2[] => parts.flatMap((p, i) => (i ? p.slice(1) : p));
+
+/** How people actually draw some symbols (round hooks, a soft point), unlike the models. */
+export const HANDWRITTEN: { name: string; strokes: P2[][] }[] = [
+  { name: "integral", strokes: [chain(bez([0.55, 0.08], [0.5, -0.02], [0.35, 0], [0.33, 0.2]), bez([0.33, 0.2], [0.3, 0.45], [0.28, 0.7], [0.26, 0.9]), bez([0.26, 0.9], [0.25, 1.0], [0.12, 1.02], [0.08, 0.92]))] },
+  { name: "leftBrace", strokes: [chain(bez([0.5, 0], [0.2, 0.02], [0.3, 0.25], [0.25, 0.42]), bez([0.25, 0.42], [0.22, 0.5], [0.1, 0.52], [0.02, 0.53]), bez([0.02, 0.53], [0.15, 0.56], [0.22, 0.6], [0.22, 0.72]), bez([0.22, 0.72], [0.22, 0.92], [0.3, 1], [0.5, 0.98]))] },
+  { name: "rightBrace", strokes: [chain(bez([0, 0], [0.3, 0.02], [0.2, 0.25], [0.25, 0.42]), bez([0.25, 0.42], [0.28, 0.5], [0.4, 0.52], [0.48, 0.53]), bez([0.48, 0.53], [0.35, 0.56], [0.28, 0.6], [0.28, 0.72]), bez([0.28, 0.72], [0.28, 0.92], [0.2, 1], [0, 0.98]))] },
+];

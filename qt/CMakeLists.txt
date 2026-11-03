@@ -81,6 +81,7 @@ qt_add_executable(inkleaf
   src/Js.h src/Js.cpp
   src/PaperImage.h src/PaperImage.cpp
   src/Pdf.h src/Pdf.cpp
+  src/LaserTrail.h src/LaserTrail.cpp
 )
 
 # Theme is a singleton (must be set before the module is declared).

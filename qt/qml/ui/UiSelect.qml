@@ -28,6 +28,9 @@ ComboBox {
     implicitHeight: 40
     font.pixelSize: 14
     leftPadding: 12
+    // The label gets the full height and centres itself (Arabic text is tall).
+    topPadding: 0
+    bottomPadding: 0
 
     background: Rectangle { antialiasing: true;
         radius: Theme.radius
