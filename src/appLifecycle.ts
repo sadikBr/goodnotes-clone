@@ -9,6 +9,11 @@ export function onFlushRequest(fn: () => Promise<void>) {
   flushOpenWork = fn;
 }
 
+/** Saves what's open (e.g. before an update restarts the app). */
+export async function saveOpenWork() {
+  await flushOpenWork();
+}
+
 /** Saves what's open, then stops further saves until the app reloads. */
 export async function prepareForRestore() {
   await flushOpenWork();

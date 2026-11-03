@@ -6,6 +6,7 @@ import { getSetting, notifySettings, PEN_ONLY_KEY, setSetting, type Settings } f
 import { setTheme, themeMode } from "./theme";
 import { h, icon } from "./ui";
 import { backupSection } from "./backupSettings";
+import { updatesSection } from "./updates";
 
 type Choice<T extends string> = { value: T; label: string };
 
@@ -93,6 +94,7 @@ export function openSettings() {
       ),
     ),
     backupSection(),
+    updatesSection(),
     section("sun", "Appearance", row("Theme", "System follows your computer's light or dark setting.", segmented("Theme", [{ value: "light", label: "Light" }, { value: "dark", label: "Dark" }, { value: "system", label: "System" }], themeMode(), (v) => setTheme(v)))),
   );
   const backdrop = h(

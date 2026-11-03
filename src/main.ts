@@ -5,6 +5,7 @@ import { installTooltips } from "./ui";
 import { applyStoredTheme } from "./theme";
 import { isRestoring, onFlushRequest } from "./appLifecycle";
 import { startBackupTimer } from "./backupSettings";
+import { startUpdateChecks } from "./updates";
 
 const app = document.getElementById("app")!;
 
@@ -48,3 +49,4 @@ onFlushRequest(async () => {
 
 void showLibrary();
 startBackupTimer();
+startUpdateChecks();

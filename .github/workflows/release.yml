@@ -1,0 +1,89 @@
+# Builds, signs and publishes a release when a version tag is pushed:
+#   npm run set-version 0.8.1 && git commit -am "v0.8.1" && git tag v0.8.1 && git push origin main v0.8.1
+# Installed apps find it through latest.json and offer to update.
+#
+# Needs (repository Settings → Secrets and variables → Actions):
+#   secret   TAURI_SIGNING_PRIVATE_KEY           the private key file's contents
+#   secret   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  its password
+#   variable TAURI_UPDATER_PUBKEY                the .pub file's contents
+#   (Android) secrets ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+#   (Drive sync) secrets GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-24.04
+    outputs:
+      id: ${{ steps.release.outputs.id }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag matches the app version
+        run: node scripts/check-version.mjs
+        env:
+          TAG: ${{ github.ref_name }}
+      - name: Create a draft release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" --draft --title "Inkleaf ${{ github.ref_name }}" --generate-notes
+          echo "id=$(gh release view "${{ github.ref_name }}" --json databaseId -q .databaseId)" >> "$GITHUB_OUTPUT"
+
+  desktop:
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-24.04
+            bundles: appimage
+          - platform: windows-latest
+            bundles: nsis
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Linux build dependencies
+        if: startsWith(matrix.platform, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - run: npm ci
+      - name: Release config (updater key)
+        run: node scripts/release-config.mjs
+        env:
+          TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        with:
+          releaseId: ${{ needs.create-release.outputs.id }}
+          args: --bundles ${{ matrix.bundles }} --config src-tauri/tauri.release.conf.json
+          includeUpdaterJson: true
+
+  publish:
+    needs: [create-release, desktop]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Publish the release (updates go live)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "${{ github.ref_name }}" --repo "${{ github.repository }}" --draft=false --latest

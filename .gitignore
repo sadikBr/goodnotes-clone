@@ -5,3 +5,5 @@ src-tauri/gen/
 *.log
 .DS_Store
 public/pdfjs/
+
+src-tauri/tauri.release.conf.json
