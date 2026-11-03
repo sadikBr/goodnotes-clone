@@ -9,6 +9,7 @@ AbstractButton {
     property bool active: false
     property color iconColor: active ? Theme.accentContrast : (enabled ? Theme.text : Theme.muted)
     property color activeColor: Theme.text
+    property int iconSize: 20
     implicitWidth: 40
     implicitHeight: 38
     hoverEnabled: true
@@ -24,6 +25,7 @@ AbstractButton {
             anchors.centerIn: parent
             name: root.iconName
             color: root.iconColor
+            size: root.iconSize
         }
     }
     ToolTip.visible: hovered && tip.length > 0

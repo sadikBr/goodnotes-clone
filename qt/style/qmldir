@@ -1,0 +1,5 @@
+module InkleafStyle
+import QtQuick.Controls.Basic
+ToolTip 1.0 ToolTip.qml
+ScrollBar 1.0 ScrollBar.qml
+ScrollIndicator 1.0 ScrollIndicator.qml

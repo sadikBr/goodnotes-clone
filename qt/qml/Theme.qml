@@ -27,6 +27,24 @@ QtObject {
 
     readonly property string font: "Inter"
 
+    /// `a` mixed with `b` by `t` (0 = a, 1 = b), like CSS color-mix.
+    function mix(a, b, t) {
+        const c1 = Qt.color(a), c2 = Qt.color(b)
+        return Qt.rgba(c1.r + (c2.r - c1.r) * t, c1.g + (c2.g - c1.g) * t, c1.b + (c2.b - c1.b) * t, c1.a + (c2.a - c1.a) * t)
+    }
+    function alpha(c, a) {
+        const k = Qt.color(c)
+        return Qt.rgba(k.r, k.g, k.b, a)
+    }
+
+    // Folder colours (src/library.ts FOLDER_COLORS).
+    readonly property var folderColors: [{ color: "#3b82f6", label: "Blue" }, { color: "#0ea5e9", label: "Sky" }, { color: "#14b8a6", label: "Teal" }, { color: "#22c55e", label: "Green" }, { color: "#eab308", label: "Yellow" }, { color: "#f97316", label: "Orange" }, { color: "#ef4444", label: "Red" }, { color: "#ec4899", label: "Pink" }, { color: "#8b5cf6", label: "Violet" }, { color: "#64748b", label: "Slate" }]
+    // Cover colours (src/ui.ts COVER_COLORS).
+    readonly property var coverColors: ["#2563eb", "#0d9488", "#16a34a", "#ca8a04", "#ea580c", "#dc2626", "#db2777", "#7c3aed", "#475569", "#111827"]
+    // Paper colours and sizes (src/api.ts).
+    readonly property var paperColors: [{ color: "#ffffff", label: "White" }, { color: "#fffdf7", label: "Cream" }, { color: "#fdf3c8", label: "Yellow" }, { color: "#eef1f4", label: "Grey" }, { color: "#22262d", label: "Dark" }]
+    readonly property var paperSizes: [{ id: "a4", label: "A4", w: 794, h: 1123 }, { id: "a5", label: "A5", w: 559, h: 794 }, { id: "letter", label: "US Letter", w: 816, h: 1056 }, { id: "legal", label: "US Legal", w: 816, h: 1344 }, { id: "square", label: "Square", w: 900, h: 900 }]
+
     // Ink and highlighter colours (src/editor/toolkit.ts).
     readonly property var inkColors: ["#111827", "#374151", "#6b7280", "#9ca3af", "#ffffff", "#7c2d12", "#1e3a8a", "#2563eb", "#0891b2", "#0d9488", "#16a34a", "#65a30d", "#ca8a04", "#ea580c", "#dc2626", "#be123c", "#db2777", "#9333ea"]
     readonly property var highlighterColors: ["#facc15", "#fde047", "#a3e635", "#4ade80", "#2dd4bf", "#38bdf8", "#60a5fa", "#c084fc", "#f472b6", "#fb7185", "#fb923c", "#e5e7eb"]

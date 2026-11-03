@@ -7,6 +7,8 @@
 #include <QQuickWindow>
 #include <QSurfaceFormat>
 
+#include "ShadowImage.h"
+
 int main(int argc, char* argv[]) {
   // Antialiased ink: the GPU smooths stroke edges (4× multisampling).
   QSurfaceFormat fmt = QSurfaceFormat::defaultFormat();
@@ -29,8 +31,11 @@ int main(int argc, char* argv[]) {
   ui.setHintingPreference(QFont::PreferNoHinting);
   QGuiApplication::setFont(ui);
 
-  QQuickStyle::setStyle("Basic");
+  // Our tooltips and scroll bars; the rest from the Basic style.
+  QQuickStyle::setStyle("InkleafStyle");
   QQmlApplicationEngine engine;
+  engine.addImageProvider("shadow", new ShadowImage);
+  engine.addImportPath(QStringLiteral("qrc:/qt/qml"));  // the default from Qt 6.5 on
   QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app, [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
   engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Inkleaf/qml/Main.qml")));
   return app.exec();

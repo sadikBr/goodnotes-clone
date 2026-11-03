@@ -1,0 +1,83 @@
+// A notebook or folder on the shelf: its picture, title and a line about it,
+// with a ⋯ button that shows on hover.
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import Inkleaf
+
+Item {
+    id: root
+    property bool isFolder: false
+    property var item: ({})
+    property string meta
+    property var sheets: []
+    property int count: 0
+    property bool trash: false
+    signal activated()
+    signal moreRequested(Item anchor)
+
+    readonly property real artHeight: width * 4 / 3
+    implicitHeight: artHeight + 14 + 20 + 3 + 16
+    readonly property bool hot: hover.hovered || more.down || moreMenuOpen
+    property bool moreMenuOpen: false
+
+    HoverHandler { id: hover; cursorShape: root.trash ? Qt.ArrowCursor : Qt.PointingHandCursor }
+    TapHandler { onTapped: root.activated() }
+    TapHandler { acceptedButtons: Qt.RightButton; onTapped: root.moreRequested(more) }
+
+    Item {
+        id: art
+        width: root.width
+        height: root.artHeight
+        Book {
+            visible: !root.isFolder
+            anchors.fill: parent
+            coverColor: root.item.coverColor || "#2563eb"
+            thumbnail: root.item.thumbnail || ""
+            hasCover: !!root.item.hasCover
+            title: root.item.title || ""
+            favourite: !!root.item.favourite
+            raised: root.hot && !root.trash
+            // Lifted on hover (no tilt: a tilted stack of layers shimmers at the edges).
+            transform: Translate { y: root.hot && !root.trash ? -5 : 0; Behavior on y { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } } }
+        }
+        Loader {
+            active: root.isFolder
+            anchors.fill: parent
+            sourceComponent: FolderArt {
+                folderColor: root.item.color || "#64748b"
+                sheets: root.sheets
+                count: root.count
+                open: root.hot && !root.trash
+            }
+        }
+    }
+    Label {
+        id: title
+        y: root.artHeight + 14
+        width: root.width - 32
+        text: (root.isFolder && root.item.favourite ? "★ " : "") + (root.isFolder ? root.item.name : root.item.title)
+        elide: Text.ElideRight
+        font.weight: Font.DemiBold
+        color: Theme.text
+    }
+    Label {
+        y: title.y + title.height + 3
+        width: root.width - 32
+        text: root.meta
+        elide: Text.ElideRight
+        font.pixelSize: 12
+        color: Theme.muted
+    }
+    IconButton {
+        id: more
+        x: root.width - width + 6
+        y: root.height - height - 2
+        width: 34; height: 34
+        iconName: "more"
+        tip: "Options"
+        opacity: root.hot ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: 150 } }
+        onClicked: root.moreRequested(more)
+    }
+}

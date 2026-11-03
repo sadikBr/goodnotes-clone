@@ -33,9 +33,12 @@ ApplicationWindow {
     }
 
     Loader {
+        id: loader
         anchors.fill: parent
         sourceComponent: win.openNotebook ? editorPage : libraryPage
     }
+    Toast { id: toast }
+
     Component {
         id: libraryPage
         Library {
@@ -44,6 +47,8 @@ ApplicationWindow {
                 Theme.dark = !Theme.dark
                 prefs.dark = Theme.dark
             }
+            onNotify: (message, error) => toast.show(message, error)
+            onSettingsRequested: toast.show("Settings are coming to the native app next.", false)
         }
     }
     Component {

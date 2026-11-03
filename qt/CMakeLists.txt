@@ -44,6 +44,8 @@ qt_add_executable(inkleaf
   src/Ink.h src/Ink.cpp
   src/Paper.h src/Paper.cpp
   src/InkCanvas.h src/InkCanvas.cpp
+  src/RoundImage.h src/RoundImage.cpp
+  src/ShadowImage.h src/ShadowImage.cpp
 )
 
 # Theme is a singleton (must be set before the module is declared).
@@ -69,6 +71,23 @@ qt_add_qml_module(inkleaf
     qml/IconButton.qml
     qml/Icon.qml
     qml/IconData.js
+    qml/ui/Shadow.qml
+    qml/ui/UiButton.qml
+    qml/ui/Segmented.qml
+    qml/ui/UiSwitch.qml
+    qml/ui/UiSlider.qml
+    qml/ui/UiField.qml
+    qml/ui/UiSelect.qml
+    qml/ui/Swatches.qml
+    qml/ui/PopupMenu.qml
+    qml/ui/FormDialog.qml
+    qml/ui/Toast.qml
+    qml/ui/Book.qml
+    qml/ui/FolderArt.qml
+    qml/ui/Card.qml
+    qml/ui/NewTile.qml
+    qml/ui/CreateMenu.qml
+    qml/ui/CreateItem.qml
     ${CMAKE_CURRENT_BINARY_DIR}/gen/Prefs.qml
   RESOURCES
     assets/icon.svg
@@ -76,6 +95,14 @@ qt_add_qml_module(inkleaf
     assets/fonts/inter-latin-600-normal.woff
     assets/fonts/inter-latin-700-normal.woff
     assets/fonts/inter-latin-ext-400-normal.woff
+)
+
+# The controls style (tooltips, scroll bars; everything else from Basic): a
+# plain QML module in the app's resources.
+qt_add_resources(inkleaf "inkleaf_style"
+  PREFIX /qt/qml/InkleafStyle
+  BASE style
+  FILES style/qmldir style/ToolTip.qml style/ScrollBar.qml style/ScrollIndicator.qml
 )
 
 target_compile_definitions(inkleaf PRIVATE INKLEAF_VERSION="${PROJECT_VERSION}")
