@@ -1,0 +1,32 @@
+// A round-cornered icon button with a tooltip (the web app's .icon-btn / tool buttons).
+import QtQuick
+import QtQuick.Controls
+
+AbstractButton {
+    id: root
+    property string iconName
+    property string tip
+    property bool active: false
+    property color iconColor: active ? Theme.accentContrast : (enabled ? Theme.text : Theme.muted)
+    property color activeColor: Theme.text
+    implicitWidth: 40
+    implicitHeight: 38
+    hoverEnabled: true
+    opacity: enabled ? 1 : 0.4
+
+    background: Rectangle {
+        radius: 10
+        color: root.active ? root.activeColor : (root.hovered ? Theme.surface3 : "transparent")
+        Behavior on color { ColorAnimation { duration: 120 } }
+    }
+    contentItem: Item {
+        Icon {
+            anchors.centerIn: parent
+            name: root.iconName
+            color: root.iconColor
+        }
+    }
+    ToolTip.visible: hovered && tip.length > 0
+    ToolTip.delay: 500
+    ToolTip.text: tip
+}

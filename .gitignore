@@ -17,3 +17,4 @@ keystore.properties
 *.key.pub
 
 target/
+build/

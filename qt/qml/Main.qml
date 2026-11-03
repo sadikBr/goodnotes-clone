@@ -1,0 +1,58 @@
+// The app window: the library, or a notebook open in the editor.
+import QtQuick
+import QtQuick.Controls
+import Qt.labs.settings
+import Inkleaf
+
+ApplicationWindow {
+    id: win
+    width: 1280
+    height: 860
+    minimumWidth: 760
+    minimumHeight: 520
+    visible: true
+    title: openNotebook ? openTitle + " — Inkleaf" : "Inkleaf"
+    color: Theme.bg
+    font.family: Theme.font
+
+    property string openNotebook: ""
+    property string openTitle: ""
+
+    Settings {
+        id: prefs
+        category: "app"
+        property bool dark: false
+    }
+    Component.onCompleted: Theme.dark = prefs.dark
+
+    function open(id, title) {
+        openTitle = title
+        openNotebook = id
+    }
+    function closeNotebook() {
+        openNotebook = ""
+    }
+
+    Loader {
+        anchors.fill: parent
+        sourceComponent: win.openNotebook ? editorPage : libraryPage
+    }
+    Component {
+        id: libraryPage
+        Library {
+            onOpenRequested: (id, title) => win.open(id, title)
+            onToggleDark: {
+                Theme.dark = !Theme.dark
+                prefs.dark = Theme.dark
+            }
+        }
+    }
+    Component {
+        id: editorPage
+        Editor {
+            notebookId: win.openNotebook
+            title: win.openTitle
+            onBack: win.closeNotebook()
+        }
+    }
+}
