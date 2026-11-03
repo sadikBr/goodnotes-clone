@@ -436,3 +436,59 @@ pub fn inspect_backup(path: String) -> AppResult<BackupSummary> {
 pub fn restore_backup(db: State<'_, Db>, path: String) -> AppResult<BackupSummary> {
     db.restore_from(Path::new(&path))
 }
+
+// --- Android: files as bytes ---------------------------------------------------
+// On Android the save/open dialogs hand out content:// URIs that std::fs
+// can't open; the webview reads and writes them (fs plugin) and these
+// commands work on bytes instead of paths.
+
+/// A scratch file in the app's cache folder (writable on every platform).
+fn scratch_file(app: &AppHandle, name: &str) -> AppResult<PathBuf> {
+    let dir = app.path().app_cache_dir().map_err(|e| AppError::Invalid(format!("no cache folder: {e}")))?;
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir.join(format!("{}-{name}", crate::db::new_id())))
+}
+
+fn raw_body(request: &tauri::ipc::Request<'_>) -> AppResult<Vec<u8>> {
+    match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => Ok(bytes.clone()),
+        _ => Err(AppError::Invalid("expected the file as raw bytes".into())),
+    }
+}
+
+/// Builds a PDF, PPTX or PNG export and returns its bytes.
+#[tauri::command]
+pub fn build_document(format: String, pages: Vec<ExportPage>) -> AppResult<tauri::ipc::Response> {
+    let format = Format::parse(&format)?;
+    Ok(tauri::ipc::Response::new(export::build(format, &pages)?))
+}
+
+/// The whole library as the bytes of one `.inkleaf` file.
+#[tauri::command]
+pub fn library_snapshot(app: AppHandle, db: State<'_, Db>) -> AppResult<tauri::ipc::Response> {
+    let tmp = scratch_file(&app, "snapshot.inkleaf")?;
+    db.snapshot_to(&tmp)?;
+    let bytes = std::fs::read(&tmp);
+    let _ = std::fs::remove_file(&tmp);
+    Ok(tauri::ipc::Response::new(bytes?))
+}
+
+/// What a backup (sent as raw bytes) holds.
+#[tauri::command]
+pub fn inspect_backup_bytes(app: AppHandle, request: tauri::ipc::Request<'_>) -> AppResult<BackupSummary> {
+    let tmp = scratch_file(&app, "inspect.inkleaf")?;
+    std::fs::write(&tmp, raw_body(&request)?)?;
+    let r = Db::inspect_backup(&tmp);
+    let _ = std::fs::remove_file(&tmp);
+    r
+}
+
+/// Replaces the library with a backup sent as raw bytes.
+#[tauri::command]
+pub fn restore_backup_bytes(app: AppHandle, db: State<'_, Db>, request: tauri::ipc::Request<'_>) -> AppResult<BackupSummary> {
+    let tmp = scratch_file(&app, "restore.inkleaf")?;
+    std::fs::write(&tmp, raw_body(&request)?)?;
+    let r = db.restore_from(&tmp);
+    let _ = std::fs::remove_file(&tmp);
+    r
+}

@@ -1,6 +1,6 @@
 // The Backups section of the Settings screen, and the daily backup check.
 
-import { api, type BackupConfig } from "./api";
+import { api, isAndroid, type BackupConfig } from "./api";
 import { cancelRestore, prepareForRestore } from "./appLifecycle";
 import { confirmDialog, h, icon, relativeTime, reportError, toast } from "./ui";
 
@@ -109,11 +109,16 @@ export function backupSection(): HTMLElement {
     });
     const restore = h("button", { type: "button", class: "btn danger" }, "Restore…");
     restore.addEventListener("click", () => void restoreFlow());
-    body.replaceChildren(
-      row("Backup folder", help, choose),
+    const folderRows = isAndroid
+      ? []
+      : [
+          row("Backup folder", help, choose),
       row("Back up every day", "While Inkleaf is open, once a day. Only the newest backups are kept in the folder.", daily),
       row("Keep", "How many daily backups stay in the folder.", seg("Keep", [{ value: 7, label: "7" }, { value: 14, label: "14" }, { value: 30, label: "30" }], cfg.keep, (v) => void save(cfg.folder, cfg.daily, v))),
-      row("Status", status(), now),
+          row("Status", status(), now),
+        ];
+    body.replaceChildren(
+      ...folderRows,
       row("Export everything", "Your whole library (notebooks, PDFs, settings of each daftar) as one .inkleaf file.", exportAll),
       row("Restore from a backup", "Replaces everything in Inkleaf with a backup or export. Your current library is kept as a safety copy.", restore),
     );

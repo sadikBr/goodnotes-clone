@@ -79,8 +79,59 @@ jobs:
           args: --bundles ${{ matrix.bundles }} --config src-tauri/tauri.release.conf.json
           includeUpdaterJson: true
 
+  android:
+    needs: create-release
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - name: Android NDK
+        run: sdkmanager --install "ndk;27.2.12479018"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - name: Generate the Android project
+        run: npx tauri android init --ci
+        env:
+          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
+      - name: Signing
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/inkleaf.jks"
+          node scripts/android-signing.mjs
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/inkleaf.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      - name: "Build the APK (arm64 and armv7 tablets)"
+        run: npx tauri android build --apk --target aarch64 armv7
+        env:
+          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      - name: Attach the APK to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          apk=$(find src-tauri/gen/android/app/build/outputs/apk -name '*release*.apk' | head -n 1)
+          test -n "$apk"
+          cp "$apk" "Inkleaf_${GITHUB_REF_NAME#v}_android.apk"
+          gh release upload "$GITHUB_REF_NAME" "Inkleaf_${GITHUB_REF_NAME#v}_android.apk" --clobber
+
   publish:
-    needs: [create-release, desktop]
+    needs: [create-release, desktop, android]
     runs-on: ubuntu-24.04
     steps:
       - name: Publish the release (updates go live)

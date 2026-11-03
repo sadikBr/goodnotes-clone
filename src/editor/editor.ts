@@ -253,6 +253,9 @@ export interface EditorCallbacks {
  */
 const FULL_CANVAS_PIXELS = 9_000_000;
 
+/** A tablet in portrait or a small window: the page sidebar slides over the page. */
+const narrowScreen = () => window.matchMedia("(max-width: 900px)").matches;
+
 /** Lesson outlines the teacher wrote (JSON Outline[]). */
 const OUTLINES_KEY = "inkleaf-daftar-outlines";
 
@@ -374,7 +377,8 @@ export class EditorScreen {
       ),
       this.fileInput,
     );
-    this.root.classList.toggle("no-sidebar", getPref(SIDEBAR_KEY, "shown", ["shown", "hidden"]) === "hidden");
+    // Narrow screens (a tablet in portrait) start with the thumbnails tucked away.
+    this.root.classList.toggle("no-sidebar", getPref(SIDEBAR_KEY, narrowScreen() ? "hidden" : "shown", ["shown", "hidden"]) === "hidden");
     // Start every tool on its selected favourites.
     for (const t of FAV_TOOLS) {
       const c = this.favs.color(t);
@@ -1617,7 +1621,14 @@ export class EditorScreen {
         return [...heading, h(
           "li",
           { class: `page-item${i === this.index ? " active" : ""}` },
-          h("button", { class: "page-thumb", "aria-label": `Go to page ${i + 1}`, "aria-current": i === this.index ? "page" : undefined, onclick: () => this.goTo(i) }, thumb),
+          h("button", { class: "page-thumb", "aria-label": `Go to page ${i + 1}`, "aria-current": i === this.index ? "page" : undefined, onclick: () => {
+            this.goTo(i);
+            // On a narrow screen the thumbnails cover the page: get out of the way.
+            if (narrowScreen() && !this.root.classList.contains("no-sidebar")) {
+              this.root.classList.add("no-sidebar");
+              this.afterChromeChange();
+            }
+          } }, thumb),
           h("div", { class: "page-num" }, p.favourite ? "★ " : "", String(i + 1)),
           more,
         )];

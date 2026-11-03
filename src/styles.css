@@ -1561,10 +1561,8 @@ kbd {
   .sidebar-section span {
     display: none;
   }
-  .page-sidebar {
-    width: 96px;
-  }
 }
+
 
 /* ---------------------------------------------- tool options & pen mode */
 
@@ -3351,4 +3349,36 @@ select option {
   display: flex;
   gap: 6px;
   align-self: center;
+}
+
+/* Tablets in portrait and other narrow screens: the tools get their own
+   row, and the page thumbnails slide over the page instead of squeezing it. */
+@media (max-width: 900px) {
+  .editor-header {
+    height: auto;
+    flex-wrap: wrap;
+    row-gap: 6px;
+    padding: 6px 10px;
+  }
+  .editor-header > .toolbar {
+    order: 3;
+    flex-basis: 100%;
+    display: flex;
+    justify-content: center;
+  }
+  .editor-body {
+    position: relative;
+  }
+  .page-sidebar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 15;
+    box-shadow: var(--shadow-lg);
+  }
+  .no-sidebar .page-sidebar,
+  .focus .page-sidebar {
+    box-shadow: none;
+  }
 }

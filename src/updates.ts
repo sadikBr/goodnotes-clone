@@ -3,14 +3,14 @@
 // Android (no in-app updater) the app only says a new APK is out and opens
 // its download in the browser.
 
-import { isTauri } from "./api";
+import { isAndroid, isTauri } from "./api";
 import { saveOpenWork } from "./appLifecycle";
 import { getPref, setPref } from "./prefs";
 import { h, icon, reportError, toast } from "./ui";
 
 const AUTO_KEY = "inkleaf-auto-update";
 const REPO = "sadikBr/goodnotes-clone";
-export const isAndroid = /Android/i.test(navigator.userAgent);
+export { isAndroid };
 
 export const autoCheckEnabled = () => getPref<string>(AUTO_KEY, "on") === "on";
 export const setAutoCheck = (on: boolean) => setPref(AUTO_KEY, on ? "on" : "off");

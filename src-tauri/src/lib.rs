@@ -12,7 +12,9 @@ use tauri::Manager;
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init());
+        .plugin(tauri_plugin_opener::init())
+        // Android: files picked in the dialogs are content:// URIs, read and written from the webview.
+        .plugin(tauri_plugin_fs::init());
     // In-app updates are for the desktop; Android updates come as a new APK.
     #[cfg(desktop)]
     let builder = builder
@@ -75,6 +77,10 @@ pub fn run() {
             commands::export_library,
             commands::inspect_backup,
             commands::restore_backup,
+            commands::build_document,
+            commands::library_snapshot,
+            commands::inspect_backup_bytes,
+            commands::restore_backup_bytes,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Inkleaf");

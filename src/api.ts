@@ -360,12 +360,14 @@ class TauriBackend implements Backend {
   simplifyStroke = (points: [number, number, number][], epsilon: number) =>
     invoke<[number, number, number][]>("simplify_stroke", { points, epsilon });
   chooseExportPath = async (fileName: string, format: ExportFormat) => {
-    const defaultPath = await invoke<string>("default_export_dir", { fileName, format });
+    const ext = FORMAT_FILTERS[format].extensions[0];
+    const defaultPath = isAndroid ? `${fileName}.${ext}` : await invoke<string>("default_export_dir", { fileName, format });
     return save({ title: "Export", defaultPath, filters: [FORMAT_FILTERS[format]] });
   };
-  exportDocument = (path: string, format: ExportFormat, pages: ExportPage[]) =>
-    invoke<string>("export_document", { path, format, pages });
-  savePdfExport = (path: string, bytes: Uint8Array) => invoke<string>("save_pdf_export", bytes, { headers: { "x-export-path": encodeURIComponent(path) } });
+  exportDocument = async (path: string, format: ExportFormat, pages: ExportPage[]) =>
+    isAndroid ? writePicked(path, new Uint8Array(await invoke<ArrayBuffer>("build_document", { format, pages }))) : invoke<string>("export_document", { path, format, pages });
+  savePdfExport = (path: string, bytes: Uint8Array) =>
+    isAndroid ? writePicked(path, bytes) : invoke<string>("save_pdf_export", bytes, { headers: { "x-export-path": encodeURIComponent(path) } });
   recognizeHandwriting = (strokes: P2[][]) => invoke<HandwritingRecognition>("recognize_handwriting", { strokes });
   // Raw bytes go over IPC as a binary body, not JSON.
   storePdfAsset = (bytes: Uint8Array) => invoke<string>("store_pdf_asset", bytes);
@@ -380,22 +382,38 @@ class TauriBackend implements Backend {
     return typeof r === "string" ? r : null;
   };
   exportLibrary = async (label: string) => {
-    const dir = await invoke<string>("default_export_dir", { fileName: "x", format: "pdf" }).catch(() => null);
     const name = `Inkleaf everything ${label}.inkleaf`;
+    const dir = isAndroid ? null : await invoke<string>("default_export_dir", { fileName: "x", format: "pdf" }).catch(() => null);
     const defaultPath = dir ? dir.replace(/[^\\/]*$/, name) : name;
     const path = await save({ title: "Export everything", defaultPath, filters: [BACKUP_FILTER] });
-    return path ? invoke<string>("export_library", { path }) : null;
+    if (!path) return null;
+    return isAndroid ? writePicked(path, new Uint8Array(await invoke<ArrayBuffer>("library_snapshot"))) : invoke<string>("export_library", { path });
   };
   chooseBackupFile = async () => {
     const r = await open({ title: "Restore from a backup", multiple: false, filters: [BACKUP_FILTER] });
     return typeof r === "string" ? r : null;
   };
-  inspectBackup = (path: string) => invoke<BackupSummary>("inspect_backup", { path });
-  restoreBackup = (path: string) => invoke<BackupSummary>("restore_backup", { path });
+  inspectBackup = async (path: string) => (isAndroid ? invoke<BackupSummary>("inspect_backup_bytes", await readPicked(path)) : invoke<BackupSummary>("inspect_backup", { path }));
+  restoreBackup = async (path: string) => (isAndroid ? invoke<BackupSummary>("restore_backup_bytes", await readPicked(path)) : invoke<BackupSummary>("restore_backup", { path }));
 }
 
 const BACKUP_FILTER = { name: "Inkleaf backup", extensions: ["inkleaf", "db"] };
 
+/** Android: reads a file picked in the open dialog. */
+async function readPicked(path: string): Promise<Uint8Array> {
+  const { readFile } = await import("@tauri-apps/plugin-fs");
+  return readFile(path);
+}
+
 export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+/** The Android app (files from the dialogs are content:// URIs; no folder backups or in-app updater). */
+export const isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
+
+/** Android: writes bytes to a file picked in the save dialog. */
+async function writePicked(path: string, bytes: Uint8Array): Promise<string> {
+  const { writeFile } = await import("@tauri-apps/plugin-fs");
+  await writeFile(path, bytes);
+  return decodeURIComponent(path.split("/").pop() ?? path);
+}
 
 export const api: Backend = isTauri ? new TauriBackend() : new MockBackend();
