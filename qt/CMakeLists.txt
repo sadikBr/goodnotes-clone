@@ -2,7 +2,11 @@
 # Build:  cmake -S qt -B build/qt -DCMAKE_BUILD_TYPE=Release && cmake --build build/qt -j
 # The Rust core (../core, via qt/native) is built with cargo and linked in.
 cmake_minimum_required(VERSION 3.21)
-project(Inkleaf VERSION 0.8.0 LANGUAGES CXX)
+# The version is the app's (package.json, set by npm run set-version).
+file(READ ${CMAKE_CURRENT_SOURCE_DIR}/../package.json INKLEAF_PACKAGE_JSON)
+string(JSON INKLEAF_VERSION_FROM_PACKAGE GET ${INKLEAF_PACKAGE_JSON} version)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../package.json)
+project(Inkleaf VERSION ${INKLEAF_VERSION_FROM_PACKAGE} LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -140,8 +144,13 @@ if(UNIX AND NOT APPLE)
   target_link_libraries(inkleaf PRIVATE dl pthread m)
 endif()
 if(WIN32)
+  target_sources(inkleaf PRIVATE packaging/inkleaf.rc)  # the app icon
   target_link_libraries(inkleaf PRIVATE ws2_32 userenv bcrypt ntdll advapi32 ole32 oleaut32 runtimeobject propsys shell32 crypt32 secur32 ncrypt)
   set_target_properties(inkleaf PROPERTIES WIN32_EXECUTABLE ON)
 endif()
 
 install(TARGETS inkleaf RUNTIME DESTINATION bin)
+if(UNIX AND NOT APPLE AND NOT ANDROID)
+  install(FILES packaging/inkleaf.desktop DESTINATION share/applications)
+  install(FILES ${REPO_ROOT}/src-tauri/icons/128x128@2x.png DESTINATION share/icons/hicolor/256x256/apps RENAME inkleaf.png)
+endif()

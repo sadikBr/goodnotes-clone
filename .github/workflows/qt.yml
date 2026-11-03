@@ -1,0 +1,116 @@
+# Builds the native Qt app for Linux (AppImage) and Windows (a folder with
+# everything it needs, zipped) and keeps them as downloadable artifacts of
+# the run (Actions → Qt app). Nothing is published: releases still ship the
+# current app until the Qt app replaces it.
+#
+# Uses the same Drive sync secrets as the release (GOOGLE_CLIENT_ID,
+# GOOGLE_CLIENT_SECRET); without them the build works but can't sign in.
+name: Qt app
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["qt/**", "core/**", "src/**", "scripts/qt-*", ".github/workflows/qt.yml"]
+
+concurrency:
+  group: qt-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  QT_VERSION: "6.8.3"
+
+jobs:
+  linux:
+    # The oldest supported runner: the AppImage then runs on older systems too.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> build/qt/cargo"
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          modules: qtpdf
+          cache: true
+      - name: Build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libfuse2 ninja-build
+      - run: npm ci
+      - name: Scripts bundle (the web app's drawing code)
+        run: npm run qt-bridge
+      - name: Build
+        env:
+          INKLEAF_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          INKLEAF_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: |
+          cmake -S qt -B build/qt -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+          cmake --build build/qt
+          DESTDIR=$PWD/AppDir cmake --install build/qt
+      - name: AppImage
+        env:
+          QML_SOURCES_PATHS: ${{ github.workspace }}/qt/qml
+          EXTRA_QT_MODULES: svg;pdf;network
+          EXTRA_PLATFORM_PLUGINS: libqwayland-egl.so;libqwayland-generic.so
+        run: |
+          base=https://github.com/linuxdeploy
+          curl -fsSLo linuxdeploy $base/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          curl -fsSLo linuxdeploy-plugin-qt $base/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x linuxdeploy linuxdeploy-plugin-qt
+          version=$(node -p "require('./package.json').version")
+          LINUXDEPLOY_OUTPUT_VERSION=$version ./linuxdeploy --appdir AppDir --plugin qt --output appimage \
+            -d AppDir/usr/share/applications/inkleaf.desktop -i AppDir/usr/share/icons/hicolor/256x256/apps/inkleaf.png
+          mv Inkleaf-*.AppImage "Inkleaf_${version}_qt_x86_64.AppImage"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inkleaf-qt-linux
+          path: Inkleaf_*_qt_x86_64.AppImage
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> build/qt/cargo"
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: win64_msvc2022_64
+          modules: qtpdf
+          cache: true
+      - uses: ilammy/msvc-dev-cmd@v1
+      - run: npm ci
+      - name: Scripts bundle (the web app's drawing code)
+        run: npm run qt-bridge
+      - name: Build
+        env:
+          INKLEAF_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          INKLEAF_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: |
+          cmake -S qt -B build/qt -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/qt
+      - name: Gather the app and Qt's files
+        shell: bash
+        run: |
+          mkdir -p dist/Inkleaf
+          cp build/qt/inkleaf.exe dist/Inkleaf/Inkleaf.exe
+          windeployqt --release --qmldir qt/qml --no-translations --compiler-runtime dist/Inkleaf/Inkleaf.exe
+          version=$(node -p "require('./package.json').version")
+          cd dist && 7z a "../Inkleaf_${version}_qt_windows_x64.zip" Inkleaf > /dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inkleaf-qt-windows
+          path: Inkleaf_*_qt_windows_x64.zip

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Inkleaf
+GenericName=Handwritten notes
+Comment=Write by hand in notebooks and on PDFs
+Exec=inkleaf %F
+Icon=inkleaf
+Terminal=false
+Categories=Office;Education;
+MimeType=application/pdf;
+StartupWMClass=inkleaf
