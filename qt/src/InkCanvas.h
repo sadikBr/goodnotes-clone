@@ -15,6 +15,7 @@
 #include <QQuickItem>
 #include <QTimer>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 #include "Ink.h"
@@ -102,6 +103,7 @@ signals:
 protected:
   QSGNode* updatePaintNode(QSGNode* old, UpdatePaintNodeData*) override;
   void updatePolish() override;
+  QSGNode* buildScene(QSGNode* old, UpdatePaintNodeData* data);
   void geometryChange(const QRectF& newGeometry, const QRectF& oldGeometry) override;
   void itemChange(ItemChange change, const ItemChangeData& value) override;
   bool eventFilter(QObject* watched, QEvent* event) override;
@@ -201,7 +203,9 @@ private:
   // Render-thread bookkeeping (touched only in updatePaintNode, while the GUI thread waits).
   struct PageNodeState {
     quint64 version = 0;
-    QSGNode* node = nullptr;
+    QSGNode* node = nullptr;       // the page's transform node
+    QSGNode* lastPaper = nullptr;  // its last paper node (ink goes after it); null until built
+    std::unordered_map<QString, QSGNode*> strokes;  // stroke id → its node
   };
   std::vector<PageNodeState> m_nodeState;
   bool m_rebuildAll = true;

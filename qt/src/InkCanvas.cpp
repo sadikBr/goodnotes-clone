@@ -627,7 +627,8 @@ void InkCanvas::wheelEvent(QWheelEvent* e) {
     return;
   }
   const QPoint px = e->pixelDelta();
-  const QPointF d = !px.isNull() ? QPointF(px) : QPointF(e->angleDelta()) / 120.0 * 60.0;
+  // A wheel notch scrolls about as far as in a browser; touchpads give exact pixels.
+  const QPointF d = !px.isNull() ? QPointF(px) : QPointF(e->angleDelta()) / 120.0 * 110.0;
   if (e->modifiers() & Qt::ShiftModifier) m_scroll.rx() -= d.y();
   else m_scroll -= d;
   clampScroll();
@@ -696,7 +697,8 @@ void InkCanvas::refresh() {
 void InkCanvas::updatePolish() {
   // GUI thread, just before the frame: load the pages that come into view.
   const QPointF o = originFor(width(), m_maxPageW * m_zoom, m_scroll);
-  const qreal top = (-o.y()) / m_zoom - 400, bottom = (height() - o.y()) / m_zoom + 400;
+  const qreal screen = height() / m_zoom;
+  const qreal top = (-o.y()) / m_zoom - screen, bottom = (height() - o.y()) / m_zoom + screen;
   bool loaded = false;
   for (int i = 0; i < int(m_pages.size()); ++i) {
     const Page& p = m_pages[i];
@@ -710,7 +712,18 @@ void InkCanvas::updatePolish() {
 
 // --- scene graph ------------------------------------------------------------------------
 
-QSGNode* InkCanvas::updatePaintNode(QSGNode* old, UpdatePaintNodeData*) {
+QSGNode* InkCanvas::updatePaintNode(QSGNode* old, UpdatePaintNodeData* data) {
+  // INKLEAF_PROFILE=1 prints how long each scene update takes.
+  static const bool profile = qEnvironmentVariableIsSet("INKLEAF_PROFILE");
+  if (!profile) return buildScene(old, data);
+  QElapsedTimer t;
+  t.start();
+  QSGNode* n = buildScene(old, data);
+  qInfo("scene update %.2f ms", t.nsecsElapsed() / 1e6);
+  return n;
+}
+
+QSGNode* InkCanvas::buildScene(QSGNode* old, UpdatePaintNodeData*) {
   // root (no transform) → content transform → pages; live stroke; eraser ring.
   auto* root = old;
   QSGTransformNode* content;
@@ -743,8 +756,10 @@ QSGNode* InkCanvas::updatePaintNode(QSGNode* old, UpdatePaintNodeData*) {
   content->setMatrix(m);
   content->markDirty(QSGNode::DirtyMatrix);
 
-  // Which pages are near the view: only those have nodes (and get loaded).
-  const qreal viewTop = (-o.y()) / m_zoom - 400, viewBottom = (height() - o.y()) / m_zoom + 400;
+  // Pages near the view have nodes; they're dropped only once well out of
+  // view (so scrolling back and forth doesn't rebuild them).
+  const qreal screen = height() / m_zoom;
+  const qreal viewTop = (-o.y()) / m_zoom, viewBottom = (height() - o.y()) / m_zoom;
   if (m_rebuildAll || m_nodeState.size() != m_pages.size()) {
     while (QSGNode* c = content->firstChild()) {
       content->removeChildNode(c);
@@ -760,35 +775,58 @@ QSGNode* InkCanvas::updatePaintNode(QSGNode* old, UpdatePaintNodeData*) {
   }
   for (size_t i = 0; i < m_pages.size(); ++i) {
     Page& pg = m_pages[i];
-    auto* pageT = static_cast<QSGTransformNode*>(m_nodeState[i].node);
-    const bool near = pg.top + pg.h >= viewTop && pg.top <= viewBottom;
-    if (!near) {
-      if (pageT->firstChild()) {
-        while (QSGNode* c = pageT->firstChild()) {
-          pageT->removeChildNode(c);
-          delete c;
-        }
-        m_nodeState[i].version = 0;
+    PageNodeState& st = m_nodeState[i];
+    auto* pageT = static_cast<QSGTransformNode*>(st.node);
+    const bool near = pg.top + pg.h >= viewTop - screen && pg.top <= viewBottom + screen;
+    const bool far = pg.top + pg.h < viewTop - 4 * screen || pg.top > viewBottom + 4 * screen;
+    if (far && st.lastPaper) {
+      while (QSGNode* c = pageT->firstChild()) {
+        pageT->removeChildNode(c);
+        delete c;
       }
+      st = PageNodeState{0, pageT, nullptr, {}};
       continue;
     }
-    if (!pg.loaded) continue;  // loaded on the GUI thread (updatePolish), drawn next frame
-    if (m_nodeState[i].version == pg.version) continue;
-    while (QSGNode* c = pageT->firstChild()) {
-      pageT->removeChildNode(c);
-      delete c;
+    if (!near || !pg.loaded || st.version == pg.version) continue;
+    if (!st.lastPaper) {
+      // Paper once: shadow, sheet, lines.
+      QMatrix4x4 pm;
+      pm.translate((m_maxPageW - pg.w) / 2, pg.top);
+      pageT->setMatrix(pm);
+      pageT->appendChildNode(new QSGSimpleRectNode(QRectF(1, 2, pg.w, pg.h), QColor(0, 0, 0, 22)));
+      pageT->appendChildNode(new QSGSimpleRectNode(QRectF(0, 0, pg.w, pg.h), pg.paper));
+      for (const paper::Layer& l : paper::lines(pg.tmpl, pg.w, pg.h, pg.paper))
+        if (!l.tris.empty()) pageT->appendChildNode(meshNode(l.tris, l.color));
+      st.lastPaper = pageT->lastChild();
     }
-    QMatrix4x4 pm;
-    pm.translate((m_maxPageW - pg.w) / 2, pg.top);
-    pageT->setMatrix(pm);
-    // Shadow, paper, lines, ink.
-    pageT->appendChildNode(new QSGSimpleRectNode(QRectF(1, 2, pg.w, pg.h), QColor(0, 0, 0, 22)));
-    pageT->appendChildNode(new QSGSimpleRectNode(QRectF(0, 0, pg.w, pg.h), pg.paper));
-    for (const paper::Layer& l : paper::lines(pg.tmpl, pg.w, pg.h, pg.paper))
-      if (!l.tris.empty()) pageT->appendChildNode(meshNode(l.tris, l.color));
-    for (const Stroke& s : pg.strokes)
-      if (s.mesh && !s.mesh->tris.empty()) pageT->appendChildNode(meshNode(s.mesh->tris, strokeColor(s.color, s.pen)));
-    m_nodeState[i].version = pg.version;
+    // Ink: only what changed. Erased strokes lose their node, new strokes get
+    // one in z order; every other stroke's geometry stays on the GPU as it is.
+    std::unordered_map<QString, bool> present;
+    present.reserve(pg.strokes.size());
+    for (const Stroke& s : pg.strokes) present[s.id] = true;
+    for (auto it = st.strokes.begin(); it != st.strokes.end();) {
+      if (!present.count(it->first)) {
+        pageT->removeChildNode(it->second);
+        delete it->second;
+        it = st.strokes.erase(it);
+      } else {
+        ++it;
+      }
+    }
+    QSGNode* prev = st.lastPaper;
+    for (const Stroke& s : pg.strokes) {
+      auto found = st.strokes.find(s.id);
+      if (found != st.strokes.end()) {
+        prev = found->second;
+        continue;
+      }
+      if (!s.mesh || s.mesh->tris.empty()) continue;
+      QSGNode* n = meshNode(s.mesh->tris, strokeColor(s.color, s.pen));
+      pageT->insertChildNodeAfter(n, prev);
+      st.strokes.emplace(s.id, n);
+      prev = n;
+    }
+    st.version = pg.version;
   }
 
   // The stroke being written, in its page's place.
