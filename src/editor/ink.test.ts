@@ -86,3 +86,15 @@ describe("smoothing levels", () => {
     expect(strong).toBeLessThan(normal);
   });
 });
+
+describe("thinning stored strokes", () => {
+  it("drops only points crowded onto the last one, never the shape", async () => {
+    const { thinPoints } = await import("./ink");
+    const pts: [number, number, number][] = [[0, 0, 0.5], [0.05, 0, 0.5], [0.1, 0, 0.5], [1, 0.4, 0.6], [2, -0.4, 0.4], [2.05, -0.4, 0.4], [3, 0, 0.5]];
+    const out = thinPoints(pts, 0.3);
+    expect(out).toEqual([[0, 0, 0.5], [1, 0.4, 0.6], [2, -0.4, 0.4], [3, 0, 0.5]]);
+    // Every small wiggle a jittery pen makes is kept (smoothing evens it out later).
+    const wiggle = Array.from({ length: 40 }, (_, i) => [i, i % 2 ? 0.4 : -0.4, 0.5] as [number, number, number]);
+    expect(thinPoints(wiggle, 0.3)).toHaveLength(40);
+  });
+});

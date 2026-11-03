@@ -352,8 +352,32 @@ export class MockBackend implements Backend {
     return hits;
   }
 
-  async simplifyStroke(points: [number, number, number][], _epsilon: number) {
-    return points;
+  /** Same as the desktop app (src-tauri/src/ink.rs): Ramer–Douglas–Peucker, pressure kept. */
+  async simplifyStroke(points: [number, number, number][], epsilon: number) {
+    const n = points.length;
+    if (n < 3) return points;
+    const keep = new Array<boolean>(n).fill(false);
+    keep[0] = keep[n - 1] = true;
+    const dist = (p: number[], a: number[], b: number[]) => {
+      const dx = b[0] - a[0], dy = b[1] - a[1];
+      const len = dx * dx + dy * dy;
+      const t = len ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len)) : 0;
+      return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
+    };
+    const stack: [number, number][] = [[0, n - 1]];
+    while (stack.length) {
+      const [s0, e0] = stack.pop()!;
+      let max = 0, idx = s0;
+      for (let i = s0 + 1; i < e0; i++) {
+        const d = dist(points[i], points[s0], points[e0]);
+        if (d > max) [max, idx] = [d, i];
+      }
+      if (max > Math.max(0, epsilon)) {
+        keep[idx] = true;
+        stack.push([s0, idx], [idx, e0]);
+      }
+    }
+    return points.filter((_, i) => keep[i]);
   }
 
   async chooseExportPath(fileName: string, format: ExportFormat): Promise<string | null> {

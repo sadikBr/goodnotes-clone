@@ -44,7 +44,7 @@ import { addLessonPage, classExportPages, DAYS, fillStudents, holidayOn, isoDate
 import { isLessonTemplate, lessonLayout } from "./daftarPapers";
 import { cachedBackground, renderBackground } from "./pdfRender";
 import { INSTRUMENTS, MM, Ruler, type Guide as EdgeGuide, type InstrumentKind } from "./ruler";
-import { smoothPoints, SMOOTHING, SpeedInk, speedSensitive, type SmoothingLevel } from "./ink";
+import { smoothPoints, SMOOTHING, SpeedInk, speedSensitive, thinPoints, type SmoothingLevel } from "./ink";
 import { COVER_DESIGNS, coverDesignOf, isCoverTemplate, type CoverDesign } from "./covers";
 import { applyCover, coverPreview } from "../cover";
 import { Laser, LASER_CORE_FADE_MS, LASER_HOLD_MS, type LaserLayers, type LaserMode } from "./laser";
@@ -3165,12 +3165,9 @@ export class EditorScreen {
           } else this.addElement(shape);
         } else {
           const tool = g.tool === "highlighter" ? "highlighter" : "pen";
-          let points = tool === "highlighter" ? steadyHighlight(g.points, this.widths.highlighter) : g.points;
-          try {
-            if (points.length > 8) points = await api.simplifyStroke(points, 0.15);
-          } catch {
-            /* keep the raw points */
-          }
+          // Kept as written (only near-duplicate points dropped): what was
+          // drawn while writing is exactly what stays on the page.
+          const points = thinPoints(tool === "highlighter" ? steadyHighlight(g.points, this.widths.highlighter) : g.points, Math.min(0.3, 0.6 / this.zoom));
           const id = newId();
           this.addElement({
             id,

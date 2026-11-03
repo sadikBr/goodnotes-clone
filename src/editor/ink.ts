@@ -114,6 +114,23 @@ export type SmoothingLevel = keyof typeof SMOOTHING;
 export const DEFAULT_STREAMLINE = SMOOTHING.normal;
 
 /**
+ * Drops points closer than `min` to the last point kept (a resting pen
+ * sends many), keeping the last one. Unlike path simplification this never
+ * keeps jitter while dropping the points around it, so a stroke looks the
+ * same after it's saved as while it was written.
+ */
+export function thinPoints(points: Pt[], min: number): Pt[] {
+  if (points.length < 3) return points;
+  const out: Pt[] = [points[0]];
+  for (let i = 1; i < points.length - 1; i++) {
+    const last = out[out.length - 1];
+    if (Math.hypot(points[i][0] - last[0], points[i][1] - last[1]) >= min) out.push(points[i]);
+  }
+  out.push(points[points.length - 1]);
+  return out;
+}
+
+/**
  * The stroke's points after streamline smoothing (each point eases toward
  * the pen from the previous one). Pass `into` to extend an earlier result
  * as points are added, for a stroke being drawn.

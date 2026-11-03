@@ -7,3 +7,11 @@ src-tauri/gen/
 public/pdfjs/
 
 src-tauri/tauri.release.conf.json
+
+# Signing keys: never commit (see docs/RELEASING.md)
+*.jks
+*.jks.b64
+*.keystore
+keystore.properties
+*.key
+*.key.pub
