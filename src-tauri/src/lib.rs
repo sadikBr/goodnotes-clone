@@ -1,3 +1,4 @@
+pub mod backup;
 pub mod commands;
 pub mod db;
 pub mod error;
@@ -16,6 +17,7 @@ pub fn run() {
             std::fs::create_dir_all(&dir)?;
             let database = db::Db::open(&dir.join("inkleaf.db"))?;
             app.manage(database);
+            app.manage(backup::Backups::load(dir.join("backup.json")));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -59,6 +61,13 @@ pub fn run() {
             commands::store_pdf_asset,
             commands::create_pdf_notebook,
             commands::asset_bytes,
+            commands::backup_status,
+            commands::set_backup_settings,
+            commands::backup_now,
+            commands::backup_if_due,
+            commands::export_library,
+            commands::inspect_backup,
+            commands::restore_backup,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Inkleaf");

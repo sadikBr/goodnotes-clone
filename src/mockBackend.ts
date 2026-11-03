@@ -4,6 +4,8 @@
 // freehand in the browser preview.
 
 import type {
+  BackupConfig,
+  BackupSummary,
   Backend,
   ExportFormat,
   ExportPage,
@@ -405,5 +407,34 @@ export class MockBackend implements Backend {
     a.download = path;
     a.click();
     return path;
+  }
+
+  // Backups need files on disk: only in the desktop app.
+  async backupStatus(): Promise<BackupConfig> {
+    return { folder: null, daily: true, keep: 14, lastBackupAt: null, lastBackupFile: null, lastError: null };
+  }
+  async setBackupSettings(): Promise<BackupConfig> {
+    return fail("backups are available in the desktop app");
+  }
+  async backupNow(): Promise<BackupConfig> {
+    return fail("backups are available in the desktop app");
+  }
+  async backupIfDue(): Promise<BackupConfig> {
+    return this.backupStatus();
+  }
+  async chooseBackupFolder(): Promise<string | null> {
+    return fail("backups are available in the desktop app");
+  }
+  async exportLibrary(): Promise<string | null> {
+    return fail("backups are available in the desktop app");
+  }
+  async chooseBackupFile(): Promise<string | null> {
+    return fail("backups are available in the desktop app");
+  }
+  async inspectBackup(): Promise<BackupSummary> {
+    return fail("backups are available in the desktop app");
+  }
+  async restoreBackup(): Promise<BackupSummary> {
+    return fail("backups are available in the desktop app");
   }
 }

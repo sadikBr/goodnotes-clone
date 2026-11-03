@@ -3,7 +3,7 @@
 // the same contract is used so the UI can be developed without the shell.
 
 import { invoke } from "@tauri-apps/api/core";
-import { save } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { MockBackend } from "./mockBackend";
 
 export type Template =
@@ -275,6 +275,35 @@ export interface Backend {
   storePdfAsset(bytes: Uint8Array): Promise<string>;
   createPdfNotebook(input: NewPdfNotebook): Promise<Notebook>;
   assetBytes(id: string): Promise<Uint8Array>;
+  // Backups (desktop app only).
+  backupStatus(): Promise<BackupConfig>;
+  setBackupSettings(folder: string | null, daily: boolean, keep: number): Promise<BackupConfig>;
+  /** `label`: local date and time for the file name, e.g. "2026-11-03 0915". */
+  backupNow(label: string): Promise<BackupConfig>;
+  backupIfDue(label: string): Promise<BackupConfig>;
+  /** Asks for a folder; null when cancelled. */
+  chooseBackupFolder(current: string | null): Promise<string | null>;
+  /** Asks where to save "everything" and saves it; null when cancelled. */
+  exportLibrary(label: string): Promise<string | null>;
+  /** Asks for a backup file; null when cancelled. */
+  chooseBackupFile(): Promise<string | null>;
+  inspectBackup(path: string): Promise<BackupSummary>;
+  restoreBackup(path: string): Promise<BackupSummary>;
+}
+
+export interface BackupConfig {
+  folder: string | null;
+  daily: boolean;
+  keep: number;
+  lastBackupAt: number | null;
+  lastBackupFile: string | null;
+  lastError: string | null;
+}
+
+export interface BackupSummary {
+  notebooks: number;
+  folders: number;
+  pages: number;
 }
 
 export interface NewPdfNotebook {
@@ -342,7 +371,30 @@ class TauriBackend implements Backend {
   storePdfAsset = (bytes: Uint8Array) => invoke<string>("store_pdf_asset", bytes);
   createPdfNotebook = (input: NewPdfNotebook) => invoke<Notebook>("create_pdf_notebook", { input });
   assetBytes = async (id: string) => new Uint8Array(await invoke<ArrayBuffer>("asset_bytes", { id }));
+  backupStatus = () => invoke<BackupConfig>("backup_status");
+  setBackupSettings = (folder: string | null, daily: boolean, keep: number) => invoke<BackupConfig>("set_backup_settings", { folder, daily, keep });
+  backupNow = (label: string) => invoke<BackupConfig>("backup_now", { label });
+  backupIfDue = (label: string) => invoke<BackupConfig>("backup_if_due", { label });
+  chooseBackupFolder = async (current: string | null) => {
+    const r = await open({ title: "Choose the backup folder", directory: true, multiple: false, defaultPath: current ?? undefined });
+    return typeof r === "string" ? r : null;
+  };
+  exportLibrary = async (label: string) => {
+    const dir = await invoke<string>("default_export_dir", { fileName: "x", format: "pdf" }).catch(() => null);
+    const name = `Inkleaf everything ${label}.inkleaf`;
+    const defaultPath = dir ? dir.replace(/[^\\/]*$/, name) : name;
+    const path = await save({ title: "Export everything", defaultPath, filters: [BACKUP_FILTER] });
+    return path ? invoke<string>("export_library", { path }) : null;
+  };
+  chooseBackupFile = async () => {
+    const r = await open({ title: "Restore from a backup", multiple: false, filters: [BACKUP_FILTER] });
+    return typeof r === "string" ? r : null;
+  };
+  inspectBackup = (path: string) => invoke<BackupSummary>("inspect_backup", { path });
+  restoreBackup = (path: string) => invoke<BackupSummary>("restore_backup", { path });
 }
+
+const BACKUP_FILTER = { name: "Inkleaf backup", extensions: ["inkleaf", "db"] };
 
 export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 

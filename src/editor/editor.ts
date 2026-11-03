@@ -3,6 +3,7 @@
 import { api, PAPER_COLORS, TEMPLATE_CATEGORIES, TEMPLATES, type ExportFormat, type ExportPage, type Notebook, type P2, type Page, type RecognizedShape, type Template } from "../api";
 import { ensureFonts, FONT_PRESETS, fontPreset, isRtl, type FontId } from "../fonts";
 import { getPref, hasPref, setPref } from "../prefs";
+import { isRestoring } from "../appLifecycle";
 import { getSetting, onSettingsChange, pressureCurve, setSetting } from "../settings";
 import { customColorButton } from "../colorPicker";
 import { isDark, toggleTheme } from "../theme";
@@ -2565,6 +2566,8 @@ export class EditorScreen {
   }
 
   private saveNow(): Promise<void> {
+    // A backup is being restored: the library under this page is being replaced.
+    if (isRestoring()) return Promise.resolve();
     window.clearTimeout(this.saveTimer);
     if (!this.dirty) return this.saving;
     this.dirty = false;

@@ -3,6 +3,8 @@ import { EditorScreen } from "./editor/editor";
 import { LibraryScreen } from "./library";
 import { installTooltips } from "./ui";
 import { applyStoredTheme } from "./theme";
+import { isRestoring, onFlushRequest } from "./appLifecycle";
+import { startBackupTimer } from "./backupSettings";
 
 const app = document.getElementById("app")!;
 
@@ -38,7 +40,11 @@ document.addEventListener("paste", (e) => {
   if (editor) editor.handlePaste(e);
 });
 window.addEventListener("beforeunload", () => {
-  void editor?.flush();
+  if (!isRestoring()) void editor?.flush();
+});
+onFlushRequest(async () => {
+  await editor?.flush();
 });
 
 void showLibrary();
+startBackupTimer();

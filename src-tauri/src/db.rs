@@ -6,9 +6,9 @@
 //! of folders, notebooks and pages are soft ("trashed") so they can be
 //! recovered, mirroring the trash/recover flow of mainstream note apps.
 
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -235,29 +235,129 @@ fn validate_name(name: &str) -> AppResult<String> {
 
 pub struct Db {
     conn: Mutex<Connection>,
+    /// The database file (None in memory); needed to restore a backup.
+    path: Option<PathBuf>,
+}
+
+/// What a backup file holds, shown before restoring it.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupSummary {
+    pub notebooks: i64,
+    pub folders: i64,
+    pub pages: i64,
 }
 
 impl Db {
     pub fn open(path: &Path) -> AppResult<Self> {
         let conn = Connection::open(path)?;
-        Self::init(conn)
+        Self::init(conn, Some(path.to_path_buf()))
     }
 
     pub fn open_in_memory() -> AppResult<Self> {
-        Self::init(Connection::open_in_memory()?)
+        Self::init(Connection::open_in_memory()?, None)
     }
 
-    fn init(conn: Connection) -> AppResult<Self> {
+    fn configure(conn: &Connection) -> AppResult<()> {
         conn.execute_batch(
             "PRAGMA journal_mode = WAL;
              PRAGMA foreign_keys = ON;
              PRAGMA synchronous = NORMAL;",
         )?;
-        let db = Db {
+        Ok(())
+    }
+
+    fn init(conn: Connection, path: Option<PathBuf>) -> AppResult<Self> {
+        Self::configure(&conn)?;
+        Self::migrate(&conn)?;
+        Ok(Db {
             conn: Mutex::new(conn),
+            path,
+        })
+    }
+
+    /// Writes a consistent copy of the whole library (notebooks, pages, ink,
+    /// imported PDFs) to `dest` as one SQLite file. It is written under a
+    /// temporary name first, so a synced folder never uploads half a file.
+    pub fn snapshot_to(&self, dest: &Path) -> AppResult<()> {
+        let mut part = dest.as_os_str().to_owned();
+        part.push(".part");
+        let part = PathBuf::from(part);
+        let _ = std::fs::remove_file(&part);
+        let target = part.to_string_lossy().into_owned();
+        self.conn().execute("VACUUM INTO ?1", [target])?;
+        std::fs::rename(&part, dest).inspect_err(|_| {
+            let _ = std::fs::remove_file(&part);
+        })?;
+        Ok(())
+    }
+
+    /// Checks that `path` is an Inkleaf backup this version can open, and
+    /// counts what's in it.
+    pub fn inspect_backup(path: &Path) -> AppResult<BackupSummary> {
+        let bad = || AppError::Invalid("that file isn't an Inkleaf backup".into());
+        let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX).map_err(|_| bad())?;
+        let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).map_err(|_| bad())?;
+        if version < 1 {
+            return Err(bad());
+        }
+        if version > SCHEMA_VERSION {
+            return Err(AppError::Invalid("that backup was made by a newer Inkleaf: update the app to restore it".into()));
+        }
+        let check: String = conn.query_row("PRAGMA quick_check", [], |r| r.get(0)).map_err(|_| bad())?;
+        if check != "ok" {
+            return Err(AppError::Invalid("that backup file is damaged".into()));
+        }
+        let count = |table: &str| -> AppResult<i64> {
+            conn.query_row(&format!("SELECT COUNT(*) FROM {table} WHERE trashed_at IS NULL"), [], |r| r.get(0)).map_err(|_| bad())
         };
-        db.migrate()?;
-        Ok(db)
+        let pages: i64 = conn
+            .query_row("SELECT COUNT(*) FROM pages p JOIN notebooks n ON n.id = p.notebook_id WHERE n.trashed_at IS NULL", [], |r| r.get(0))
+            .map_err(|_| bad())?;
+        Ok(BackupSummary { notebooks: count("notebooks")?, folders: count("folders")?, pages })
+    }
+
+    /// Replaces the whole library with a backup. The current library is
+    /// first saved next to the database as `inkleaf-before-restore.db`; if
+    /// anything fails, the current library is reopened unchanged.
+    pub fn restore_from(&self, src: &Path) -> AppResult<BackupSummary> {
+        let summary = Self::inspect_backup(src)?;
+        let path = self.path.clone().ok_or_else(|| AppError::Invalid("restoring needs a database file".into()))?;
+        let safety = path.with_file_name("inkleaf-before-restore.db");
+        // Read the backup before touching anything (it may sit in the same folder).
+        let bytes = std::fs::read(src)?;
+        let mut conn = self.conn();
+        let _ = std::fs::remove_file(&safety);
+        conn.execute("VACUUM INTO ?1", [safety.to_string_lossy().into_owned()])?;
+        // Close the database so its files can be replaced.
+        drop(std::mem::replace(&mut *conn, Connection::open_in_memory()?));
+        let swap = (|| -> AppResult<Connection> {
+            for ext in ["-wal", "-shm"] {
+                let mut side = path.as_os_str().to_owned();
+                side.push(ext);
+                let _ = std::fs::remove_file(PathBuf::from(side));
+            }
+            std::fs::write(&path, &bytes)?;
+            let next = Connection::open(&path)?;
+            Self::configure(&next)?;
+            Self::migrate(&next)?;
+            Ok(next)
+        })();
+        match swap {
+            Ok(next) => {
+                *conn = next;
+                Ok(summary)
+            }
+            Err(e) => {
+                // Put the library back as it was.
+                let _ = std::fs::copy(&safety, &path);
+                if let Ok(old) = Connection::open(&path) {
+                    let _ = Self::configure(&old);
+                    *conn = old;
+                }
+                Err(e)
+            }
+        }
     }
 
     fn conn(&self) -> std::sync::MutexGuard<'_, Connection> {
@@ -266,8 +366,7 @@ impl Db {
         self.conn.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    fn migrate(&self) -> AppResult<()> {
-        let conn = self.conn();
+    fn migrate(conn: &Connection) -> AppResult<()> {
         let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
         if version < 1 {
             conn.execute_batch(

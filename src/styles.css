@@ -3285,3 +3285,17 @@ select option {
     display: none;
   }
 }
+
+/* Backups in Settings. */
+.backup-folder {
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-all;
+}
+.backup-error {
+  color: var(--danger, #c0392b);
+}
+.switch-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

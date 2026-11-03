@@ -1,12 +1,13 @@
 //! Tauri command layer: thin wrappers that expose the database and ink
 //! geometry to the webview frontend.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use tauri::{AppHandle, Manager, State};
 
+use crate::backup::{self, BackupConfig, Backups};
 use crate::db::{
-    Db, Element, Folder, Library, NewNotebook, NewPdfNotebook, Notebook, Page, SearchHit,
+    BackupSummary, Db, Element, Folder, Library, NewNotebook, NewPdfNotebook, Notebook, Page, SearchHit,
     TrashContents,
 };
 use crate::error::{AppError, AppResult};
@@ -383,4 +384,55 @@ mod tests {
             PathBuf::from("/tmp/notes.png.pptx")
         );
     }
+}
+
+// --- backups ---------------------------------------------------------------
+
+/// Backup settings and the last backup's result.
+#[tauri::command]
+pub fn backup_status(backups: State<'_, Backups>) -> BackupConfig {
+    backups.status()
+}
+
+#[tauri::command]
+pub fn set_backup_settings(backups: State<'_, Backups>, folder: Option<String>, daily: bool, keep: u32) -> AppResult<BackupConfig> {
+    backups.configure(folder, daily, keep)
+}
+
+/// Backs up into the backup folder now; `label` is the local date and time.
+#[tauri::command]
+pub fn backup_now(db: State<'_, Db>, backups: State<'_, Backups>, label: String) -> AppResult<BackupConfig> {
+    backups.backup_now(&db, &label)
+}
+
+/// The daily backup, when it's on and due (the app checks every so often).
+#[tauri::command]
+pub fn backup_if_due(db: State<'_, Db>, backups: State<'_, Backups>, label: String) -> BackupConfig {
+    backups.backup_if_due(&db, &label)
+}
+
+/// "Export everything": the whole library as one `.inkleaf` file at `path`.
+#[tauri::command]
+pub fn export_library(db: State<'_, Db>, path: String) -> AppResult<String> {
+    let mut path = PathBuf::from(path);
+    if path.extension().and_then(|e| e.to_str()) != Some(backup::EXTENSION) {
+        let mut p = path.into_os_string();
+        p.push(format!(".{}", backup::EXTENSION));
+        path = PathBuf::from(p);
+    }
+    db.snapshot_to(&path)?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
+/// What a backup file holds (to confirm before restoring).
+#[tauri::command]
+pub fn inspect_backup(path: String) -> AppResult<BackupSummary> {
+    Db::inspect_backup(Path::new(&path))
+}
+
+/// Replaces the library with a backup (the current one is kept as
+/// `inkleaf-before-restore.db` in the app's data folder).
+#[tauri::command]
+pub fn restore_backup(db: State<'_, Db>, path: String) -> AppResult<BackupSummary> {
+    db.restore_from(Path::new(&path))
 }
