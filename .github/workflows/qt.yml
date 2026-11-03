@@ -64,10 +64,23 @@ jobs:
           curl -fsSLo linuxdeploy $base/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
           curl -fsSLo linuxdeploy-plugin-qt $base/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
           chmod +x linuxdeploy linuxdeploy-plugin-qt
+          # Wayland's helpers aren't platform plugins, so the Qt plugin
+          # leaves them out: GPU drawing (wayland-egl), the window frame and
+          # the shell. linuxdeploy then bundles what they need.
+          mkdir -p AppDir/usr/plugins
+          for d in wayland-graphics-integration-client wayland-decoration-client wayland-shell-integration; do
+            cp -r "$QT_ROOT_DIR/plugins/$d" AppDir/usr/plugins/
+          done
+          export LD_LIBRARY_PATH="$QT_ROOT_DIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           version=$(node -p "require('./package.json').version")
           LINUXDEPLOY_OUTPUT_VERSION=$version ./linuxdeploy --appdir AppDir --plugin qt --output appimage \
             -d AppDir/usr/share/applications/inkleaf.desktop -i AppDir/usr/share/icons/hicolor/256x256/apps/inkleaf.png
           mv Inkleaf-*.AppImage "Inkleaf_${version}_qt_x86_64.AppImage"
+          # What a Wayland desktop needs is in it (CI can't start it there).
+          for f in platforms/libqwayland-egl.so platforms/libqxcb.so wayland-graphics-integration-client/libqt-plugin-wayland-egl.so wayland-shell-integration/libxdg-shell.so; do
+            test -e "AppDir/usr/plugins/$f" || { echo "missing from the AppImage: $f"; exit 1; }
+          done
+          ls AppDir/usr/lib | grep -q WaylandEglClientHwIntegration || { echo "missing from the AppImage: libQt6WaylandEglClientHwIntegration"; exit 1; }
       - name: The AppImage starts (window, scripts and dialogs load)
         env:
           QT_QPA_PLATFORM: offscreen
