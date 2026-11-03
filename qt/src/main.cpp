@@ -14,6 +14,7 @@
 #include <QSurfaceFormat>
 
 #include "Js.h"
+#include "Pdf.h"
 #include "PaperImage.h"
 #include "ShadowImage.h"
 
@@ -59,6 +60,17 @@ int main(int argc, char* argv[]) {
     const QJSValue after = Js::instance().engine().globalObject().property("__after");
     if (after.isCallable()) r = after.call();
     qInfo().noquote() << (r.isError() ? "error: " + r.toString() : Js::instance().engine().evaluate("JSON.stringify").call({r}).toString());
+    return 0;
+  }
+
+  // Developer check: imports PDFs, then quits (inkleaf --import-pdf <file>…).
+  if (const int i = QCoreApplication::arguments().indexOf("--import-pdf"); i > 0 && i + 1 < argc) {
+    PdfImporter importer;
+    QVariantList files;
+    for (const QString& f : QCoreApplication::arguments().mid(i + 1)) files << f;
+    importer.add(files, QString());
+    while (importer.busy() || importer.jobs().isEmpty()) QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+    for (const QVariant& j : importer.jobs()) qInfo().noquote() << j.toMap()["name"].toString() << j.toMap()["state"].toString() << j.toMap()["label"].toString();
     return 0;
   }
 

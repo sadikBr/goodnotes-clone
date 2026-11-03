@@ -3,6 +3,7 @@
 // same screen as the web app's src/library.ts).
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import Inkleaf
 
@@ -147,7 +148,7 @@ Rectangle {
         return [
             { id: "notebook", icon: "book", title: "Notebook", sub: "Cover, paper and page size", key: "N", action: () => newNotebook(fid) },
             { id: "daftar", icon: "docs", title: "Daftar annossous", sub: "Lesson log for your classes", tint: "#7c3aed", action: () => root.notify("Daftar annossous is coming to the native app soon — use the current app for now.", false) },
-            { id: "pdf", icon: "page", title: "Import PDFs", sub: "One or several, to write on", tint: "#dc2626", action: () => root.notify("PDF import is coming to the native app soon — use the current app for now.", false) },
+            { id: "pdf", icon: "page", title: "Import PDFs", sub: "One or several, to write on", tint: "#dc2626", action: () => { pdfDialog.folder = fid; pdfDialog.open() } },
             { id: "folder", icon: "folder", title: "Folder", sub: "Group your documents", tint: "#ca8a04", iconColor: "#b45309", action: () => newFolder(fid) }
         ]
     }
@@ -317,6 +318,28 @@ Rectangle {
         }
     }
 
+    FileDialog {
+        id: pdfDialog
+        property var folder: null
+        title: "Import PDFs"
+        fileMode: FileDialog.OpenFiles
+        nameFilters: ["PDF documents (*.pdf)"]
+        onAccepted: PdfImporter.add(selectedFiles.map(u => u.toString()), folder || "")
+    }
+    Connections {
+        target: PdfImporter
+        function onAdded() { root.reload() }
+    }
+    ImportPanel {
+        z: 50
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.margins: 16
+        onOpenRequested: id => {
+            const nb = root.library.notebooks.find(n => n.id === id)
+            root.openRequested(id, nb ? nb.title : "")
+        }
+    }
     PopupMenu { id: menu }
     CreateMenu { id: createMenu }
     FormDialog { id: dialog }

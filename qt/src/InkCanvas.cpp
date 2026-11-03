@@ -23,6 +23,7 @@
 #include "Core.h"
 #include "Js.h"
 #include "JsCanvas.h"
+#include "Pdf.h"
 
 namespace {
 constexpr float kPageGap = 28;     // page units between pages
@@ -651,7 +652,14 @@ QVariantMap InkCanvas::exportPage(int index, qreal scale, bool jpeg) {
   Js& js = Js::instance();
   const Page& p = m_pages[index];
   QJSValue els = core("scene", jsArgs({index}));
-  QJSValue canvas = js.call("renderPage", {p.tmpl, p.paper, p.w, p.h, els, scale, coreProp("images")});
+  // An imported PDF page as the background.
+  QJSValue bg(QJSValue::NullValue);
+  const QString asset = p.meta["backgroundAsset"].toString();
+  if (!asset.isEmpty() && !p.meta["backgroundPage"].isNull()) {
+    const QImage img = PdfDocs::instance().render(asset, p.meta["backgroundPage"].toInt(), scale * p.w / std::max(1.0, PdfDocs::instance().pageSize(asset, p.meta["backgroundPage"].toInt()).width()));
+    if (!img.isNull()) bg = js.engine().newQObject(new JsImage(img.convertToFormat(QImage::Format_ARGB32_Premultiplied)));
+  }
+  QJSValue canvas = js.call("renderPage", {p.tmpl, p.paper, p.w, p.h, els, scale, coreProp("images"), bg});
   auto* c = qobject_cast<JsCanvas*>(canvas.toQObject());
   if (!c) return {};
   return {{"dataUrl", c->toDataURL(jpeg ? "image/jpeg" : "image/png", 0.9)}, {"widthPx", c->width()}, {"heightPx", c->height()}, {"pageWidth", p.w}, {"pageHeight", p.h}};
@@ -1118,6 +1126,25 @@ void InkCanvas::updatePolish() {
   }
 }
 
+QImage InkCanvas::paperWithBackground(const Page& p, double scale, QRectF region) {
+  QImage img = Js::instance().paper(p.tmpl, p.paper, p.w, p.h, scale, region);
+  // An imported PDF page goes over the paper, as in the web app.
+  const QString asset = p.meta["backgroundAsset"].toString();
+  if (!asset.isEmpty() && !p.meta["backgroundPage"].isNull()) {
+    const QRectF r = region.isEmpty() ? QRectF(0, 0, p.w, p.h) : region;
+    // The PDF page fills the page (its size in units may differ slightly).
+    const QSizeF ps = PdfDocs::instance().pageSize(asset, p.meta["backgroundPage"].toInt());
+    if (!ps.isEmpty()) {
+      const double fit = p.w / ps.width();
+      const QImage bg = PdfDocs::instance().render(asset, p.meta["backgroundPage"].toInt(), scale * fit, QRectF(r.x() / fit, r.y() / fit, r.width() / fit, r.height() / fit));
+      QPainter painter(&img);
+      painter.setRenderHint(QPainter::SmoothPixmapTransform);
+      painter.drawImage(QRectF(0, 0, img.width(), img.height()), bg);
+    }
+  }
+  return img;
+}
+
 void InkCanvas::renderPictures(bool missingOnly) {
   if (m_pages.empty()) return;
   Js& js = Js::instance();
@@ -1140,7 +1167,7 @@ void InkCanvas::renderPictures(bool missingOnly) {
     // The whole page, as sharp as fits one picture.
     const double full = std::min(s, kMaxTexture / double(std::max(p.w, p.h)));
     if (p.paperScale != full && !(missingOnly && p.paperScale > 0)) {
-      p.paperImg = js.paper(p.tmpl, p.paper, p.w, p.h, full);
+      p.paperImg = paperWithBackground(p, full, {});
       p.paperScale = full;
       p.paperDirty = true;
     }
@@ -1150,7 +1177,7 @@ void InkCanvas::renderPictures(bool missingOnly) {
       const QRectF want = view.intersected(QRectF(0, 0, p.w, p.h));
       if (p.detailScale != s || !p.detailRect.contains(want)) {
         const QRectF r = want.adjusted(-want.width() * 0.25, -want.height() * 0.25, want.width() * 0.25, want.height() * 0.25).intersected(QRectF(0, 0, p.w, p.h));
-        p.detailImg = js.paper(p.tmpl, p.paper, p.w, p.h, s, r);
+        p.detailImg = paperWithBackground(p, s, r);
         p.detailRect = r;
         p.detailScale = s;
         p.detailDirty = true;

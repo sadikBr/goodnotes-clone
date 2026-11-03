@@ -269,6 +269,8 @@ private:
   void refresh();
   double renderScale() const;
   void renderPictures(bool missingOnly = false);
+  /// The page's paper picture, with its imported PDF page on top (if any).
+  QImage paperWithBackground(const Page& p, double scale, QRectF region);
   /// The library picture of page `i` (paper and items as drawn), stored with the page.
   void storeThumbnail(int i);  // papers and element pictures for what's in view
 

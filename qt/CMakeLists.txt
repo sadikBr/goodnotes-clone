@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Quick QuickControls2)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Quick QuickControls2 Pdf)
 qt_standard_project_setup()
 
 # --- the Rust core -------------------------------------------------------------
@@ -48,6 +48,7 @@ qt_add_executable(inkleaf
   src/JsCanvas.h src/JsCanvas.cpp
   src/Js.h src/Js.cpp
   src/PaperImage.h src/PaperImage.cpp
+  src/Pdf.h src/Pdf.cpp
 )
 
 # Theme is a singleton (must be set before the module is declared).
@@ -96,6 +97,7 @@ qt_add_qml_module(inkleaf
     qml/ui/CreateMenu.qml
     qml/ui/CreateItem.qml
     qml/ui/DashedBox.qml
+    qml/ui/ImportPanel.qml
     qml/editor/ToolPrefs.qml
     qml/editor/ToolBtn.qml
     qml/editor/Pill.qml
@@ -129,7 +131,7 @@ qt_add_resources(inkleaf "inkleaf_style"
 )
 
 target_compile_definitions(inkleaf PRIVATE INKLEAF_VERSION="${PROJECT_VERSION}")
-target_link_libraries(inkleaf PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::QuickControls2 inkleaf_native)
+target_link_libraries(inkleaf PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::QuickControls2 Qt6::Pdf inkleaf_native)
 if(UNIX AND NOT APPLE)
   target_link_libraries(inkleaf PRIVATE dl pthread m)
 endif()

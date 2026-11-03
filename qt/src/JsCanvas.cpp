@@ -216,14 +216,16 @@ QPainter& JsCanvas::painter() {
 }
 
 void JsCanvas::save() {
+  QPainter& p = painter();  // create first: a new painter replays the saved states
   m_states.push_back(m_states.back());
-  painter().save();
+  p.save();
 }
 
 void JsCanvas::restore() {
   if (m_states.size() <= 1) return;
+  QPainter& p = painter();
   m_states.pop_back();
-  painter().restore();
+  p.restore();
 }
 
 void JsCanvas::translate(double x, double y) { st().ctm = QTransform::fromTranslate(x, y) * st().ctm; }
