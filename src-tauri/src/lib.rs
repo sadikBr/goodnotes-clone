@@ -1,11 +1,6 @@
-pub mod backup;
 pub mod commands;
-pub mod db;
-pub mod error;
-pub mod export;
-pub mod handwriting;
-pub mod ink;
-pub mod sync;
+// The shared core, under the names the commands use.
+pub use inkleaf_core::{backup, db, error, export, handwriting, ink, sync};
 
 use tauri::Manager;
 

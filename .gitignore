@@ -15,3 +15,5 @@ src-tauri/tauri.release.conf.json
 keystore.properties
 *.key
 *.key.pub
+
+target/

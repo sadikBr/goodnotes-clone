@@ -1815,8 +1815,7 @@ dependencies = [
 name = "inkleaf"
 version = "0.8.0"
 dependencies = [
- "base64 0.22.1",
- "rusqlite",
+ "inkleaf-core",
  "serde",
  "serde_json",
  "tauri",
@@ -1826,6 +1825,16 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-process",
  "tauri-plugin-updater",
+]
+
+[[package]]
+name = "inkleaf-core"
+version = "0.8.0"
+dependencies = [
+ "base64 0.22.1",
+ "rusqlite",
+ "serde",
+ "serde_json",
  "thiserror 2.0.21",
  "ureq",
  "uuid",
@@ -1834,6 +1843,15 @@ dependencies = [
  "windows-core",
  "windows-future",
  "zip 9.2.1",
+]
+
+[[package]]
+name = "inkleaf-native"
+version = "0.8.0"
+dependencies = [
+ "inkleaf-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -1,0 +1,15 @@
+[package]
+name = "inkleaf-native"
+version = "0.8.0"
+description = "C interface to Inkleaf's core, for the Qt app"
+edition = "2021"
+rust-version = "1.90"
+
+[lib]
+name = "inkleaf_native"
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+inkleaf-core = { path = "../../core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
