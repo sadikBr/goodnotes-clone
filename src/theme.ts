@@ -33,6 +33,23 @@ export function toggleTheme() {
   listeners.forEach((fn) => fn());
 }
 
+/** "system" follows the computer's setting. */
+export function themeMode(): "light" | "dark" | "system" {
+  const t = stored();
+  return t === "light" || t === "dark" ? t : "system";
+}
+
+export function setTheme(mode: "light" | "dark" | "system") {
+  try {
+    if (mode === "system") localStorage.removeItem(THEME_KEY);
+    else localStorage.setItem(THEME_KEY, mode);
+  } catch {
+    /* preference is per session only */
+  }
+  applyStoredTheme();
+  listeners.forEach((fn) => fn());
+}
+
 /** Called when the theme changes (to update switches). */
 export function onThemeChange(fn: () => void) {
   listeners.push(fn);

@@ -186,7 +186,7 @@ export class LibraryScreen {
       ),
       folders.length ? tree : h("p", { class: "sidebar-hint" }, "Group notebooks into folders with +"),
       h("div", { class: "sidebar-spacer" }),
-      h("div", { class: "sidebar-footer" }, item("Trash", "trash", { kind: "trash" }), themeSwitch),
+      h("div", { class: "sidebar-footer" }, item("Trash", "trash", { kind: "trash" }), themeSwitch, h("button", { class: "nav-item", onclick: () => void import("./settingsScreen").then((m) => m.openSettings()) }, icon("gear"), h("span", { class: "nav-label" }, "Settings"))),
     );
   }
 

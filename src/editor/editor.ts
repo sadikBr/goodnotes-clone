@@ -3,6 +3,7 @@
 import { api, PAPER_COLORS, TEMPLATE_CATEGORIES, TEMPLATES, type ExportFormat, type ExportPage, type Notebook, type P2, type Page, type RecognizedShape, type Template } from "../api";
 import { ensureFonts, FONT_PRESETS, fontPreset, isRtl, type FontId } from "../fonts";
 import { getPref, hasPref, setPref } from "../prefs";
+import { getSetting, onSettingsChange, pressureCurve, setSetting } from "../settings";
 import { customColorButton } from "../colorPicker";
 import { isDark, toggleTheme } from "../theme";
 import { shortcutsSheet } from "./shortcuts";
@@ -97,9 +98,6 @@ const LASER_MODE_KEY = "inkleaf-laser-mode";
 const INSTRUMENT_KEY = "inkleaf-instrument";
 const SIDEBAR_KEY = "inkleaf-page-sidebar";
 const DRAWER_KEY = "inkleaf-tool-drawer";
-const SMOOTHING_KEY = "inkleaf-smoothing";
-const CURSOR_KEY = "inkleaf-pen-cursor";
-type PenCursor = "cross" | "dot" | "none";
 const SMOOTHING_LABELS: Record<SmoothingLevel, string> = { off: "Off", light: "Light", normal: "Normal", strong: "Strong" };
 const DRAWER_TIP_KEY = "inkleaf-tool-drawer-tip";
 const FAV_TOOLS: FavTool[] = ["pen", "highlighter", "shape", "text", "sticky", "laser", "eraser"];
@@ -377,6 +375,16 @@ export class EditorScreen {
     this.rulerLayer.append(this.ruler.el);
     this.ruler.setKind(getPref<InstrumentKind>(INSTRUMENT_KEY, "ruler", INSTRUMENTS.map((i) => i.id)));
     this.bindCanvas();
+    onSettingsChange(() => {
+      if (!this.root.isConnected) return;
+      // Pen-only mode can be changed from the Settings screen too.
+      const penOnly = getPref<string>(PEN_ONLY_KEY, "false") === "true";
+      if (penOnly !== this.penOnly) {
+        this.penOnly = penOnly;
+        this.renderPenOnlyButton();
+      }
+      this.renderToolbar();
+    });
     this.fileInput.addEventListener("change", () => this.insertImageFile(this.fileInput.files?.[0]));
     this.scroller.addEventListener("wheel", (e) => this.onWheel(e), { passive: false });
     this.scroller.addEventListener("scroll", () => this.onScroll(), { passive: true });
@@ -764,7 +772,7 @@ export class EditorScreen {
       popupMenu(btn, [
         { label: "Focus mode", shortcut: "F", action: () => this.toggleFocus() },
         { label: this.root.classList.contains("no-sidebar") ? "Show pages" : "Hide pages", shortcut: "[", action: () => this.toggleSidebar() },
-        { label: "Writing settings…", action: () => void this.writingSettings() },
+        { label: "Settings…", action: () => void import("../settingsScreen").then((m) => m.openSettings()) },
         { label: "Keyboard shortcuts", shortcut: "?", action: () => shortcutsSheet() },
         { label: isDark() ? "Light mode" : "Dark mode", action: () => toggleTheme() },
       ]),
@@ -1116,6 +1124,9 @@ export class EditorScreen {
     toast(on ? "Pen-only mode on: the pen writes, touch and mouse scroll and pinch-zoom" : "Pen-only mode off: touch and mouse can write again");
   }
 
+  /** What started the current gesture (pen, touch or mouse). */
+  private gesturePointer = "";
+
   /** Records pen activity; the first time a pen is seen, pen-only mode turns on. */
   private notePen() {
     this.lastPenAt = performance.now();
@@ -1211,7 +1222,7 @@ export class EditorScreen {
     this.placeDrawer();
     this.renderPenOnlyButton();
     this.canvas.dataset.tool = this.tool;
-    this.canvas.dataset.cursor = this.penCursor;
+    this.canvas.dataset.cursor = getSetting("penCursor");
     // The laser's three window-sized layers only exist while it's in use, so
     // the compositor doesn't blend empty layers on every frame otherwise.
     this.laserLayer.style.display = this.tool === "laser" ? "" : "none";
@@ -1223,8 +1234,9 @@ export class EditorScreen {
 
   // ------------------------------------------------------------- writing settings
 
-  private smoothing: SmoothingLevel = getPref<SmoothingLevel>(SMOOTHING_KEY, "normal", Object.keys(SMOOTHING) as SmoothingLevel[]);
-  private penCursor: PenCursor = getPref<PenCursor>(CURSOR_KEY, "cross", ["cross", "dot", "none"]);
+  private get smoothing(): SmoothingLevel {
+    return getSetting("smoothing");
+  }
 
   /** The path smoothing new strokes use. */
   private get streamline(): number {
@@ -1232,41 +1244,7 @@ export class EditorScreen {
   }
 
   private setSmoothing(level: SmoothingLevel) {
-    this.smoothing = level;
-    setPref(SMOOTHING_KEY, level);
-    this.renderToolbar();
-  }
-
-  /** Smoothing and the cursor shown under the pen. */
-  private async writingSettings() {
-    const r = await formDialog(
-      "Writing settings",
-      [
-        {
-          name: "smoothing",
-          label: "Smoothing — evens out shaky lines; Off draws exactly what you write",
-          type: "select",
-          value: this.smoothing,
-          options: (Object.keys(SMOOTHING) as SmoothingLevel[]).map((k) => ({ value: k, label: SMOOTHING_LABELS[k] + (k === "normal" ? " (default)" : "") })),
-        },
-        {
-          name: "cursor",
-          label: "Cursor under the pen (pen, highlighter and shapes)",
-          type: "select",
-          value: this.penCursor,
-          options: [
-            { value: "cross", label: "Cross (+)" },
-            { value: "dot", label: "Small dot" },
-            { value: "none", label: "Hidden" },
-          ],
-        },
-      ],
-      "Save",
-    );
-    if (!r) return;
-    this.penCursor = r.cursor as PenCursor;
-    setPref(CURSOR_KEY, this.penCursor);
-    this.setSmoothing(r.smoothing as SmoothingLevel);
+    setSetting("smoothing", level); // re-renders through onSettingsChange
   }
 
   /** True while a menu, picker or the (unpinned) options drawer is open. */
@@ -2341,6 +2319,8 @@ export class EditorScreen {
 
   private bindCanvas() {
     const c = this.canvas;
+    // The pen's side button is a right click to the browser: keep its menu away.
+    c.addEventListener("contextmenu", (e) => e.preventDefault());
     // A tap on the page while a menu or the options drawer is open only
     // closes it: nothing is drawn. This runs before the menus close
     // themselves, so it can still see them.
@@ -2398,16 +2378,42 @@ export class EditorScreen {
   /** The pressure value stored for a point: stylus pressure, shaped by speed where it applies. */
   private inkPressure(ink: SpeedInk | null, x: number, y: number, e: PointerEvent): number {
     if (!ink) return this.pressure(e);
-    return ink.next(x, y, e.timeStamp, e.pointerType === "pen" && e.pressure > 0 ? e.pressure : null);
+    return ink.next(x, y, e.timeStamp, e.pointerType === "pen" && e.pressure > 0 ? pressureCurve(e.pressure) : null);
   }
 
   private pressure(e: PointerEvent): number {
-    if (e.pointerType === "pen") return e.pressure > 0 ? e.pressure : 0.5;
+    if (e.pointerType === "pen") return e.pressure > 0 ? pressureCurve(e.pressure) : 0.5;
     return 0.5;
   }
 
+  /**
+   * A touch that is probably the writing hand: the pen is near the screen or
+   * was used a moment ago, or the contact is broad like a palm.
+   */
+  private palmLikely(e: PointerEvent): boolean {
+    if (e.pointerType !== "touch" || !getSetting("palmRejection")) return false;
+    if (performance.now() - this.lastPenAt < 1500) return true;
+    return (e.width || 0) * (e.height || 0) > 1800;
+  }
+
+  /** The tool for this press: the stylus's eraser end or side button can stand in for the current one. */
+  private toolFor(e: PointerEvent): Tool {
+    if (e.pointerType !== "pen") return this.tool;
+    if ((e.buttons & 32 || e.button === 5) && getSetting("eraserEnd")) return "eraser";
+    if (e.buttons & 2 || e.button === 2) {
+      const side = getSetting("sideButton");
+      if (side !== "none") return side;
+    }
+    return this.tool;
+  }
+
   private onDown(e: PointerEvent) {
-    if (e.pointerType === "pen") this.notePen();
+    if (e.pointerType === "pen") {
+      this.notePen();
+      // The pen arriving while a resting palm is "writing": drop the palm's stroke.
+      if (this.gesture && this.gesturePointer === "touch" && getSetting("palmRejection")) this.cancelGesture();
+    }
+    if (this.palmLikely(e)) return;
     // Pen-only mode: anything that isn't the pen navigates instead of writing.
     // (A mouse can still present with the laser.)
     if (this.penOnly && e.pointerType !== "pen" && !(this.tool === "laser" && e.pointerType === "mouse")) {
@@ -2418,7 +2424,8 @@ export class EditorScreen {
     if (this.gesture) return;
     this.finishTextEdit();
     const [x, y] = this.point(e);
-    const tool = this.tool;
+    const tool = this.toolFor(e);
+    this.gesturePointer = e.pointerType;
     this.canvas.setPointerCapture(e.pointerId);
 
     switch (tool) {

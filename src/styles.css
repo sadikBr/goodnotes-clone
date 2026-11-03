@@ -3120,3 +3120,103 @@ select option {
 .page-canvas[data-cursor="none"]:is([data-tool="pen"], [data-tool="highlighter"], [data-tool="shape"]) {
   cursor: none;
 }
+
+/* ------------------------------------------------------------- settings */
+
+.settings-modal {
+  width: 640px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.set-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.set-head h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.set-body {
+  overflow-y: auto;
+  padding: 8px 24px 24px;
+}
+.set-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.set-section h3 svg {
+  width: 16px;
+  height: 16px;
+}
+.set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.set-section h3 + .set-row {
+  border-top: 0;
+}
+.set-title {
+  font-weight: 500;
+}
+.set-help {
+  margin-top: 2px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.seg {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 10px;
+  background: var(--surface-3);
+}
+.seg button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 11px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.seg button.on {
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  font-weight: 600;
+}
+.switch-btn .switch {
+  display: block;
+}
+.switch-btn {
+  flex-shrink: 0;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+}
+@media (max-width: 560px) {
+  .set-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
