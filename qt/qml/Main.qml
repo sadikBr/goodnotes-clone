@@ -17,7 +17,7 @@ ApplicationWindow {
     property string openNotebook: ""
     property string openTitle: ""
 
-    Component.onCompleted: AppSettings.dark  // applies the theme
+    Component.onCompleted: { AppSettings.dark; requestActivate() }  // applies the theme; takes the keyboard
     SettingsDialog { id: settings; services: services }
     Services {
         id: services
