@@ -79,10 +79,36 @@ export class MockBackend implements Backend {
     this.notebookPages(notebookId).forEach((p, i) => (p.position = i));
   }
 
+  /** `roots` and every folder inside them, at any depth. */
+  private folderTree(roots: Iterable<string>): Set<string> {
+    const out = new Set(roots);
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const f of this.s.folders)
+        if (f.parentId && out.has(f.parentId) && !out.has(f.id)) {
+          out.add(f.id);
+          grew = true;
+        }
+    }
+    return out;
+  }
+
+  /** Folders in the trash, with everything inside them. */
+  private trashedTree(): Set<string> {
+    return this.folderTree(this.s.folders.filter((f) => f.trashedAt).map((f) => f.id));
+  }
+
+  /** Deletes notebooks (with their pages and elements) for good. */
+  private dropNotebooks(ids: Set<string>) {
+    for (const p of this.s.pages) if (ids.has(p.notebookId)) delete this.s.elements[p.id];
+    this.s.pages = this.s.pages.filter((p) => !ids.has(p.notebookId));
+    this.s.notebooks = this.s.notebooks.filter((n) => !ids.has(n.id));
+  }
+
   async library(): Promise<Library> {
-    const trashedFolders = new Set(this.s.folders.filter((f) => f.trashedAt).map((f) => f.id));
+    const trashedFolders = this.trashedTree();
     return {
-      folders: this.s.folders.filter((f) => !f.trashedAt),
+      folders: this.s.folders.filter((f) => !trashedFolders.has(f.id)),
       notebooks: this.s.notebooks
         .filter((n) => !n.trashedAt && !(n.folderId && trashedFolders.has(n.folderId)))
         .map((n) => this.nb(n.id))
@@ -97,11 +123,11 @@ export class MockBackend implements Backend {
     };
   }
 
+  /** Trashed notebooks, and trashed folders with everything inside them. */
   async emptyTrash() {
-    const gone = new Set(this.s.notebooks.filter((n) => n.trashedAt).map((n) => n.id));
-    this.s.notebooks = this.s.notebooks.filter((n) => !gone.has(n.id));
-    this.s.pages = this.s.pages.filter((p) => !gone.has(p.notebookId));
-    this.s.folders = this.s.folders.filter((f) => !f.trashedAt);
+    const folders = this.trashedTree();
+    this.dropNotebooks(new Set(this.s.notebooks.filter((n) => n.trashedAt || (n.folderId && folders.has(n.folderId))).map((n) => n.id)));
+    this.s.folders = this.s.folders.filter((f) => !folders.has(f.id));
     this.persist();
   }
 
@@ -139,8 +165,12 @@ export class MockBackend implements Backend {
     this.persist();
   }
 
+  /** A folder for good, with its subfolders and every notebook in them. */
   async deleteFolder(id: string) {
-    this.s.folders = this.s.folders.filter((f) => f.id !== id);
+    this.folder(id);
+    const tree = this.folderTree([id]);
+    this.dropNotebooks(new Set(this.s.notebooks.filter((n) => n.folderId && tree.has(n.folderId)).map((n) => n.id)));
+    this.s.folders = this.s.folders.filter((f) => !tree.has(f.id));
     this.persist();
   }
 
@@ -338,7 +368,8 @@ export class MockBackend implements Backend {
     const q = query.trim().toLowerCase();
     if (!q) return [];
     const hits: SearchHit[] = [];
-    for (const n of this.s.notebooks.filter((x) => !x.trashedAt)) {
+    const trashedFolders = this.trashedTree();
+    for (const n of this.s.notebooks.filter((x) => !x.trashedAt && !(x.folderId && trashedFolders.has(x.folderId)))) {
       if (n.title.toLowerCase().includes(q)) hits.push({ notebookId: n.id, notebookTitle: n.title, pageId: null, pageNumber: null, snippet: n.title });
       for (const p of this.notebookPages(n.id)) {
         for (const e of this.s.elements[p.id] ?? []) {

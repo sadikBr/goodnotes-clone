@@ -650,11 +650,11 @@ export class LibraryScreen {
   }
 
   private async deleteForever(kind: "folder" | "notebook", id: string, name: string) {
-    const ok = await confirmDialog(`Delete “${name}” forever?`, kind === "folder" ? "The folder and every notebook inside it will be permanently deleted." : "This notebook and all of its pages will be permanently deleted.");
+    const ok = await confirmDialog(`Delete “${name}” forever?`, kind === "folder" ? "The folder, its subfolders and every notebook inside them will be permanently deleted." : "This notebook and all of its pages will be permanently deleted.");
     if (ok) await this.run(() => (kind === "folder" ? api.deleteFolder(id) : api.deleteNotebook(id)), "Deleted");
   }
 
   private async emptyTrash() {
-    if (await confirmDialog("Empty trash?", "Everything in the trash will be permanently deleted.", "Empty trash")) await this.run(() => api.emptyTrash(), "Trash emptied");
+    if (await confirmDialog("Empty trash?", "Everything in the trash will be permanently deleted, including all the subfolders and notebooks inside trashed folders.", "Empty trash")) await this.run(() => api.emptyTrash(), "Trash emptied");
   }
 }

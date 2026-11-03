@@ -16,6 +16,13 @@ use crate::error::{AppError, AppResult};
 
 const SCHEMA_VERSION: i64 = 4;
 
+/// Ids of the folders in the trash and every folder inside them, at any
+/// depth: what's in a trashed folder is in the trash with it.
+const TRASHED_FOLDERS: &str = "(WITH RECURSIVE gone(id) AS (
+        SELECT id FROM folders WHERE trashed_at IS NOT NULL
+        UNION SELECT c.id FROM folders c JOIN gone ON c.parent_id = gone.id
+    ) SELECT id FROM gone)";
+
 pub fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -528,12 +535,14 @@ impl Db {
         Ok(Library {
             folders: query_folders(
                 &conn,
-                "WHERE trashed_at IS NULL ORDER BY name COLLATE NOCASE",
+                &format!("WHERE id NOT IN {TRASHED_FOLDERS} ORDER BY name COLLATE NOCASE"),
             )?,
             notebooks: query_notebooks(
                 &conn,
-                "WHERE n.trashed_at IS NULL AND (n.folder_id IS NULL OR f.trashed_at IS NULL)
-                 ORDER BY n.updated_at DESC",
+                &format!(
+                    "WHERE n.trashed_at IS NULL AND (n.folder_id IS NULL OR n.folder_id NOT IN {TRASHED_FOLDERS})
+                     ORDER BY n.updated_at DESC"
+                ),
             )?,
         })
     }
@@ -552,10 +561,14 @@ impl Db {
         })
     }
 
+    /// Deletes for good everything in the trash: trashed notebooks, and
+    /// trashed folders with all they contain (subfolders and notebooks).
     pub fn empty_trash(&self) -> AppResult<()> {
-        let conn = self.conn();
-        conn.execute("DELETE FROM notebooks WHERE trashed_at IS NOT NULL", [])?;
-        conn.execute("DELETE FROM folders WHERE trashed_at IS NOT NULL", [])?;
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        tx.execute(&format!("DELETE FROM notebooks WHERE trashed_at IS NOT NULL OR folder_id IN {TRASHED_FOLDERS}"), [])?;
+        tx.execute(&format!("DELETE FROM folders WHERE id IN {TRASHED_FOLDERS}"), [])?;
+        tx.commit()?;
         Ok(())
     }
 
@@ -641,9 +654,21 @@ impl Db {
         expect_one(n, id)
     }
 
+    /// Deletes a folder for good, with its subfolders and every notebook in them.
     pub fn delete_folder(&self, id: &str) -> AppResult<()> {
-        let conn = self.conn();
-        expect_one(conn.execute("DELETE FROM folders WHERE id = ?1", [id])?, id)
+        let mut conn = self.conn();
+        let tree = "(WITH RECURSIVE t(id) AS (
+                SELECT id FROM folders WHERE id = ?1
+                UNION SELECT c.id FROM folders c JOIN t ON c.parent_id = t.id
+            ) SELECT id FROM t)";
+        let tx = conn.transaction()?;
+        tx.execute(&format!("DELETE FROM notebooks WHERE folder_id IN {tree}"), [id])?;
+        let n = tx.execute(&format!("DELETE FROM folders WHERE id IN {tree}"), [id])?;
+        if n == 0 {
+            return Err(AppError::NotFound(id.to_string()));
+        }
+        tx.commit()?;
+        Ok(())
     }
 
     pub fn set_folder_favourite(&self, id: &str, favourite: bool) -> AppResult<()> {
@@ -1236,8 +1261,11 @@ impl Db {
         let mut hits = Vec::new();
         {
             let mut stmt = conn.prepare(
-                "SELECT id, title FROM notebooks WHERE trashed_at IS NULL AND title LIKE ?1 ESCAPE '\\'
-                 ORDER BY updated_at DESC LIMIT 50",
+                &format!(
+                    "SELECT id, title FROM notebooks
+                     WHERE trashed_at IS NULL AND (folder_id IS NULL OR folder_id NOT IN {TRASHED_FOLDERS}) AND title LIKE ?1 ESCAPE '\\'
+                     ORDER BY updated_at DESC LIMIT 50"
+                ),
             )?;
             let rows = stmt.query_map([&pattern], |r| {
                 Ok(SearchHit {
@@ -1254,10 +1282,10 @@ impl Db {
         }
         {
             let mut stmt = conn.prepare(
-                "SELECT n.id, n.title, p.id, p.position, e.text_content
+                &format!("SELECT n.id, n.title, p.id, p.position, e.text_content
                  FROM elements e JOIN pages p ON p.id = e.page_id JOIN notebooks n ON n.id = p.notebook_id
-                 WHERE n.trashed_at IS NULL AND e.text_content LIKE ?1 ESCAPE '\\'
-                 ORDER BY n.updated_at DESC, p.position LIMIT 200",
+                 WHERE n.trashed_at IS NULL AND (n.folder_id IS NULL OR n.folder_id NOT IN {TRASHED_FOLDERS}) AND e.text_content LIKE ?1 ESCAPE '\\'
+                 ORDER BY n.updated_at DESC, p.position LIMIT 200"),
             )?;
             let rows = stmt.query_map([&pattern], |r| {
                 let text: String = r.get(4)?;
@@ -1803,5 +1831,72 @@ mod tests {
             "NEEDLE",
         );
         assert!(s.contains("needle"));
+    }
+}
+
+
+#[cfg(test)]
+mod trashed_folder_tests {
+    use super::*;
+
+    fn notebook(db: &Db, title: &str, folder: Option<&str>) -> Notebook {
+        db.create_notebook(&NewNotebook { title: title.into(), folder_id: folder.map(str::to_string), cover_color: None, template: None, paper_color: None, width: None, height: None, cover_page: false }).unwrap()
+    }
+    fn count(db: &Db, table: &str) -> i64 {
+        db.conn().query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0)).unwrap()
+    }
+
+    #[test]
+    fn a_trashed_folder_takes_everything_inside_with_it() {
+        let db = Db::open_in_memory().unwrap();
+        let class = db.create_folder("Class", None, None).unwrap();
+        let unit = db.create_folder("Unit 1", Some(&class.id), None).unwrap();
+        let other = db.create_folder("Other", None, None).unwrap();
+        notebook(&db, "Lesson A", Some(&class.id));
+        let deep = notebook(&db, "Lesson B", Some(&unit.id));
+        let page = db.pages(&deep.id).unwrap()[0].id.clone();
+        db.save_elements(&page, &[Element { id: new_id(), kind: "text".into(), z: 0, data: serde_json::json!({ "text": "fractions" }) }]).unwrap();
+        notebook(&db, "Kept", Some(&other.id));
+        notebook(&db, "Loose", None);
+
+        // In the trash: nothing inside shows in the library or in search.
+        db.set_folder_trashed(&class.id, true).unwrap();
+        let lib = db.library().unwrap();
+        assert_eq!(lib.folders.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(), vec!["Other"]);
+        let mut titles: Vec<_> = lib.notebooks.iter().map(|n| n.title.as_str()).collect();
+        titles.sort();
+        assert_eq!(titles, vec!["Kept", "Loose"]);
+        assert!(db.search("fractions").unwrap().is_empty());
+        assert!(db.search("Lesson").unwrap().is_empty());
+
+        // Recovering brings it all back.
+        db.set_folder_trashed(&class.id, false).unwrap();
+        assert_eq!(db.library().unwrap().notebooks.len(), 4);
+        assert_eq!(db.search("fractions").unwrap().len(), 1);
+
+        // Emptying the trash deletes the folder, its subfolder and both notebooks, with their pages.
+        db.set_folder_trashed(&class.id, true).unwrap();
+        db.empty_trash().unwrap();
+        assert_eq!(count(&db, "folders"), 1);
+        assert_eq!(count(&db, "notebooks"), 2);
+        assert_eq!(count(&db, "elements"), 0);
+        let lib = db.library().unwrap();
+        assert_eq!(lib.notebooks.len(), 2);
+    }
+
+    #[test]
+    fn deleting_a_folder_for_good_deletes_its_contents() {
+        let db = Db::open_in_memory().unwrap();
+        let f = db.create_folder("Old year", None, None).unwrap();
+        let sub = db.create_folder("Term 2", Some(&f.id), None).unwrap();
+        notebook(&db, "A", Some(&f.id));
+        notebook(&db, "B", Some(&sub.id));
+        notebook(&db, "Elsewhere", None);
+        db.set_folder_trashed(&f.id, true).unwrap();
+        db.delete_folder(&f.id).unwrap();
+        assert_eq!(count(&db, "folders"), 0);
+        assert_eq!(db.library().unwrap().notebooks.iter().map(|n| n.title.clone()).collect::<Vec<_>>(), vec!["Elsewhere"]);
+        assert_eq!(count(&db, "notebooks"), 1);
+        assert!(db.delete_folder("missing").is_err());
     }
 }
