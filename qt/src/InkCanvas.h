@@ -323,6 +323,7 @@ private:
   bool m_fitPending = true;
   QTimer m_settle;  // the zoom stopped changing: sharper pictures
   QTimer m_saveTimer;
+  QTimer m_thumbFill;  // missing PDF page thumbnails
   QTimer m_timers;  // the scripts' timers (holding a stroke still)
   QTimer m_laserTick;
 

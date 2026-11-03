@@ -105,6 +105,19 @@ InkCanvas::InkCanvas(QQuickItem* parent) : QQuickItem(parent) {
   m_saveTimer.setSingleShot(true);
   m_saveTimer.setInterval(600);
   connect(&m_saveTimer, &QTimer::timeout, this, &InkCanvas::flush);
+  // Imported PDF pages get their thumbnails in the background, one at a time.
+  m_thumbFill.setSingleShot(true);
+  m_thumbFill.setInterval(250);
+  connect(&m_thumbFill, &QTimer::timeout, this, [this] {
+    for (int i = 0; i < int(m_pages.size()); ++i) {
+      const QJsonObject& m = m_pages[i].meta;
+      if (m["backgroundAsset"].toString().isEmpty() || !m["thumbnail"].toString().isEmpty()) continue;
+      storeThumbnail(i);
+      emit pagesChanged();
+      if (!m_pages[i].meta["thumbnail"].toString().isEmpty()) m_thumbFill.start();
+      return;
+    }
+  });
   m_settle.setSingleShot(true);
   m_settle.setInterval(160);
   connect(&m_settle, &QTimer::timeout, this, [this] {
@@ -415,6 +428,7 @@ void InkCanvas::applyPages(const QJsonArray& pages) {
   m_rebuildAll = true;
   emit pagesChanged();
   refresh();
+  m_thumbFill.start(1500);
 }
 
 QVariantList InkCanvas::pages() const {
@@ -574,7 +588,7 @@ void InkCanvas::storeThumbnail(int i) {
   QPainter painter(&img);
   painter.setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
   painter.scale(s, s);
-  if (p.paperImg.isNull()) p.paperImg = Js::instance().paper(p.tmpl, p.paper, p.w, p.h, std::max(s, 0.5)), p.paperScale = std::max(s, 0.5), p.paperDirty = true;
+  if (p.paperImg.isNull()) p.paperImg = paperWithBackground(p, std::max(s, 0.5), {}), p.paperScale = std::max(s, 0.5), p.paperDirty = true;
   painter.drawImage(QRectF(0, 0, p.w, p.h), p.paperImg);
   for (const auto& it : p.items) {
     if (it->mesh) {
