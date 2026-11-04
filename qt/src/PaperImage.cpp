@@ -16,7 +16,7 @@
 #include "draw/Strokes.h"
 
 #include "draw/Render.h"
-#include "JsCanvas.h"
+#include "Canvas.h"
 
 QImage PaperImage::requestImage(const QString& id, QSize* size, const QSize& requested) {
   // Drawn on the GUI thread (the fonts and caches live there).
@@ -75,7 +75,7 @@ QJsonArray pts(const std::vector<std::array<double, 3>>& p) {
 
 }  // namespace
 
-void nibSample(JsCanvas& c, const QString& style, const QString& color, double size, bool dark) {
+void nibSample(Canvas& c, const QString& style, const QString& color, double size, bool dark) {
   const double w = 56, hgt = 22;
   std::vector<std::array<double, 3>> points;
   for (int i = 0; i <= 24; ++i) {
@@ -85,7 +85,7 @@ void nibSample(JsCanvas& c, const QString& style, const QString& color, double s
   draw::drawStroke(c, {{"id", "sample"}, {"z", 0}, {"kind", "stroke"}, {"tool", "pen"}, {"style", style}, {"color", sampleInk(color, dark)}, {"width", std::min(6.5, std::max(1.4, size * 0.9))}, {"points", pts(points)}});
 }
 
-void smoothingSample(JsCanvas& c, double streamline, const QString& color, bool dark) {
+void smoothingSample(Canvas& c, double streamline, const QString& color, bool dark) {
   const double w = 56, hgt = 22;
   std::vector<std::array<double, 3>> points;
   for (int i = 0; i <= 40; ++i) {
@@ -104,7 +104,7 @@ QImage InkSampleImage::requestImage(const QString& id, QSize* size, const QSize&
   }
   const QStringList p = id.split('/');
   const QSize want = requested.isValid() && !requested.isEmpty() ? requested : QSize(112, 44);
-  JsCanvas canvas(want.width(), want.height());
+  Canvas canvas(want.width(), want.height());
   canvas.setTransform(want.width() / 56.0, 0, 0, want.height() / 22.0, 0, 0);
   if (p.value(0) == "nib") nibSample(canvas, p.value(1), "#" + p.value(2), p.value(3).toDouble(), p.value(4) == "1");
   else smoothingSample(canvas, p.value(1).toDouble(), "#" + p.value(2), p.value(3) == "1");

@@ -2,11 +2,11 @@
 # Build:  cmake -S qt -B build/qt -DCMAKE_BUILD_TYPE=Release && cmake --build build/qt -j
 # The Rust core (../core, via qt/native) is built with cargo and linked in.
 cmake_minimum_required(VERSION 3.21)
-# The version is the app's (package.json, set by npm run set-version).
-file(READ ${CMAKE_CURRENT_SOURCE_DIR}/../package.json INKLEAF_PACKAGE_JSON)
-string(JSON INKLEAF_VERSION_FROM_PACKAGE GET ${INKLEAF_PACKAGE_JSON} version)
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../package.json)
-project(Inkleaf VERSION ${INKLEAF_VERSION_FROM_PACKAGE} LANGUAGES CXX)
+# The version is the app's (../VERSION, set by scripts/set-version.py).
+file(READ ${CMAKE_CURRENT_SOURCE_DIR}/../VERSION INKLEAF_VERSION_FILE)
+string(STRIP "${INKLEAF_VERSION_FILE}" INKLEAF_VERSION_FILE)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../VERSION)
+project(Inkleaf VERSION ${INKLEAF_VERSION_FILE} LANGUAGES CXX)
 # Android's version number: 0.8.1 → 801 (major*10000 + minor*100 + patch).
 math(EXPR INKLEAF_VERSION_CODE "${PROJECT_VERSION_MAJOR} * 10000 + ${PROJECT_VERSION_MINOR} * 100 + ${PROJECT_VERSION_PATCH}")
 
@@ -77,8 +77,7 @@ qt_add_executable(inkleaf
   src/InkCanvas.h src/InkCanvas.cpp
   src/RoundImage.h src/RoundImage.cpp
   src/ShadowImage.h src/ShadowImage.cpp
-  src/JsCanvas.h src/JsCanvas.cpp
-  src/Js.h src/Js.cpp
+  src/Canvas.h src/Canvas.cpp
   src/draw/Fonts.h src/draw/Fonts.cpp
   src/draw/Papers.h src/draw/Papers.cpp
   src/draw/Covers.h src/draw/Covers.cpp
@@ -93,7 +92,6 @@ qt_add_executable(inkleaf
   src/editor/Instrument.h src/editor/Instrument.cpp
   src/editor/EditorCore.h src/editor/EditorCore.cpp
   src/draw/Render.h src/draw/Render.cpp
-  src/editor/DaftarBridge.h
   src/Catalog.h src/Catalog.cpp
   src/daftar/Store.h src/daftar/Store.cpp
   src/daftar/Daftar.h src/daftar/Daftar.cpp
@@ -102,10 +100,7 @@ qt_add_executable(inkleaf
   src/daftar/DaftarEditor.h src/daftar/DaftarEditor.cpp
   src/tests/SelfTest.h src/tests/SelfTest.cpp
   src/tests/GeometryTests.cpp
-  src/tests/TextAndSnapTests.cpp src/tests/DaftarTests.cpp src/tests/Samples.h src/tests/Samples.cpp src/tests/Golden.h src/tests/Golden.cpp
-  src/CompareRender.h src/CompareRender.cpp
-  src/CompareEditor.h src/CompareEditor.cpp
-  src/CompareDaftar.h src/CompareDaftar.cpp src/CompareJson.h
+  src/tests/TextAndSnapTests.cpp src/tests/DaftarTests.cpp src/tests/Samples.h src/tests/Samples.cpp src/tests/Golden.h src/tests/Golden.cpp src/tests/EditorSessions.h src/tests/EditorSessions.cpp src/tests/JsonCompare.h
   src/PaperImage.h src/PaperImage.cpp
   src/Pdf.h src/Pdf.cpp
   src/LaserTrail.h src/LaserTrail.cpp
@@ -194,7 +189,6 @@ qt_add_qml_module(inkleaf
     ${CMAKE_CURRENT_BINARY_DIR}/gen/Prefs.qml
   RESOURCES
     assets/icon.svg
-    js/bridge.js
     ${INKLEAF_FONTS}
 )
 

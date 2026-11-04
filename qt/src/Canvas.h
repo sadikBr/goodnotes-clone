@@ -1,9 +1,10 @@
-// An HTML canvas 2D context over QPainter, for the web app's drawing code
-// (papers, covers, daftar pages, text, shapes, sticky notes) run unchanged in
-// a QJSEngine (see Js.h). Covers what that code uses: paths in the current
-// transform, fills and strokes with colours, gradients and patterns, text in
-// CSS fonts (with right-to-left and Arabic shaping from Qt), images, clipping,
-// dashes, alpha, composite modes and blurred shadows.
+// The drawing surface the app's pictures are made on (papers, covers, daftar
+// pages, text, shapes, sticky notes, overlays, exports): a canvas-2D style
+// API over QPainter, kept from when the drawing code ran as scripts so the C++
+// port draws the same pixels. Paths in the current transform, fills and
+// strokes with colours, gradients and patterns, text in CSS fonts (with
+// right-to-left and Arabic shaping from Qt), images, clipping, dashes,
+// alpha, composite modes and blurred shadows.
 #pragma once
 
 #include <QBrush>
@@ -20,10 +21,10 @@
 #include <vector>
 
 /// A gradient made by createLinearGradient / createRadialGradient.
-class JsGradient : public QObject {
+class CanvasGradient : public QObject {
   Q_OBJECT
 public:
-  explicit JsGradient(QGradient* g) : m_g(g) {}
+  explicit CanvasGradient(QGradient* g) : m_g(g) {}
   Q_INVOKABLE void addColorStop(double offset, const QString& color);
   const QGradient& gradient() const { return *m_g; }
 
@@ -32,10 +33,10 @@ private:
 };
 
 /// A pattern made by createPattern.
-class JsPattern : public QObject {
+class CanvasPattern : public QObject {
   Q_OBJECT
 public:
-  explicit JsPattern(QImage img) : m_img(std::move(img)) {}
+  explicit CanvasPattern(QImage img) : m_img(std::move(img)) {}
   const QImage& image() const { return m_img; }
   Q_INVOKABLE void setTransform(const QJSValue&) {}
 
@@ -44,7 +45,7 @@ private:
 };
 
 /// A decoded picture (new Image() in the shims).
-class JsImage : public QObject {
+class CanvasImage : public QObject {
   Q_OBJECT
   Q_PROPERTY(int naturalWidth READ width CONSTANT)
   Q_PROPERTY(int naturalHeight READ height CONSTANT)
@@ -53,7 +54,7 @@ class JsImage : public QObject {
   Q_PROPERTY(bool complete READ complete CONSTANT)
 public:
   bool complete() const { return true; }
-  explicit JsImage(QImage img) : m_img(std::move(img)) {}
+  explicit CanvasImage(QImage img) : m_img(std::move(img)) {}
   const QImage& image() const { return m_img; }
   int width() const { return m_img.width(); }
   int height() const { return m_img.height(); }
@@ -63,7 +64,7 @@ private:
 };
 
 /// A canvas and its 2D context in one object.
-class JsCanvas : public QObject {
+class Canvas : public QObject {
   Q_OBJECT
   Q_PROPERTY(int width READ width WRITE setWidth)
   Q_PROPERTY(int height READ height WRITE setHeight)
@@ -91,11 +92,11 @@ class JsCanvas : public QObject {
   Q_PROPERTY(QVariantMap style MEMBER m_style)
   Q_PROPERTY(QString className MEMBER m_className)
 public:
-  JsCanvas(int w, int h, QObject* parent = nullptr);
+  Canvas(int w, int h, QObject* parent = nullptr);
   /// Draws through `external` (e.g. on a PDF page) instead of into a picture;
   /// w and h are the page's size. The painter must outlive the canvas.
-  JsCanvas(QPainter* external, int w, int h, QObject* parent = nullptr);
-  ~JsCanvas() override;
+  Canvas(QPainter* external, int w, int h, QObject* parent = nullptr);
+  ~Canvas() override;
 
   /// The picture so far (ends painting first).
   QImage image();
@@ -156,8 +157,6 @@ public:
   // Images
   Q_INVOKABLE void drawImage(QObject* source, double a, double b, const QJSValue& c = QJSValue(), const QJSValue& d = QJSValue(), const QJSValue& e = QJSValue(),
                              const QJSValue& f = QJSValue(), const QJSValue& g = QJSValue(), const QJSValue& h = QJSValue());
-  Q_INVOKABLE QJSValue getImageData(int x, int y, int w, int h);
-  Q_INVOKABLE void putImageData(const QJSValue& data, int x, int y);
   Q_INVOKABLE QByteArray pixels(int x, int y, int w, int h);
   Q_INVOKABLE QString toDataURL(const QString& type = QStringLiteral("image/png"), double quality = 0.92);
   Q_INVOKABLE void putPixels(const QByteArray& rgba, int x, int y, int w, int h);
@@ -169,7 +168,7 @@ public:
   Q_INVOKABLE void setLineDash(const QVariantList& dashes);
   Q_INVOKABLE QVariantList getLineDash() const;
 
-  // For drawing code in C++ (the same canvas the scripts draw on).
+  // Plain C++ setters for the styles.
   void setFill(const QString& css) { setFillStyle(QJSValue(css)); }
   void setStroke(const QString& css) { setStrokeStyle(QJSValue(css)); }
   /// A gradient or pattern brush in user space (as a CanvasGradient/Pattern is).

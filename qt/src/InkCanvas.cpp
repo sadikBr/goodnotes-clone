@@ -26,7 +26,7 @@
 
 #include "Core.h"
 #include "draw/Render.h"
-#include "JsCanvas.h"
+#include "Canvas.h"
 #include "Pdf.h"
 
 namespace {
@@ -288,7 +288,7 @@ void InkCanvas::syncPage(int i) {
         const ink::Pen pen = ink::penFromName(style, hl);
         it->tris = std::make_shared<ink::Mesh>();
         ink::strokeMesh(p, pen, float(el->width), el->smooth ? float(*el->smooth) : ink::kSmoothNormal, *it->tris);
-        it->color = inkColor(JsCanvas::parseColor(el->color.isEmpty() ? QStringLiteral("#111827") : el->color), pen);
+        it->color = inkColor(Canvas::parseColor(el->color.isEmpty() ? QStringLiteral("#111827") : el->color), pen);
       } else {
         // Textured nibs: drawn as pictures.
         it->data = el->toJson();
@@ -536,7 +536,7 @@ void InkCanvas::storeThumbnail(int i) {
   const bool cover = p.tmpl.startsWith("cover");
   const double s = (cover ? 420.0 : 200.0) / p.w;
   QImage img(int(std::ceil(p.w * s)), int(std::ceil(p.h * s)), QImage::Format_RGB32);
-  img.fill(JsCanvas::parseColor(p.paper));
+  img.fill(Canvas::parseColor(p.paper));
   QPainter painter(&img);
   painter.setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
   painter.scale(s, s);
@@ -696,7 +696,7 @@ QString InkCanvas::exportPdf(const QString& path, const QVariantList& indexes, c
       if (!img.isNull()) bg = img.convertToFormat(QImage::Format_ARGB32_Premultiplied);
     }
     {
-      JsCanvas canvas(&painter, int(std::ceil(p.w)), int(std::ceil(p.h)));
+      Canvas canvas(&painter, int(std::ceil(p.w)), int(std::ceil(p.h)));
       draw::paintPage(canvas, p.tmpl, p.paper, p.w, p.h, sceneJson(i), bg);
     }  // the canvas restores the painter for the next page
   }
@@ -845,7 +845,7 @@ qreal InkCanvas::laserCoreAlpha() const {
   return t <= 0 ? 1 : std::max(0.0, 1 - t / kLaserCoreFade);
 }
 
-QColor InkCanvas::laserColor() const { return JsCanvas::parseColor(m_colors.value("laser", "#ff1f1f").toString()); }
+QColor InkCanvas::laserColor() const { return Canvas::parseColor(m_colors.value("laser", "#ff1f1f").toString()); }
 
 void InkCanvas::updateCursor() {
   if (m_tool == "eraser") return setCursor(Qt::BlankCursor);
@@ -1220,7 +1220,7 @@ void InkCanvas::updatePolish() {
       if (!r.isEmpty()) {
         const double dpr = window() ? window()->effectiveDevicePixelRatio() : 1.0;
         const double s = m_zoom * dpr;
-        JsCanvas canvas(int(std::ceil(r.width() * s)), int(std::ceil(r.height() * s)));
+        Canvas canvas(int(std::ceil(r.width() * s)), int(std::ceil(r.height() * s)));
         canvas.setTransform(s, 0, 0, s, -r.x() * s, -r.y() * s);
         m_ed->drawOverlay(canvas, pi);
         m_overlayImg = canvas.image();
@@ -1365,7 +1365,7 @@ void InkCanvas::press(QPointF s, float pressure, bool stylus, const QString& too
     const bool hl = tool == "highlighter";
     const bool shape = tool == "shape";
     m_g.pen = hl ? ink::Pen::Highlighter : shape ? ink::Pen::Ballpoint : ink::penFromName(m_penStyleName, false);
-    m_g.color = JsCanvas::parseColor(m_colors.value(tool).toString());
+    m_g.color = Canvas::parseColor(m_colors.value(tool).toString());
     m_g.width = float(m_widths.value(tool, 3).toDouble());
     const float pr = ink::speedSensitive(m_g.pen) ? m_g.speed.next(float(p.x()), float(p.y()), nowMs(), stylus ? pressure : -1.f) : (stylus ? pressure : 0.5f);
     m_g.pts.push_back({float(p.x()), float(p.y()), pr});
@@ -1734,7 +1734,7 @@ QSGNode* InkCanvas::updatePaintNode(QSGNode* old, UpdatePaintNodeData*) {
       // Until the picture is ready: the paper colour.
       if (pg.paperImg.isNull()) {
         QImage fill(1, 1, QImage::Format_ARGB32_Premultiplied);
-        fill.fill(JsCanvas::parseColor(pg.paper));
+        fill.fill(Canvas::parseColor(pg.paper));
         paper->setTexture(win->createTextureFromImage(fill));
       }
     }

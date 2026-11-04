@@ -1,0 +1,53 @@
+# Records the reference results (qt/tests/golden) on CI's Qt and commits
+# them, for when the drawing, the editor or the daftar change on purpose:
+# Actions → Record reference results → Run workflow. Every push is then
+# checked against them (the Qt app workflow, `inkleaf --golden check`).
+name: Record reference results
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  QT_VERSION: "6.8.3"
+
+jobs:
+  record:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> build/qt/cargo"
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          modules: qtpdf
+          cache: true
+      - name: Build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 ninja-build
+      - name: Build
+        run: |
+          cmake -S qt -B build/qt -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/qt
+      - name: Record
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          rm -rf qt/tests/golden
+          ./build/qt/inkleaf --golden record qt/tests/golden
+          # Recorded twice over must agree with itself (nothing left to chance).
+          ./build/qt/inkleaf --golden check qt/tests/golden
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A qt/tests/golden
+          if git diff --cached --quiet; then echo "No changes to the recorded results."; exit 0; fi
+          git commit -m "Reference results recorded by CI (Qt $QT_VERSION)"
+          git push

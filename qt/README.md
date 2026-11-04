@@ -25,9 +25,10 @@ qml6-module-qt-labs-settings qml6-module-qtqml-workerscript cmake`.)
 
 `INKLEAF_DATA_DIR=/some/folder ./build/qt/inkleaf` uses another library folder (for testing).
 
-After changing the shared drawing code (`src/editor`, `src/daftar.ts`,
-`src/cover.ts`…) or `js/`, run `npm run qt-bridge`: it bundles that code into
-`js/bridge.js`, which the app runs.
+The app is C++ and QML on the Rust core; there's no script engine or Node
+step. Its checks: `inkleaf --self-test`, `inkleaf --golden check tests/golden`
+(the results recorded when the code was checked identical to the TypeScript
+it replaced; see `../docs/MIGRATION.md`) and `inkleaf --smoke`.
 
 CI (`.github/workflows/qt.yml`) builds the AppImage, the Windows folder and
 the APK on every push that touches the app (kept as run artifacts); the
@@ -58,8 +59,13 @@ Everything:
 | `src/Core.*` | The Rust core for QML (`InkleafCore.call(command, args)`) |
 | `src/InkCanvas.*` | The page canvas: input, layout, scene-graph rendering, saving |
 | `src/Ink.*` | Ink geometry (smoothing, pen widths, stroke meshes) |
-| `src/JsCanvas.*`, `src/Js.*` | A Canvas 2D for the shared drawing code, and the script engine running it |
+| `src/Canvas.*` | The drawing surface (a canvas-2D style API over QPainter) |
+| `src/editor/` | The editor (`EditorCore`): tools, gestures, selection, undo, text, instruments; geometry, lists, alignment guides |
+| `src/draw/` | Drawing: papers, covers, daftar pages, strokes, shapes, text, pictures (`Render`) |
+| `src/daftar/` | The daftar annossous and cover setup (`DaftarApi` for QML) |
+| `src/Catalog.*` | Lists for QML (papers) and small helpers |
+| `src/tests/` | Self-tests and the reference results' checks (`--golden`) |
+| `tests/golden/` | The reference results (recorded by CI: Actions → Record reference results) |
 | `src/Pdf.*` | PDF import and PDF page pictures |
-| `js/` | The editor core and the bridge to the shared code in `../src` (`bridge.ts` → `bridge.js`) |
 | `qml/` | Screens (`Library`, `Editor`), `Theme` (colours), icons |
 | `native/` | The C interface to the Rust core |

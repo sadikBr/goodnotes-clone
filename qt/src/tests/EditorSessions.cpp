@@ -1,18 +1,14 @@
-// Developer and CI check while the editor moves from the script to C++
-// (docs/MIGRATION.md, step 6): inkleaf --compare-editor <folder> runs scripted
-// sessions (drawing, erasing, the lasso, moving, resizing, turning, text,
-// sticky notes, undo, copying, instruments, holding a stroke still) through
-// the script's editor (qt/js/editorCore.ts) and the C++ one (src/editor/
-// EditorCore), and after every step compares what the app would show: each
-// page's elements, the selection bar, the text being edited, the history,
-// the instrument, the live transform, cursors and the overlay's picture.
-#include "CompareEditor.h"
+// Editing sessions (drawing, erasing, the lasso, moving, resizing, turning,
+// text, sticky notes, undo, copying, pictures, handwriting to text,
+// instruments, holding a stroke still) run through the editor step by step,
+// for the reference results (tests/Golden.cpp). They were first used to
+// check the C++ editor against the script one it replaced (identical).
+#include "EditorSessions.h"
 
 #include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QImage>
-#include <QJSValue>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -24,11 +20,10 @@
 #include <memory>
 
 #include "Core.h"
-#include "Js.h"
-#include "JsCanvas.h"
+#include "Canvas.h"
 #include "draw/Render.h"
 #include "editor/EditorCore.h"
-#include "CompareJson.h"
+#include "JsonCompare.h"
 
 namespace {
 
@@ -43,76 +38,6 @@ struct Driver {
   /// What the app shows (ids not yet normalised).
   virtual QJsonObject state() = 0;
   virtual QImage overlay(int pi) = 0;
-  /// Timers due (holding a stroke still).
-  virtual void tick() {}
-};
-
-QJsonValue jsToJson(const QJSValue& v) {
-  if (v.isUndefined()) return QJsonValue(QJsonValue::Undefined);
-  const QString s = Js::instance().engine().evaluate("(v) => JSON.stringify(v === undefined ? null : v)").call({v}).toString();
-  return QJsonDocument::fromJson(("[" + s + "]").toUtf8()).array().first();
-}
-
-struct ScriptDriver : Driver {
-  QJSValue core;
-  explicit ScriptDriver(const QJsonArray& pages) {
-    Js& js = Js::instance();
-    core = js.call("createEditor", {js.toJs(pages)});
-  }
-  QJSValue invoke(const QString& m, const QJSValueList& args) {
-    QJSValue f = core.property(m);
-    QJSValue r = f.callWithInstance(core, args);
-    if (r.isError()) qWarning().noquote() << "script:" << m << r.toString();
-    return r;
-  }
-  QString down(int pi, double x, double y, double p, double t, const QString& tool, bool shift) override { return invoke("down", {pi, x, y, p, t, tool, shift}).toString(); }
-  void move(double x, double y, double p, double t, bool shift, bool alt) override { invoke("move", {x, y, p, t, shift, alt}); }
-  QJsonValue call(const QString& m, const QVariantList& args) override {
-    QJSValueList list;
-    for (const QVariant& a : args) list << Js::instance().engine().toScriptValue(a);
-    return jsToJson(invoke(m, list));
-  }
-  void set(const QString& prop, const QVariant& v) override { core.setProperty(prop, Js::instance().engine().toScriptValue(v)); }
-  QJsonObject state() override {
-    QJsonObject o;
-    QJsonArray scenes, hidden;
-    const int n = core.property("pages").property("length").toInt();
-    for (int i = 0; i < n; ++i) {
-      scenes.append(jsToJson(invoke("scene", {i})));
-      QJsonArray h;
-      for (const QJsonValue& el : scenes.last().toArray())
-        if (invoke("isHidden", {i, el.toObject()["id"].toString()}).toBool()) h.append(el.toObject()["id"]);
-      hidden.append(h);
-    }
-    o["scenes"] = scenes;
-    o["hidden"] = hidden;
-    o["active"] = core.property("active").toInt();
-    o["selection"] = jsToJson(invoke("selectionInfo", {}));
-    o["overlayBounds"] = jsToJson(invoke("overlayBounds", {}));
-    o["liveHidden"] = invoke("liveHidden", {}).toBool();
-    o["liveTransform"] = jsToJson(invoke("liveTransform", {}));
-    o["editing"] = jsToJson(core.property("editing"));
-    o["canUndo"] = invoke("canUndo", {}).toBool();
-    o["canRedo"] = invoke("canRedo", {}).toBool();
-    o["dirty"] = invoke("dirty", {}).toBool();
-    QJsonObject ins = jsToJson(invoke("instrument", {})).toObject();
-    ins.remove("rev");
-    o["instrument"] = ins;
-    return o;
-  }
-  QImage overlay(int pi) override {
-    auto* c = new JsCanvas(794, 1123);
-    QJSEngine::setObjectOwnership(c, QJSEngine::CppOwnership);
-    QJSValue ctx = Js::instance().engine().newQObject(c);
-    invoke("drawOverlay", {ctx, pi});
-    QImage img = c->image();
-    delete c;
-    return img;
-  }
-  void tick() override {
-    QJSValue g = Js::instance().engine().globalObject();
-    g.property("__runTimers").call();
-  }
 };
 
 QJsonValue rectJson(const std::optional<ed::Rect>& r) {
@@ -221,28 +146,11 @@ struct NativeDriver : Driver {
     return o;
   }
   QImage overlay(int pi) override {
-    JsCanvas c(794, 1123);
+    Canvas c(794, 1123);
     core.drawOverlay(c, pi);
     return c.image();
   }
 };
-
-int pixelDiff(const QImage& a0, const QImage& b0, int* max) {
-  const QImage a = a0.convertToFormat(QImage::Format_ARGB32), b = b0.convertToFormat(QImage::Format_ARGB32);
-  if (a.size() != b.size()) return -1;
-  int n = 0;
-  *max = 0;
-  for (int y = 0; y < a.height(); ++y) {
-    const QRgb* pa = reinterpret_cast<const QRgb*>(a.constScanLine(y));
-    const QRgb* pb = reinterpret_cast<const QRgb*>(b.constScanLine(y));
-    for (int x = 0; x < a.width(); ++x) {
-      const int m = std::max({std::abs(qRed(pa[x]) - qRed(pb[x])), std::abs(qGreen(pa[x]) - qGreen(pb[x])), std::abs(qBlue(pa[x]) - qBlue(pb[x])), std::abs(qAlpha(pa[x]) - qAlpha(pb[x]))});
-      *max = std::max(*max, m);
-      if (m > 2) ++n;
-    }
-  }
-  return n;
-}
 
 // ------------------------------------------------------------ the sessions
 
@@ -254,105 +162,54 @@ struct Session {
 
 class Runner {
 public:
-  /// Both editors compared (with the scripts), or the C++ one alone with each step handed to `onStep`.
-  Runner(const QString& name, const QJsonArray& pages, const QString& outDir, EditorStepFn onStep = {}) : m_name(name), m_out(outDir), m_onStep(std::move(onStep)) {
-    if (!m_onStep) m_eds.emplace_back(new ScriptDriver(pages));
-    m_eds.emplace_back(new NativeDriver(pages));
-    for (auto& e : m_eds) {
-      e->set("colors", QVariantMap{{"pen", "#111827"}, {"highlighter", "#facc15"}, {"shape", "#2563eb"}, {"text", "#111827"}, {"sticky", "#fef08a"}, {"laser", "#ff1f1f"}});
-      e->set("widths", QVariantMap{{"pen", 3}, {"highlighter", 18}, {"eraser", 14}, {"shape", 3}, {"text", 20}, {"sticky", 18}});
-      e->set("viewWidth", 1000);
-    }
+  Runner(const QString& name, const QJsonArray& pages, EditorStepFn onStep) : m_name(name), m_onStep(std::move(onStep)), m_ed(new NativeDriver(pages)) {
+    m_ed->set("colors", QVariantMap{{"pen", "#111827"}, {"highlighter", "#facc15"}, {"shape", "#2563eb"}, {"text", "#111827"}, {"sticky", "#fef08a"}, {"laser", "#ff1f1f"}});
+    m_ed->set("widths", QVariantMap{{"pen", 3}, {"highlighter", 18}, {"eraser", 14}, {"shape", 3}, {"text", 20}, {"sticky", 18}});
+    m_ed->set("viewWidth", 1000);
   }
-  int failures = 0, steps = 0;
 
-  void set(const QString& prop, const QVariant& v) {
-    for (auto& e : m_eds) e->set(prop, v);
-  }
+  void set(const QString& prop, const QVariant& v) { m_ed->set(prop, v); }
   void down(int pi, double x, double y, const QString& tool, bool shift = false) {
-    const double t = draw::clockMs();
-    QStringList r;
-    for (auto& e : m_eds) r << e->down(pi, x, y, 0.5, t, tool, shift);
-    const QString step = QString("down %1 %2,%3").arg(tool).arg(x).arg(y);
-    if (m_onStep) return check(step, {}, QJsonValue(r[0]));
-    check(step, r[0] != r[1] ? QStringList{QString("returned %1 vs %2").arg(r[0], r[1])} : QStringList{});
+    const QString r = m_ed->down(pi, x, y, 0.5, draw::clockMs(), tool, shift);
+    check(QString("down %1 %2,%3").arg(tool).arg(x).arg(y), QJsonValue(r));
   }
-  void move(double x, double y, bool shift = false, bool alt = false, double p = 0.5) {
-    const double t = draw::clockMs();
-    for (auto& e : m_eds) e->move(x, y, p, t, shift, alt);
-  }
+  void move(double x, double y, bool shift = false, bool alt = false, double p = 0.5) { m_ed->move(x, y, p, draw::clockMs(), shift, alt); }
   /// A drag from the press point along `pts`, then up.
   void drag(const std::vector<ed::P2>& pts, bool shift = false, bool alt = false) {
     for (const auto& p : pts) move(p[0], p[1], shift, alt);
-    check("drag", {});
+    check("drag");
   }
   void stroke(int pi, const QString& tool, const std::vector<ed::P2>& pts, bool shift = false) {
     down(pi, pts[0][0], pts[0][1], tool, shift);
     for (size_t k = 1; k < pts.size(); ++k) move(pts[k][0], pts[k][1], shift, false, 0.3 + 0.4 * std::sin(k * 0.3) * std::sin(k * 0.3));
-    check(tool + " moves", {});
+    check(tool + " moves");
     call("up");
   }
   QJsonValue call(const QString& m, const QVariantList& args = {}) {
-    if (m_onStep) {
-      QJsonValue r = m_eds[0]->call(m, args);
-      check(m, {}, r);
-      return r;
-    }
-    QJsonValue r[2];
-    for (int k = 0; k < 2; ++k) r[k] = m_eds[k]->call(m, args);
-    QStringList d;
-    QHash<QString, QString> i0, i1;
-    normalise(r[0], i0);
-    normalise(r[1], i1);
-    compare(r[0], r[1], "result", d);
-    check(m, d);
-    return r[1];
+    const QJsonValue r = m_ed->call(m, args);
+    check(m, r);
+    return r;
   }
   /// Real time passes (timers fire).
   void wait(int ms) {
     QElapsedTimer t;
     t.start();
-    while (t.elapsed() < ms) {
-      QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
-      for (auto& e : m_eds) e->tick();
-    }
-    check(QString("wait %1").arg(ms), {});
+    while (t.elapsed() < ms) QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+    check(QString("wait %1").arg(ms));
   }
-  void check(const QString& step, QStringList diffs, QJsonValue result = QJsonValue(QJsonValue::Undefined)) {
-    ++steps;
-    if (m_onStep) {
-      QJsonValue st = m_eds[0]->state();
-      QHash<QString, QString> ids;
-      normalise(st, ids);
-      normalise(result, ids);
-      m_onStep(m_name, step, result, st, m_eds[0]->overlay(st.toObject()["active"].toInt()));
-      return;
-    }
-    QJsonValue s[2] = {m_eds[0]->state(), m_eds[1]->state()};
-    QHash<QString, QString> i0, i1;
-    normalise(s[0], i0);
-    normalise(s[1], i1);
-    compare(s[0], s[1], "state", diffs);
-    const int pi = s[1].toObject()["active"].toInt();
-    const QImage a = m_eds[0]->overlay(pi), b = m_eds[1]->overlay(pi);
-    int max = 0;
-    const int px = pixelDiff(a, b, &max);
-    if (px != 0) diffs << QString("overlay: %1 pixels differ (max %2)").arg(px).arg(max);
-    if (diffs.isEmpty()) return;
-    ++failures;
-    qWarning().noquote() << "DIFFERS" << m_name << "step" << steps << step;
-    for (const QString& d : diffs) qWarning().noquote() << "   " << d;
-    if (px != 0) {
-      const QString base = QString("%1/%2-%3").arg(m_out, m_name).arg(steps);
-      a.save(base + "-script.png");
-      b.save(base + "-native.png");
-    }
+  /// One step: its result, the editor's state and its overlay.
+  void check(const QString& step, QJsonValue result = QJsonValue(QJsonValue::Undefined)) {
+    QJsonValue st = m_ed->state();
+    QHash<QString, QString> ids;
+    normalise(st, ids);
+    normalise(result, ids);
+    m_onStep(m_name, step, result, st, m_ed->overlay(st.toObject()["active"].toInt()));
   }
 
 private:
-  QString m_name, m_out;
+  QString m_name;
   EditorStepFn m_onStep;
-  std::vector<std::unique_ptr<Driver>> m_eds;
+  std::unique_ptr<Driver> m_ed;
 };
 
 std::vector<ed::P2> line(ed::P2 a, ed::P2 b, int n) {
@@ -672,30 +529,11 @@ QJsonArray seed() {
 }  // namespace
 
 void runEditorSessions(const EditorStepFn& onStep) {
-  QTemporaryDir data;
-  qputenv("INKLEAF_DATA_DIR", data.path().toUtf8());
+  // (The library folder is the caller's: INKLEAF_DATA_DIR.)
   const QJsonArray pages = seed();
   for (const Session& s : sessions()) {
-    Runner r(s.name, pages, QString(), onStep);
-    r.check("start", {});
+    Runner r(s.name, pages, onStep);
+    r.check("start");
     s.run(r);
   }
-}
-
-int compareEditor(const QString& outDir) {
-  QDir().mkpath(outDir);
-  QTemporaryDir data;
-  qputenv("INKLEAF_DATA_DIR", data.path().toUtf8());
-  const QJsonArray pages = seed();
-  int failed = 0, steps = 0;
-  for (const Session& s : sessions()) {
-    Runner r(s.name, pages, outDir);
-    r.check("start", {});
-    s.run(r);
-    failed += r.failures;
-    steps += r.steps;
-    Js::instance().engine().collectGarbage();
-  }
-  qInfo().noquote() << QString("compare-editor: %1 of %2 steps differ").arg(failed).arg(steps);
-  return failed ? 1 : 0;
 }

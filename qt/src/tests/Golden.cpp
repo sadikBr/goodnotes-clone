@@ -19,9 +19,9 @@
 #include <random>
 
 #include "../Catalog.h"
-#include "../CompareEditor.h"
-#include "../CompareJson.h"
-#include "../JsCanvas.h"
+#include "EditorSessions.h"
+#include "JsonCompare.h"
+#include "../Canvas.h"
 #include "../PaperImage.h"
 #include "../daftar/Cover.h"
 #include "../daftar/Daftar.h"
@@ -287,7 +287,7 @@ std::vector<std::pair<QString, std::function<QImage()>>> pictures() {
   for (const auto& [name, el] : samples::sampleElements()) {
     const QJsonObject e = el;
     out.push_back({name, [=] {
-                     JsCanvas c(320, 280);
+                     Canvas c(320, 280);
                      draw::drawElement(c, e);
                      return c.image();
                    }});
@@ -303,7 +303,7 @@ std::vector<std::pair<QString, std::function<QImage()>>> pictures() {
     for (bool dark : {false, true}) {
       const QString s = style;
       out.push_back({QString("sample-%1-%2").arg(style).arg(dark ? "dark" : "light"), [=] {
-                       JsCanvas c(112, 44);
+                       Canvas c(112, 44);
                        c.setTransform(2, 0, 0, 2, 0, 0);
                        nibSample(c, s, dark ? "#111827" : "#ffffff", 3, dark);
                        return c.image();

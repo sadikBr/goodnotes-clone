@@ -31,7 +31,7 @@ public:
   Q_INVOKABLE void callAsync(const QString& cmd, const QVariantMap& args, const QJSValue& callback);
   /// The same from C++: the answer as JSON, `error` set on failure.
   QJsonValue callJson(const QString& cmd, const QJsonObject& args, QString* error = nullptr, const QByteArray& bytes = {});
-  /// The answer's JSON text as it comes from the core (no parsing): for the scripts.
+  /// The answer's JSON text as it comes from the core (no parsing): for big answers.
   QByteArray callRaw(const QString& cmd, const QByteArray& argsJson, QString* error = nullptr);
   /// For commands that return a file (assetBytes, buildDocument, ...).
   QByteArray callBytes(const QString& cmd, const QJsonObject& args, QString* error = nullptr);

@@ -20,7 +20,7 @@
 #include "Model.h"
 #include "Snap.h"
 
-class JsCanvas;
+class Canvas;
 
 namespace ed {
 
@@ -145,7 +145,7 @@ public:
 
   // ------------------------------------------------------------ drawing
   /// Everything drawn over the page: the gesture in progress, the selection and its handles.
-  void drawOverlay(JsCanvas& c, int pi);
+  void drawOverlay(Canvas& c, int pi);
   /// Where the overlay draws on the active page, or none.
   std::optional<Rect> overlayBounds();
 
@@ -248,7 +248,7 @@ private:
   Els selectedInk();
   void startTextEdit(const ElPtr& el, bool isNew);
   std::vector<P2> transformOutline() const;
-  void drawHeldHint(JsCanvas& c, const El& el, const QString& mode) const;
+  void drawHeldHint(Canvas& c, const El& el, const QString& mode) const;
   double nextZ() { return nextZOf(elements()); }
   static double nextZOf(const Els& els);
   void stopTimers();
@@ -277,11 +277,11 @@ QVariantMap continueListFor(const QString& text, int caret);
 std::vector<Pt> thinPoints(const std::vector<Pt>& points, double min);
 
 // The overlay's pieces (were in src/editor/render.ts).
-void drawSelection(JsCanvas& c, const Rect& r, double zoom);
-void drawGroupHandles(JsCanvas& c, const Rect& box, double zoom);
-void drawTransformedBox(JsCanvas& c, const std::vector<P2>& corners, double zoom);
-void drawHandles(JsCanvas& c, const El& el, double zoom);
-void drawLasso(JsCanvas& c, const std::vector<P2>& pts, double zoom);
-void drawGuides(JsCanvas& c, const std::vector<Guide>& guides, double zoom);
+void drawSelection(Canvas& c, const Rect& r, double zoom);
+void drawGroupHandles(Canvas& c, const Rect& box, double zoom);
+void drawTransformedBox(Canvas& c, const std::vector<P2>& corners, double zoom);
+void drawHandles(Canvas& c, const El& el, double zoom);
+void drawLasso(Canvas& c, const std::vector<P2>& pts, double zoom);
+void drawGuides(Canvas& c, const std::vector<Guide>& guides, double zoom);
 
 }  // namespace ed

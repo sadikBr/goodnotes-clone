@@ -4,7 +4,7 @@
 #include <cmath>
 #include <functional>
 
-#include "../JsCanvas.h"
+#include "../Canvas.h"
 #include "Fonts.h"
 
 namespace draw {
@@ -37,7 +37,7 @@ QString tint(const QString& hex, double k) {
 
 /// Width of a label.
 double labelWidth(const QString& s, double size, bool bold = false) {
-  static JsCanvas* measurer = new JsCanvas(300, 150);
+  static Canvas* measurer = new Canvas(300, 150);
   measurer->setFont(fontCss("sans", size, bold, false, isRtl(s)));
   return measurer->textWidth(s);
 }
@@ -50,7 +50,7 @@ struct TextOpts {
   char anchor = 'r';
 };
 
-double text(JsCanvas& c, const QString& s, double x, double y, const TextOpts& o) {
+double text(Canvas& c, const QString& s, double x, double y, const TextOpts& o) {
   c.save();
   const bool rtl = isRtl(s);
   c.setFont(fontCss("sans", o.size, o.bold, false, rtl));
@@ -67,7 +67,7 @@ TextOpts T(double size, bool bold = false, const QString& color = {}, char ancho
 
 // --- shapes ----------------------------------------------------------------------
 
-void roundRect(JsCanvas& c, double x, double y, double w, double h, double r) {
+void roundRect(Canvas& c, double x, double y, double w, double h, double r) {
   c.beginPath();
   c.moveTo(x + r, y);
   c.lineTo(x + w - r, y);
@@ -81,7 +81,7 @@ void roundRect(JsCanvas& c, double x, double y, double w, double h, double r) {
   c.closePath();
 }
 
-void line(JsCanvas& c, double x0, double y0, double x1, double y1, const QString& color, double width = 1) {
+void line(Canvas& c, double x0, double y0, double x1, double y1, const QString& color, double width = 1) {
   c.setStroke(color);
   c.setLineWidth(width);
   c.beginPath();
@@ -90,13 +90,13 @@ void line(JsCanvas& c, double x0, double y0, double x1, double y1, const QString
   c.stroke();
 }
 
-void dotted(JsCanvas& c, double x0, double x1, double y, const QString& color = "rgba(60, 55, 70, 0.55)") {
+void dotted(Canvas& c, double x0, double x1, double y, const QString& color = "rgba(60, 55, 70, 0.55)") {
   c.setFill(color);
   for (double x = std::max(x0, x1); x > std::min(x0, x1); x -= 4) c.fillRect(x - 1.1, y, 1.1, 1.1);
 }
 
 /// The strip of small diamonds along the top of the printed pages.
-void topStrip(JsCanvas& c, double w, const QString& accent) {
+void topStrip(Canvas& c, double w, const QString& accent) {
   const double hgt = 24;
   c.setFill(tint(accent, 0.82));
   c.fillRect(0, 0, w, hgt);
@@ -115,13 +115,13 @@ void topStrip(JsCanvas& c, double w, const QString& accent) {
 }
 
 /// A page heading: Arabic, large and bold (`fr` is not shown: Arabic only).
-void heading(JsCanvas& c, const QString& ar, const QString& fr, double w, double y) {
+void heading(Canvas& c, const QString& ar, const QString& fr, double w, double y) {
   Q_UNUSED(fr);
   text(c, ar, w / 2, y + 8, T(26, true, {}, 'c'));
 }
 
 /// A rounded band across the page with a white section name.
-void sectionBand(JsCanvas& c, const QString& label, const QString& fr, double x0, double x1, double y, const QString& accent) {
+void sectionBand(Canvas& c, const QString& label, const QString& fr, double x0, double x1, double y, const QString& accent) {
   c.setFill(accent);
   roundRect(c, x0, y, x1 - x0, 32, 14);
   c.fill();
@@ -157,7 +157,7 @@ struct TableOpts {
 };
 
 /// A table with a coloured header (white labels) and ruled rows.
-void table(JsCanvas& c, const std::vector<Col>& cols, double x0, double x1, double y0, double rowH, int rows, const QString& accent, const TableOpts& o = {}) {
+void table(Canvas& c, const std::vector<Col>& cols, double x0, double x1, double y0, double rowH, int rows, const QString& accent, const TableOpts& o = {}) {
   const double headH = o.headH;
   const std::vector<Column> edges = columns(cols, x0, x1);
   const double bottom = y0 + headH + rows * rowH;
@@ -195,20 +195,20 @@ void table(JsCanvas& c, const std::vector<Col>& cols, double x0, double x1, doub
 }
 
 /// "label :" then a dotted line to `xEnd`; returns where its value goes.
-Slot field(JsCanvas& c, const QString& label, double xRight, double xEnd, double y, double size = 13.5) {
+Slot field(Canvas& c, const QString& label, double xRight, double xEnd, double y, double size = 13.5) {
   const double lw = text(c, label + " :", xRight, y, T(size, true));
   dotted(c, xRight - lw - 6, xEnd, y + 2);
   return {xEnd, y - size - 3, std::max(30.0, xRight - lw - 10 - xEnd)};
 }
 
 /// Signature lines for the teacher, the head and the inspector.
-void signatures(JsCanvas& c, double w, double y, double m) {
+void signatures(Canvas& c, double w, double y, double m) {
   text(c, "السيد(ة) الأستاذ(ة):", w - m, y, T(13, true));
   text(c, "السيد(ة) المدير(ة):", w / 2 + 50, y + 14, T(13, true));
   text(c, "السيد(ة) المفتش(ة):", m + 130, y + 28, T(13, true));
 }
 
-void star8(JsCanvas& c, double cx, double cy, double r, double turn) {
+void star8(Canvas& c, double cx, double cy, double r, double turn) {
   c.beginPath();
   for (int i = 0; i < 16; i++) {
     const double a = turn + (i * M_PI) / 8;
@@ -381,7 +381,7 @@ struct SlotMap {
 };
 
 /// Draws a daftar page and returns the slots where its values go.
-SlotMap drawPage(JsCanvas& c, const QString& t, double w, double h) {
+SlotMap drawPage(Canvas& c, const QString& t, double w, double h) {
   const QString accent = accentOf(t);
   SlotMap out;
   const double mid = w / 2;
@@ -573,7 +573,7 @@ bool isLessonTemplate(const QString& t) { return LESSON_TEMPLATES.contains(t); }
 bool isDaftarTemplate(const QString& t) { return isLessonTemplate(t) || DAFTAR_PAGES.contains(t); }
 QString lessonTemplateFor(int i) { return LESSON_TEMPLATES[((i % 6) + 6) % 6]; }
 
-void drawDaftarPage(JsCanvas& c, const QString& tmpl, double w, double h, const QString& paper) {
+void drawDaftarPage(Canvas& c, const QString& tmpl, double w, double h, const QString& paper) {
   c.setFill(paper);
   c.fillRect(0, 0, w, h);
   const Fit f = fit(w, h);
@@ -586,7 +586,7 @@ void drawDaftarPage(JsCanvas& c, const QString& tmpl, double w, double h, const 
 
 QHash<QString, Slot> daftarSlots(const QString& tmpl, double w, double h) {
   // Drawn on a tiny canvas only for the positions.
-  JsCanvas scratch(1, 1);
+  Canvas scratch(1, 1);
   const Fit f = fit(w, h);
   QHash<QString, Slot> out;
   const SlotMap found = drawPage(scratch, tmpl, A4W, A4H);
@@ -595,7 +595,7 @@ QHash<QString, Slot> daftarSlots(const QString& tmpl, double w, double h) {
 }
 
 std::vector<std::pair<QString, Slot>> daftarSlotList(const QString& tmpl, double w, double h) {
-  JsCanvas scratch(1, 1);
+  Canvas scratch(1, 1);
   const Fit f = fit(w, h);
   const SlotMap found = drawPage(scratch, tmpl, A4W, A4H);
   std::vector<std::pair<QString, Slot>> out;

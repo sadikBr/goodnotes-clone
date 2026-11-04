@@ -65,26 +65,26 @@ no Goodnotes code, assets or branding.
 ## Project layout
 
 ```
-qt/                   The app (Qt 6: QML screens, C++ canvas and glue); see qt/README.md
+qt/                   The app (Qt 6: QML screens, C++); see qt/README.md
+  src/editor/         The editor: gestures, selection, undo, text, instruments
+  src/draw/           Drawing: papers, covers, daftar pages, pens, shapes, text
+  src/daftar/         The daftar annossous and cover setup
+  src/tests/          Self-tests and the reference results' checks
+  tests/golden/       Reference results (recorded by CI)
   native/             The C interface to the Rust core
-  js/                 Editor logic and the bridge to the shared drawing code
-core/                 Rust core: SQLite library, ink, export (PDF/PPTX), backups,
-                      Google Drive sync, handwriting recognition (Windows Ink)
-src/                  Shared TypeScript drawing and layout code (papers, covers,
-                      pens, shapes and symbols, text, the daftar), bundled into
-                      qt/js/bridge.js by `npm run qt-bridge`
+core/                 Rust core: SQLite library, ink, shape and symbol recognition,
+                      export (PDF/PPTX), backups, Google Drive sync, handwriting
+                      recognition (Windows Ink)
 docs/                 Release guide, web pages (privacy, terms),
                       reverse-engineering/ (Goodnotes web architecture reports)
 ```
 
 ## Development
 
-Prerequisites: Qt 6.5+ (Quick, Controls, Svg, PDF), CMake, Rust stable,
-Node 20+. On Arch: `sudo pacman -S --needed qt6-base qt6-declarative qt6-svg qt6-webengine cmake base-devel rustup nodejs npm`.
+Prerequisites: Qt 6.5+ (Quick, Controls, Svg, PDF), CMake and Rust stable.
+On Arch: `sudo pacman -S --needed qt6-base qt6-declarative qt6-svg qt6-webengine cmake base-devel rustup`.
 
 ```bash
-npm install
-npm run qt-bridge                       # after changing src/ or qt/js
 cmake -S qt -B build/qt -DCMAKE_BUILD_TYPE=Release
 cmake --build build/qt -j
 ./build/qt/inkleaf
@@ -93,10 +93,16 @@ cmake --build build/qt -j
 Tests:
 
 ```bash
-npm run typecheck && npm test          # TypeScript + unit tests (Vitest)
-cargo test -p inkleaf-core             # Rust core (database, ink, export, sync)
+cargo test -p inkleaf-core             # Rust core (database, ink, recognition, export, sync)
+QT_QPA_PLATFORM=offscreen ./build/qt/inkleaf --self-test   # C++ tests (geometry, lists, guides, daftar…)
+QT_QPA_PLATFORM=offscreen ./build/qt/inkleaf --golden check qt/tests/golden   # same results as recorded
 QT_QPA_PLATFORM=offscreen ./build/qt/inkleaf --smoke   # the app starts and its screens load
 ```
+
+The reference results are recorded by CI (on its Qt version; text can measure
+a hair differently on others). After an intended change to drawing, the
+editor or the daftar, run **Actions → Record reference results**: it records
+them again and commits them.
 
 Data lives in the OS app-data directory (e.g. `~/.local/share/app.inkleaf.desktop/inkleaf.db`
 on Linux); `INKLEAF_DATA_DIR=/some/folder` uses another one.

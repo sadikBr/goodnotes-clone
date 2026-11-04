@@ -16,12 +16,11 @@
 #include <QQuickWindow>
 #include <QSurfaceFormat>
 
-#include "CompareDaftar.h"
+#include "Catalog.h"
+#include "draw/Covers.h"
+#include "draw/Render.h"
 #include "tests/Golden.h"
-#include "CompareEditor.h"
-#include "CompareRender.h"
 #include "tests/SelfTest.h"
-#include "Js.h"
 #include "Pdf.h"
 #include "PaperImage.h"
 #include "ShadowImage.h"
@@ -61,18 +60,6 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  // Developer check: evaluates a script with the bridge loaded and prints
-  // the result (inkleaf --js "<expression>").
-  if (const int i = QCoreApplication::arguments().indexOf("--js"); i > 0 && i + 1 < argc) {
-    QJSValue r = Js::instance().engine().evaluate(QCoreApplication::arguments().at(i + 1));
-    // Promises settle after the script returns; __after() reads their results.
-    QCoreApplication::processEvents();
-    const QJSValue after = Js::instance().engine().globalObject().property("__after");
-    if (after.isCallable()) r = after.call();
-    qInfo().noquote() << (r.isError() ? "error: " + r.toString() : Js::instance().engine().evaluate("JSON.stringify").call({r}).toString());
-    return 0;
-  }
-
   // Developer check: imports PDFs, then quits (inkleaf --import-pdf <file>…).
   if (const int i = QCoreApplication::arguments().indexOf("--import-pdf"); i > 0 && i + 1 < argc) {
     PdfImporter importer;
@@ -84,29 +71,18 @@ int main(int argc, char* argv[]) {
     return 0;
   }
 
-  // The C++ code's own tests (docs/MIGRATION.md).
+  // The C++ code's own tests.
   if (QCoreApplication::arguments().contains("--self-test")) return selftest::runAll();
-  // Developer and CI check: the C++ drawing matches the scripts' (docs/MIGRATION.md).
-  if (const int i = QCoreApplication::arguments().indexOf("--compare-render"); i > 0 && i + 1 < argc) return compareRender(QCoreApplication::arguments().at(i + 1));
-  // The same for the editor: both editors through the same sessions.
-  if (QCoreApplication::arguments().contains("--compare-daftar")) return compareDaftar();
-  // The reference results the C++ code is checked against (record or check).
+  // The reference results the code is checked against (docs/MIGRATION.md):
+  // inkleaf --golden record|check <folder> [<diffs folder>].
   if (const int i = QCoreApplication::arguments().indexOf("--golden"); i > 0 && i + 2 < argc)
     return golden(QCoreApplication::arguments().at(i + 1), QCoreApplication::arguments().at(i + 2), QCoreApplication::arguments().value(i + 3));
-  if (const int i = QCoreApplication::arguments().indexOf("--compare-editor"); i > 0 && i + 1 < argc) return compareEditor(QCoreApplication::arguments().at(i + 1));
-  // Developer check: draws every paper with the web app's code, then quits
-  // (inkleaf --render-papers <folder>).
+  // Developer check: draws every paper and cover, then quits (inkleaf --render-papers <folder>).
   if (const int i = QCoreApplication::arguments().indexOf("--render-papers"); i > 0 && i + 1 < argc) {
     const QString dir = QCoreApplication::arguments().at(i + 1);
     QDir().mkpath(dir);
-    QJSValue list = Js::instance().fn("TEMPLATES");
-    const int n = list.property("length").toInt();
-    for (int k = 0; k < n; ++k) {
-      const QString id = list.property(k).property("id").toString();
-      Js::instance().paper(id, "#fffdf7", 794, 1123, 1.0).save(dir + "/" + id + ".png");
-    }
-    for (const char* c : {"cover", "cover-geometric", "cover-zellige", "cover-marble", "cover-waves", "cover-leather", "cover-kraft", "cover-dots", "cover-minimal"})
-      Js::instance().paper(c, "#2563eb", 794, 1123, 0.5).save(dir + "/" + c + ".png");
+    for (const PaperTemplate& t : paperTemplates()) draw::paperImage(t.id, "#fffdf7", 794, 1123, 1.0).save(dir + "/" + t.id + ".png");
+    for (const draw::CoverDesign& d : draw::coverDesigns()) draw::paperImage(d.tmpl, "#2563eb", 794, 1123, 0.5).save(dir + "/" + d.tmpl + ".png");
     return 0;
   }
   QFont ui("Inter");

@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ["qt/**", "core/**", "src/**", "scripts/qt-*", "package*.json", "Cargo.*", ".github/workflows/qt.yml"]
+    paths: ["qt/**", "core/**", "scripts/**", "VERSION", "Cargo.*", ".github/workflows/qt.yml"]
   workflow_call:
     inputs:
       release:
@@ -36,10 +36,6 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
       - uses: dtolnay/rust-toolchain@stable
       - uses: swatinem/rust-cache@v2
         with:
@@ -53,9 +49,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libfuse2 ninja-build
-      - run: npm ci
-      - name: Scripts bundle (the web app's drawing code)
-        run: npm run qt-bridge
       - name: Build
         env:
           INKLEAF_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
@@ -64,28 +57,12 @@ jobs:
           cmake -S qt -B build/qt -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
           cmake --build build/qt
           DESTDIR=$PWD/AppDir cmake --install build/qt
-      - name: Unit tests (Rust core, shared TypeScript)
-        run: |
-          cargo test -p inkleaf-core
-          npm test
+      - name: Unit tests (Rust core)
+        run: cargo test -p inkleaf-core
       - name: The C++ code's own tests
         env:
           QT_QPA_PLATFORM: offscreen
         run: ./build/qt/inkleaf --self-test
-      - name: C++ drawing matches the scripts' (docs/MIGRATION.md)
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: ./build/qt/inkleaf --compare-render "$RUNNER_TEMP/compare"
-      - name: C++ editor matches the script's (docs/MIGRATION.md)
-        if: success() || failure()
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: ./build/qt/inkleaf --compare-editor "$RUNNER_TEMP/compare"
-      - name: C++ daftar and covers match the scripts' (docs/MIGRATION.md)
-        if: success() || failure()
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: ./build/qt/inkleaf --compare-daftar
       - name: Same results as recorded (qt/tests/golden)
         if: success() || failure()
         env:
@@ -94,9 +71,9 @@ jobs:
           if [ -f qt/tests/golden/editor.json ]; then
             ./build/qt/inkleaf --golden check qt/tests/golden "$RUNNER_TEMP/golden-diffs"
           else
-            echo "No recorded results yet (see the golden-new artifact)."
+            echo "No recorded results yet: run Actions → Record reference results."
           fi
-      - name: Results as they are now (to record after an intended change)
+      - name: Results as they are now (to compare by eye when the check fails)
         if: success() || failure()
         env:
           QT_QPA_PLATFORM: offscreen
@@ -113,12 +90,6 @@ jobs:
           name: golden-diffs
           path: ${{ runner.temp }}/golden-diffs
           if-no-files-found: ignore
-      - name: Differing pictures
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: compare-render
-          path: ${{ runner.temp }}/compare
       - name: AppImage
         env:
           QML_SOURCES_PATHS: ${{ github.workspace }}/qt/qml
@@ -137,7 +108,7 @@ jobs:
             cp -r "$QT_ROOT_DIR/plugins/$d" AppDir/usr/plugins/
           done
           export LD_LIBRARY_PATH="$QT_ROOT_DIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-          version=$(node -p "require('./package.json').version")
+          version=$(cat VERSION)
           LINUXDEPLOY_OUTPUT_VERSION=$version ./linuxdeploy --appdir AppDir --plugin qt --output appimage \
             -d AppDir/usr/share/applications/inkleaf.desktop -i AppDir/usr/share/icons/hicolor/256x256/apps/inkleaf.png
           mv Inkleaf-*.AppImage "Inkleaf_${version}_x86_64.AppImage"
@@ -161,10 +132,6 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
       - uses: dtolnay/rust-toolchain@stable
       - uses: swatinem/rust-cache@v2
         with:
@@ -176,9 +143,6 @@ jobs:
           modules: qtpdf
           cache: true
       - uses: ilammy/msvc-dev-cmd@v1
-      - run: npm ci
-      - name: Scripts bundle (the web app's drawing code)
-        run: npm run qt-bridge
       - name: Build
         env:
           INKLEAF_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
@@ -212,7 +176,7 @@ jobs:
           # It starts (window, scripts and dialogs load), without the Qt
           # installed here, so a module missing from the folder fails.
           env -u QML_IMPORT_PATH -u QML2_IMPORT_PATH -u QT_PLUGIN_PATH INKLEAF_DATA_DIR="$RUNNER_TEMP/library" ./dist/Inkleaf/Inkleaf.exe --smoke
-          version=$(node -p "require('./package.json').version")
+          version=$(cat VERSION)
           (cd dist && 7z a "../Inkleaf_${version}_windows_x64.zip" Inkleaf > /dev/null)
       - name: Installer (setup .exe)
         shell: bash
@@ -220,7 +184,7 @@ jobs:
           makensis=$(command -v makensis || true)
           [ -n "$makensis" ] || makensis="/c/Program Files (x86)/NSIS/makensis.exe"
           if [ ! -x "$makensis" ]; then choco install nsis -y --no-progress > /dev/null; makensis="/c/Program Files (x86)/NSIS/makensis.exe"; fi
-          version=$(node -p "require('./package.json').version")
+          version=$(cat VERSION)
           out="$PWD/Inkleaf_${version}_windows_x64_setup.exe"
           "$makensis" -V2 -DVERSION="$version" -DSOURCE="$(cygpath -w "$PWD/dist/Inkleaf")" -DOUTFILE="$(cygpath -w "$out")" qt/packaging/windows/inkleaf.nsi
           # It installs (quietly, into a test folder) and the installed app starts.
@@ -241,10 +205,6 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -268,9 +228,6 @@ jobs:
           arch: android_arm64_v8a
           extra: --autodesktop
           cache: true
-      - run: npm ci
-      - name: Scripts bundle (the web app's drawing code)
-        run: npm run qt-bridge
       - name: Signing key (when the Android secrets are set)
         env:
           KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -297,7 +254,7 @@ jobs:
             -DQT_HOST_PATH="$host" -DANDROID_SDK_ROOT="$ANDROID_HOME" -DANDROID_NDK_ROOT="$NDK_HOME" \
             -DQT_ANDROID_SIGN_APK=$SIGN
           cmake --build build/android --target apk
-          version=$(node -p "require('./package.json').version")
+          version=$(cat VERSION)
           apk=$(find build/android -name '*.apk' | grep -v unaligned | head -n 1)
           test -n "$apk"
           cp "$apk" "Inkleaf_${version}_android_arm64.apk"

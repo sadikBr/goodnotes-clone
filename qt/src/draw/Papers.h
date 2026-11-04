@@ -6,7 +6,7 @@
 #include <QString>
 #include <vector>
 
-class JsCanvas;
+class Canvas;
 
 namespace draw {
 
@@ -27,6 +27,6 @@ PaperLayout paperLayout(const QString& tmpl, double w, double h);
 
 /// Draws the paper colour and the template's lines (papers, covers, daftar
 /// pages; anything else is blank paper). Always true.
-bool drawPaper(JsCanvas& c, const QString& tmpl, double w, double h, const QString& paper);
+bool drawPaper(Canvas& c, const QString& tmpl, double w, double h, const QString& paper);
 
 }  // namespace draw

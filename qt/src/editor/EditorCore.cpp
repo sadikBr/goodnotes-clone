@@ -8,7 +8,7 @@
 #include <unordered_map>
 
 #include "../Core.h"
-#include "../JsCanvas.h"
+#include "../Canvas.h"
 #include "../draw/Render.h"
 #include "../draw/Elements.h"
 #include "../draw/Fonts.h"
@@ -1401,7 +1401,7 @@ void EditorCore::finishTextEdit() {
 
 // ------------------------------------------------------------ drawing
 
-void EditorCore::drawOverlay(JsCanvas& c, int pi) {
+void EditorCore::drawOverlay(Canvas& c, int pi) {
   if (pi != active) return;
   const Gesture& g = m_g;
   if (g.type == G::Draw) {
@@ -1488,7 +1488,7 @@ std::optional<Rect> EditorCore::overlayBounds() {
   return pad(*u, 48 / zoom);
 }
 
-void EditorCore::drawHeldHint(JsCanvas& c, const El& el, const QString& mode) const {
+void EditorCore::drawHeldHint(Canvas& c, const El& el, const QString& mode) const {
   const QString text = mode == "transform" ? QStringLiteral("Rotate & resize · hold still to move") : QStringLiteral("Move · hold still to rotate & resize");
   const Rect r = bounds(el);
   const double z = zoom;
@@ -1530,7 +1530,7 @@ std::vector<Pt> thinPoints(const std::vector<Pt>& points, double min) {
   return out;
 }
 
-void drawSelection(JsCanvas& c, const Rect& r, double zoom) {
+void drawSelection(Canvas& c, const Rect& r, double zoom) {
   c.save();
   c.setStroke(QStringLiteral("#2563eb"));
   c.setLineWidth(1.5 / zoom);
@@ -1539,7 +1539,7 @@ void drawSelection(JsCanvas& c, const Rect& r, double zoom) {
   c.restore();
 }
 
-void drawGroupHandles(JsCanvas& c, const Rect& box, double zoom) {
+void drawGroupHandles(Canvas& c, const Rect& box, double zoom) {
   const double size = 9 / zoom;
   const std::vector<Handle> hs = groupHandles(box, zoom);
   const Handle rot = *std::find_if(hs.begin(), hs.end(), [](const Handle& h) { return h.id == "rot"; });
@@ -1565,7 +1565,7 @@ void drawGroupHandles(JsCanvas& c, const Rect& box, double zoom) {
   c.restore();
 }
 
-void drawTransformedBox(JsCanvas& c, const std::vector<P2>& corners, double zoom) {
+void drawTransformedBox(Canvas& c, const std::vector<P2>& corners, double zoom) {
   c.save();
   c.setStroke(QStringLiteral("#2563eb"));
   c.setLineWidth(1.5 / zoom);
@@ -1580,7 +1580,7 @@ void drawTransformedBox(JsCanvas& c, const std::vector<P2>& corners, double zoom
   c.restore();
 }
 
-void drawHandles(JsCanvas& c, const El& el, double zoom) {
+void drawHandles(Canvas& c, const El& el, double zoom) {
   const double size = 9 / zoom;
   c.save();
   c.setLineWidth(1.5 / zoom);
@@ -1596,7 +1596,7 @@ void drawHandles(JsCanvas& c, const El& el, double zoom) {
   c.restore();
 }
 
-void drawLasso(JsCanvas& c, const std::vector<P2>& pts, double zoom) {
+void drawLasso(Canvas& c, const std::vector<P2>& pts, double zoom) {
   if (pts.size() < 2) return;
   c.save();
   c.setStroke(QStringLiteral("#2563eb"));
@@ -1612,7 +1612,7 @@ void drawLasso(JsCanvas& c, const std::vector<P2>& pts, double zoom) {
   c.restore();
 }
 
-void drawGuides(JsCanvas& c, const std::vector<Guide>& guides, double zoom) {
+void drawGuides(Canvas& c, const std::vector<Guide>& guides, double zoom) {
   if (guides.empty()) return;
   c.save();
   c.setStroke(QStringLiteral("#db2777"));

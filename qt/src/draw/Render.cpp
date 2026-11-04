@@ -7,7 +7,7 @@
 #include <utility>
 
 #include "../Core.h"
-#include "../JsCanvas.h"
+#include "../Canvas.h"
 #include "Elements.h"
 #include "Papers.h"
 
@@ -34,7 +34,7 @@ QImage paperImage(const QString& tmpl, const QString& color, double w, double h,
       cache.push_front({key, hit});
       return hit;
     }
-  JsCanvas canvas(std::max(1, int(std::ceil(region.width() * scale))), std::max(1, int(std::ceil(region.height() * scale))));
+  Canvas canvas(std::max(1, int(std::ceil(region.width() * scale))), std::max(1, int(std::ceil(region.height() * scale))));
   canvas.setTransform(scale, 0, 0, scale, -region.x() * scale, -region.y() * scale);
   drawPaper(canvas, tmpl, w, h, color);
   QImage out = canvas.image();
@@ -44,7 +44,7 @@ QImage paperImage(const QString& tmpl, const QString& color, double w, double h,
 }
 
 QImage elementsImage(const QJsonArray& els, double scale, QRectF region) {
-  JsCanvas canvas(std::max(1, int(std::ceil(region.width() * scale))), std::max(1, int(std::ceil(region.height() * scale))));
+  Canvas canvas(std::max(1, int(std::ceil(region.width() * scale))), std::max(1, int(std::ceil(region.height() * scale))));
   canvas.setTransform(scale, 0, 0, scale, -region.x() * scale, -region.y() * scale);
   for (const QJsonValue& v : els) drawElement(canvas, v.toObject());
   return canvas.image();

@@ -5,8 +5,7 @@
 #include <QRegularExpression>
 #include <cmath>
 
-#include "../Js.h"
-#include "../JsCanvas.h"
+#include "../Canvas.h"
 #include "Fonts.h"
 #include "Papers.h"
 #include "Strokes.h"
@@ -58,7 +57,7 @@ QString listMarker(const QString& para) {
   return m.hasMatch() ? m.captured(0) : QString();
 }
 
-QStringList wrapLines(JsCanvas& c, const QString& text, double maxWidth) {
+QStringList wrapLines(Canvas& c, const QString& text, double maxWidth) {
   QStringList out;
   for (const QString& para : text.split('\n')) {
     QString line;
@@ -76,13 +75,13 @@ QStringList wrapLines(JsCanvas& c, const QString& text, double maxWidth) {
   return out;
 }
 
-JsCanvas& measurer() {
-  static JsCanvas* m = new JsCanvas(300, 150);
+Canvas& measurer() {
+  static Canvas* m = new Canvas(300, 150);
   return *m;
 }
 
 /// Draws a laid-out line, right to left for Arabic (x is always its left edge).
-void fillLine(JsCanvas& c, const LaidLine& line) {
+void fillLine(Canvas& c, const LaidLine& line) {
   c.setFont(line.font);
   c.setDirection(line.rtl ? "rtl" : "ltr");
   c.setTextAlign("left");
@@ -102,7 +101,7 @@ bool isClosedShape(const QJsonObject& s) {
   return true;
 }
 
-void drawArrowHead(JsCanvas& c, P2 from, P2 to, double width) {
+void drawArrowHead(Canvas& c, P2 from, P2 to, double width) {
   const double angle = std::atan2(to.second - from.second, to.first - from.first);
   const double len = std::max(12.0, width * 4.5);
   c.beginPath();
@@ -114,7 +113,7 @@ void drawArrowHead(JsCanvas& c, P2 from, P2 to, double width) {
   c.stroke();
 }
 
-void drawShape(JsCanvas& c, const QJsonObject& el) {
+void drawShape(Canvas& c, const QJsonObject& el) {
   const QJsonObject s = el["shape"].toObject();
   const QString kind = s["kind"].toString();
   const double width = el["width"].toDouble();
@@ -152,7 +151,7 @@ void drawShape(JsCanvas& c, const QJsonObject& el) {
   c.restore();
 }
 
-void drawText(JsCanvas& c, const QJsonObject& el) {
+void drawText(Canvas& c, const QJsonObject& el) {
   c.save();
   c.setFill(el["color"].toString());
   c.setTextBaseline("top");
@@ -161,7 +160,7 @@ void drawText(JsCanvas& c, const QJsonObject& el) {
   c.restore();
 }
 
-void drawSticky(JsCanvas& c, const QJsonObject& el) {
+void drawSticky(Canvas& c, const QJsonObject& el) {
   const double x = el["x"].toDouble(), y = el["y"].toDouble(), w = el["w"].toDouble(), h = el["h"].toDouble();
   c.save();
   c.setShadowColor("rgba(0,0,0,0.18)");
@@ -180,7 +179,7 @@ void drawSticky(JsCanvas& c, const QJsonObject& el) {
   c.restore();
 }
 
-void drawImage(JsCanvas& c, const QJsonObject& el) {
+void drawImage(Canvas& c, const QJsonObject& el) {
   const double x = el["x"].toDouble(), y = el["y"].toDouble(), w = el["w"].toDouble(), h = el["h"].toDouble();
   QImage img;
   if (const QImage* im = imageFor(el["src"].toString())) img = *im;
@@ -199,7 +198,7 @@ void drawImage(JsCanvas& c, const QJsonObject& el) {
 
 TextStyle TextStyle::of(const QJsonObject& el) { return {el["font"].toString(), el["bold"].toBool(), el["italic"].toBool(), el["align"].toString()}; }
 
-std::vector<LaidLine> layoutText(JsCanvas& c, const QString& text, double x, double y, double w, double size, double lineH, const TextStyle& style) {
+std::vector<LaidLine> layoutText(Canvas& c, const QString& text, double x, double y, double w, double size, double lineH, const TextStyle& style) {
   std::vector<LaidLine> out;
   int row = 0;
   for (const QString& para : text.split('\n')) {
@@ -254,7 +253,7 @@ double naturalTextWidth(const QJsonObject& el) {
   return best;
 }
 
-void drawElement(JsCanvas& c, const QJsonObject& el) {
+void drawElement(Canvas& c, const QJsonObject& el) {
   const QString kind = el["kind"].toString();
   // Text boxes, sticky notes and pictures can be rotated around their centre.
   if ((kind == "text" || kind == "sticky" || kind == "image") && el["rotation"].toDouble() != 0) {
@@ -277,14 +276,14 @@ void drawElement(JsCanvas& c, const QJsonObject& el) {
   else if (kind == "image") drawImage(c, el);
 }
 
-void paintPage(JsCanvas& c, const QString& tmpl, const QString& paper, double w, double h, const QJsonArray& els, const QImage& background) {
+void paintPage(Canvas& c, const QString& tmpl, const QString& paper, double w, double h, const QJsonArray& els, const QImage& background) {
   drawPaper(c, tmpl, w, h, paper);
   if (!background.isNull()) c.drawImage(background, 0, 0, w, h);
   for (const QJsonValue& v : els) drawElement(c, v.toObject());
 }
 
-std::unique_ptr<JsCanvas> renderPage(const QString& tmpl, const QString& paper, double w, double h, const QJsonArray& els, double scale, const QImage& background) {
-  auto c = std::make_unique<JsCanvas>(std::max(1, int(std::floor(w * scale + 0.5))), std::max(1, int(std::floor(h * scale + 0.5))));
+std::unique_ptr<Canvas> renderPage(const QString& tmpl, const QString& paper, double w, double h, const QJsonArray& els, double scale, const QImage& background) {
+  auto c = std::make_unique<Canvas>(std::max(1, int(std::floor(w * scale + 0.5))), std::max(1, int(std::floor(h * scale + 0.5))));
   c->scale(scale, scale);
   paintPage(*c, tmpl, paper, w, h, els, background);
   return c;

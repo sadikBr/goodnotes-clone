@@ -1,4 +1,4 @@
-#include "JsCanvas.h"
+#include "Canvas.h"
 
 #include <QBuffer>
 #include <QFontDatabase>
@@ -62,11 +62,11 @@ void blurAlpha(QImage& img, double sigma) {
 
 // --- gradients -------------------------------------------------------------------
 
-void JsGradient::addColorStop(double offset, const QString& color) { m_g->setColorAt(clamp01(offset), JsCanvas::parseColor(color)); }
+void CanvasGradient::addColorStop(double offset, const QString& color) { m_g->setColorAt(clamp01(offset), Canvas::parseColor(color)); }
 
 // --- colours and fonts -------------------------------------------------------------
 
-QColor JsCanvas::parseColor(const QString& input) {
+QColor Canvas::parseColor(const QString& input) {
   const QString css = input.trimmed().toLower();
   if (css.isEmpty() || css == "transparent") return QColor(0, 0, 0, 0);
   if (css.startsWith('#')) {
@@ -109,7 +109,7 @@ QColor JsCanvas::parseColor(const QString& input) {
   return c.isValid() ? c : QColor(Qt::black);
 }
 
-QFont JsCanvas::parseFont(const QString& css) {
+QFont Canvas::parseFont(const QString& css) {
   static QHash<QString, QFont> cache;
   if (auto it = cache.constFind(css); it != cache.constEnd()) return *it;
   QFont f;
@@ -166,13 +166,13 @@ QFont JsCanvas::parseFont(const QString& css) {
 
 // --- the canvas ---------------------------------------------------------------------
 
-JsCanvas::JsCanvas(int w, int h, QObject* parent) : QObject(parent) {
+Canvas::Canvas(int w, int h, QObject* parent) : QObject(parent) {
   m_states.emplace_back();
   m_states.back().font = parseFont(m_states.back().fontCss);
   reset(w, h);
 }
 
-JsCanvas::JsCanvas(QPainter* external, int w, int h, QObject* parent) : QObject(parent) {
+Canvas::Canvas(QPainter* external, int w, int h, QObject* parent) : QObject(parent) {
   m_states.emplace_back();
   m_states.back().font = parseFont(m_states.back().fontCss);
   reset(1, 1);  // a tiny picture for font metrics at 96 dpi
@@ -182,7 +182,7 @@ JsCanvas::JsCanvas(QPainter* external, int w, int h, QObject* parent) : QObject(
   m_external->setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing | QPainter::SmoothPixmapTransform);
 }
 
-JsCanvas::~JsCanvas() {
+Canvas::~Canvas() {
   if (m_external) {
     for (size_t i = 1; i < m_states.size(); ++i) m_external->restore();
     m_external->restore();
@@ -193,7 +193,7 @@ JsCanvas::~JsCanvas() {
   m_painter.reset();
 }
 
-void JsCanvas::reset(int w, int h) {
+void Canvas::reset(int w, int h) {
   if (m_painter)
     for (size_t i = 1; i < m_states.size(); ++i) m_painter->restore();
   m_painter.reset();
@@ -208,7 +208,7 @@ void JsCanvas::reset(int w, int h) {
   m_hasPoint = false;
 }
 
-QImage JsCanvas::image() {
+QImage Canvas::image() {
   if (m_external) return {};
   // Ends painting (it starts again on the next call), balancing saved states.
   if (m_painter)
@@ -217,7 +217,7 @@ QImage JsCanvas::image() {
   return m_img;
 }
 
-QPainter& JsCanvas::painter() {
+QPainter& Canvas::painter() {
   if (m_external) return *m_external;
   if (!m_painter) {
     m_painter = std::make_unique<QPainter>(&m_img);
@@ -232,62 +232,62 @@ QPainter& JsCanvas::painter() {
   return *m_painter;
 }
 
-void JsCanvas::save() {
+void Canvas::save() {
   QPainter& p = painter();  // create first: a new painter replays the saved states
   m_states.push_back(m_states.back());
   p.save();
 }
 
-void JsCanvas::restore() {
+void Canvas::restore() {
   if (m_states.size() <= 1) return;
   QPainter& p = painter();
   m_states.pop_back();
   p.restore();
 }
 
-void JsCanvas::translate(double x, double y) { st().ctm = QTransform::fromTranslate(x, y) * st().ctm; }
-void JsCanvas::rotate(double a) {
+void Canvas::translate(double x, double y) { st().ctm = QTransform::fromTranslate(x, y) * st().ctm; }
+void Canvas::rotate(double a) {
   QTransform r;
   r.rotateRadians(a);
   st().ctm = r * st().ctm;
 }
-void JsCanvas::scale(double x, double y) { st().ctm = QTransform::fromScale(x, y) * st().ctm; }
-void JsCanvas::transform(double a, double b, double c, double d, double e, double f) { st().ctm = QTransform(a, b, c, d, e, f) * st().ctm; }
-void JsCanvas::setTransform(double a, double b, double c, double d, double e, double f) { st().ctm = QTransform(a, b, c, d, e, f); }
-QVariantList JsCanvas::getTransformList() const {
+void Canvas::scale(double x, double y) { st().ctm = QTransform::fromScale(x, y) * st().ctm; }
+void Canvas::transform(double a, double b, double c, double d, double e, double f) { st().ctm = QTransform(a, b, c, d, e, f) * st().ctm; }
+void Canvas::setTransform(double a, double b, double c, double d, double e, double f) { st().ctm = QTransform(a, b, c, d, e, f); }
+QVariantList Canvas::getTransformList() const {
   const QTransform& t = st().ctm;
   return {t.m11(), t.m12(), t.m21(), t.m22(), t.dx(), t.dy()};
 }
 
 // --- paths ---------------------------------------------------------------------------
 
-void JsCanvas::moveTo(double x, double y) {
+void Canvas::moveTo(double x, double y) {
   m_path.moveTo(st().ctm.map(QPointF(x, y)));
   m_hasPoint = true;
 }
-void JsCanvas::ensurePoint(double x, double y) {
+void Canvas::ensurePoint(double x, double y) {
   if (!m_hasPoint) moveTo(x, y);
 }
-void JsCanvas::lineTo(double x, double y) {
+void Canvas::lineTo(double x, double y) {
   if (!m_hasPoint) return moveTo(x, y);
   m_path.lineTo(st().ctm.map(QPointF(x, y)));
 }
-void JsCanvas::closePath() {
+void Canvas::closePath() {
   if (m_hasPoint) m_path.closeSubpath();
 }
-void JsCanvas::quadraticCurveTo(double cx, double cy, double x, double y) {
+void Canvas::quadraticCurveTo(double cx, double cy, double x, double y) {
   ensurePoint(cx, cy);
   m_path.quadTo(st().ctm.map(QPointF(cx, cy)), st().ctm.map(QPointF(x, y)));
 }
-void JsCanvas::bezierCurveTo(double c1x, double c1y, double c2x, double c2y, double x, double y) {
+void Canvas::bezierCurveTo(double c1x, double c1y, double c2x, double c2y, double x, double y) {
   ensurePoint(c1x, c1y);
   const QTransform& t = st().ctm;
   m_path.cubicTo(t.map(QPointF(c1x, c1y)), t.map(QPointF(c2x, c2y)), t.map(QPointF(x, y)));
 }
 
-void JsCanvas::arc(double x, double y, double r, double a0, double a1, bool ccw) { ellipse(x, y, r, r, 0, a0, a1, ccw); }
+void Canvas::arc(double x, double y, double r, double a0, double a1, bool ccw) { ellipse(x, y, r, r, 0, a0, a1, ccw); }
 
-void JsCanvas::ellipse(double x, double y, double rx, double ry, double rot, double a0, double a1, bool ccw) {
+void Canvas::ellipse(double x, double y, double rx, double ry, double rot, double a0, double a1, bool ccw) {
   if (rx < 0 || ry < 0 || !std::isfinite(rx + ry + a0 + a1)) return;
   // The sweep, as the canvas spec defines it.
   const double tau = 2 * M_PI;
@@ -326,7 +326,7 @@ void JsCanvas::ellipse(double x, double y, double rx, double ry, double rot, dou
   }
 }
 
-void JsCanvas::arcTo(double x1, double y1, double x2, double y2, double r) {
+void Canvas::arcTo(double x1, double y1, double x2, double y2, double r) {
   // Device space is fine for the tangent points when the transform keeps
   // circles round (the drawing code only uses uniform scales).
   if (!m_hasPoint) return moveTo(x1, y1);
@@ -351,7 +351,7 @@ void JsCanvas::arcTo(double x1, double y1, double x2, double y2, double r) {
   arc(c.x(), c.y(), r, a0, a2, cross > 0);
 }
 
-void JsCanvas::rect(double x, double y, double w, double h) {
+void Canvas::rect(double x, double y, double w, double h) {
   const QTransform& t = st().ctm;
   m_path.moveTo(t.map(QPointF(x, y)));
   m_path.lineTo(t.map(QPointF(x + w, y)));
@@ -362,7 +362,7 @@ void JsCanvas::rect(double x, double y, double w, double h) {
   m_hasPoint = true;
 }
 
-void JsCanvas::roundRect(double x, double y, double w, double h, const QJSValue& radii) {
+void Canvas::roundRect(double x, double y, double w, double h, const QJSValue& radii) {
   double r = 0;
   if (radii.isNumber()) r = radii.toNumber();
   else if (radii.isArray() && radii.property("length").toInt() > 0) r = radii.property(0).toNumber();
@@ -383,15 +383,15 @@ void JsCanvas::roundRect(double x, double y, double w, double h, const QJSValue&
 
 // --- painting -----------------------------------------------------------------------
 
-QBrush JsCanvas::brushFor(const QJSValue& v, bool* userSpace) {
+QBrush Canvas::brushFor(const QJSValue& v, bool* userSpace) {
   *userSpace = false;
   if (v.isQObject()) {
     QObject* o = v.toQObject();
-    if (auto* g = qobject_cast<JsGradient*>(o)) {
+    if (auto* g = qobject_cast<CanvasGradient*>(o)) {
       *userSpace = true;
       return QBrush(g->gradient());
     }
-    if (auto* p = qobject_cast<JsPattern*>(o)) {
+    if (auto* p = qobject_cast<CanvasPattern*>(o)) {
       *userSpace = true;
       return QBrush(p->image());
     }
@@ -399,52 +399,52 @@ QBrush JsCanvas::brushFor(const QJSValue& v, bool* userSpace) {
   return QBrush(parseColor(v.toString()));
 }
 
-void JsCanvas::setFillStyle(const QJSValue& v) {
+void Canvas::setFillStyle(const QJSValue& v) {
   if (!v.isString() && !v.isQObject()) return;
   st().fillJs = v;
   st().fill = brushFor(v, &st().fillUser);
 }
-void JsCanvas::setStrokeStyle(const QJSValue& v) {
+void Canvas::setStrokeStyle(const QJSValue& v) {
   if (!v.isString() && !v.isQObject()) return;
   st().strokeJs = v;
   st().strokeBrush = brushFor(v, &st().strokeUser);
 }
 
-void JsCanvas::setFill(const QBrush& brush) {
+void Canvas::setFill(const QBrush& brush) {
   st().fillJs = QJSValue();
   st().fill = brush;
   st().fillUser = true;
 }
-void JsCanvas::setStroke(const QBrush& brush) {
+void Canvas::setStroke(const QBrush& brush) {
   st().strokeJs = QJSValue();
   st().strokeBrush = brush;
   st().strokeUser = true;
 }
-void JsCanvas::setDash(std::initializer_list<qreal> dashes) {
+void Canvas::setDash(std::initializer_list<qreal> dashes) {
   QVariantList l;
   for (qreal d : dashes) l << d;
   setLineDash(l);
 }
-void JsCanvas::drawImage(const QImage& img, double x, double y, double w, double h) {
+void Canvas::drawImage(const QImage& img, double x, double y, double w, double h) {
   if (img.isNull()) return;
-  auto* holder = new JsImage(img);
+  auto* holder = new CanvasImage(img);
   drawImage(holder, x, y, QJSValue(w), QJSValue(h));
   delete holder;
 }
-double JsCanvas::textWidth(const QString& text) { return measureText(text).value("width").toDouble(); }
+double Canvas::textWidth(const QString& text) { return measureText(text).value("width").toDouble(); }
 
-QString JsCanvas::lineCap() const { return st().cap == Qt::RoundCap ? "round" : st().cap == Qt::SquareCap ? "square" : "butt"; }
-void JsCanvas::setLineCap(const QString& c) { st().cap = c == "round" ? Qt::RoundCap : c == "square" ? Qt::SquareCap : Qt::FlatCap; }
-QString JsCanvas::lineJoin() const { return st().join == Qt::RoundJoin ? "round" : st().join == Qt::BevelJoin ? "bevel" : "miter"; }
-void JsCanvas::setLineJoin(const QString& j) { st().join = j == "round" ? Qt::RoundJoin : j == "bevel" ? Qt::BevelJoin : Qt::SvgMiterJoin; }
+QString Canvas::lineCap() const { return st().cap == Qt::RoundCap ? "round" : st().cap == Qt::SquareCap ? "square" : "butt"; }
+void Canvas::setLineCap(const QString& c) { st().cap = c == "round" ? Qt::RoundCap : c == "square" ? Qt::SquareCap : Qt::FlatCap; }
+QString Canvas::lineJoin() const { return st().join == Qt::RoundJoin ? "round" : st().join == Qt::BevelJoin ? "bevel" : "miter"; }
+void Canvas::setLineJoin(const QString& j) { st().join = j == "round" ? Qt::RoundJoin : j == "bevel" ? Qt::BevelJoin : Qt::SvgMiterJoin; }
 
-void JsCanvas::setFont(const QString& css) {
+void Canvas::setFont(const QString& css) {
   st().fontCss = css;
   st().font = parseFont(css);
   if (st().letterSpacing) st().font.setLetterSpacing(QFont::AbsoluteSpacing, st().letterSpacing);
 }
 
-void JsCanvas::setLetterSpacing(const QString& s) {
+void Canvas::setLetterSpacing(const QString& s) {
   st().letterSpacingCss = s;
   QString v = s.trimmed();
   if (v.endsWith("px")) v.chop(2);
@@ -452,7 +452,7 @@ void JsCanvas::setLetterSpacing(const QString& s) {
   st().font.setLetterSpacing(QFont::AbsoluteSpacing, st().letterSpacing);
 }
 
-void JsCanvas::setComposite(const QString& c) {
+void Canvas::setComposite(const QString& c) {
   static const QHash<QString, QPainter::CompositionMode> modes = {
       {"source-over", QPainter::CompositionMode_SourceOver},
       {"source-in", QPainter::CompositionMode_SourceIn},
@@ -483,9 +483,9 @@ void JsCanvas::setComposite(const QString& c) {
   }
 }
 
-void JsCanvas::setShadowColor(const QString& c) { st().shadowColor = parseColor(c); }
+void Canvas::setShadowColor(const QString& c) { st().shadowColor = parseColor(c); }
 
-void JsCanvas::setLineDash(const QVariantList& dashes) {
+void Canvas::setLineDash(const QVariantList& dashes) {
   QVector<qreal> d;
   for (const QVariant& v : dashes) {
     const double x = v.toDouble();
@@ -496,13 +496,13 @@ void JsCanvas::setLineDash(const QVariantList& dashes) {
   bool allZero = std::all_of(d.begin(), d.end(), [](qreal x) { return x == 0; });
   st().dash = allZero ? QVector<qreal>() : d;
 }
-QVariantList JsCanvas::getLineDash() const {
+QVariantList Canvas::getLineDash() const {
   QVariantList out;
   for (qreal d : st().dash) out << d;
   return out;
 }
 
-QPen JsCanvas::strokePen() const {
+QPen Canvas::strokePen() const {
   const State& s = st();
   QPen pen(s.strokeBrush, s.lineWidth, Qt::SolidLine, s.cap, s.join);
   pen.setMiterLimit(s.miter / 2);  // Qt measures it in half widths
@@ -516,7 +516,7 @@ QPen JsCanvas::strokePen() const {
   return pen;
 }
 
-void JsCanvas::drawShadow(const QPainterPath& path) {
+void Canvas::drawShadow(const QPainterPath& path) {
   const State& s = st();
   if (s.shadowColor.alpha() == 0 || (s.shadowBlur <= 0 && s.shadowOffset.isNull())) return;
   const double sigma = s.shadowBlur / 2;
@@ -539,7 +539,7 @@ void JsCanvas::drawShadow(const QPainterPath& path) {
   p.drawImage(box.topLeft() + s.shadowOffset, img);
 }
 
-void JsCanvas::fillDevice(const QPainterPath& path, const QBrush& b, bool userSpace) {
+void Canvas::fillDevice(const QPainterPath& path, const QBrush& b, bool userSpace) {
   QPainter& p = painter();
   drawShadow(path);
   QBrush brush = b;
@@ -550,13 +550,13 @@ void JsCanvas::fillDevice(const QPainterPath& path, const QBrush& b, bool userSp
   p.fillPath(path, brush);
 }
 
-void JsCanvas::fill(const QString& rule) {
+void Canvas::fill(const QString& rule) {
   QPainterPath path = m_path;
   path.setFillRule(rule == "evenodd" ? Qt::OddEvenFill : Qt::WindingFill);
   fillDevice(path, st().fill, st().fillUser);
 }
 
-void JsCanvas::stroke() {
+void Canvas::stroke() {
   // Stroked in user space (so the line width follows the transform), then drawn.
   const QTransform& t = st().ctm;
   if (!t.isInvertible()) return;
@@ -567,7 +567,7 @@ void JsCanvas::stroke() {
   fillDevice(outline, st().strokeBrush, st().strokeUser);
 }
 
-void JsCanvas::clip(const QString& rule) {
+void Canvas::clip(const QString& rule) {
   QPainterPath path = m_path;
   path.setFillRule(rule == "evenodd" ? Qt::OddEvenFill : Qt::WindingFill);
   QPainter& p = painter();
@@ -575,14 +575,14 @@ void JsCanvas::clip(const QString& rule) {
   p.setClipPath(path, p.hasClipping() ? Qt::IntersectClip : Qt::ReplaceClip);
 }
 
-void JsCanvas::fillRect(double x, double y, double w, double h) {
+void Canvas::fillRect(double x, double y, double w, double h) {
   QPainterPath path;
   path.addPolygon(st().ctm.map(QPolygonF(QRectF(x, y, w, h))));
   path.closeSubpath();
   fillDevice(path, st().fill, st().fillUser);
 }
 
-void JsCanvas::strokeRect(double x, double y, double w, double h) {
+void Canvas::strokeRect(double x, double y, double w, double h) {
   const QPainterPath saved = m_path;
   const bool had = m_hasPoint;
   beginPath();
@@ -592,7 +592,7 @@ void JsCanvas::strokeRect(double x, double y, double w, double h) {
   m_hasPoint = had;
 }
 
-void JsCanvas::clearRect(double x, double y, double w, double h) {
+void Canvas::clearRect(double x, double y, double w, double h) {
   QPainter& p = painter();
   p.setTransform(st().ctm);
   p.setOpacity(1);
@@ -630,7 +630,7 @@ Laid layOut(const QString& text, const QFont& font, bool rtl) {
 }
 }  // namespace
 
-void JsCanvas::drawText(const QString& text, double x, double y, bool strokeIt, const QJSValue& maxWidth) {
+void Canvas::drawText(const QString& text, double x, double y, bool strokeIt, const QJSValue& maxWidth) {
   if (text.isEmpty()) return;
   const State& s = st();
   const bool rtl = s.direction == "rtl";
@@ -692,10 +692,10 @@ void JsCanvas::drawText(const QString& text, double x, double y, bool strokeIt, 
   l.layout->draw(&p, QPointF(0, 0));
 }
 
-void JsCanvas::fillText(const QString& text, double x, double y, const QJSValue& maxWidth) { drawText(text, x, y, false, maxWidth); }
-void JsCanvas::strokeText(const QString& text, double x, double y, const QJSValue& maxWidth) { drawText(text, x, y, true, maxWidth); }
+void Canvas::fillText(const QString& text, double x, double y, const QJSValue& maxWidth) { drawText(text, x, y, false, maxWidth); }
+void Canvas::strokeText(const QString& text, double x, double y, const QJSValue& maxWidth) { drawText(text, x, y, true, maxWidth); }
 
-QVariantMap JsCanvas::measureText(const QString& text) {
+QVariantMap Canvas::measureText(const QString& text) {
   const State& s = st();
   Laid l = layOut(text, s.font, s.direction == "rtl");
   const QFontMetricsF fm(s.font, &m_img);
@@ -720,11 +720,11 @@ QVariantMap JsCanvas::measureText(const QString& text) {
 
 // --- images -----------------------------------------------------------------------------
 
-void JsCanvas::drawImage(QObject* source, double a, double b, const QJSValue& c, const QJSValue& d, const QJSValue& e, const QJSValue& f, const QJSValue& g,
+void Canvas::drawImage(QObject* source, double a, double b, const QJSValue& c, const QJSValue& d, const QJSValue& e, const QJSValue& f, const QJSValue& g,
                          const QJSValue& h) {
   QImage img;
-  if (auto* cv = qobject_cast<JsCanvas*>(source)) img = cv == this ? m_img.copy() : cv->image();
-  else if (auto* im = qobject_cast<JsImage*>(source)) img = im->image();
+  if (auto* cv = qobject_cast<Canvas*>(source)) img = cv == this ? m_img.copy() : cv->image();
+  else if (auto* im = qobject_cast<CanvasImage*>(source)) img = im->image();
   if (img.isNull()) return;
   QRectF src(0, 0, img.width(), img.height()), dst;
   if (!c.isUndefined() && !g.isUndefined()) {
@@ -748,19 +748,8 @@ void JsCanvas::drawImage(QObject* source, double a, double b, const QJSValue& c,
   p.drawImage(dst, img, src);
 }
 
-QJSValue JsCanvas::getImageData(int x, int y, int w, int h) {
-  QJSEngine* engine = qjsEngine(this);
-  if (!engine) return {};
-  return engine->globalObject().property("__imageData").call({engine->toScriptValue(pixels(x, y, w, h)), w, h});
-}
 
-void JsCanvas::putImageData(const QJSValue& data, int x, int y) {
-  const int w = data.property("width").toInt(), h = data.property("height").toInt();
-  const QByteArray bytes = data.property("data").property("buffer").toVariant().toByteArray();
-  putPixels(bytes, x, y, w, h);
-}
-
-QString JsCanvas::toDataURL(const QString& type, double quality) {
+QString Canvas::toDataURL(const QString& type, double quality) {
   QByteArray bytes;
   QBuffer buf(&bytes);
   buf.open(QIODevice::WriteOnly);
@@ -780,7 +769,7 @@ QString JsCanvas::toDataURL(const QString& type, double quality) {
   return QStringLiteral("data:") + (jpeg ? "image/jpeg" : "image/png") + ";base64," + QString::fromLatin1(bytes.toBase64());
 }
 
-QByteArray JsCanvas::pixels(int x, int y, int w, int h) {
+QByteArray Canvas::pixels(int x, int y, int w, int h) {
   const QImage part = image().copy(x, y, w, h).convertToFormat(QImage::Format_RGBA8888);
   QByteArray out;
   out.reserve(qsizetype(w) * h * 4);
@@ -788,7 +777,7 @@ QByteArray JsCanvas::pixels(int x, int y, int w, int h) {
   return out;
 }
 
-void JsCanvas::putPixels(const QByteArray& rgba, int x, int y, int w, int h) {
+void Canvas::putPixels(const QByteArray& rgba, int x, int y, int w, int h) {
   if (rgba.size() < qsizetype(w) * h * 4) return;
   QImage part(reinterpret_cast<const uchar*>(rgba.constData()), w, h, w * 4, QImage::Format_RGBA8888);
   QPainter& p = painter();
@@ -799,22 +788,22 @@ void JsCanvas::putPixels(const QByteArray& rgba, int x, int y, int w, int h) {
   p.setCompositionMode(QPainter::CompositionMode_SourceOver);
 }
 
-QObject* JsCanvas::createLinearGradient(double x0, double y0, double x1, double y1) {
+QObject* Canvas::createLinearGradient(double x0, double y0, double x1, double y1) {
   auto* g = new QLinearGradient(x0, y0, x1, y1);
   g->setSpread(QGradient::PadSpread);
-  return new JsGradient(g);
+  return new CanvasGradient(g);
 }
 
-QObject* JsCanvas::createRadialGradient(double x0, double y0, double r0, double x1, double y1, double r1) {
+QObject* Canvas::createRadialGradient(double x0, double y0, double r0, double x1, double y1, double r1) {
   auto* g = new QRadialGradient(QPointF(x1, y1), r1, QPointF(x0, y0), r0);
   g->setSpread(QGradient::PadSpread);
-  return new JsGradient(g);
+  return new CanvasGradient(g);
 }
 
-QObject* JsCanvas::createPattern(QObject* source, const QString&) {
+QObject* Canvas::createPattern(QObject* source, const QString&) {
   QImage img;
-  if (auto* cv = qobject_cast<JsCanvas*>(source)) img = cv->image();
-  else if (auto* im = qobject_cast<JsImage*>(source)) img = im->image();
+  if (auto* cv = qobject_cast<Canvas*>(source)) img = cv->image();
+  else if (auto* im = qobject_cast<CanvasImage*>(source)) img = im->image();
   if (img.isNull()) return nullptr;
-  return new JsPattern(img);
+  return new CanvasPattern(img);
 }

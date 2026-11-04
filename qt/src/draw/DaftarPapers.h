@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-class JsCanvas;
+class Canvas;
 
 namespace draw {
 
@@ -25,7 +25,7 @@ struct Slot {
 };
 
 /// Draws a daftar page (paper first), scaled from A4 to the page.
-void drawDaftarPage(JsCanvas& c, const QString& tmpl, double w, double h, const QString& paper);
+void drawDaftarPage(Canvas& c, const QString& tmpl, double w, double h, const QString& paper);
 /// Where a daftar page's filled-in values go (keys like "school", "class", "year").
 QHash<QString, Slot> daftarSlots(const QString& tmpl, double w, double h);
 /// The same, in the order the page lays them out.

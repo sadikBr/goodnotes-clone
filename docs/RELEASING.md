@@ -69,14 +69,14 @@ environment before building (the CMake build builds the core).
 ## 3. Making a release
 
 ```sh
-npm run set-version 0.8.1          # package.json and the Rust crates
-git commit -am "v0.8.1"
-git tag v0.8.1
-git push origin main v0.8.1
+python3 scripts/set-version.py 0.9.1   # VERSION and the Rust crates
+git commit -am "v0.9.1"
+git tag v0.9.1
+git push origin main v0.9.1
 ```
 
 Or, without a tag: **Actions → Release → Run workflow** releases the version in
-`package.json`.
+`VERSION`.
 
 The **Release** workflow checks the versions match, builds and checks the
 downloads (the same build as every push, with the APK signed), attaches

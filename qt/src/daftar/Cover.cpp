@@ -5,7 +5,7 @@
 #include <QRegularExpression>
 #include <cmath>
 
-#include "../JsCanvas.h"
+#include "../Canvas.h"
 #include "../draw/Covers.h"
 #include "../draw/Elements.h"
 #include "Daftar.h"

@@ -5,7 +5,7 @@
 #include <limits>
 #include <optional>
 
-#include "../JsCanvas.h"
+#include "../Canvas.h"
 #include "../draw/Elements.h"
 
 namespace ed {
@@ -81,7 +81,7 @@ std::vector<Target> paperTargets(const std::vector<double>& rules, double spanFr
 }
 
 std::vector<Anchor> textAnchors(const El& el) {
-  static JsCanvas* ctx = new JsCanvas(300, 150);
+  static Canvas* ctx = new Canvas(300, 150);
   const draw::TextStyle ts{el.font.value_or(QString()), el.bold.value_or(false), el.italic.value_or(false), el.align.value_or(QString())};
   const double size = el.fontSize.value_or(18);
   const auto lines = draw::layoutText(*ctx, el.text, el.x, el.y, el.w, size, size * 1.35, ts);

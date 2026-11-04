@@ -6,7 +6,7 @@
 #include <cmath>
 #include <limits>
 
-#include "../JsCanvas.h"
+#include "../Canvas.h"
 #include "Freehand.h"
 
 namespace draw {
@@ -101,7 +101,7 @@ std::vector<FPoint> fpoints(const std::vector<Pt>& pts, size_t from, size_t to) 
 }
 
 /// Adds a closed, smooth path through an outline polygon (quadratics through midpoints).
-void outlinePath(JsCanvas& c, const std::vector<P2>& outline) {
+void outlinePath(Canvas& c, const std::vector<P2>& outline) {
   const size_t n = outline.size();
   if (n < 3) return;
   auto mid = [](P2 a, P2 b) { return P2{(a.first + b.first) / 2, (a.second + b.second) / 2}; };
@@ -119,7 +119,7 @@ void outlinePath(JsCanvas& c, const std::vector<P2>& outline) {
 QImage grainTile(const QString& color) {
   static QHash<QString, QImage> cache;
   if (auto it = cache.constFind(color); it != cache.constEnd()) return *it;
-  JsCanvas t(48, 48);
+  Canvas t(48, 48);
   t.setFill(color);
   t.fillRect(0, 0, 48, 48);
   QByteArray px = t.pixels(0, 0, 48, 48);
@@ -177,7 +177,7 @@ std::vector<Pt> calligraphyPath(const std::vector<Pt>& pts, double step, int smo
 }
 
 /// Calligraphy: a flat nib held at a fixed angle, swept along the path.
-void drawCalligraphy(JsCanvas& c, const QJsonObject& el, const std::vector<Pt>& points, double width, const QString& color) {
+void drawCalligraphy(Canvas& c, const QJsonObject& el, const std::vector<Pt>& points, double width, const QString& color) {
   const double ux = std::cos(NIB_ANGLE), uy = std::sin(NIB_ANGLE);
   auto half = [&](const Pt& p) { return (width * 1.4 * (0.55 + 0.6 * std::min(1.0, std::max(0.05, p[2])))) / 2; };
   // Even spacing, smoothed over about a nib width (at least ~1 mm).
@@ -219,7 +219,7 @@ void drawCalligraphy(JsCanvas& c, const QJsonObject& el, const std::vector<Pt>& 
 }
 
 /// Flat (chisel) highlighter ends: a short straight piece of marker behind each end.
-void flatEndFillers(JsCanvas& c, const std::vector<P2>& pts, double width) {
+void flatEndFillers(Canvas& c, const std::vector<P2>& pts, double width) {
   if (pts.size() < 2) return;
   double total = 0;
   for (size_t i = 1; i < pts.size(); i++) total += std::hypot(pts[i].first - pts[i - 1].first, pts[i].second - pts[i - 1].second);
@@ -320,7 +320,7 @@ std::vector<P2> flattenSmooth(const std::vector<Pt>& pts) {
   return out;
 }
 
-void drawStroke(JsCanvas& c, const QJsonObject& el, bool live) {
+void drawStroke(Canvas& c, const QJsonObject& el, bool live) {
   const std::vector<Pt> pts = pointsOf(el);
   if (pts.empty()) return;
   const QString color = el["color"].toString();

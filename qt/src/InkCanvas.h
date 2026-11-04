@@ -1,14 +1,14 @@
 // The notebook's pages, drawn on the GPU (Qt Quick scene graph), with the
-// editor's tools. Editing itself (gestures, selection, undo, saving) is the
-// web editor's logic running in the script engine (qt/js/editorCore.ts); this
-// item handles input, the view (scrolling, zoom), and drawing:
-//  - paper from the web code's papers, as a picture per page (sharper ones
-//    made as the zoom settles; only the visible part at high zoom),
+// editor's tools. Editing itself (gestures, selection, undo) is the editor
+// (editor/EditorCore); this item handles input, the view (scrolling, zoom),
+// saving, and drawing:
+//  - paper (draw/Papers, Covers, DaftarPapers), as a picture per page (sharper
+//    ones made as the zoom settles; only the visible part at high zoom),
 //  - pen and highlighter ink as triangle meshes built once per stroke,
 //  - text, shapes, sticky notes, pictures and textured nibs (pencil,
-//    calligraphy) as pictures drawn by the web code,
+//    calligraphy) as pictures (draw/Elements),
 //  - the stroke being written as a live mesh, the selection and gesture
-//    overlay drawn by the web code, the eraser ring and the laser natively.
+//    overlay (EditorCore::drawOverlay), the eraser ring and the laser.
 #pragma once
 
 #include <QColor>
@@ -282,7 +282,7 @@ private:
     bool stylus = false;
   };
 
-  // Script side
+  // The editor
   void pushToolState();
   void afterCore();  // syncs whatever the core changed
   void syncPage(int i);

@@ -11,7 +11,7 @@
 #include <memory>
 #include <vector>
 
-class JsCanvas;
+class Canvas;
 
 namespace draw {
 
@@ -33,7 +33,7 @@ struct LaidLine {
 
 /// Lays out text: word wrap, list items with a hanging indent and
 /// left/centre/right alignment. Measures on `c` (its font is changed).
-std::vector<LaidLine> layoutText(JsCanvas& c, const QString& text, double x, double y, double w, double size, double lineH, const TextStyle& style);
+std::vector<LaidLine> layoutText(Canvas& c, const QString& text, double x, double y, double w, double size, double lineH, const TextStyle& style);
 /// The same, on a canvas kept for measuring.
 std::vector<LaidLine> layoutText(const QString& text, double x, double y, double w, double size, double lineH, const TextStyle& style);
 /// Text box height including word-wrapped lines.
@@ -46,10 +46,10 @@ double measureText(const QString& text, const QString& font, double size);
 double naturalTextWidth(const QJsonObject& el);
 
 /// Draws one element.
-void drawElement(JsCanvas& c, const QJsonObject& el);
+void drawElement(Canvas& c, const QJsonObject& el);
 /// Paper, an imported PDF page (if any) and the elements, onto `c` in page units.
-void paintPage(JsCanvas& c, const QString& tmpl, const QString& paper, double w, double h, const QJsonArray& els, const QImage& background = {});
+void paintPage(Canvas& c, const QString& tmpl, const QString& paper, double w, double h, const QJsonArray& els, const QImage& background = {});
 /// A whole page on a fresh canvas `scale` pixels per page unit.
-std::unique_ptr<JsCanvas> renderPage(const QString& tmpl, const QString& paper, double w, double h, const QJsonArray& els, double scale, const QImage& background = {});
+std::unique_ptr<Canvas> renderPage(const QString& tmpl, const QString& paper, double w, double h, const QJsonArray& els, double scale, const QImage& background = {});
 
 }  // namespace draw

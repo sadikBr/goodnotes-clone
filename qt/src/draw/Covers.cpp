@@ -5,7 +5,7 @@
 #include <cmath>
 #include <cstdint>
 
-#include "../JsCanvas.h"
+#include "../Canvas.h"
 #include "Fonts.h"
 
 namespace draw {
@@ -28,7 +28,7 @@ private:
 
 using Seg = std::array<double, 4>;
 
-void roundRect(JsCanvas& c, double x, double y, double w, double h, double r) {
+void roundRect(Canvas& c, double x, double y, double w, double h, double r) {
   c.moveTo(x + r, y);
   c.lineTo(x + w - r, y);
   c.quadraticCurveTo(x + w, y, x + w, y + r);
@@ -41,7 +41,7 @@ void roundRect(JsCanvas& c, double x, double y, double w, double h, double r) {
   c.closePath();
 }
 
-void fillRound(JsCanvas& c, const Box& b, double r, const QString& style) {
+void fillRound(Canvas& c, const Box& b, double r, const QString& style) {
   c.setFill(style);
   c.beginPath();
   roundRect(c, b.x, b.y, b.w, b.h, r);
@@ -49,12 +49,12 @@ void fillRound(JsCanvas& c, const Box& b, double r, const QString& style) {
 }
 
 /// A soft drop shadow under a rounded box (a few faint layers).
-void softShadow(JsCanvas& c, const Box& b, double r, double dy = 4) {
+void softShadow(Canvas& c, const Box& b, double r, double dy = 4) {
   for (int k = 3; k >= 1; k--) fillRound(c, {b.x - k + 1, b.y - k + dy, b.w + 2 * k - 2, b.h + 2 * k}, r + k, "rgba(0, 0, 0, 0.07)");
 }
 
 /// Many parallel lines as one stroke.
-void lines(JsCanvas& c, const std::vector<Seg>& segs, const QString& style, double width, std::initializer_list<qreal> dash = {}) {
+void lines(Canvas& c, const std::vector<Seg>& segs, const QString& style, double width, std::initializer_list<qreal> dash = {}) {
   if (segs.empty()) return;
   c.save();
   c.setStroke(style);
@@ -72,7 +72,7 @@ void lines(JsCanvas& c, const std::vector<Seg>& segs, const QString& style, doub
 QString alphaCss(const char* rgb, double a) { return QString("rgba(%1, %2)").arg(rgb, jsNumber(a)); }
 
 /// Fine cross threads (cloth texture).
-void linen(JsCanvas& c, double w, double h, double alpha) {
+void linen(Canvas& c, double w, double h, double alpha) {
   std::vector<Seg> light, dark;
   int i = 0;
   for (double y = 1.5; y < h; y += 2.6, i++) (i % 2 ? light : dark).push_back({0, y, w, y});
@@ -83,7 +83,7 @@ void linen(JsCanvas& c, double w, double h, double alpha) {
 }
 
 /// A soft sheen from the top-left (many faint layers).
-void sheen(JsCanvas& c, double w, double h, double strength = 0.0065) {
+void sheen(Canvas& c, double w, double h, double strength = 0.0065) {
   c.save();
   c.setFill(alphaCss("255, 255, 255", strength));
   const int n = 28;
@@ -109,7 +109,7 @@ PlateText plateText(const Box& p, double pad = 26) {
   return {{p.x + pad, p.y + 26, p.w - 2 * pad, divider - p.y - 34}, {p.x + pad, divider + 12, p.w - 2 * pad, 0}, divider};
 }
 
-void divider(JsCanvas& c, double x0, double x1, double y, const QString& color, const QString& diamond) {
+void divider(Canvas& c, double x0, double x1, double y, const QString& color, const QString& diamond) {
   const double cx = (x0 + x1) / 2;
   lines(c, {{x0, y, cx - 9, y}, {cx + 9, y, x1, y}}, color, 1);
   c.setFill(diamond);
@@ -173,7 +173,7 @@ Circle dotsLabel(double w, double h) { return {w / 2, h * (w > h ? 0.45 : 0.36),
 class Circles {
 public:
   void circle(double x, double y, double r) { m_c.push_back({x, y, r}); }
-  void fill(JsCanvas& c, const QString& style) {
+  void fill(Canvas& c, const QString& style) {
     c.setFill(style);
     c.beginPath();
     for (const Circle& k : m_c) {
@@ -189,7 +189,7 @@ private:
 
 // --- designs -----------------------------------------------------------------------
 
-void drawClassic(JsCanvas& c, double w, double h, const QString& color) {
+void drawClassic(Canvas& c, double w, double h, const QString& color) {
   const ClassicLayout L = classicLayout(w, h);
   linen(c, w, h, 0.025);
   sheen(c, w, h);
@@ -221,7 +221,7 @@ void drawClassic(JsCanvas& c, double w, double h, const QString& color) {
   divider(c, p.x + 40, p.x + p.w - 40, L.text.divider, shade(color, 0.2), shade(color, 0.1));
 }
 
-void drawMinimal(JsCanvas& c, double w, double h) {
+void drawMinimal(Canvas& c, double w, double h) {
   sheen(c, w, h, 0.004);
   const double m = std::max(28.0, w * 0.035);
   c.save();
@@ -239,7 +239,7 @@ void drawMinimal(JsCanvas& c, double w, double h) {
   c.fill();
 }
 
-void drawGeometric(JsCanvas& c, double w, double h, const QString& color) {
+void drawGeometric(Canvas& c, double w, double h, const QString& color) {
   // Low-poly facets over the top 58%, fading out towards the title.
   Rng rand(7);
   const int cols = 7;
@@ -276,7 +276,7 @@ void drawGeometric(JsCanvas& c, double w, double h, const QString& color) {
   c.fillRect(t.title.x, t.title.y - 24, 46, 5);
 }
 
-void drawWaves(JsCanvas& c, double w, double h, const QString& color) {
+void drawWaves(Canvas& c, double w, double h, const QString& color) {
   sheen(c, w, h, 0.005);
   // Layered waves rising from the bottom, each a little darker.
   struct Layer {
@@ -300,7 +300,7 @@ void drawWaves(JsCanvas& c, double w, double h, const QString& color) {
   }
 }
 
-void drawMarble(JsCanvas& c, double w, double h, const QString& color) {
+void drawMarble(Canvas& c, double w, double h, const QString& color) {
   // Composition-book mottle: many small irregular blobs, light and dark.
   Rng rand(11);
   c.setFill(shade(color, -0.2));
@@ -344,7 +344,7 @@ void drawMarble(JsCanvas& c, double w, double h, const QString& color) {
   lines(c, {{p.x + 24, p.y + p.h * 0.6, p.x + p.w - 24, p.y + p.h * 0.6}, {p.x + 24, p.y + p.h * 0.82, p.x + p.w - 24, p.y + p.h * 0.82}}, "rgba(31, 35, 40, 0.35)", 1);
 }
 
-void drawLeather(JsCanvas& c, double w, double h, const QString& color) {
+void drawLeather(Canvas& c, double w, double h, const QString& color) {
   c.setFill(shade(color, -0.42));
   c.fillRect(0, 0, w, h);
   // Grain: tiny pores, light and dark.
@@ -395,7 +395,7 @@ void drawLeather(JsCanvas& c, double w, double h, const QString& color) {
   lines(c, {{cx - 90, t.title.y - 22, cx + 90, t.title.y - 22}, {cx - 90, t.date.y - 14, cx + 90, t.date.y - 14}}, "rgba(232, 207, 138, 0.7)", 1.2);
 }
 
-void drawKraft(JsCanvas& c, double w, double h, const QString& color) {
+void drawKraft(Canvas& c, double w, double h, const QString& color) {
   c.setFill("#c8a77c");
   c.fillRect(0, 0, w, h);
   // Paper fibres.
@@ -430,7 +430,7 @@ void drawKraft(JsCanvas& c, double w, double h, const QString& color) {
   lines(c, {{p.x + 34, p.y + p.h * 0.64, p.x + p.w - 34, p.y + p.h * 0.64}}, "rgba(63, 45, 28, 0.3)", 1, {3, 3});
 }
 
-void drawDots(JsCanvas& c, double w, double h, const QString& color) {
+void drawDots(Canvas& c, double w, double h, const QString& color) {
   Circles dots;
   const double gap = std::max(30.0, w * 0.042);
   int row = 0;
@@ -459,7 +459,7 @@ void drawDots(JsCanvas& c, double w, double h, const QString& color) {
 }
 
 /// An eight-pointed star (two overlapping squares), as one closed path.
-void star8(JsCanvas& c, double cx, double cy, double r, double turn = 0) {
+void star8(Canvas& c, double cx, double cy, double r, double turn = 0) {
   const double inner = r * 0.7654;  // the two squares' crossing points
   for (int i = 0; i < 16; i++) {
     const double a = turn + (i * M_PI) / 8;
@@ -473,7 +473,7 @@ void star8(JsCanvas& c, double cx, double cy, double r, double turn = 0) {
 
 /// Zellige: Moroccan tilework — eight-pointed stars with small diamonds
 /// between them, in tints of the cover colour, around a cream panel.
-void drawZellige(JsCanvas& c, double w, double h, const QString& color) {
+void drawZellige(Canvas& c, double w, double h, const QString& color) {
   const double g = std::max(56.0, w * 0.12);
   const double ox = std::fmod(w, g) / 2, oy = std::fmod(h, g) / 2;
   c.beginPath();
@@ -605,7 +605,7 @@ CoverText coverText(const QString& design, double w, double h) {
   return {L.text.title, L.text.date, "center", darkTitle, darkDate, "sans", 34, 15};
 }
 
-void drawCoverDesign(JsCanvas& c, const QString& tmpl, double w, double h, const QString& color) {
+void drawCoverDesign(Canvas& c, const QString& tmpl, double w, double h, const QString& color) {
   c.setFill(color);
   c.fillRect(0, 0, w, h);
   c.save();

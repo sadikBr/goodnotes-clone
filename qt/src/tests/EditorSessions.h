@@ -1,6 +1,4 @@
-// Developer and CI check while the editor moves from the script to C++
-// (docs/MIGRATION.md): inkleaf --compare-editor <folder> runs the same
-// editing sessions through both editors and fails on any difference.
+// The editing sessions for the reference results (see EditorSessions.cpp).
 #pragma once
 
 #include <QImage>
@@ -8,7 +6,6 @@
 #include <QString>
 #include <functional>
 
-int compareEditor(const QString& outDir);
 
 /// One step of an editing session: what the editor returned (if anything),
 /// its state (ids numbered in order of appearance) and its overlay.

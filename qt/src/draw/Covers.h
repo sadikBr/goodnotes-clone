@@ -7,7 +7,7 @@
 #include <QString>
 #include <vector>
 
-class JsCanvas;
+class Canvas;
 
 namespace draw {
 
@@ -39,6 +39,6 @@ Box zelligePanel(double w, double h);
 QString shade(const QString& color, double amount);
 
 /// Draws a cover page (the page's paper colour is the notebook's cover colour).
-void drawCoverDesign(JsCanvas& c, const QString& tmpl, double w, double h, const QString& color);
+void drawCoverDesign(Canvas& c, const QString& tmpl, double w, double h, const QString& color);
 
 }  // namespace draw

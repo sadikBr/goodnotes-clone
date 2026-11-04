@@ -1,5 +1,5 @@
 // The drawing instrument over the page (src/editor/ruler.ts): ruler,
-// protractor or set square, drawn from the web code's shapes. Drag the body to
+// protractor or set square, drawn from the C++ instrument's shapes. Drag the body to
 // move it, a round grip to turn it (snapping to common angles; Shift for 15°
 // steps), the protractor's knobs to measure an angle; the wheel turns it too.
 import QtQuick

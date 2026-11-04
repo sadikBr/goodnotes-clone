@@ -4,7 +4,7 @@
 #include <array>
 #include <cmath>
 
-#include "../JsCanvas.h"
+#include "../Canvas.h"
 #include "Covers.h"
 #include "DaftarPapers.h"
 #include "Fonts.h"
@@ -72,7 +72,7 @@ public:
   Lines& h(double y, double x0, double x1) { return add(x0, y + 0.5, x1, y + 0.5); }
   Lines& v(double x, double y0, double y1) { return add(x + 0.5, y0, x + 0.5, y1); }
   Lines& rect(double x, double y, double w, double hh) { return h(y, x, x + w).h(y + hh, x, x + w).v(x, y, y + hh).v(x + w, y, y + hh); }
-  void stroke(JsCanvas& c, const QString& color, double width = 1, std::initializer_list<qreal> dash = {}) {
+  void stroke(Canvas& c, const QString& color, double width = 1, std::initializer_list<qreal> dash = {}) {
     if (m_segs.empty()) return;
     c.save();
     c.setStroke(color);
@@ -93,7 +93,7 @@ private:
   std::vector<std::array<double, 4>> m_segs;
 };
 
-void label(JsCanvas& c, const QString& text, double x, double y, const Inks& ink, double size = 13, bool bold = false) {
+void label(Canvas& c, const QString& text, double x, double y, const Inks& ink, double size = 13, bool bold = false) {
   c.save();
   c.setFont(fontCss("sans", size, bold, false, isRtl(text)));
   c.setFill(ink.text);
@@ -106,7 +106,7 @@ void checkbox(Lines& lines, double x, double baseline, double size = 14) { lines
 
 /// Millimetre paper: faint 1 mm lines, medium 5 mm lines and bolder 1 cm
 /// lines. One centimetre line passes through (ox, oy).
-void drawMillimetreGrid(JsCanvas& c, double w, double h, const Inks& ink, double ox, double oy) {
+void drawMillimetreGrid(Canvas& c, double w, double h, const Inks& ink, double ox, double oy) {
   Lines mm, half, cm;
   auto level = [&](int k) -> Lines& { return k % 10 == 0 ? cm : k % 5 == 0 ? half : mm; };
   auto first = [](double o) { return -int(std::floor(o / MM)); };
@@ -117,13 +117,13 @@ void drawMillimetreGrid(JsCanvas& c, double w, double h, const Inks& ink, double
   cm.stroke(c, ink.line, 1);
 }
 
-void drawGraph(JsCanvas& c, double w, double h, const Inks& ink) {
+void drawGraph(Canvas& c, double w, double h, const Inks& ink) {
   // Centre the centimetre grid on the page.
   const double cmU = 10 * MM;
   drawMillimetreGrid(c, w, h, ink, std::fmod(w, cmU) / 2, std::fmod(h, cmU) / 2);
 }
 
-void drawCoordinate(JsCanvas& c, double w, double h, const Inks& ink) {
+void drawCoordinate(Canvas& c, double w, double h, const Inks& ink) {
   const double cmU = 10 * MM;
   // Origin on the centimetre line nearest the page centre.
   const double ox = std::fmod(w, cmU) / 2, oy = std::fmod(h, cmU) / 2;
@@ -152,7 +152,7 @@ void drawCoordinate(JsCanvas& c, double w, double h, const Inks& ink) {
   axes.stroke(c, ink.strong, 1.4);
 }
 
-void drawIsometric(JsCanvas& c, double w, double h, const Inks& ink) {
+void drawIsometric(Canvas& c, double w, double h, const Inks& ink) {
   const double s = 24;
   const double rowH = s * std::sin(M_PI / 3);
   c.save();
@@ -163,7 +163,7 @@ void drawIsometric(JsCanvas& c, double w, double h, const Inks& ink) {
   c.restore();
 }
 
-void drawHexagons(JsCanvas& c, double w, double h, const Inks& ink) {
+void drawHexagons(Canvas& c, double w, double h, const Inks& ink) {
   const double r = 18;  // corner radius, flat-topped hexagons
   const double colW = r * 1.5, rowH = r * std::sqrt(3.0);
   Lines lines;
@@ -181,7 +181,7 @@ void drawHexagons(JsCanvas& c, double w, double h, const Inks& ink) {
   lines.stroke(c, ink.line, 1);
 }
 
-void drawHandwriting(JsCanvas& c, double w, double h, const Inks& ink) {
+void drawHandwriting(Canvas& c, double w, double h, const Inks& ink) {
   Lines solid, base, dashed, faint;
   for (const HandRow& r : handwritingRows(h)) {
     solid.h(r.top, 40, w - 40);
@@ -195,7 +195,7 @@ void drawHandwriting(JsCanvas& c, double w, double h, const Inks& ink) {
   base.stroke(c, ink.strong, 1.3);
 }
 
-void drawCalligraphy(JsCanvas& c, double w, double h, const Inks& ink) {
+void drawCalligraphy(Canvas& c, double w, double h, const Inks& ink) {
   Lines faint, line, base, slant;
   const double angle = (55 * M_PI) / 180;  // slant lines, from the horizontal
   const double run = 1 / std::tan(angle);
@@ -212,7 +212,7 @@ void drawCalligraphy(JsCanvas& c, double w, double h, const Inks& ink) {
   base.stroke(c, ink.strong, 1.3);
 }
 
-void drawStoryboard(JsCanvas& c, double w, double h, const Inks& ink) {
+void drawStoryboard(Canvas& c, double w, double h, const Inks& ink) {
   const double m = 44, g = 26;
   const int cols = w > h ? 3 : 2;
   const double fw = (w - 2 * m - (cols - 1) * g) / cols;
@@ -235,7 +235,7 @@ void drawStoryboard(JsCanvas& c, double w, double h, const Inks& ink) {
   frames.stroke(c, ink.strong, 1.4);
 }
 
-void drawDailyPlanner(JsCanvas& c, double w, double h, const Inks& ink) {
+void drawDailyPlanner(Canvas& c, double w, double h, const Inks& ink) {
   const double m = 48;
   const double headerY = m + 40;
   label(c, "Date", m, m + 22, ink, 13, true);
@@ -282,7 +282,7 @@ void drawDailyPlanner(JsCanvas& c, double w, double h, const Inks& ink) {
   strong.stroke(c, ink.strong, 1.3);
 }
 
-void drawWeeklyPlanner(JsCanvas& c, double w, double h, const Inks& ink) {
+void drawWeeklyPlanner(Canvas& c, double w, double h, const Inks& ink) {
   const double m = 40;
   label(c, "Week of", m, m + 20, ink, 13, true);
   Lines strong, line;
@@ -344,7 +344,7 @@ PaperLayout paperLayout(const QString& t, double w, double h) {
   return lay({}, 0, w, false, 0);
 }
 
-bool drawPaper(JsCanvas& c, const QString& t, double w, double h, const QString& paper) {
+bool drawPaper(Canvas& c, const QString& t, double w, double h, const QString& paper) {
   c.setFill(paper);
   c.fillRect(0, 0, w, h);
   const Inks ink = inks(paper);

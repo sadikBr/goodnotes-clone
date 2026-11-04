@@ -1,4 +1,4 @@
-// Text presets (src/fonts.ts FONT_PRESETS): id, label and the face to show it in.
+// Text presets (as qt/src/draw/Fonts.cpp has them): id, label and the face to show it in.
 .pragma library
 var presets = [
     { id: "sans", label: "Clean", face: "Inter" },

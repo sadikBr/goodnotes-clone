@@ -8,7 +8,7 @@
 #include <array>
 #include <vector>
 
-class JsCanvas;
+class Canvas;
 
 namespace draw {
 
@@ -26,6 +26,6 @@ std::vector<std::pair<double, double>> flattenSmooth(const std::vector<Pt>& pts)
 
 /// A stroke element (as the editor holds it: tool, style, color, width, points, smooth).
 /// `live`: still being drawn (its end isn't tapered yet).
-void drawStroke(JsCanvas& c, const QJsonObject& el, bool live = false);
+void drawStroke(Canvas& c, const QJsonObject& el, bool live = false);
 
 }  // namespace draw
