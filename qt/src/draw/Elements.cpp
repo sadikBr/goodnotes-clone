@@ -4,6 +4,7 @@
 
 #include "Render.h"
 
+#include <QColor>
 #include <QRegularExpression>
 #include <cmath>
 
@@ -394,6 +395,98 @@ double measureText(const QString& text, const QString& font, double size) {
   return best;
 }
 
+TableGrid tableGrid(const QJsonObject& el) {
+  TableGrid t;
+  const double x = el["x"].toDouble(), y = el["y"].toDouble(), w = el["w"].toDouble(), h = el["h"].toDouble();
+  const QStringList lines = el["text"].toString().split('\n');
+  auto shares = [](const QJsonArray& a, int fallback) {
+    std::vector<double> v;
+    for (const QJsonValue& x : a) v.push_back(std::max(0.0, x.toDouble()));
+    if (v.empty()) v.assign(std::max(1, fallback), 1.0);
+    double sum = 0;
+    for (double d : v) sum += d;
+    for (double& d : v) d = sum > 0 ? d / sum : 1.0 / v.size();
+    return v;
+  };
+  int textCols = 1;
+  for (const QString& l : lines) textCols = std::max(textCols, int(l.split('\t').size()));
+  const std::vector<double> cw = shares(el["cols"].toArray(), textCols), rh = shares(el["rows"].toArray(), int(lines.size()));
+  t.cols = int(cw.size());
+  t.rows = int(rh.size());
+  t.header = el["header"].toBool(false);
+  double acc = x;
+  t.xs.push_back(acc);
+  for (double f : cw) t.xs.push_back(acc += f * w);
+  acc = y;
+  t.ys.push_back(acc);
+  for (double f : rh) t.ys.push_back(acc += f * h);
+  for (int r = 0; r < t.rows; ++r) {
+    const QStringList cells = r < lines.size() ? lines[r].split('\t') : QStringList();
+    for (int c = 0; c < t.cols; ++c) t.cells << QString(cells.value(c)).replace(QChar(0x2028), '\n');
+  }
+  return t;
+}
+
+/// A table: its lines in its colour, a tinted header row, and each cell's
+/// text (wrapped, centred top to bottom) in the table's font.
+void drawTable(Canvas& c, const QJsonObject& el) {
+  const TableGrid t = tableGrid(el);
+  if (t.rows < 1 || t.cols < 1) return;
+  const double x0 = t.xs.front(), x1 = t.xs.back(), y0 = t.ys.front(), y1 = t.ys.back();
+  if (x1 - x0 < 4 || y1 - y0 < 4) return;
+  const QString line = el["color"].toString().isEmpty() ? QStringLiteral("#374151") : el["color"].toString();
+  const double lw = el["width"].toDouble() > 0 ? el["width"].toDouble() : 1.5;
+  c.save();
+  if (t.header) {
+    QColor tint(line);
+    c.setFill(QStringLiteral("rgba(%1,%2,%3,0.09)").arg(tint.red()).arg(tint.green()).arg(tint.blue()));
+    c.beginPath();
+    c.rect(x0, y0, x1 - x0, t.ys[1] - y0);
+    c.fill();
+  }
+  // The cells' text.
+  const double fs = el["fontSize"].toDouble() > 0 ? el["fontSize"].toDouble() : 18;
+  const double pad = tableCellPad(fs);
+  const QString ink = el["textColor"].toString().isEmpty() ? QStringLiteral("#111827") : el["textColor"].toString();
+  for (int r = 0; r < t.rows; ++r)
+    for (int col = 0; col < t.cols; ++col) {
+      const QString text = t.cell(r, col);
+      if (text.trimmed().isEmpty()) continue;
+      const double cx = t.xs[col], cy = t.ys[r], cw = t.xs[col + 1] - cx, ch = t.ys[r + 1] - cy;
+      QJsonObject te{{"kind", "text"}, {"text", text}, {"fontSize", fs}, {"color", ink}, {"x", cx + pad}, {"w", std::max(4.0, cw - 2 * pad)}};
+      if (el.contains("font")) te["font"] = el["font"];
+      if (el.contains("align")) te["align"] = el["align"];
+      if (t.header && r == 0) te["bold"] = true;
+      const double th = textHeight(text, fs, std::max(4.0, cw - 2 * pad), TextStyle::of(te));
+      te["y"] = cy + std::max(pad * 0.5, (ch - th) / 2);
+      c.save();
+      c.beginPath();
+      c.rect(cx, cy, cw, ch);
+      c.clip();
+      drawText(c, te);
+      c.restore();
+    }
+  // The lines.
+  c.setStroke(line);
+  c.setLineWidth(lw);
+  c.setLineCap("round");
+  c.setLineJoin("round");
+  c.beginPath();
+  for (int i = 1; i < t.cols; ++i) c.moveTo(t.xs[i], y0), c.lineTo(t.xs[i], y1);
+  for (int i = 1; i < t.rows; ++i) c.moveTo(x0, t.ys[i]), c.lineTo(x1, t.ys[i]);
+  c.stroke();
+  c.setLineWidth(lw * (t.header ? 1.25 : 1));
+  c.beginPath();
+  c.rect(x0, y0, x1 - x0, y1 - y0);
+  c.stroke();
+  if (t.header && t.rows > 1) {
+    c.beginPath();
+    c.moveTo(x0, t.ys[1]), c.lineTo(x1, t.ys[1]);
+    c.stroke();
+  }
+  c.restore();
+}
+
 double naturalTextWidth(const QJsonObject& el) {
   double best = 0;
   const double size = el["fontSize"].toDouble();
@@ -404,7 +497,7 @@ double naturalTextWidth(const QJsonObject& el) {
 void drawElement(Canvas& c, const QJsonObject& el) {
   const QString kind = el["kind"].toString();
   // Text boxes, sticky notes and pictures can be rotated around their centre.
-  if ((kind == "text" || kind == "sticky" || kind == "image" || kind == "graph") && el["rotation"].toDouble() != 0) {
+  if ((kind == "text" || kind == "sticky" || kind == "image" || kind == "graph" || kind == "table") && el["rotation"].toDouble() != 0) {
     const QRectF r = boxOf(el);
     const double cx = r.x() + r.width() / 2, cy = r.y() + r.height() / 2;
     c.save();
@@ -423,6 +516,7 @@ void drawElement(Canvas& c, const QJsonObject& el) {
   else if (kind == "sticky") drawSticky(c, el);
   else if (kind == "image") drawImage(c, el);
   else if (kind == "graph") drawGraph(c, el);
+  else if (kind == "table") drawTable(c, el);
 }
 
 void paintPage(Canvas& c, const QString& tmpl, const QString& paper, double w, double h, const QJsonArray& els, const QImage& background) {

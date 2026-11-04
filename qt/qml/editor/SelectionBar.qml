@@ -99,6 +99,36 @@ Item {
             implicitHeight: 30
             onClicked: root.graphEditRequested(root.s.graph)
         }
+        // Tables: a grid drawn by hand becomes one; a table's rows, columns and cells.
+        UiButton {
+            visible: !!root.s.drawnTable
+            kind: "ghost"
+            iconName: "table"
+            text: "Make table"
+            implicitHeight: 30
+            ToolTip.visible: hovered
+            ToolTip.delay: 500
+            ToolTip.text: "Turn the grid you drew into a table you can type in"
+            onClicked: if (!root.canvas.tableFromSelection()) root.canvas.message("That doesn't look like a grid", true)
+        }
+        UiButton {
+            id: tableBtn
+            visible: !!root.s.table
+            kind: "ghost"
+            iconName: "table"
+            text: "Table"
+            implicitHeight: 30
+            onClicked: {
+                const t = root.s.table
+                menu.show(tableBtn, [
+                    { icon: "text", label: "Type in the cells", action: () => root.canvas.cellEditRequested({ id: t.id, row: 0, col: 0 }) },
+                    { icon: "plus", label: "Add a row", action: () => root.canvas.changeTable(t.id, "addRow", -1) },
+                    { icon: "plus", label: "Add a column", action: () => root.canvas.changeTable(t.id, "addCol", -1) }
+                ].concat(t.rows > 1 ? [{ icon: "trash", label: "Remove the last row", action: () => root.canvas.changeTable(t.id, "removeRow", -1) }] : [],
+                         t.cols > 1 ? [{ icon: "trash", label: "Remove the last column", action: () => root.canvas.changeTable(t.id, "removeCol", -1) }] : [],
+                         [{ label: "Header row", checked: !!t.header, action: () => root.canvas.changeTable(t.id, "header", -1) }]))
+            }
+        }
 
         // Handwriting → text.
         AbstractButton {

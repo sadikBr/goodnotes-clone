@@ -1,5 +1,6 @@
 // The editor for one notebook (was qt/js/editorCore.ts); see EditorCore.h.
 #include "EditorCore.h"
+#include "Table.h"
 
 #include <QJsonDocument>
 #include <QRegularExpression>
@@ -387,6 +388,16 @@ QString EditorCore::down(int pi, double x, double y, double p, double t, const Q
     touchOverlay();
     return {};
   }
+  if (tl == "text") {
+    // In a table: type in that cell.
+    const Els& els = elements();
+    for (auto it = els.rbegin(); it != els.rend(); ++it)
+      if ((*it)->kind == Kind::Table)
+        if (auto cell = ed::tableCellAt(**it, x, y)) {
+          m_cellRequest = {{"id", (*it)->id}, {"row", cell->first}, {"col", cell->second}};
+          return "cell";
+        }
+  }
   if (tl == "text" || tl == "sticky") {
     const Kind want = tl == "text" ? Kind::Text : Kind::Sticky;
     const Els& els = elements();
@@ -616,6 +627,14 @@ void EditorCore::up() {
           if ((near(boxOfEl(**it), tx, ty, 8 / zoom) && hitForSelect(**it, tx, ty, 6 / zoom)) ||
               ((*it)->kind == Kind::Text && rectContains(frameOfEl(**it), tx, ty))) {
             m_selection.insert((*it)->id);
+            // A table comes with what's written in it (to move it all together).
+            if ((*it)->kind == Kind::Table) {
+              const Rect t = bounds(**it);
+              for (const ElPtr& el : els) {
+                const Rect b = bounds(*el);
+                if (el != *it && el->z > (*it)->z && b.x >= t.x - 2 && b.y >= t.y - 2 && b.x + b.w <= t.x + t.w + 2 && b.y + b.h <= t.y + t.h + 2) m_selection.insert(el->id);
+              }
+            }
             break;
           }
       } else {
@@ -1010,7 +1029,7 @@ void EditorCore::eraseAt(double x, double y) {
   next.reserve(els.size());
   for (const ElPtr& el : els) {
     const double w = el->kind == Kind::Stroke || el->kind == Kind::Shape ? el->width : 0;
-    if (el->kind == Kind::Image || el->kind == Kind::Graph || !near(boxOfEl(*el), x, y, radius + 2 + w)) {
+    if (el->kind == Kind::Image || el->kind == Kind::Graph || el->kind == Kind::Table || !near(boxOfEl(*el), x, y, radius + 2 + w)) {
       next.push_back(el);
       continue;
     }
@@ -1134,6 +1153,19 @@ QVariantMap EditorCore::selectionInfo() {
                                {"ymin", g.extra.value("ymin").toDouble(-5)}, {"ymax", g.extra.value("ymax").toDouble(5)}, {"grid", g.extra.value("grid").toBool(true)}};
   }
   out["hasText"] = std::any_of(els.begin(), els.end(), [](const ElPtr& e) { return e->kind == Kind::Text && !e->text.trimmed().isEmpty(); });
+  // A table (with what's written in it), or a grid drawn by hand that can become one.
+  const ElPtr* table = nullptr;
+  int tables = 0;
+  for (const ElPtr& e : els)
+    if (e->kind == Kind::Table) table = &e, ++tables;
+  if (tables == 1) {
+    const TableData t = tableData(**table);
+    out["table"] = QVariantMap{{"id", (*table)->id}, {"rows", t.rowCount()}, {"cols", t.colCount()}, {"header", t.header}};
+  } else if (tables == 0 && els.size() >= 2 && els.size() <= 400) {
+    std::vector<const El*> list;
+    for (const ElPtr& e : els) list.push_back(e.get());
+    if (findDrawnGrid(list)) out["drawnTable"] = true;
+  }
   return out;
 }
 
@@ -1362,6 +1394,173 @@ bool EditorCore::updateSelectedGraph(const QVariantMap& spec) {
   ++selectionRev;
   changed();
   return true;
+}
+
+// ------------------------------------------------------------ tables
+
+void EditorCore::insertTable(int rows, int cols, double x, double y, double w) {
+  rows = std::clamp(rows, 1, 40);
+  cols = std::clamp(cols, 1, 20);
+  El el;
+  el.id = newId();
+  el.z = nextZ();
+  el.kind = Kind::Table;
+  el.color = "#374151";
+  el.width = 1.5;
+  // A little smaller than typed text, so the cells hold more.
+  el.fontSize = std::clamp(std::round(widths.value("text", 20) * 0.8), 11.0, 24.0);
+  if (!textFont.isEmpty() && textFont != "sans") el.font = textFont;
+  el.w = std::min(w, pageWidth() - 20);
+  el.h = rows * *el.fontSize * 2.1;
+  el.x = std::max(0.0, std::min(x, pageWidth() - el.w));
+  el.y = std::max(0.0, std::min(y, pageHeight() - el.h));
+  TableData t;
+  t.cols.assign(cols, 1.0);
+  t.rows.assign(rows, 1.0);
+  t.cells.assign(rows, QStringList(QVector<QString>(cols).toList()));
+  t.header = rows > 1;
+  setTableData(el, t);
+  const QString id = el.id;
+  addElement(makeEl(std::move(el)));
+  m_selection = {id};
+  ++selectionRev;
+}
+
+bool EditorCore::tableFromSelection() {
+  const Els sel = selected().list;
+  std::vector<const El*> list;
+  for (const ElPtr& e : sel) list.push_back(e.get());
+  const auto grid = findDrawnGrid(list);
+  if (!grid) return false;
+  El el;
+  el.id = newId();
+  el.kind = Kind::Table;
+  el.color = grid->color.isEmpty() ? "#374151" : grid->color;
+  el.width = grid->width;
+  el.fontSize = std::clamp(std::round(widths.value("text", 20) * 0.8), 11.0, 24.0);
+  if (!textFont.isEmpty() && textFont != "sans") el.font = textFont;
+  el.x = grid->frame.x, el.y = grid->frame.y, el.w = grid->frame.w, el.h = grid->frame.h;
+  // Under what's written in it.
+  double z = INFINITY;
+  for (const ElPtr& e : sel)
+    if (grid->lineIds.contains(e->id)) z = std::min(z, e->z);
+  el.z = std::isfinite(z) ? z : nextZ();
+  TableData t;
+  for (size_t i = 0; i + 1 < grid->xs.size(); ++i) t.cols.push_back(grid->xs[i + 1] - grid->xs[i]);
+  for (size_t i = 0; i + 1 < grid->ys.size(); ++i) t.rows.push_back(grid->ys[i + 1] - grid->ys[i]);
+  t.cells.assign(t.rows.size(), QStringList(QVector<QString>(int(t.cols.size())).toList()));
+  setTableData(el, t);
+  // Typed text in a cell goes into it.
+  QSet<QString> gone = grid->lineIds;
+  for (const ElPtr& e : sel) {
+    if (e->kind != Kind::Text || e->rot() != 0 || e->text.trimmed().isEmpty()) continue;
+    const Rect b = bounds(*e);
+    if (auto cell = ed::tableCellAt(el, b.x + b.w / 2, b.y + b.h / 2)) {
+      const QString before = t.cell(cell->first, cell->second);
+      t.setCell(cell->first, cell->second, before.isEmpty() ? e->text.trimmed() : before + "\n" + e->text.trimmed());
+      gone.insert(e->id);
+    }
+  }
+  setTableData(el, t);
+  fitTableRows(el);
+  snapshot();
+  Els& els = elements();
+  els.erase(std::remove_if(els.begin(), els.end(), [&](const ElPtr& e) { return gone.contains(e->id); }), els.end());
+  const QString id = el.id;
+  ElPtr made = makeEl(std::move(el));
+  els.insert(std::upper_bound(els.begin(), els.end(), made, [](const ElPtr& a, const ElPtr& b) { return a->z < b->z; }), made);
+  QSet<QString> keep;
+  for (const ElPtr& e : sel)
+    if (!gone.contains(e->id)) keep.insert(e->id);
+  keep.insert(id);
+  m_selection = keep;
+  ++selectionRev;
+  changed();
+  return true;
+}
+
+namespace {
+ElPtr findTable(const Els& els, const QString& id) {
+  for (const ElPtr& e : els)
+    if (e->id == id && e->kind == Kind::Table) return e;
+  return nullptr;
+}
+}  // namespace
+
+QVariantMap EditorCore::tableCell(const QString& id, int row, int col) {
+  const ElPtr el = findTable(elements(), id);
+  if (!el) return {};
+  const TableData t = tableData(*el);
+  if (row < 0 || col < 0 || row >= t.rowCount() || col >= t.colCount()) return {};
+  const Rect r = tableCellRect(*el, row, col);
+  return {{"id", id}, {"row", row}, {"col", col}, {"rows", t.rowCount()}, {"cols", t.colCount()}, {"page", active},
+          {"x", r.x}, {"y", r.y}, {"w", r.w}, {"h", r.h}, {"text", t.cell(row, col)}, {"header", t.header && row == 0},
+          {"fontSize", el->fontSize.value_or(18)}, {"font", el->font.value_or(QString())}, {"color", el->extra.value("textColor").toString("#111827")}};
+}
+
+QVariantMap EditorCore::tableCellAt(double x, double y) {
+  const Els& els = elements();
+  for (auto it = els.rbegin(); it != els.rend(); ++it)
+    if ((*it)->kind == Kind::Table)
+      if (auto cell = ed::tableCellAt(**it, x, y)) return tableCell((*it)->id, cell->first, cell->second);
+  return {};
+}
+
+namespace {
+/// Replaces the table `id` with a changed copy (`change` returns false: nothing to do).
+template <class F>
+bool editTable(EditorCore& ed, Els& els, const QString& id, F change) {
+  for (ElPtr& e : els)
+    if (e->id == id && e->kind == Kind::Table) {
+      El next = *e;
+      if (!change(next)) return false;
+      ed.snapshot();
+      for (ElPtr& x : els)
+        if (x->id == id) x = makeEl(std::move(next));
+      return true;
+    }
+  return false;
+}
+}  // namespace
+
+bool EditorCore::setTableCell(const QString& id, int row, int col, const QString& text) {
+  const bool done = editTable(*this, elements(), id, [&](El& el) {
+    TableData t = tableData(el);
+    const QString clean = trimEnd(text);
+    if (row < 0 || col < 0 || row >= t.rowCount() || col >= t.colCount() || t.cell(row, col) == clean) return false;
+    t.setCell(row, col, clean);
+    setTableData(el, t);
+    fitTableRows(el);
+    return true;
+  });
+  if (done) ++selectionRev, changed();
+  return done;
+}
+
+bool EditorCore::changeTableById(const QString& id, const QString& op, int index) {
+  const bool done = editTable(*this, elements(), id, [&](El& el) { return changeTable(el, op, index); });
+  if (done) ++selectionRev, changed();
+  return done;
+}
+
+bool EditorCore::setTableSizes(const QString& id, const QVariantList& cols, const QVariantList& rows) {
+  const bool done = editTable(*this, elements(), id, [&](El& el) {
+    TableData t = tableData(el);
+    if ((!cols.isEmpty() && cols.size() != t.colCount()) || (!rows.isEmpty() && rows.size() != t.rowCount())) return false;
+    if (!cols.isEmpty()) {
+      t.cols.clear();
+      for (const QVariant& v : cols) t.cols.push_back(std::max(0.02, v.toDouble()));
+    }
+    if (!rows.isEmpty()) {
+      t.rows.clear();
+      for (const QVariant& v : rows) t.rows.push_back(std::max(0.02, v.toDouble()));
+    }
+    setTableData(el, t);
+    fitTableRows(el);
+    return true;
+  });
+  if (done) ++selectionRev, changed();
+  return done;
 }
 
 bool EditorCore::writeBeside(const QString& value, const QString& font) {

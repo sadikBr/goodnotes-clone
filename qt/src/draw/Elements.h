@@ -48,6 +48,22 @@ double measureText(const QString& text, const QString& font, double size);
 /// Width a text box needs to show every paragraph on one line.
 double naturalTextWidth(const QJsonObject& el);
 
+/// A table: cells in its text (rows on lines, cells split by tabs, a line
+/// break inside a cell written as U+2028), column and row sizes as shares
+/// of its box ("cols", "rows"), and whether the first row is a header.
+struct TableGrid {
+  /// Column and row edges in page units (cols + 1 and rows + 1 of them).
+  std::vector<double> xs, ys;
+  int rows = 0, cols = 0;
+  /// rows × cols cells' text (line breaks as '\n').
+  QStringList cells;
+  bool header = false;
+  QString cell(int r, int c) const { return r >= 0 && c >= 0 && r < rows && c < cols ? cells.value(r * cols + c) : QString(); }
+};
+TableGrid tableGrid(const QJsonObject& el);
+/// Space between a cell's edge and its text, for a font size.
+inline double tableCellPad(double fontSize) { return fontSize * 0.45; }
+
 /// Draws one element.
 void drawElement(Canvas& c, const QJsonObject& el);
 /// Paper, an imported PDF page (if any) and the elements, onto `c` in page units.

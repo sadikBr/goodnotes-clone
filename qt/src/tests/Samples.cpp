@@ -136,6 +136,22 @@ std::vector<std::pair<QString, QJsonObject>> sampleElements() {
   sticky("font", {{"text", para}, {"font", "marker"}, {"color", "#bbf7d0"}, {"fontSize", 16}});
   sticky("arabic", {{"text", "ملاحظة مهمة للحصة القادمة"}, {"color", "#fbcfe8"}});
   sticky("rotated", {{"text", "Tilted"}, {"rotation", -0.3}});
+  // Tables: rows on lines, cells split by tabs.
+  auto table = [&](const QString& name, QJsonObject o) {
+    o["kind"] = "table";
+    o["id"] = name;
+    if (!o.contains("x")) o["x"] = 30;
+    if (!o.contains("y")) o["y"] = 40;
+    if (!o.contains("w")) o["w"] = 340;
+    if (!o.contains("h")) o["h"] = 150;
+    if (!o.contains("color")) o["color"] = "#374151";
+    if (!o.contains("fontSize")) o["fontSize"] = 14;
+    out.push_back({"el-table-" + name, o});
+  };
+  table("plain", {{"text", "\t\t\n\t\t\n\t\t"}, {"cols", QJsonArray{1, 1, 1}}, {"rows", QJsonArray{1, 1, 1}}});
+  table("header", {{"text", "Element\tSymbol\tMass\nHydrogen\tH\t1,008\nHelium, a noble gas that is light\tHe\t4,003"}, {"header", true},
+                   {"cols", QJsonArray{0.5, 0.2, 0.3}}, {"rows", QJsonArray{0.25, 0.25, 0.5}}});
+  table("arabic", {{"text", "اليوم\tالحصة\nالاثنين\tالرياضيات\nالثلاثاء\tالفيزياء"}, {"header", true}, {"font", "school"}, {"color", "#2563eb"}, {"width", 2}});
   const QString png = pngDataUrl();
   out.push_back({"el-image", QJsonObject{{"kind", "image"}, {"id", "img"}, {"x", 60}, {"y", 60}, {"w", 160}, {"h", 120}, {"src", png}}});
   out.push_back({"el-image-rotated", QJsonObject{{"kind", "image"}, {"id", "img2"}, {"x", 60}, {"y", 60}, {"w", 160}, {"h", 120}, {"src", png}, {"rotation", 0.7}}});

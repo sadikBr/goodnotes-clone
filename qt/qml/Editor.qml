@@ -63,8 +63,8 @@ Rectangle {
         onAccepted: root.activeCanvas.insertImage(selectedFile.toString())
     }
     PopupMenu { id: menu }
-    PaperPicker { id: paperPicker; canvas: canvas }
-    CoverPicker { id: coverPicker; canvas: canvas; notebookId: root.notebookId; title: root.title }
+    PaperPicker { id: paperPicker; canvas: root.mainCanvas }
+    CoverPicker { id: coverPicker; canvas: root.mainCanvas; notebookId: root.notebookId; title: root.title }
     FormDialog { id: dialog }
     Daftar { id: daftarUi; dialog: dialog; onNotify: (m, e) => root.notify(m, e) }
 
@@ -383,10 +383,11 @@ Rectangle {
                             property bool tipDismissed: false
                             onPressedChanged: if (pressed) tipDismissed = true
                             onHoveredChanged: if (!hovered) tipDismissed = false
-                            ToolTip.text: "Insert a picture, a graph, one of your pieces or a page"
+                            ToolTip.text: "Insert a picture, a table, a graph, one of your pieces or a page"
                             onClicked: menu.show(insertBtn, [
                                 { icon: "image", label: "Image", sub: "A picture from your files", action: () => imageDialog.open() },
-                                { icon: "graph", label: "Graph", sub: "Plot functions, as you'd write them", action: () => graphDialog.show(null, false) },
+                                { icon: "table", label: "Table", sub: "Rows and columns to type or write in", action: () => tablePicker.show(insertBtn) },
+                            { icon: "graph", label: "Graph", sub: "Plot functions, as you'd write them", action: () => graphDialog.show(null, false) },
                                 { icon: "stack", label: "My pieces", sub: "Something you saved to use again", action: () => piecesPanel.show(insertBtn) },
                                 { icon: "page", label: "Page", sub: "A new page after this one", action: () => root.activeCanvas.addPage(root.activeCanvas.currentPage + 1, "") }
                             ])
@@ -509,9 +510,11 @@ Rectangle {
                     onPagesChanged: if (sidePane.item) sidePane.item.mainChanged()
                 }
 
-                Instrument { anchors.fill: parent; canvas: canvas; z: 4 }
-                EraserCursor { anchors.fill: canvas; canvas: canvas; z: 6 }
-                TextEditor { anchors.fill: parent; canvas: canvas; z: 5 }
+                Instrument { anchors.fill: parent; canvas: root.mainCanvas; z: 4 }
+                EraserCursor { anchors.fill: canvas; canvas: root.mainCanvas; z: 6 }
+                TextEditor { anchors.fill: parent; canvas: root.mainCanvas; z: 5 }
+                TableCellEditor { anchors.fill: parent; canvas: root.mainCanvas; z: 5 }
+                TableHandles { anchors.fill: parent; canvas: root.mainCanvas; z: 5 }
                 // The laser pointer (src/editor/laser.ts): a soft glow, a saturated
                 // tube and a thin white core, each layer drawn once with its own
                 // opacity so crossings never darken; and the pointer dot.
@@ -525,21 +528,21 @@ Rectangle {
                         visible: canvas.laserTrail
                         layer.enabled: visible
                         opacity: 0.28 * canvas.laserColorAlpha
-                        LaserTrail { anchors.fill: parent; canvas: canvas; radius: 5.5; color: canvas.laserColor }
+                        LaserTrail { anchors.fill: parent; canvas: root.mainCanvas; radius: 5.5; color: canvas.laserColor }
                     }
                     Item {
                         anchors.fill: parent
                         visible: canvas.laserTrail
                         layer.enabled: visible
                         opacity: canvas.laserColorAlpha
-                        LaserTrail { anchors.fill: parent; canvas: canvas; radius: 3; color: canvas.laserColor }
+                        LaserTrail { anchors.fill: parent; canvas: root.mainCanvas; radius: 3; color: canvas.laserColor }
                     }
                     Item {
                         anchors.fill: parent
                         visible: canvas.laserTrail
                         layer.enabled: visible
                         opacity: canvas.laserCoreAlpha
-                        LaserTrail { anchors.fill: parent; canvas: canvas; radius: 0.9; color: "white" }
+                        LaserTrail { anchors.fill: parent; canvas: root.mainCanvas; radius: 0.9; color: "white" }
                     }
                     // .laser-dot: 6px, with a grey and a white ring.
                     Item {
@@ -553,7 +556,7 @@ Rectangle {
                 }
 
                 SelectionBar {
-                    id: selectionBar; canvas: canvas; z: 6
+                    id: selectionBar; canvas: root.mainCanvas; z: 6
                     onAskAi: what => root.askAboutSelection(what)
                     onMathsRequested: mathCard.start()
                     onGraphEditRequested: g => graphDialog.show(g, true)
@@ -649,8 +652,9 @@ Rectangle {
     }
 
     // Export (PDF, PowerPoint, PNG).
-    Exporter { id: exporter; canvas: canvas; title: root.title; onNotify: (m, e) => root.notify(m, e) }
+    Exporter { id: exporter; canvas: root.mainCanvas; title: root.title; onNotify: (m, e) => root.notify(m, e) }
     GraphDialog { id: graphDialog; canvas: root.activeCanvas }
+    TablePicker { id: tablePicker; onPicked: (rows, cols) => root.activeCanvas.insertTable(rows, cols) }
     PiecesPanel { id: piecesPanel; canvas: root.activeCanvas; onNotify: (m, e) => root.notify(m, e); onSaveRequested: root.savePiece() }
     /// The page view last used: the notebook, or the side view. Tools, the
     /// maths card, graphs, pieces, undo and the clipboard act on it.

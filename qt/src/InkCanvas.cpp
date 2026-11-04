@@ -975,6 +975,91 @@ bool InkCanvas::updateGraph(const QVariantMap& spec) {
   return true;
 }
 
+void InkCanvas::insertTable(int rows, int cols) {
+  if (!m_ed) return;
+  finishEdit();
+  const int pi = currentPage();
+  if (pi < 0 || pi >= int(m_pages.size())) return;
+  m_ed->activate(pi);
+  const double pw = m_pages[pi].w;
+  const double w = std::min(pw * 0.8, std::max(240.0, cols * 120.0));
+  const QPointF c = toPageOf(pi, QPointF(width() / 2, height() / 2));
+  setTool("lasso");
+  m_ed->insertTable(rows, cols, c.x() - w / 2, c.y() - rows * 20, w);
+  afterCore();
+}
+
+bool InkCanvas::tableFromSelection() {
+  if (!m_ed) return false;
+  finishEdit();
+  if (!m_ed->tableFromSelection()) return false;
+  afterCore();
+  return true;
+}
+
+QVariantMap InkCanvas::tableCell(const QString& id, int row, int col) {
+  if (!m_ed) return {};
+  QVariantMap cell = m_ed->tableCell(id, row, col);
+  if (cell.isEmpty()) return cell;
+  cell["rect"] = pageRectToItem(cell.value("page").toInt(), QRectF(cell.value("x").toDouble(), cell.value("y").toDouble(), cell.value("w").toDouble(), cell.value("h").toDouble()));
+  cell["zoom"] = m_zoom;
+  return cell;
+}
+
+bool InkCanvas::setTableCell(const QString& id, int row, int col, const QString& text) {
+  if (!m_ed || !m_ed->setTableCell(id, row, col, text)) return false;
+  afterCore();
+  return true;
+}
+
+bool InkCanvas::changeTable(const QString& id, const QString& op, int index) {
+  if (!m_ed || !m_ed->changeTableById(id, op, index)) return false;
+  afterCore();
+  return true;
+}
+
+QVariantMap InkCanvas::tableEdges(const QString& id) {
+  if (!m_ed) return {};
+  const QVariantMap first = m_ed->tableCell(id, 0, 0);
+  if (first.isEmpty()) return {};
+  const int rows = first.value("rows").toInt(), cols = first.value("cols").toInt(), pi = first.value("page").toInt();
+  QVariantList xs, ys, colShares, rowShares;
+  double x = 0, y = 0, w = 0, h = 0;
+  for (int c = 0; c < cols; ++c) {
+    const QVariantMap cell = m_ed->tableCell(id, 0, c);
+    if (c == 0) x = cell.value("x").toDouble();
+    w += cell.value("w").toDouble();
+  }
+  for (int r = 0; r < rows; ++r) {
+    const QVariantMap cell = m_ed->tableCell(id, r, 0);
+    if (r == 0) y = cell.value("y").toDouble();
+    h += cell.value("h").toDouble();
+  }
+  double acc = x;
+  xs << pageRectToItem(pi, QRectF(acc, y, 0, 0)).x();
+  for (int c = 0; c < cols; ++c) {
+    const double cw = m_ed->tableCell(id, 0, c).value("w").toDouble();
+    acc += cw;
+    colShares << cw / std::max(1e-6, w);
+    xs << pageRectToItem(pi, QRectF(acc, y, 0, 0)).x();
+  }
+  acc = y;
+  ys << pageRectToItem(pi, QRectF(x, acc, 0, 0)).y();
+  for (int r = 0; r < rows; ++r) {
+    const double rh = m_ed->tableCell(id, r, 0).value("h").toDouble();
+    acc += rh;
+    rowShares << rh / std::max(1e-6, h);
+    ys << pageRectToItem(pi, QRectF(x, acc, 0, 0)).y();
+  }
+  return {{"xs", xs}, {"ys", ys}, {"cols", colShares}, {"rows", rowShares}};
+}
+
+bool InkCanvas::setTableSizes(const QString& id, const QVariantList& cols, const QVariantList& rows) {
+  if (!m_ed || !m_ed->setTableSizes(id, cols, rows)) return false;
+  afterCore();
+  return true;
+}
+
 QVariantMap InkCanvas::selectionPiece(int maxSide) {
   if (!m_ed) return {};
   finishEdit();
@@ -1490,6 +1575,9 @@ void InkCanvas::press(QPointF s, float pressure, bool stylus, const QString& too
   } else if (r == "edit") {
     m_g = Gesture();
     syncEditing();
+  } else if (r == "cell") {
+    m_g = Gesture();
+    emit cellEditRequested(m_ed->takeCellRequest());
   }
   m_rubbing = tool == "eraser";
   setHover(s);

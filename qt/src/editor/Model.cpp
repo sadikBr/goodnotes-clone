@@ -71,6 +71,7 @@ QString kindName(Kind k) {
     case Kind::Sticky: return "sticky";
     case Kind::Image: return "image";
     case Kind::Graph: return "graph";
+    case Kind::Table: return "table";
   }
   return "stroke";
 }
@@ -82,6 +83,7 @@ std::optional<Kind> kindOf(const QString& n) {
   if (n == "sticky") return Kind::Sticky;
   if (n == "image") return Kind::Image;
   if (n == "graph") return Kind::Graph;
+  if (n == "table") return Kind::Table;
   return std::nullopt;
 }
 
@@ -172,6 +174,7 @@ QJsonObject El::toJson(bool withPoints) const {
         if (role) o["role"] = *role;
         if (session) o["session"] = *session;
       }
+      if (kind == Kind::Table && width > 0) o["width"] = width;
       if (rotation) o["rotation"] = *rotation;
       break;
   }

@@ -96,7 +96,8 @@ public:
   void changed();
 
   // ------------------------------------------------------------ pointer
-  /// A press on page `pi`. Returns "draw" (native live ink), "ruler" (ink along the instrument), "edit" (open the text editor) or "".
+  /// A press on page `pi`. Returns "draw" (native live ink), "ruler" (ink along the instrument), "edit" (open the text editor),
+  /// "cell" (type in a table's cell: takeCellRequest) or "".
   QString down(int pi, double x, double y, double p, double t, const QString& tool, bool shift);
   void move(double x, double y, double p, double t, bool shift, bool alt);
   void hover(double x, double y);
@@ -140,6 +141,26 @@ public:
   void insertGraph(const QVariantMap& spec, double x, double y, double w, double h);
   /// Changes the selected graph (one graph selected); false when there's none.
   bool updateSelectedGraph(const QVariantMap& spec);
+
+  // ------------------------------------------------------------ tables
+  /// An empty table, `rows` × `cols`, `w` wide, with its top left at (x, y), selected.
+  void insertTable(int rows, int cols, double x, double y, double w);
+  /// The selection's hand-drawn grid becomes a table (typed text in its cells
+  /// goes into them; handwriting stays where it is). False with no grid.
+  bool tableFromSelection();
+  /// A table cell on the active page: { id, row, col, rows, cols, x, y, w, h
+  /// (its box on the page), text, fontSize, font }; empty when there's none.
+  QVariantMap tableCell(const QString& id, int row, int col);
+  /// The cell at (x, y) on the active page (see tableCell).
+  QVariantMap tableCellAt(double x, double y);
+  /// Sets a cell's text (rows grow to fit it): one undo step.
+  bool setTableCell(const QString& id, int row, int col, const QString& text);
+  /// See changeTable (Table.h).
+  bool changeTableById(const QString& id, const QString& op, int index);
+  /// New column and row sizes (shares of the table's box).
+  bool setTableSizes(const QString& id, const QVariantList& cols, const QVariantList& rows);
+  /// The cell a text-tool press landed in ({ id, row, col }), taken once.
+  QVariantMap takeCellRequest() { QVariantMap m = m_cellRequest; m_cellRequest.clear(); return m; }
   /// The selection as a reusable piece: its elements from the top left of
   /// its box ({ elements, width, height }); empty with nothing selected.
   QJsonObject selectionAsPiece();
@@ -229,6 +250,7 @@ private:
   /// Copied elements, shared by every open page view (copy in one, paste in another).
   static std::vector<El>& clipboard();
   ElPtr m_editing;
+  QVariantMap m_cellRequest;
   bool m_editingNew = false;
   Els m_editingBefore;
   std::vector<Recent> m_recentInk;

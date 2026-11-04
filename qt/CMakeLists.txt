@@ -89,6 +89,7 @@ qt_add_executable(inkleaf
   src/editor/Geometry.h src/editor/Geometry.cpp
   src/editor/TextFormat.h src/editor/TextFormat.cpp
   src/editor/Snap.h src/editor/Snap.cpp
+  src/editor/Table.h src/editor/Table.cpp
   src/editor/Instrument.h src/editor/Instrument.cpp
   src/editor/EditorCore.h src/editor/EditorCore.cpp
   src/draw/Render.h src/draw/Render.cpp
@@ -100,7 +101,7 @@ qt_add_executable(inkleaf
   src/daftar/DaftarEditor.h src/daftar/DaftarEditor.cpp
   src/tests/SelfTest.h src/tests/SelfTest.cpp
   src/tests/GeometryTests.cpp
-  src/tests/TextAndSnapTests.cpp src/tests/MathTests.cpp src/tests/DaftarTests.cpp src/tests/Samples.h src/tests/Samples.cpp src/tests/Golden.h src/tests/Golden.cpp src/tests/EditorSessions.h src/tests/EditorSessions.cpp src/tests/JsonCompare.h
+  src/tests/TextAndSnapTests.cpp src/tests/MathTests.cpp src/tests/TableTests.cpp src/tests/DaftarTests.cpp src/tests/Samples.h src/tests/Samples.cpp src/tests/Golden.h src/tests/Golden.cpp src/tests/EditorSessions.h src/tests/EditorSessions.cpp src/tests/JsonCompare.h
   src/PaperImage.h src/PaperImage.cpp
   src/Pdf.h src/Pdf.cpp
   src/Updater.h src/Updater.cpp
@@ -184,6 +185,9 @@ qt_add_qml_module(inkleaf
     qml/editor/EraserCursor.qml
     qml/editor/MathCard.qml
     qml/editor/GraphDialog.qml
+    qml/editor/TableCellEditor.qml
+    qml/editor/TableHandles.qml
+    qml/editor/TablePicker.qml
     qml/editor/PiecesPanel.qml
     qml/editor/SidePane.qml
     qml/editor/Fonts.js

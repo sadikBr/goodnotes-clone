@@ -174,6 +174,19 @@ public:
   Q_INVOKABLE void insertGraph(const QVariantMap& spec);
   /// Changes the selected graph.
   Q_INVOKABLE bool updateGraph(const QVariantMap& spec);
+  /// An empty table (rows × cols, the first a header) in the middle of the view, selected.
+  Q_INVOKABLE void insertTable(int rows, int cols);
+  /// The selected hand-drawn grid becomes a table; false when there's none.
+  Q_INVOKABLE bool tableFromSelection();
+  /// A table cell on the active page (EditorCore::tableCell) plus where it is
+  /// in this item ("rect"); empty when there's none.
+  Q_INVOKABLE QVariantMap tableCell(const QString& id, int row, int col);
+  Q_INVOKABLE bool setTableCell(const QString& id, int row, int col, const QString& text);
+  /// "addRow", "addCol", "removeRow", "removeCol" (at `index`, -1: the end) or "header".
+  Q_INVOKABLE bool changeTable(const QString& id, const QString& op, int index = -1);
+  /// A selected table's column and row edges in this item ({ xs, ys }; empty if none).
+  Q_INVOKABLE QVariantMap tableEdges(const QString& id);
+  Q_INVOKABLE bool setTableSizes(const QString& id, const QVariantList& cols, const QVariantList& rows);
   /// The selection as a reusable piece: { elements (JSON text), width,
   /// height, preview (PNG data: URL about `maxSide` on its long side) }.
   Q_INVOKABLE QVariantMap selectionPiece(int maxSide = 240);
@@ -246,6 +259,8 @@ signals:
   void laserChanged();
   /// A press that only closed the drawer (see dismissOnPress).
   void dismissed();
+  /// The text tool tapped a table: type in this cell ({ id, row, col }).
+  void cellEditRequested(const QVariantMap& cell);
 
 protected:
   QSGNode* updatePaintNode(QSGNode* old, UpdatePaintNodeData*) override;

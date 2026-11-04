@@ -5,6 +5,12 @@ Updates → What's new) and on its GitHub release. Keep them short, one line
 per change, written for the people using Inkleaf. A release needs its
 section here before it can be published (`scripts/check-version.py`).
 
+## 0.12.0
+
+- **Tables:** draw a rough grid and choose *Make table* to get a clean one, or *Insert → Table*. Type in the cells, write in them, drag the lines to resize, add rows and columns.
+- **What's new** shows in the update card, and once more after updating (Settings → Updates → What's new).
+- **My pieces** has a new look, with *Save selection* right in it.
+
 ## 0.11.0
 
 - **Maths:** select written maths and Inkleaf works it out: it writes the answer beside it, typesets it, solves equations or shows the steps.

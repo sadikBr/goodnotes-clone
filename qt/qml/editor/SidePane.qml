@@ -107,6 +107,8 @@ Rectangle {
             }
             EraserCursor { anchors.fill: view; canvas: view; z: 6; visible: !root.same }
             TextEditor { anchors.fill: parent; canvas: view; z: 5 }
+            TableCellEditor { anchors.fill: parent; canvas: view; z: 5 }
+            TableHandles { anchors.fill: parent; canvas: view; z: 5 }
             SelectionBar {
                 canvas: view; z: 7
                 onAskAi: what => root.editor.askAboutSelection(what)
