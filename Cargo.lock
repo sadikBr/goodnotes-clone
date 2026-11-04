@@ -354,7 +354,7 @@ dependencies = [
 
 [[package]]
 name = "inkleaf-core"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "base64",
  "rusqlite",
@@ -373,7 +373,7 @@ dependencies = [
 
 [[package]]
 name = "inkleaf-native"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "inkleaf-core",
  "serde",
