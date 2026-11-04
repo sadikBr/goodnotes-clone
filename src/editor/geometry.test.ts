@@ -1,5 +1,6 @@
+import type { P2 } from "../api";
 import { describe, expect, it } from "vitest";
-import { applyAffine, bounds, groupTransform, rotateAbout, scaleAbout, transformElement, buildShape, convertShape, eraseElement, geomBox, handleAt, handlesFor, hitForSelect, hitTest, resizeElement, setLineCounter, insideLasso, isHeld, pointInPolygon, pressureWidth, translate, unionRects } from "./geometry";
+import { applyAffine, bounds, groupTransform, rotateAbout, scaleAbout, transformElement, buildShape, convertShape, eraseElement, geomBox, handleAt, handlesFor, hitForSelect, hitTest, resizeElement, setLineCounter, insideLasso, isHeld, pointInPolygon, pressureWidth, translate, unionRects, transformShape, isClosedShape } from "./geometry";
 import { fromStored, nextZ, toStored, type El, type StrokeEl } from "./model";
 
 const stroke = (points: [number, number][], width = 4): StrokeEl => ({
@@ -255,5 +256,28 @@ describe("selection transforms", () => {
     expect(hitTest(img, 100, 50, 0)).toBe(true); // centre
     expect(hitTest(img, 100, 140, 1)).toBe(true); // now extends vertically
     expect(hitTest(img, 190, 50, 1)).toBe(false); // no longer horizontally
+  });
+});
+
+describe("transformShape", () => {
+  it("rotates and scales around a pivot", () => {
+    const line = { kind: "line" as const, points: [[0, 0], [10, 0]] as P2[] };
+    const t = transformShape(line, [0, 0], Math.PI / 2, 2);
+    if (t.kind !== "line") throw new Error("kind changed");
+    expect(t.points[1][0]).toBeCloseTo(0);
+    expect(t.points[1][1]).toBeCloseTo(20);
+  });
+
+  it("keeps circles as circles and turns rotated ellipses into closed paths", () => {
+    const c = transformShape({ kind: "ellipse", cx: 0, cy: 0, rx: 10, ry: 10 }, [5, 0], 1, 1.5);
+    expect(c).toMatchObject({ kind: "ellipse", rx: 15, ry: 15 });
+    const e = transformShape({ kind: "ellipse", cx: 0, cy: 0, rx: 20, ry: 10 }, [0, 0], 0.6, 1);
+    expect(e.kind).toBe("path");
+    expect(isClosedShape(e)).toBe(true);
+  });
+
+  it("translates", () => {
+    const r = transformShape({ kind: "rectangle", points: [[0, 0], [1, 0], [1, 1], [0, 1]] }, [0, 0], 0, 1, 5, 7);
+    if (r.kind === "rectangle") expect(r.points[0]).toEqual([5, 7]);
   });
 });

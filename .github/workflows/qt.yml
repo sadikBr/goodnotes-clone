@@ -64,6 +64,10 @@ jobs:
           cmake -S qt -B build/qt -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
           cmake --build build/qt
           DESTDIR=$PWD/AppDir cmake --install build/qt
+      - name: Unit tests (Rust core, shared TypeScript)
+        run: |
+          cargo test -p inkleaf-core
+          npm test
       - name: C++ drawing matches the scripts' (docs/MIGRATION.md)
         env:
           QT_QPA_PLATFORM: offscreen

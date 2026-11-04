@@ -14,18 +14,19 @@ and one codebase to read and test.
 
 ## Where things go
 
-- **Rust core (`core/`)**: pure logic, with its tests ported from Vitest to
-  `cargo test`: geometry (bounds, hit tests, lasso, transforms), shape and
-  ink refinement (`beautify`), maths symbols (`symbols`), alignment guides
-  (`snap`), list continuation (`textFormat`), instrument maths (`ruler`),
-  paper layouts (writing lines), the template and paper catalogues, and the
-  daftar's and covers' data (classes, timetable, holidays, student lists,
-  the text elements their pages get).
+- **Rust core (`core/`)**: logic that runs once per stroke or per action,
+  with its tests ported from Vitest to `cargo test`: shape and ink
+  refinement (`beautify`), maths symbols (`symbols`), and the daftar's and
+  covers' data (classes, timetable, holidays, student lists, the text
+  elements their pages get).
 - **C++ (`qt/src/`)**: everything that draws or needs fonts: papers, covers,
   daftar pages, elements (strokes, shapes, text with Arabic and lists,
   sticky notes, images), selection and handles, export painting; and the
-  editor (tools, gestures, selection, undo, text editing), which needs both
-  drawing and text measurement.
+  editor (tools, gestures, selection, undo, text editing) with what it uses
+  on every pen movement: geometry (bounds, hit tests, lasso, transforms),
+  alignment guides (`snap`), list continuation (`textFormat`) and
+  instrument maths (`ruler`) — calling across to Rust that often would
+  cost more than it does.
 - **QML** keeps its small inline helpers (that's part of Qt), but no longer
   calls `Js.run`.
 
@@ -57,8 +58,8 @@ and one codebase to read and test.
 | 2 | Covers in C++ | `covers.ts` | compare: all designs, colours |
 | 3 | Daftar pages in C++ | `daftarPapers.ts` | compare: all daftar pages |
 | 4 | Elements in C++: strokes, shapes, text layout, sticky notes, images; export painting | `render.ts`, `ink.ts`, `fonts.ts` | compare: element samples; text wrap identical |
-| 5 | Recognisers and geometry in Rust | `geometry.ts`, `beautify.ts`, `symbols.ts`, `snap.ts`, `textFormat.ts`, `ruler.ts` | ported tests |
-| 6 | Editor in C++ | `editorCore.ts`, `toolkit.ts`, `colorPicker.ts`, `model.ts` | editor UI tests (draw, select, transform, text, undo) |
+| 5 | Recognisers in Rust | `beautify.ts`, `symbols.ts` | ported tests; script vs Rust on generated strokes |
+| 6 | Editor in C++, with its geometry | `editorCore.ts`, `geometry.ts`, `snap.ts`, `textFormat.ts`, `ruler.ts`, `toolkit.ts`, `colorPicker.ts`, `model.ts`, `papers.ts` | ported tests (Qt Test); editor UI tests (draw, select, transform, text, undo) |
 | 7 | Daftar and covers setup in Rust | `daftar.ts`, `cover.ts`, `daftarQt.ts` | ported tests |
 | 8 | Remove the script engine | `Js.*`, `JsCanvas.*`, `qt/js/`, `src/`, npm | build without Node; golden pictures |
 
@@ -87,7 +88,10 @@ read their list from a data file instead of `src/fonts.ts`.
   thumbnails, image and PDF export now draw in C++. Still in the scripts
   until their steps: the editor's overlay (selection, handles, guides) and
   its text measuring (step 6), and the cover preview (step 7).
-- [ ] 5. Recognisers and geometry (Rust)
-- [ ] 6. Editor (C++)
+- [x] 5. Recognisers in Rust (`core/src/recognize/`): shapes, braces, smoothing
+  and maths symbols, with their 24 tests ported; before the switch, script
+  and Rust gave the same answers on 1,783 generated hand-drawn strokes (every
+  shape, brace orientation and symbol). The editor calls them natively.
+- [ ] 6. Editor and its geometry (C++)
 - [ ] 7. Daftar and cover setup (Rust)
 - [ ] 8. Script engine removed

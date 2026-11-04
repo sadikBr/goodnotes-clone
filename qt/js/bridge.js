@@ -31,11 +31,9 @@ var Inkleaf = (() => {
     PAPER_COLORS: () => PAPER_COLORS,
     PAPER_SIZES: () => PAPER_SIZES,
     PEN_STYLES: () => PEN_STYLES,
-    SYMBOL_GLYPHS: () => SYMBOL_GLYPHS,
-    TEMPLATES: () => TEMPLATES2,
+    TEMPLATES: () => TEMPLATES,
     TEMPLATE_CATEGORIES: () => TEMPLATE_CATEGORIES,
     applyCover: () => applyCover,
-    beautify: () => beautify,
     coverDesignOf: () => coverDesignOf,
     coverPreview: () => coverPreview,
     coverTemplate: () => coverTemplate,
@@ -60,23 +58,17 @@ var Inkleaf = (() => {
     isDarkPaper: () => isDarkPaper,
     isRtl: () => isRtl,
     layoutText: () => layoutText,
-    matchSymbol: () => matchSymbol,
     measureText: () => measureText,
     naturalTextWidth: () => naturalTextWidth,
     paintPage: () => paintPage,
     paperLayout: () => paperLayout,
-    rankSymbols: () => rankSymbols,
-    recognizeShape: () => recognizeShape,
     refreshCoverThumbnail: () => refreshCoverThumbnail,
     renderPage: () => renderPage,
     samples: () => samples_exports,
     setUpCover: () => setUpCover,
-    smoothPath: () => smoothPath,
     snap: () => snap_exports,
     snapAngle: () => snapAngle,
-    snapToAxis: () => snapToAxis,
     steadyHighlight: () => steadyHighlight,
-    symbolShape: () => symbolShape,
     templateUsesText: () => templateUsesText,
     textAnchors: () => textAnchors,
     textFormat: () => textFormat_exports
@@ -4548,7 +4540,7 @@ var Inkleaf = (() => {
       var b2 = pts[i2];
       var ha = half(a2);
       var hb = half(b2);
-      var quad2 = [
+      var quad = [
         [a2[0] + ux * ha, a2[1] + uy * ha],
         [b2[0] + ux * hb, b2[1] + uy * hb],
         [b2[0] - ux * hb, b2[1] - uy * hb],
@@ -4556,12 +4548,12 @@ var Inkleaf = (() => {
       ];
       var area = 0;
       for (var k2 = 0; k2 < 4; k2++)
-        area += quad2[k2][0] * quad2[(k2 + 1) % 4][1] - quad2[(k2 + 1) % 4][0] * quad2[k2][1];
+        area += quad[k2][0] * quad[(k2 + 1) % 4][1] - quad[(k2 + 1) % 4][0] * quad[k2][1];
       if (area < 0)
-        quad2.reverse();
-      ctx.moveTo(quad2[0][0], quad2[0][1]);
+        quad.reverse();
+      ctx.moveTo(quad[0][0], quad[0][1]);
       for (var k2 = 1; k2 < 4; k2++)
-        ctx.lineTo(quad2[k2][0], quad2[k2][1]);
+        ctx.lineTo(quad[k2][0], quad[k2][1]);
       ctx.closePath();
     }
     ctx.fill("nonzero");
@@ -5296,1494 +5288,6 @@ var Inkleaf = (() => {
     return c2;
   }
 
-  // src/editor/beautify.ts
-  var __values10 = globalThis.__fast && globalThis.__fast.__values || function(o2) {
-    var s2 = typeof Symbol === "function" && Symbol.iterator, m2 = s2 && o2[s2], i2 = 0;
-    if (m2) return m2.call(o2);
-    if (o2 && typeof o2.length === "number") return {
-      next: function() {
-        if (o2 && i2 >= o2.length) o2 = void 0;
-        return { value: o2 && o2[i2++], done: !o2 };
-      }
-    };
-    throw new TypeError(s2 ? "Object is not iterable." : "Symbol.iterator is not defined.");
-  };
-  var __read10 = globalThis.__fast && globalThis.__fast.__read || function(o2, n2) {
-    var m2 = typeof Symbol === "function" && o2[Symbol.iterator];
-    if (!m2) return o2;
-    var i2 = m2.call(o2), r2, ar = [], e2;
-    try {
-      while ((n2 === void 0 || n2-- > 0) && !(r2 = i2.next()).done) ar.push(r2.value);
-    } catch (error) {
-      e2 = { error };
-    } finally {
-      try {
-        if (r2 && !r2.done && (m2 = i2["return"])) m2.call(i2);
-      } finally {
-        if (e2) throw e2.error;
-      }
-    }
-    return ar;
-  };
-  var __spreadArray6 = globalThis.__fast && globalThis.__fast.__spreadArray || function(to, from, pack) {
-    if (pack || arguments.length === 2) for (var i2 = 0, l2 = from.length, ar; i2 < l2; i2++) {
-      if (ar || !(i2 in from)) {
-        if (!ar) ar = Array.prototype.slice.call(from, 0, i2);
-        ar[i2] = from[i2];
-      }
-    }
-    return to.concat(ar || Array.prototype.slice.call(from));
-  };
-  var dist = function(a2, b2) {
-    return Math.hypot(a2[0] - b2[0], a2[1] - b2[1]);
-  };
-  function segDist(p2, a2, b2) {
-    var dx = b2[0] - a2[0];
-    var dy = b2[1] - a2[1];
-    var len2 = dx * dx + dy * dy;
-    if (len2 === 0)
-      return dist(p2, a2);
-    var t2 = Math.max(0, Math.min(1, ((p2[0] - a2[0]) * dx + (p2[1] - a2[1]) * dy) / len2));
-    return dist(p2, [a2[0] + t2 * dx, a2[1] + t2 * dy]);
-  }
-  function pathLength(pts) {
-    var total = 0;
-    for (var i2 = 1; i2 < pts.length; i2++)
-      total += dist(pts[i2 - 1], pts[i2]);
-    return total;
-  }
-  function bbox(pts) {
-    var e_1, _a;
-    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    try {
-      for (var pts_1 = __values10(pts), pts_1_1 = pts_1.next(); !pts_1_1.done; pts_1_1 = pts_1.next()) {
-        var _b = __read10(pts_1_1.value, 2), x2 = _b[0], y2 = _b[1];
-        x0 = Math.min(x0, x2);
-        y0 = Math.min(y0, y2);
-        x1 = Math.max(x1, x2);
-        y1 = Math.max(y1, y2);
-      }
-    } catch (e_1_1) {
-      e_1 = { error: e_1_1 };
-    } finally {
-      try {
-        if (pts_1_1 && !pts_1_1.done && (_a = pts_1.return)) _a.call(pts_1);
-      } finally {
-        if (e_1) throw e_1.error;
-      }
-    }
-    return { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0, diag: Math.hypot(x1 - x0, y1 - y0) };
-  }
-  function rdpIndices(pts, eps) {
-    var n2 = pts.length;
-    if (n2 < 3)
-      return pts.map(function(_2, i3) {
-        return i3;
-      });
-    var keep = new Uint8Array(n2);
-    keep[0] = keep[n2 - 1] = 1;
-    var stack = [[0, n2 - 1]];
-    while (stack.length) {
-      var _a = __read10(stack.pop(), 2), s2 = _a[0], e2 = _a[1];
-      var maxD = 0;
-      var idx = s2;
-      for (var i2 = s2 + 1; i2 < e2; i2++) {
-        var d2 = segDist(pts[i2], pts[s2], pts[e2]);
-        if (d2 > maxD) {
-          maxD = d2;
-          idx = i2;
-        }
-      }
-      if (maxD > eps) {
-        keep[idx] = 1;
-        stack.push([s2, idx], [idx, e2]);
-      }
-    }
-    var out = [];
-    keep.forEach(function(k2, i3) {
-      return k2 && out.push(i3);
-    });
-    return out;
-  }
-  function resampleCount(pts, n2) {
-    var total = pathLength(pts);
-    if (pts.length < 2 || total === 0 || n2 < 2)
-      return pts.slice();
-    return resampleSpacing(pts, total / (n2 - 1)).slice(0, n2);
-  }
-  function resampleSpacing(pts, step) {
-    if (pts.length < 2 || step <= 0)
-      return pts.slice();
-    var out = [pts[0]];
-    var acc = 0;
-    var prev = pts[0];
-    var i2 = 1;
-    while (i2 < pts.length) {
-      var cur = pts[i2];
-      var d2 = dist(prev, cur);
-      if (d2 > 0 && acc + d2 >= step) {
-        var t2 = (step - acc) / d2;
-        var q = [prev[0] + t2 * (cur[0] - prev[0]), prev[1] + t2 * (cur[1] - prev[1])];
-        out.push(q);
-        prev = q;
-        acc = 0;
-      } else {
-        acc += d2;
-        prev = cur;
-        i2++;
-      }
-    }
-    var last = pts[pts.length - 1];
-    if (dist(out[out.length - 1], last) > step * 0.25)
-      out.push(last);
-    else
-      out[out.length - 1] = last;
-    return out;
-  }
-  function angleAt(a2, b2, c2) {
-    var v1x = a2[0] - b2[0], v1y = a2[1] - b2[1];
-    var v2x = c2[0] - b2[0], v2y = c2[1] - b2[1];
-    var n2 = Math.hypot(v1x, v1y) * Math.hypot(v2x, v2y);
-    if (n2 === 0)
-      return 180;
-    return Math.acos(Math.max(-1, Math.min(1, (v1x * v2x + v1y * v2y) / n2))) * 180 / Math.PI;
-  }
-  function closedCorners(pts, eps, minGap) {
-    var e_2, _a;
-    var start = pts[0];
-    var far = 0;
-    pts.forEach(function(p2, i2) {
-      return dist(p2, start) > dist(pts[far], start) && (far = i2);
-    });
-    var first = pts.slice(0, far + 1);
-    var second = __spreadArray6(__spreadArray6([], __read10(pts.slice(far)), false), [start], false);
-    var corners = rdpIndices(first, eps).map(function(i2) {
-      return first[i2];
-    });
-    corners.pop();
-    corners.push.apply(corners, __spreadArray6([], __read10(rdpIndices(second, eps).map(function(i2) {
-      return second[i2];
-    })), false));
-    corners.pop();
-    var merged = [];
-    try {
-      for (var corners_1 = __values10(corners), corners_1_1 = corners_1.next(); !corners_1_1.done; corners_1_1 = corners_1.next()) {
-        var c2 = corners_1_1.value;
-        if (!merged.length || dist(merged[merged.length - 1], c2) >= minGap)
-          merged.push(c2);
-      }
-    } catch (e_2_1) {
-      e_2 = { error: e_2_1 };
-    } finally {
-      try {
-        if (corners_1_1 && !corners_1_1.done && (_a = corners_1.return)) _a.call(corners_1);
-      } finally {
-        if (e_2) throw e_2.error;
-      }
-    }
-    while (merged.length > 2 && dist(merged[0], merged[merged.length - 1]) < minGap)
-      merged.pop();
-    var _loop_1 = function() {
-      var n2 = merged.length;
-      if (n2 <= 3)
-        return "break";
-      var i2 = merged.findIndex(function(_2, k2) {
-        return angleAt(merged[(k2 + n2 - 1) % n2], merged[k2], merged[(k2 + 1) % n2]) > 160;
-      });
-      if (i2 < 0)
-        return "break";
-      merged.splice(i2, 1);
-    };
-    for (; ; ) {
-      var state_1 = _loop_1();
-      if (state_1 === "break")
-        break;
-    }
-    return merged;
-  }
-  function ellipseFit(pts) {
-    var b2 = bbox(pts);
-    var cx = (b2.x0 + b2.x1) / 2;
-    var cy = (b2.y0 + b2.y1) / 2;
-    var rx = Math.max(b2.w / 2, 1e-6);
-    var ry = Math.max(b2.h / 2, 1e-6);
-    var err = pts.reduce(function(s2, _a) {
-      var _b = __read10(_a, 2), x2 = _b[0], y2 = _b[1];
-      return s2 + Math.abs(Math.hypot((x2 - cx) / rx, (y2 - cy) / ry) - 1);
-    }, 0) / pts.length;
-    return { err, cx, cy, rx, ry };
-  }
-  function regulariseRectangle(c2) {
-    var edge = [c2[1][0] - c2[0][0], c2[1][1] - c2[0][1]];
-    var ang = (Math.atan2(edge[1], edge[0]) * 180 / Math.PI % 90 + 90) % 90;
-    if (ang < 8 || ang > 82) {
-      var b2 = bbox(c2);
-      return [[b2.x0, b2.y0], [b2.x1, b2.y0], [b2.x1, b2.y1], [b2.x0, b2.y1]];
-    }
-    var cx = c2.reduce(function(s3, p2) {
-      return s3 + p2[0];
-    }, 0) / 4;
-    var cy = c2.reduce(function(s3, p2) {
-      return s3 + p2[1];
-    }, 0) / 4;
-    var len = Math.hypot(edge[0], edge[1]);
-    var u2 = [edge[0] / len, edge[1] / len];
-    var v2 = [-u2[1], u2[0]];
-    var w2 = (dist(c2[0], c2[1]) + dist(c2[2], c2[3])) / 4;
-    var h3 = (dist(c2[1], c2[2]) + dist(c2[3], c2[0])) / 4;
-    var cross = (c2[1][0] - c2[0][0]) * (c2[2][1] - c2[1][1]) - (c2[1][1] - c2[0][1]) * (c2[2][0] - c2[1][0]);
-    var s2 = cross >= 0 ? 1 : -1;
-    var corner = function(a2, b3) {
-      return [cx + a2 * w2 * u2[0] + b3 * s2 * h3 * v2[0], cy + a2 * w2 * u2[1] + b3 * s2 * h3 * v2[1]];
-    };
-    return [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, 1)];
-  }
-  function recognizeShape(raw) {
-    if (raw.length < 4)
-      return null;
-    var b2 = bbox(raw);
-    if (b2.diag < 12)
-      return null;
-    var length = pathLength(raw);
-    var first = raw[0];
-    var last = raw[raw.length - 1];
-    if (dist(first, last) / length > 0.94)
-      return { kind: "line", points: [first, snapToAxis(first, last)] };
-    var closed = dist(first, last) < 0.22 * b2.diag && length > 2 * b2.diag * 0.9;
-    if (!closed)
-      return null;
-    var pts = resampleCount(raw, 96);
-    var corners = closedCorners(pts, 0.06 * b2.diag, 0.12 * b2.diag);
-    var e2 = ellipseFit(pts);
-    if (corners.length === 3)
-      return { kind: "triangle", points: corners };
-    if (corners.length === 4) {
-      var right = corners.every(function(_2, i2) {
-        return Math.abs(angleAt(corners[(i2 + 3) % 4], corners[i2], corners[(i2 + 1) % 4]) - 90) < 22;
-      });
-      if (right)
-        return { kind: "rectangle", points: regulariseRectangle(corners) };
-      if (e2.err < 0.06)
-        return { kind: "ellipse", cx: e2.cx, cy: e2.cy, rx: e2.rx, ry: e2.ry };
-      return { kind: "polygon", points: corners };
-    }
-    if (e2.err < 0.12) {
-      if (Math.abs(e2.rx - e2.ry) / Math.max(e2.rx, e2.ry) < 0.12) {
-        var r2 = (e2.rx + e2.ry) / 2;
-        return { kind: "ellipse", cx: e2.cx, cy: e2.cy, rx: r2, ry: r2 };
-      }
-      return { kind: "ellipse", cx: e2.cx, cy: e2.cy, rx: e2.rx, ry: e2.ry };
-    }
-    if (corners.length >= 5 && corners.length <= 8)
-      return { kind: "polygon", points: corners };
-    return null;
-  }
-  function snapToAxis(a2, b2, toleranceDeg) {
-    if (toleranceDeg === void 0) {
-      toleranceDeg = 4;
-    }
-    var dx = b2[0] - a2[0];
-    var dy = b2[1] - a2[1];
-    var ang = Math.abs(Math.atan2(dy, dx) * 180 / Math.PI);
-    var offH = Math.min(ang, 180 - ang);
-    var offV = Math.abs(90 - ang);
-    if (offH <= toleranceDeg)
-      return [b2[0], a2[1]];
-    if (offV <= toleranceDeg)
-      return [a2[0], b2[1]];
-    return b2;
-  }
-  function taubin(pts, iterations) {
-    var e_3, _a;
-    var p2 = pts.map(function(q2) {
-      return [q2[0], q2[1]];
-    });
-    var n2 = p2.length;
-    if (n2 < 3)
-      return p2;
-    for (var k2 = 0; k2 < iterations; k2++) {
-      try {
-        for (var _b = (e_3 = void 0, __values10([0.5, -0.53])), _c = _b.next(); !_c.done; _c = _b.next()) {
-          var f3 = _c.value;
-          var q = p2.map(function(v2) {
-            return [v2[0], v2[1]];
-          });
-          for (var i2 = 1; i2 < n2 - 1; i2++) {
-            q[i2][0] = p2[i2][0] + f3 * ((p2[i2 - 1][0] + p2[i2 + 1][0]) / 2 - p2[i2][0]);
-            q[i2][1] = p2[i2][1] + f3 * ((p2[i2 - 1][1] + p2[i2 + 1][1]) / 2 - p2[i2][1]);
-          }
-          p2 = q;
-        }
-      } catch (e_3_1) {
-        e_3 = { error: e_3_1 };
-      } finally {
-        try {
-          if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
-        } finally {
-          if (e_3) throw e_3.error;
-        }
-      }
-    }
-    return p2;
-  }
-  function maxDeviation(seg) {
-    var a2 = seg[0];
-    var z = seg[seg.length - 1];
-    return seg.reduce(function(m2, p2) {
-      return Math.max(m2, segDist(p2, a2, z));
-    }, 0);
-  }
-  function fitCircle(pts) {
-    var e_4, _a;
-    var n2 = pts.length;
-    if (n2 < 5)
-      return null;
-    var mx = pts.reduce(function(s2, p2) {
-      return s2 + p2[0];
-    }, 0) / n2;
-    var my = pts.reduce(function(s2, p2) {
-      return s2 + p2[1];
-    }, 0) / n2;
-    var sxx = 0, syy = 0, sxy = 0, sxz = 0, syz = 0, sz = 0;
-    try {
-      for (var pts_2 = __values10(pts), pts_2_1 = pts_2.next(); !pts_2_1.done; pts_2_1 = pts_2.next()) {
-        var _b = __read10(pts_2_1.value, 2), px = _b[0], py = _b[1];
-        var x2 = px - mx;
-        var y2 = py - my;
-        var z = x2 * x2 + y2 * y2;
-        sxx += x2 * x2;
-        syy += y2 * y2;
-        sxy += x2 * y2;
-        sxz += x2 * z;
-        syz += y2 * z;
-        sz += z;
-      }
-    } catch (e_4_1) {
-      e_4 = { error: e_4_1 };
-    } finally {
-      try {
-        if (pts_2_1 && !pts_2_1.done && (_a = pts_2.return)) _a.call(pts_2);
-      } finally {
-        if (e_4) throw e_4.error;
-      }
-    }
-    var det = sxx * syy - sxy * sxy;
-    if (Math.abs(det) < 1e-9)
-      return null;
-    var a2 = (sxz * syy - syz * sxy) / det;
-    var b2 = (syz * sxx - sxz * sxy) / det;
-    var cx = a2 / 2;
-    var cy = b2 / 2;
-    var r2 = Math.sqrt(cx * cx + cy * cy + sz / n2);
-    if (!isFinite(r2) || r2 <= 0)
-      return null;
-    return { cx: cx + mx, cy: cy + my, r: r2 };
-  }
-  function fitArc(seg) {
-    var c2 = fitCircle(seg);
-    if (!c2)
-      return null;
-    var length = pathLength(seg);
-    if (c2.r > length * 2.5)
-      return null;
-    var resid = seg.reduce(function(s2, p2) {
-      return s2 + Math.abs(Math.hypot(p2[0] - c2.cx, p2[1] - c2.cy) - c2.r);
-    }, 0) / seg.length;
-    if (resid > Math.max(1.2, 0.035 * c2.r))
-      return null;
-    var total = 0;
-    var prev = Math.atan2(seg[0][1] - c2.cy, seg[0][0] - c2.cx);
-    var a0 = prev;
-    var back = 0;
-    for (var i2 = 1; i2 < seg.length; i2++) {
-      var a2 = Math.atan2(seg[i2][1] - c2.cy, seg[i2][0] - c2.cx);
-      var d2 = a2 - prev;
-      if (d2 > Math.PI)
-        d2 -= 2 * Math.PI;
-      if (d2 < -Math.PI)
-        d2 += 2 * Math.PI;
-      if (total !== 0 && Math.sign(d2) !== Math.sign(total) && Math.abs(d2) > 0.02)
-        back++;
-      total += d2;
-      prev = a2;
-    }
-    var sweep = Math.abs(total) * (180 / Math.PI);
-    if (sweep < 35 || sweep > 330 || back > seg.length * 0.1)
-      return null;
-    var steps = Math.max(8, Math.ceil(sweep / 4));
-    var out = [];
-    for (var i2 = 0; i2 <= steps; i2++) {
-      var t2 = a0 + total * i2 / steps;
-      out.push([c2.cx + Math.cos(t2) * c2.r, c2.cy + Math.sin(t2) * c2.r]);
-    }
-    out[0] = seg[0];
-    out[out.length - 1] = seg[seg.length - 1];
-    return out;
-  }
-  function bsplineBasis(t2, m2) {
-    var k2 = 3;
-    var nk = m2 + k2 + 1;
-    var knots = new Float64Array(nk);
-    for (var i2 = 0; i2 < nk; i2++)
-      knots[i2] = Math.min(1, Math.max(0, (i2 - k2) / (m2 - k2)));
-    var N5 = new Float64Array(nk - 1);
-    var tt = Math.min(t2, 1 - 1e-9);
-    for (var i2 = 0; i2 < nk - 1; i2++)
-      N5[i2] = knots[i2] <= tt && tt < knots[i2 + 1] ? 1 : 0;
-    for (var d2 = 1; d2 <= k2; d2++) {
-      var next = new Float64Array(nk - 1 - d2);
-      for (var i2 = 0; i2 < next.length; i2++) {
-        var a2 = knots[i2 + d2] - knots[i2];
-        var b2 = knots[i2 + d2 + 1] - knots[i2 + 1];
-        next[i2] = (a2 > 0 ? (tt - knots[i2]) / a2 * N5[i2] : 0) + (b2 > 0 ? (knots[i2 + d2 + 1] - tt) / b2 * N5[i2 + 1] : 0);
-      }
-      N5 = next;
-    }
-    return N5;
-  }
-  function solve(A3, b2) {
-    var _a;
-    var n2 = b2.length;
-    var M3 = A3.map(function(row, i2) {
-      return __spreadArray6(__spreadArray6([], __read10(row), false), [b2[i2]], false);
-    });
-    for (var c2 = 0; c2 < n2; c2++) {
-      var piv = c2;
-      for (var r2 = c2 + 1; r2 < n2; r2++)
-        if (Math.abs(M3[r2][c2]) > Math.abs(M3[piv][c2]))
-          piv = r2;
-      if (Math.abs(M3[piv][c2]) < 1e-12)
-        return null;
-      _a = __read10([M3[piv], M3[c2]], 2), M3[c2] = _a[0], M3[piv] = _a[1];
-      for (var r2 = c2 + 1; r2 < n2; r2++) {
-        var f3 = M3[r2][c2] / M3[c2][c2];
-        if (f3)
-          for (var j2 = c2; j2 <= n2; j2++)
-            M3[r2][j2] -= f3 * M3[c2][j2];
-      }
-    }
-    var x2 = new Array(n2).fill(0);
-    for (var r2 = n2 - 1; r2 >= 0; r2--) {
-      var acc = M3[r2][n2];
-      for (var j2 = r2 + 1; j2 < n2; j2++)
-        acc -= M3[r2][j2] * x2[j2];
-      x2[r2] = acc / M3[r2][r2];
-    }
-    return x2;
-  }
-  function fitSmoothCurve(seg, spacing) {
-    var L2 = pathLength(seg);
-    var m2 = Math.max(4, Math.min(48, Math.round(L2 / spacing) + 3));
-    var n2 = seg.length;
-    if (n2 < m2 + 2)
-      return seg.slice();
-    var t2 = [0];
-    for (var i2 = 1; i2 < n2; i2++)
-      t2.push(t2[i2 - 1] + dist(seg[i2 - 1], seg[i2]));
-    var B = t2.map(function(v3) {
-      return bsplineBasis(v3 / L2, m2);
-    });
-    var free = m2 - 2;
-    var AtA = Array.from({ length: free }, function() {
-      return new Array(free).fill(0);
-    });
-    var rx = new Array(free).fill(0);
-    var ry = new Array(free).fill(0);
-    var p0 = seg[0];
-    var pn = seg[n2 - 1];
-    for (var s2 = 0; s2 < n2; s2++) {
-      var row = B[s2];
-      var fx = seg[s2][0] - row[0] * p0[0] - row[m2 - 1] * pn[0];
-      var fy = seg[s2][1] - row[0] * p0[1] - row[m2 - 1] * pn[1];
-      for (var i2 = 1; i2 < m2 - 1; i2++) {
-        if (!row[i2])
-          continue;
-        rx[i2 - 1] += row[i2] * fx;
-        ry[i2 - 1] += row[i2] * fy;
-        for (var j2 = 1; j2 < m2 - 1; j2++)
-          if (row[j2])
-            AtA[i2 - 1][j2 - 1] += row[i2] * row[j2];
-      }
-    }
-    var lambda = 0.02 * (n2 / m2);
-    for (var i2 = 0; i2 < m2 - 2; i2++) {
-      var idx = [i2, i2 + 1, i2 + 2];
-      var w2 = [1, -2, 1];
-      for (var a2 = 0; a2 < 3; a2++) {
-        for (var b2 = 0; b2 < 3; b2++) {
-          var ia = idx[a2] - 1;
-          var ib = idx[b2] - 1;
-          var v2 = lambda * w2[a2] * w2[b2];
-          if (ia >= 0 && ia < free && ib >= 0 && ib < free)
-            AtA[ia][ib] += v2;
-          else if (ia >= 0 && ia < free) {
-            var fixed = idx[b2] === 0 ? p0 : pn;
-            rx[ia] -= v2 * fixed[0];
-            ry[ia] -= v2 * fixed[1];
-          }
-        }
-      }
-    }
-    var cx = solve(AtA, rx);
-    var cy = solve(AtA, ry);
-    if (!cx || !cy)
-      return seg.slice();
-    var ctrl = __spreadArray6(__spreadArray6([p0], __read10(cx.map(function(x3, i3) {
-      return [x3, cy[i3]];
-    })), false), [pn], false);
-    var samples = Math.max(16, Math.min(400, Math.round(L2 / 2.5)));
-    var out = [];
-    for (var i2 = 0; i2 <= samples; i2++) {
-      var basis = bsplineBasis(i2 / samples, m2);
-      var x2 = 0;
-      var y2 = 0;
-      for (var j2 = 0; j2 < m2; j2++) {
-        x2 += basis[j2] * ctrl[j2][0];
-        y2 += basis[j2] * ctrl[j2][1];
-      }
-      out.push([x2, y2]);
-    }
-    out[0] = p0;
-    out[out.length - 1] = pn;
-    return out;
-  }
-  function turning(pts, w2) {
-    return pts.map(function(p2, i2) {
-      return i2 < w2 || i2 >= pts.length - w2 ? 180 : angleAt(pts[i2 - w2], p2, pts[i2 + w2]);
-    });
-  }
-  function findCorners(pts, w2, maxAngle) {
-    var ang = turning(pts, w2);
-    var out = [];
-    for (var i2 = w2; i2 < pts.length - w2; i2++) {
-      if (ang[i2] >= maxAngle)
-        continue;
-      var isMin = true;
-      for (var j2 = Math.max(0, i2 - w2); j2 <= Math.min(pts.length - 1, i2 + w2); j2++) {
-        if (ang[j2] < ang[i2] || ang[j2] === ang[i2] && j2 < i2) {
-          isMin = false;
-          break;
-        }
-      }
-      if (isMin)
-        out.push(i2);
-    }
-    return out;
-  }
-  function quad(a2, c2, b2, steps, out) {
-    for (var i2 = 1; i2 <= steps; i2++) {
-      var t2 = i2 / steps;
-      var m2 = 1 - t2;
-      out.push([m2 * m2 * a2[0] + 2 * m2 * t2 * c2[0] + t2 * t2 * b2[0], m2 * m2 * a2[1] + 2 * m2 * t2 * c2[1] + t2 * t2 * b2[1]]);
-    }
-  }
-  function bracePath(u0, u1, tipU, tipV, endV) {
-    var spine = (tipV + endV) / 2;
-    var half = Math.abs(endV - spine);
-    var q = Math.max(1, Math.min(half * 1.4, (tipU - u0) * 0.4, (u1 - tipU) * 0.4));
-    var out = [[u0, endV]];
-    quad([u0, endV], [u0, spine], [u0 + q, spine], 12, out);
-    out.push([tipU - q, spine]);
-    quad([tipU - q, spine], [tipU, spine], [tipU, tipV], 12, out);
-    quad([tipU, tipV], [tipU, spine], [tipU + q, spine], 12, out);
-    out.push([u1 - q, spine]);
-    quad([u1 - q, spine], [u1, spine], [u1, endV], 12, out);
-    return out;
-  }
-  function distToPolyline2(p2, line2) {
-    var best = Infinity;
-    for (var i2 = 1; i2 < line2.length; i2++)
-      best = Math.min(best, segDist(p2, line2[i2 - 1], line2[i2]));
-    return best;
-  }
-  function detectBrace(raw) {
-    var e_5, _a;
-    if (raw.length < 6)
-      return null;
-    var first = raw[0];
-    var last = raw[raw.length - 1];
-    var axisLen = dist(first, last);
-    if (axisLen < 30)
-      return null;
-    var ang = Math.atan2(last[1] - first[1], last[0] - first[0]);
-    var cos = Math.cos(ang);
-    var sin = Math.sin(ang);
-    var toUV = function(_a2) {
-      var _b2 = __read10(_a2, 2), x2 = _b2[0], y2 = _b2[1];
-      return [(x2 - first[0]) * cos + (y2 - first[1]) * sin, -(x2 - first[0]) * sin + (y2 - first[1]) * cos];
-    };
-    var fromUV = function(_a2) {
-      var _b2 = __read10(_a2, 2), u2 = _b2[0], v2 = _b2[1];
-      return [first[0] + u2 * cos - v2 * sin, first[1] + u2 * sin + v2 * cos];
-    };
-    var pts = taubin(resampleCount(raw.map(toUV), 90), 4);
-    var lb = bbox(pts);
-    var L2 = lb.w;
-    var W = lb.h;
-    if (W < 4 || L2 < 1.8 * W)
-      return null;
-    var travel = pts[pts.length - 1][0] - pts[0][0];
-    if (Math.abs(travel) < 0.75 * L2)
-      return null;
-    var dir = Math.sign(travel);
-    var back = 0;
-    for (var i2 = 1; i2 < pts.length; i2++)
-      if ((pts[i2][0] - pts[i2 - 1][0]) * dir < -0.25)
-        back++;
-    if (back > pts.length * 0.15)
-      return null;
-    var best = null;
-    var _loop_2 = function(tipLow2) {
-      var tipV = tipLow2 ? lb.y0 : lb.y1;
-      var endV = tipLow2 ? lb.y1 : lb.y0;
-      var tip = -1;
-      pts.forEach(function(p2, i3) {
-        var pos = (p2[0] - lb.x0) / L2;
-        if (pos < 0.2 || pos > 0.8)
-          return;
-        if (tip < 0 || (tipLow2 ? p2[1] < pts[tip][1] : p2[1] > pts[tip][1]))
-          tip = i3;
-      });
-      if (tip < 0)
-        return "continue";
-      var reach = Math.abs(pts[tip][1] - endV);
-      if (reach < 0.75 * W)
-        return "continue";
-      var ends = [pts[0], pts[pts.length - 1]];
-      if (ends.some(function(e2) {
-        return Math.abs(e2[1] - endV) > 0.55 * W;
-      }))
-        return "continue";
-      var path = bracePath(lb.x0, lb.x1, pts[tip][0], tipV, endV);
-      var d1 = pts.reduce(function(s2, p2) {
-        return s2 + distToPolyline2(p2, path);
-      }, 0) / pts.length;
-      var dense = resampleCount(path, 90);
-      var d2 = dense.reduce(function(s2, p2) {
-        return s2 + distToPolyline2(p2, pts);
-      }, 0) / dense.length;
-      var err = (d1 + d2) / 2 / W;
-      var vee = [pts[0], pts[tip], pts[pts.length - 1]];
-      var v1 = pts.reduce(function(acc, p2) {
-        return acc + distToPolyline2(p2, vee);
-      }, 0) / pts.length;
-      var veeDense = resampleCount(vee, 60);
-      var v2 = veeDense.reduce(function(acc, p2) {
-        return acc + distToPolyline2(p2, pts);
-      }, 0) / veeDense.length;
-      var veeErr = (v1 + v2) / 2 / W;
-      if (err > veeErr * 0.75)
-        return "continue";
-      if (!best || err < best.err)
-        best = { err, path };
-    };
-    try {
-      for (var _b = __values10([true, false]), _c = _b.next(); !_c.done; _c = _b.next()) {
-        var tipLow = _c.value;
-        _loop_2(tipLow);
-      }
-    } catch (e_5_1) {
-      e_5 = { error: e_5_1 };
-    } finally {
-      try {
-        if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
-      } finally {
-        if (e_5) throw e_5.error;
-      }
-    }
-    if (!best || best.err > 0.17)
-      return null;
-    return { kind: "path", points: best.path.map(fromUV), closed: false };
-  }
-  function smoothPath(raw) {
-    var e_6, _a;
-    var b2 = bbox(raw);
-    if (raw.length < 3 || b2.diag < 6)
-      return { points: raw.slice(), closed: false };
-    var step = Math.max(1, Math.min(3, b2.diag / 150));
-    var pts = resampleSpacing(raw, step);
-    if (pts.length < 4)
-      return { points: raw.slice(), closed: false };
-    var total = pathLength(pts);
-    var closed = dist(pts[0], pts[pts.length - 1]) < Math.max(6, 0.08 * b2.diag) && total > 2.2 * Math.max(b2.w, b2.h);
-    if (closed)
-      pts = __spreadArray6(__spreadArray6([], __read10(pts.slice(0, -1)), false), [pts[0]], false);
-    var w2 = Math.max(3, Math.round(Math.max(12, 0.035 * b2.diag) / step));
-    var corners = __spreadArray6(__spreadArray6([0], __read10(findCorners(taubin(pts, 6), w2, 120)), false), [pts.length - 1], false);
-    var scale = Math.max(2.5, Math.min(12, 0.02 * b2.diag));
-    var spacing = Math.max(14, Math.min(45, 0.09 * b2.diag));
-    var iterations = Math.max(6, Math.min(150, Math.round(2 * Math.pow(scale / step, 2))));
-    var runs = [];
-    for (var s2 = 1; s2 < corners.length; s2++) {
-      var seg = pts.slice(corners[s2 - 1], corners[s2] + 1);
-      if (seg.length < 2)
-        continue;
-      var a2 = seg[0];
-      var z = seg[seg.length - 1];
-      var chord = dist(a2, z);
-      if (seg.length <= 3 || maxDeviation(seg) < Math.max(2.5, 0.035 * chord)) {
-        runs.push({ straight: true, points: [a2, z] });
-        continue;
-      }
-      var sm = taubin(seg, iterations);
-      if (maxDeviation(sm) < Math.max(2, 0.04 * chord)) {
-        runs.push({ straight: true, points: [a2, z] });
-        continue;
-      }
-      var arc = fitArc(sm);
-      if (arc) {
-        runs.push({ straight: false, points: arc });
-        continue;
-      }
-      runs.push({ straight: false, points: fitSmoothCurve(sm, spacing) });
-    }
-    var out = [runs.length ? runs[0].points[0] : pts[0]];
-    var off = [0, 0];
-    try {
-      for (var runs_1 = __values10(runs), runs_1_1 = runs_1.next(); !runs_1_1.done; runs_1_1 = runs_1.next()) {
-        var run = runs_1_1.value;
-        var shifted = run.points.map(function(_a2) {
-          var _b = __read10(_a2, 2), x2 = _b[0], y2 = _b[1];
-          return [x2 + off[0], y2 + off[1]];
-        });
-        if (run.straight && !closed) {
-          var start = out[out.length - 1];
-          var end = snapToAxis(start, shifted[1]);
-          off = [off[0] + end[0] - shifted[1][0], off[1] + end[1] - shifted[1][1]];
-          out.push(end);
-        } else {
-          out.push.apply(out, __spreadArray6([], __read10(shifted.slice(1)), false));
-        }
-      }
-    } catch (e_6_1) {
-      e_6 = { error: e_6_1 };
-    } finally {
-      try {
-        if (runs_1_1 && !runs_1_1.done && (_a = runs_1.return)) _a.call(runs_1);
-      } finally {
-        if (e_6) throw e_6.error;
-      }
-    }
-    if (closed)
-      out[out.length - 1] = out[0];
-    return { points: out, closed };
-  }
-  function beautify(raw) {
-    if (raw.length < 2)
-      return null;
-    var shape = recognizeShape(raw);
-    if (shape)
-      return shape;
-    var brace = detectBrace(raw);
-    if (brace)
-      return brace;
-    var b2 = bbox(raw);
-    if (b2.diag < 6)
-      return null;
-    var smooth = smoothPath(raw);
-    return { kind: "path", points: smooth.points, closed: smooth.closed };
-  }
-
-  // src/editor/symbols.ts
-  var __assign7 = function() {
-    __assign7 = Object.assign || function(t2) {
-      for (var s2, i2 = 1, n2 = arguments.length; i2 < n2; i2++) {
-        s2 = arguments[i2];
-        for (var p2 in s2) if (Object.prototype.hasOwnProperty.call(s2, p2))
-          t2[p2] = s2[p2];
-      }
-      return t2;
-    };
-    return __assign7.apply(this, arguments);
-  };
-  var __values11 = globalThis.__fast && globalThis.__fast.__values || function(o2) {
-    var s2 = typeof Symbol === "function" && Symbol.iterator, m2 = s2 && o2[s2], i2 = 0;
-    if (m2) return m2.call(o2);
-    if (o2 && typeof o2.length === "number") return {
-      next: function() {
-        if (o2 && i2 >= o2.length) o2 = void 0;
-        return { value: o2 && o2[i2++], done: !o2 };
-      }
-    };
-    throw new TypeError(s2 ? "Object is not iterable." : "Symbol.iterator is not defined.");
-  };
-  var __read11 = globalThis.__fast && globalThis.__fast.__read || function(o2, n2) {
-    var m2 = typeof Symbol === "function" && o2[Symbol.iterator];
-    if (!m2) return o2;
-    var i2 = m2.call(o2), r2, ar = [], e2;
-    try {
-      while ((n2 === void 0 || n2-- > 0) && !(r2 = i2.next()).done) ar.push(r2.value);
-    } catch (error) {
-      e2 = { error };
-    } finally {
-      try {
-        if (r2 && !r2.done && (m2 = i2["return"])) m2.call(i2);
-      } finally {
-        if (e2) throw e2.error;
-      }
-    }
-    return ar;
-  };
-  var __spreadArray7 = globalThis.__fast && globalThis.__fast.__spreadArray || function(to, from, pack) {
-    if (pack || arguments.length === 2) for (var i2 = 0, l2 = from.length, ar; i2 < l2; i2++) {
-      if (ar || !(i2 in from)) {
-        if (!ar) ar = Array.prototype.slice.call(from, 0, i2);
-        ar[i2] = from[i2];
-      }
-    }
-    return to.concat(ar || Array.prototype.slice.call(from));
-  };
-  var SYMBOL_GLYPHS = {
-    integral: "∫",
-    sum: "Σ",
-    sqrt: "√",
-    infinity: "∞",
-    equals: "=",
-    identical: "≡",
-    notEqual: "≠",
-    implies: "⇒",
-    iff: "⇔",
-    arrow: "→",
-    leftRightArrow: "↔",
-    lessEqual: "≤",
-    greaterEqual: "≥",
-    plusMinus: "±",
-    forAll: "∀",
-    exists: "∃",
-    leftBrace: "{",
-    rightBrace: "}"
-  };
-  function cubic(p0, p1, p2, p3, n2) {
-    if (n2 === void 0) {
-      n2 = 12;
-    }
-    var out = [];
-    for (var i2 = 0; i2 <= n2; i2++) {
-      var t2 = i2 / n2;
-      var u2 = 1 - t2;
-      out.push([
-        u2 * u2 * u2 * p0[0] + 3 * u2 * u2 * t2 * p1[0] + 3 * u2 * t2 * t2 * p2[0] + t2 * t2 * t2 * p3[0],
-        u2 * u2 * u2 * p0[1] + 3 * u2 * u2 * t2 * p1[1] + 3 * u2 * t2 * t2 * p2[1] + t2 * t2 * t2 * p3[1]
-      ]);
-    }
-    return out;
-  }
-  var join = function() {
-    var parts = [];
-    for (var _i = 0; _i < arguments.length; _i++) {
-      parts[_i] = arguments[_i];
-    }
-    return parts.flatMap(function(p2, i2) {
-      return i2 ? p2.slice(1) : p2;
-    });
-  };
-  function lemniscate(n2) {
-    if (n2 === void 0) {
-      n2 = 48;
-    }
-    var out = [];
-    for (var i2 = 0; i2 <= n2; i2++) {
-      var t2 = i2 / n2 * Math.PI * 2;
-      var d2 = 1 + Math.pow(Math.sin(t2), 2);
-      out.push([1 + Math.cos(t2) / d2, 0.4 + Math.sin(t2) * Math.cos(t2) / d2]);
-    }
-    return out;
-  }
-  var chevron = function(x0, x1, y0, y1) {
-    return [
-      [x0, y0],
-      [x1, (y0 + y1) / 2],
-      [x0, y1]
-    ];
-  };
-  var LEFT_BRACE = join(cubic([0.6, 0], [0.32, 0], [0.32, 0.18], [0.31, 0.36]), cubic([0.31, 0.36], [0.3, 0.46], [0.18, 0.5], [0.04, 0.5]), cubic([0.04, 0.5], [0.18, 0.5], [0.3, 0.54], [0.31, 0.64]), cubic([0.31, 0.64], [0.32, 0.82], [0.32, 1], [0.6, 1]));
-  var MODELS = {
-    leftBrace: [LEFT_BRACE],
-    rightBrace: [],
-    integral: [
-      join(cubic([0.42, 0.1], [0.4, -0.02], [0.27, -0.02], [0.25, 0.14]), cubic([0.25, 0.14], [0.24, 0.4], [0.21, 0.6], [0.2, 0.86]), cubic([0.2, 0.86], [0.18, 1.02], [0.05, 1.02], [0.03, 0.9]))
-    ],
-    sum: [
-      [
-        [0.82, 0.1],
-        [0.82, 0],
-        [0, 0],
-        [0.45, 0.5],
-        [0, 1],
-        [0.85, 1],
-        [0.85, 0.9]
-      ]
-    ],
-    sqrt: [
-      [
-        [0, 0.6],
-        [0.15, 0.52],
-        [0.4, 1],
-        [0.65, 0],
-        [1.4, 0]
-      ]
-    ],
-    infinity: [lemniscate()],
-    equals: [
-      [
-        [0, 0],
-        [1.2, 0]
-      ],
-      [
-        [0, 0.45],
-        [1.2, 0.45]
-      ]
-    ],
-    identical: [
-      [
-        [0, 0],
-        [1.2, 0]
-      ],
-      [
-        [0, 0.4],
-        [1.2, 0.4]
-      ],
-      [
-        [0, 0.8],
-        [1.2, 0.8]
-      ]
-    ],
-    notEqual: [
-      [
-        [0, 0.3],
-        [1.2, 0.3]
-      ],
-      [
-        [0, 0.75],
-        [1.2, 0.75]
-      ],
-      [
-        [0.85, 0],
-        [0.35, 1.05]
-      ]
-    ],
-    implies: [
-      [
-        [0, 0.32],
-        [1.35, 0.32]
-      ],
-      [
-        [0, 0.72],
-        [1.35, 0.72]
-      ],
-      chevron(1.15, 1.6, 0, 1.04)
-    ],
-    iff: [
-      [
-        [0.2, 0.32],
-        [1.8, 0.32]
-      ],
-      [
-        [0.2, 0.72],
-        [1.8, 0.72]
-      ],
-      chevron(1.6, 2.05, 0, 1.04),
-      chevron(0.45, 0, 0, 1.04)
-    ],
-    arrow: [
-      [
-        [0, 0.5],
-        [1.6, 0.5]
-      ],
-      chevron(1.25, 1.6, 0.12, 0.88)
-    ],
-    leftRightArrow: [
-      [
-        [0, 0.5],
-        [1.9, 0.5]
-      ],
-      chevron(1.55, 1.9, 0.12, 0.88),
-      chevron(0.35, 0, 0.12, 0.88)
-    ],
-    lessEqual: [chevron(0.9, 0, 0, 0.75), [[0, 1], [0.9, 1]]],
-    greaterEqual: [chevron(0, 0.9, 0, 0.75), [[0, 1], [0.9, 1]]],
-    plusMinus: [
-      [
-        [0.45, 0],
-        [0.45, 0.72]
-      ],
-      [
-        [0, 0.36],
-        [0.9, 0.36]
-      ],
-      [
-        [0, 1],
-        [0.9, 1]
-      ]
-    ],
-    forAll: [
-      [
-        [0, 0],
-        [0.45, 1],
-        [0.9, 0]
-      ],
-      [
-        [0.18, 0.42],
-        [0.72, 0.42]
-      ]
-    ],
-    exists: [
-      [
-        [0, 0],
-        [0.75, 0],
-        [0.75, 1],
-        [0, 1]
-      ],
-      [
-        [0.12, 0.5],
-        [0.75, 0.5]
-      ]
-    ]
-  };
-  var N3 = 40;
-  function pathLen(stroke) {
-    var d2 = 0;
-    for (var i2 = 1; i2 < stroke.length; i2++)
-      d2 += Math.hypot(stroke[i2][0] - stroke[i2 - 1][0], stroke[i2][1] - stroke[i2 - 1][1]);
-    return d2;
-  }
-  function resample(strokes, n2) {
-    var e_1, _a;
-    var total = strokes.reduce(function(s2, st2) {
-      return s2 + pathLen(st2);
-    }, 0);
-    if (total === 0)
-      return Array.from({ length: n2 }, function() {
-        return { x: strokes[0][0][0], y: strokes[0][0][1] };
-      });
-    var step = total / (n2 - 1);
-    var out = [];
-    var acc = 0;
-    try {
-      for (var strokes_1 = __values11(strokes), strokes_1_1 = strokes_1.next(); !strokes_1_1.done; strokes_1_1 = strokes_1.next()) {
-        var st = strokes_1_1.value;
-        if (!st.length)
-          continue;
-        var prev = st[0];
-        if (!out.length)
-          out.push({ x: prev[0], y: prev[1] });
-        for (var i2 = 1; i2 < st.length; i2++) {
-          var cur = st[i2];
-          var d2 = Math.hypot(cur[0] - prev[0], cur[1] - prev[1]);
-          while (acc + d2 >= step && d2 > 0) {
-            var t2 = (step - acc) / d2;
-            var q = [prev[0] + t2 * (cur[0] - prev[0]), prev[1] + t2 * (cur[1] - prev[1])];
-            out.push({ x: q[0], y: q[1] });
-            prev = q;
-            d2 = Math.hypot(cur[0] - prev[0], cur[1] - prev[1]);
-            acc = 0;
-          }
-          acc += d2;
-          prev = cur;
-          cur = st[i2];
-        }
-      }
-    } catch (e_1_1) {
-      e_1 = { error: e_1_1 };
-    } finally {
-      try {
-        if (strokes_1_1 && !strokes_1_1.done && (_a = strokes_1.return)) _a.call(strokes_1);
-      } finally {
-        if (e_1) throw e_1.error;
-      }
-    }
-    var last = strokes[strokes.length - 1];
-    while (out.length < n2)
-      out.push({ x: last[last.length - 1][0], y: last[last.length - 1][1] });
-    return out.slice(0, n2);
-  }
-  function normalise(pts) {
-    var e_2, _a;
-    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    try {
-      for (var pts_1 = __values11(pts), pts_1_1 = pts_1.next(); !pts_1_1.done; pts_1_1 = pts_1.next()) {
-        var p2 = pts_1_1.value;
-        x0 = Math.min(x0, p2.x);
-        y0 = Math.min(y0, p2.y);
-        x1 = Math.max(x1, p2.x);
-        y1 = Math.max(y1, p2.y);
-      }
-    } catch (e_2_1) {
-      e_2 = { error: e_2_1 };
-    } finally {
-      try {
-        if (pts_1_1 && !pts_1_1.done && (_a = pts_1.return)) _a.call(pts_1);
-      } finally {
-        if (e_2) throw e_2.error;
-      }
-    }
-    var s2 = Math.max(x1 - x0, y1 - y0) || 1;
-    var scaled = pts.map(function(p3) {
-      return { x: (p3.x - x0) / s2, y: (p3.y - y0) / s2 };
-    });
-    var cx = scaled.reduce(function(a2, p3) {
-      return a2 + p3.x;
-    }, 0) / scaled.length;
-    var cy = scaled.reduce(function(a2, p3) {
-      return a2 + p3.y;
-    }, 0) / scaled.length;
-    return scaled.map(function(p3) {
-      return { x: p3.x - cx, y: p3.y - cy };
-    });
-  }
-  function cloudDistance(a2, b2, start) {
-    var matched = new Array(b2.length).fill(false);
-    var sum = 0;
-    var i2 = start;
-    do {
-      var best = Infinity;
-      var index = -1;
-      for (var j2 = 0; j2 < b2.length; j2++) {
-        if (matched[j2])
-          continue;
-        var d2 = Math.hypot(a2[i2].x - b2[j2].x, a2[i2].y - b2[j2].y);
-        if (d2 < best) {
-          best = d2;
-          index = j2;
-        }
-      }
-      matched[index] = true;
-      var weight = 1 - (i2 - start + a2.length) % a2.length / a2.length;
-      sum += weight * best;
-      i2 = (i2 + 1) % a2.length;
-    } while (i2 !== start);
-    return sum;
-  }
-  function greedyMatch(a2, b2) {
-    var step = Math.floor(Math.sqrt(a2.length));
-    var min = Infinity;
-    for (var i2 = 0; i2 < a2.length; i2 += step)
-      min = Math.min(min, cloudDistance(a2, b2, i2), cloudDistance(b2, a2, i2));
-    return min;
-  }
-  function bboxOf(strokes) {
-    var e_3, _a, e_4, _b;
-    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    try {
-      for (var strokes_2 = __values11(strokes), strokes_2_1 = strokes_2.next(); !strokes_2_1.done; strokes_2_1 = strokes_2.next()) {
-        var st = strokes_2_1.value;
-        try {
-          for (var st_1 = (e_4 = void 0, __values11(st)), st_1_1 = st_1.next(); !st_1_1.done; st_1_1 = st_1.next()) {
-            var _c = __read11(st_1_1.value, 2), x2 = _c[0], y2 = _c[1];
-            x0 = Math.min(x0, x2);
-            y0 = Math.min(y0, y2);
-            x1 = Math.max(x1, x2);
-            y1 = Math.max(y1, y2);
-          }
-        } catch (e_4_1) {
-          e_4 = { error: e_4_1 };
-        } finally {
-          try {
-            if (st_1_1 && !st_1_1.done && (_b = st_1.return)) _b.call(st_1);
-          } finally {
-            if (e_4) throw e_4.error;
-          }
-        }
-      }
-    } catch (e_3_1) {
-      e_3 = { error: e_3_1 };
-    } finally {
-      try {
-        if (strokes_2_1 && !strokes_2_1.done && (_a = strokes_2.return)) _a.call(strokes_2);
-      } finally {
-        if (e_3) throw e_3.error;
-      }
-    }
-    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
-  }
-  function spaced(stroke, step) {
-    var out = [stroke[0]];
-    var acc = 0;
-    var prev = stroke[0];
-    for (var i2 = 1; i2 < stroke.length; i2++) {
-      var cur = stroke[i2];
-      var d2 = Math.hypot(cur[0] - prev[0], cur[1] - prev[1]);
-      while (acc + d2 >= step && d2 > 0) {
-        var t2 = (step - acc) / d2;
-        prev = [prev[0] + t2 * (cur[0] - prev[0]), prev[1] + t2 * (cur[1] - prev[1])];
-        out.push(prev);
-        d2 = Math.hypot(cur[0] - prev[0], cur[1] - prev[1]);
-        acc = 0;
-        cur = stroke[i2];
-      }
-      acc += d2;
-      prev = stroke[i2];
-    }
-    if (out.length < 2 || Math.hypot(out[out.length - 1][0] - prev[0], out[out.length - 1][1] - prev[1]) > step * 0.3)
-      out.push(prev);
-    return out;
-  }
-  function turns(stroke, size) {
-    var raw = spaced(stroke, Math.max(size * 0.04, 1e-6));
-    var pts = raw.map(function(p2, i3) {
-      var a3 = raw[Math.max(0, i3 - 1)];
-      var b3 = raw[Math.min(raw.length - 1, i3 + 1)];
-      return [(a3[0] + 2 * p2[0] + b3[0]) / 4, (a3[1] + 2 * p2[1] + b3[1]) / 4];
-    });
-    var k2 = 3;
-    var out = [];
-    for (var i2 = k2; i2 < pts.length - k2; i2++) {
-      var a2 = Math.atan2(pts[i2][1] - pts[i2 - k2][1], pts[i2][0] - pts[i2 - k2][0]);
-      var b2 = Math.atan2(pts[i2 + k2][1] - pts[i2][1], pts[i2 + k2][0] - pts[i2][0]);
-      var turn = Math.abs(b2 - a2);
-      if (turn > Math.PI)
-        turn = 2 * Math.PI - turn;
-      out.push(turn);
-    }
-    return out;
-  }
-  function cornerCount(stroke, size) {
-    var t2 = turns(stroke, size);
-    var corners = 0;
-    for (var i2 = 0; i2 < t2.length; i2++) {
-      if (t2[i2] > 58 * Math.PI / 180) {
-        corners++;
-        i2 += 5;
-      }
-    }
-    return corners;
-  }
-  function sharpest(stroke, size) {
-    return Math.max.apply(Math, __spreadArray7([0], __read11(turns(stroke, size)), false));
-  }
-  function cornerSignature(strokes) {
-    var b2 = bboxOf(strokes);
-    var size = Math.max(b2.w, b2.h);
-    return strokes.map(function(st) {
-      return { corners: cornerCount(st, size), sharpest: sharpest(st, size) };
-    }).sort(function(a2, b3) {
-      return a2.corners - b3.corners || a2.sharpest - b3.sharpest;
-    });
-  }
-  MODELS.rightBrace = [LEFT_BRACE.map(function(_a) {
-    var _b = __read11(_a, 2), x2 = _b[0], y2 = _b[1];
-    return [0.64 - x2, y2];
-  })];
-  var CURVY = /* @__PURE__ */ new Set(["integral", "leftBrace", "rightBrace"]);
-  var TEMPLATES = Object.keys(MODELS).map(function(name) {
-    var b2 = bboxOf(MODELS[name]);
-    var straight = MODELS[name].filter(function(st) {
-      return st.length === 2;
-    }).length;
-    return { name, strokes: MODELS[name].length, straight, cloud: normalise(resample(MODELS[name], N3)), corners: cornerSignature(MODELS[name]), aspect: b2.w / Math.max(b2.h, 1e-6) };
-  });
-  var THRESHOLDS = {
-    integral: 1.6,
-    sum: 2.1,
-    sqrt: 1.9,
-    infinity: 1.4,
-    equals: 1.5,
-    identical: 1.65,
-    notEqual: 1.6,
-    implies: 1.6,
-    iff: 1.6,
-    arrow: 1.25,
-    leftRightArrow: 1.5,
-    lessEqual: 1.5,
-    greaterEqual: 1.5,
-    plusMinus: 1.7,
-    forAll: 1.7,
-    exists: 1.75,
-    leftBrace: 1.6,
-    rightBrace: 1.6
-  };
-  function matchSymbol(strokes) {
-    var e_5, _a;
-    var usable = strokes.filter(function(s2) {
-      return s2.length > 1;
-    });
-    if (!usable.length)
-      return null;
-    var cloud = normalise(resample(usable, N3));
-    var corners = cornerSignature(usable);
-    var b2 = bboxOf(usable);
-    var aspect = b2.w / Math.max(b2.h, 1e-6);
-    var best = null;
-    try {
-      for (var TEMPLATES_1 = __values11(TEMPLATES), TEMPLATES_1_1 = TEMPLATES_1.next(); !TEMPLATES_1_1.done; TEMPLATES_1_1 = TEMPLATES_1.next()) {
-        var t2 = TEMPLATES_1_1.value;
-        if (!plausible(t2, usable.length, corners, aspect))
-          continue;
-        if (!curvyFits(t2.name, usable))
-          continue;
-        var d2 = greedyMatch(cloud, t2.cloud);
-        if (d2 >= THRESHOLDS[t2.name])
-          continue;
-        if (!best || d2 / THRESHOLDS[t2.name] < best.distance / THRESHOLDS[best.name])
-          best = { name: t2.name, distance: d2 };
-      }
-    } catch (e_5_1) {
-      e_5 = { error: e_5_1 };
-    } finally {
-      try {
-        if (TEMPLATES_1_1 && !TEMPLATES_1_1.done && (_a = TEMPLATES_1.return)) _a.call(TEMPLATES_1);
-      } finally {
-        if (e_5) throw e_5.error;
-      }
-    }
-    return best;
-  }
-  function plausible(t2, strokes, corners, aspect) {
-    if (strokes !== t2.strokes)
-      return false;
-    if (CURVY.has(t2.name)) {
-      if (corners.some(function(c2) {
-        return c2.corners > 3;
-      }))
-        return false;
-      var ratio_1 = aspect / t2.aspect;
-      return ratio_1 > 0.45 && ratio_1 < 2.2;
-    }
-    var needPointed = t2.corners.filter(function(c2) {
-      return c2.corners >= 1;
-    }).length;
-    var pointed = corners.filter(function(c2) {
-      return c2.corners >= 1 || c2.sharpest > 38 * Math.PI / 180;
-    }).length;
-    if (pointed < needPointed)
-      return false;
-    if (corners.filter(function(c2) {
-      return c2.corners >= 1 || c2.sharpest > 38 * Math.PI / 180;
-    }).length > t2.strokes - t2.straight)
-      return false;
-    for (var i2 = 0; i2 < corners.length; i2++) {
-      var want = t2.corners[i2].corners;
-      if (Math.abs(corners[i2].corners - want) > (want >= 3 ? 2 : 1))
-        return false;
-      if (want === 1 && corners[i2].corners > 1)
-        return false;
-    }
-    var ratio = aspect / t2.aspect;
-    return ratio > 0.45 && ratio < 2.2;
-  }
-  function curvyFits(name, strokes) {
-    var e_6, _a;
-    if (!CURVY.has(name) || strokes.length !== 1)
-      return true;
-    var st = strokes[0];
-    var b2 = bboxOf(strokes);
-    if (b2.w <= 0 || b2.h <= 0)
-      return false;
-    var a2 = st[0];
-    var z = st[st.length - 1];
-    var apart = Math.abs(a2[0] - z[0]) / b2.w;
-    if (name === "integral")
-      return apart > 0.3;
-    if (apart > 0.45)
-      return false;
-    var left = name === "leftBrace";
-    var tip = st[0];
-    try {
-      for (var st_2 = __values11(st), st_2_1 = st_2.next(); !st_2_1.done; st_2_1 = st_2.next()) {
-        var p2 = st_2_1.value;
-        if (left ? p2[0] < tip[0] : p2[0] > tip[0])
-          tip = p2;
-      }
-    } catch (e_6_1) {
-      e_6 = { error: e_6_1 };
-    } finally {
-      try {
-        if (st_2_1 && !st_2_1.done && (_a = st_2.return)) _a.call(st_2);
-      } finally {
-        if (e_6) throw e_6.error;
-      }
-    }
-    var at = (tip[1] - b2.y) / b2.h;
-    if (at < 0.28 || at > 0.72)
-      return false;
-    return sharpest(st, Math.max(b2.w, b2.h)) > 85 * Math.PI / 180;
-  }
-  function rankSymbols(strokes) {
-    var cloud = normalise(resample(strokes, N3));
-    var corners = cornerSignature(strokes);
-    var b2 = bboxOf(strokes);
-    var aspect = b2.w / Math.max(b2.h, 1e-6);
-    return TEMPLATES.filter(function(t2) {
-      return plausible(t2, strokes.length, corners, aspect);
-    }).map(function(t2) {
-      return { name: t2.name, distance: greedyMatch(cloud, t2.cloud) };
-    }).sort(function(a2, b3) {
-      return a2.distance - b3.distance;
-    });
-  }
-  function symbolShape(name, box) {
-    var e_7, _a, e_8, _b, e_9, _c, e_10, _d;
-    var model = MODELS[name];
-    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    try {
-      for (var model_1 = __values11(model), model_1_1 = model_1.next(); !model_1_1.done; model_1_1 = model_1.next()) {
-        var st = model_1_1.value;
-        try {
-          for (var st_3 = (e_8 = void 0, __values11(st)), st_3_1 = st_3.next(); !st_3_1.done; st_3_1 = st_3.next()) {
-            var _e = __read11(st_3_1.value, 2), x2 = _e[0], y2 = _e[1];
-            x0 = Math.min(x0, x2);
-            y0 = Math.min(y0, y2);
-            x1 = Math.max(x1, x2);
-            y1 = Math.max(y1, y2);
-          }
-        } catch (e_8_1) {
-          e_8 = { error: e_8_1 };
-        } finally {
-          try {
-            if (st_3_1 && !st_3_1.done && (_b = st_3.return)) _b.call(st_3);
-          } finally {
-            if (e_8) throw e_8.error;
-          }
-        }
-      }
-    } catch (e_7_1) {
-      e_7 = { error: e_7_1 };
-    } finally {
-      try {
-        if (model_1_1 && !model_1_1.done && (_a = model_1.return)) _a.call(model_1);
-      } finally {
-        if (e_7) throw e_7.error;
-      }
-    }
-    var mw = x1 - x0 || 1;
-    var mh = y1 - y0 || 1;
-    var scale = Math.sqrt(box.w / mw * (box.h / mh));
-    var ox = box.x + box.w / 2 - mw * scale / 2 - x0 * scale;
-    var oy = box.y + box.h / 2 - mh * scale / 2 - y0 * scale;
-    var points = [];
-    var breaks = [];
-    try {
-      for (var model_2 = __values11(model), model_2_1 = model_2.next(); !model_2_1.done; model_2_1 = model_2.next()) {
-        var st = model_2_1.value;
-        if (points.length)
-          breaks.push(points.length);
-        try {
-          for (var st_4 = (e_10 = void 0, __values11(st)), st_4_1 = st_4.next(); !st_4_1.done; st_4_1 = st_4.next()) {
-            var _f = __read11(st_4_1.value, 2), x2 = _f[0], y2 = _f[1];
-            points.push([ox + x2 * scale, oy + y2 * scale]);
-          }
-        } catch (e_10_1) {
-          e_10 = { error: e_10_1 };
-        } finally {
-          try {
-            if (st_4_1 && !st_4_1.done && (_d = st_4.return)) _d.call(st_4);
-          } finally {
-            if (e_10) throw e_10.error;
-          }
-        }
-      }
-    } catch (e_9_1) {
-      e_9 = { error: e_9_1 };
-    } finally {
-      try {
-        if (model_2_1 && !model_2_1.done && (_c = model_2.return)) _c.call(model_2);
-      } finally {
-        if (e_9) throw e_9.error;
-      }
-    }
-    return __assign7({ kind: "path", points, closed: false }, breaks.length ? { breaks } : {});
-  }
-
   // src/native.ts
   var __awaiter2 = function(thisArg, _arguments, P2, generator) {
     function adopt(value) {
@@ -6888,12 +5392,12 @@ var Inkleaf = (() => {
   };
   function invoke(cmd, args) {
     return __awaiter2(this, void 0, Promise, function() {
-      var N5, r2;
+      var N4, r2;
       return __generator3(this, function(_a) {
-        N5 = globalThis.__native;
-        if (!N5)
+        N4 = globalThis.__native;
+        if (!N4)
           throw new Error("no native core (calling ".concat(cmd, ")"));
-        r2 = JSON.parse(N5.call(camel(cmd), JSON.stringify(args !== null && args !== void 0 ? args : {})));
+        r2 = JSON.parse(N4.call(camel(cmd), JSON.stringify(args !== null && args !== void 0 ? args : {})));
         if (r2.error)
           throw new Error(r2.error);
         return [2, r2.ok];
@@ -6910,7 +5414,7 @@ var Inkleaf = (() => {
     { id: "planner", label: "Planner", short: "Planner" },
     { id: "teacher", label: "Teacher", short: "Teacher" }
   ];
-  var TEMPLATES2 = [
+  var TEMPLATES = [
     { id: "blank", label: "Blank", category: "basic" },
     { id: "ruled", label: "Ruled", category: "basic" },
     { id: "narrow-ruled", label: "Narrow ruled", category: "basic" },
@@ -7106,7 +5610,7 @@ var Inkleaf = (() => {
   var api = new NativeBackend();
 
   // src/ui.ts
-  var __values12 = globalThis.__fast && globalThis.__fast.__values || function(o2) {
+  var __values10 = globalThis.__fast && globalThis.__fast.__values || function(o2) {
     var s2 = typeof Symbol === "function" && Symbol.iterator, m2 = s2 && o2[s2], i2 = 0;
     if (m2) return m2.call(o2);
     if (o2 && typeof o2.length === "number") return {
@@ -7117,7 +5621,7 @@ var Inkleaf = (() => {
     };
     throw new TypeError(s2 ? "Object is not iterable." : "Symbol.iterator is not defined.");
   };
-  var __read12 = globalThis.__fast && globalThis.__fast.__read || function(o2, n2) {
+  var __read10 = globalThis.__fast && globalThis.__fast.__read || function(o2, n2) {
     var m2 = typeof Symbol === "function" && o2[Symbol.iterator];
     if (!m2) return o2;
     var i2 = m2.call(o2), r2, ar = [], e2;
@@ -7134,7 +5638,7 @@ var Inkleaf = (() => {
     }
     return ar;
   };
-  var __spreadArray8 = globalThis.__fast && globalThis.__fast.__spreadArray || function(to, from, pack) {
+  var __spreadArray6 = globalThis.__fast && globalThis.__fast.__spreadArray || function(to, from, pack) {
     if (pack || arguments.length === 2) for (var i2 = 0, l2 = from.length, ar; i2 < l2; i2++) {
       if (ar || !(i2 in from)) {
         if (!ar) ar = Array.prototype.slice.call(from, 0, i2);
@@ -7210,8 +5714,8 @@ var Inkleaf = (() => {
   };
 
   // src/cover.ts
-  var __assign8 = function() {
-    __assign8 = Object.assign || function(t2) {
+  var __assign7 = function() {
+    __assign7 = Object.assign || function(t2) {
       for (var s2, i2 = 1, n2 = arguments.length; i2 < n2; i2++) {
         s2 = arguments[i2];
         for (var p2 in s2) if (Object.prototype.hasOwnProperty.call(s2, p2))
@@ -7219,7 +5723,7 @@ var Inkleaf = (() => {
       }
       return t2;
     };
-    return __assign8.apply(this, arguments);
+    return __assign7.apply(this, arguments);
   };
   var __awaiter3 = function(thisArg, _arguments, P2, generator) {
     function adopt(value) {
@@ -7317,7 +5821,7 @@ var Inkleaf = (() => {
       return { value: op[0] ? op[1] : void 0, done: true };
     }
   };
-  var __read13 = globalThis.__fast && globalThis.__fast.__read || function(o2, n2) {
+  var __read11 = globalThis.__fast && globalThis.__fast.__read || function(o2, n2) {
     var m2 = typeof Symbol === "function" && o2[Symbol.iterator];
     if (!m2) return o2;
     var i2 = m2.call(o2), r2, ar = [], e2;
@@ -7334,7 +5838,7 @@ var Inkleaf = (() => {
     }
     return ar;
   };
-  var __spreadArray9 = globalThis.__fast && globalThis.__fast.__spreadArray || function(to, from, pack) {
+  var __spreadArray7 = globalThis.__fast && globalThis.__fast.__spreadArray || function(to, from, pack) {
     if (pack || arguments.length === 2) for (var i2 = 0, l2 = from.length, ar; i2 < l2; i2++) {
       if (ar || !(i2 in from)) {
         if (!ar) ar = Array.prototype.slice.call(from, 0, i2);
@@ -7358,15 +5862,15 @@ var Inkleaf = (() => {
     var y2 = Math.max(box.y - 6, box.y + (box.h - lines2 * lineH) / 2);
     var common = { font: t2.font, align: t2.align, rotation: 0 };
     return {
-      title: __assign8(__assign8({}, common), { x: box.x, y: y2, w: box.w, fontSize: size, color: t2.titleColor, bold: t2.font === "sans", text: title }),
-      date: __assign8(__assign8({}, common), { x: t2.date.x, y: t2.date.y, w: t2.date.w, fontSize: t2.dateSize, color: t2.dateColor, bold: false, text: date })
+      title: __assign7(__assign7({}, common), { x: box.x, y: y2, w: box.w, fontSize: size, color: t2.titleColor, bold: t2.font === "sans", text: title }),
+      date: __assign7(__assign7({}, common), { x: t2.date.x, y: t2.date.y, w: t2.date.w, fontSize: t2.dateSize, color: t2.dateColor, bold: false, text: date })
     };
   }
   function coverTextElements(design, title, date, w2, hgt) {
     var l2 = layoutText2(design, title, date, w2, hgt);
     return [
-      __assign8(__assign8({}, l2.title), { id: newId(), z: 0, kind: "text", role: "cover-title" }),
-      __assign8(__assign8({}, l2.date), { id: newId(), z: 1, kind: "text", role: "cover-date" })
+      __assign7(__assign7({}, l2.title), { id: newId(), z: 0, kind: "text", role: "cover-title" }),
+      __assign7(__assign7({}, l2.date), { id: newId(), z: 1, kind: "text", role: "cover-date" })
     ];
   }
   function refreshCoverThumbnail(page) {
@@ -7406,7 +5910,7 @@ var Inkleaf = (() => {
           case 0:
             return [4, api.pages(nb.id)];
           case 1:
-            _a = __read13.apply(void 0, [_b.sent(), 1]), page = _a[0];
+            _a = __read11.apply(void 0, [_b.sent(), 1]), page = _a[0];
             if (!page || !isCoverTemplate(page.template))
               return [
                 2
@@ -7474,7 +5978,7 @@ var Inkleaf = (() => {
             });
             l_1 = layoutText2(design, (_b = titleEl_1 === null || titleEl_1 === void 0 ? void 0 : titleEl_1.text) !== null && _b !== void 0 ? _b : nb.title, (_c = dateEl_1 === null || dateEl_1 === void 0 ? void 0 : dateEl_1.text) !== null && _c !== void 0 ? _c : monthYear(), page.width, page.height);
             next = els.map(function(e2) {
-              return e2 === titleEl_1 ? __assign8(__assign8(__assign8({}, e2), l_1.title), { role: "cover-title" }) : e2 === dateEl_1 ? __assign8(__assign8(__assign8({}, e2), l_1.date), { role: "cover-date" }) : e2;
+              return e2 === titleEl_1 ? __assign7(__assign7(__assign7({}, e2), l_1.title), { role: "cover-title" }) : e2 === dateEl_1 ? __assign7(__assign7(__assign7({}, e2), l_1.date), { role: "cover-date" }) : e2;
             });
             return [4, api.saveElements(page.id, next.map(toStored))];
           case 10:
@@ -7517,7 +6021,7 @@ var Inkleaf = (() => {
     paperTargets: () => paperTargets,
     snapMove: () => snapMove
   });
-  var __values13 = globalThis.__fast && globalThis.__fast.__values || function(o2) {
+  var __values11 = globalThis.__fast && globalThis.__fast.__values || function(o2) {
     var s2 = typeof Symbol === "function" && Symbol.iterator, m2 = s2 && o2[s2], i2 = 0;
     if (m2) return m2.call(o2);
     if (o2 && typeof o2.length === "number") return {
@@ -7550,10 +6054,10 @@ var Inkleaf = (() => {
     var e_1, _a, e_2, _b;
     var best = null;
     try {
-      for (var anchors_1 = __values13(anchors), anchors_1_1 = anchors_1.next(); !anchors_1_1.done; anchors_1_1 = anchors_1.next()) {
+      for (var anchors_1 = __values11(anchors), anchors_1_1 = anchors_1.next(); !anchors_1_1.done; anchors_1_1 = anchors_1.next()) {
         var a2 = anchors_1_1.value;
         try {
-          for (var targets_1 = (e_2 = void 0, __values13(targets)), targets_1_1 = targets_1.next(); !targets_1_1.done; targets_1_1 = targets_1.next()) {
+          for (var targets_1 = (e_2 = void 0, __values11(targets)), targets_1_1 = targets_1.next(); !targets_1_1.done; targets_1_1 = targets_1.next()) {
             var t2 = targets_1_1.value;
             if (t2.axis !== a2.axis || !PAIRS[a2.kind].includes(t2.kind))
               continue;
@@ -7597,14 +6101,14 @@ var Inkleaf = (() => {
     var guides = [];
     var seen = /* @__PURE__ */ new Set();
     try {
-      for (var anchors_2 = __values13(anchors), anchors_2_1 = anchors_2.next(); !anchors_2_1.done; anchors_2_1 = anchors_2.next()) {
+      for (var anchors_2 = __values11(anchors), anchors_2_1 = anchors_2.next(); !anchors_2_1.done; anchors_2_1 = anchors_2.next()) {
         var a2 = anchors_2_1.value;
         var delta = a2.axis === "x" ? ndx : ndy;
         var shift = a2.axis === "x" ? ndy : ndx;
         if ((a2.axis === "x" ? ox : oy) === null)
           continue;
         try {
-          for (var targets_2 = (e_4 = void 0, __values13(targets)), targets_2_1 = targets_2.next(); !targets_2_1.done; targets_2_1 = targets_2.next()) {
+          for (var targets_2 = (e_4 = void 0, __values11(targets)), targets_2_1 = targets_2.next(); !targets_2_1.done; targets_2_1 = targets_2.next()) {
             var t2 = targets_2_1.value;
             if (t2.axis !== a2.axis || !PAIRS[a2.kind].includes(t2.kind))
               continue;
@@ -7692,8 +6196,8 @@ var Inkleaf = (() => {
     todaysLesson: () => todaysLesson,
     updateDaftar: () => updateDaftar
   });
-  var __assign9 = function() {
-    __assign9 = Object.assign || function(t2) {
+  var __assign8 = function() {
+    __assign8 = Object.assign || function(t2) {
       for (var s2, i2 = 1, n2 = arguments.length; i2 < n2; i2++) {
         s2 = arguments[i2];
         for (var p2 in s2) if (Object.prototype.hasOwnProperty.call(s2, p2))
@@ -7701,7 +6205,7 @@ var Inkleaf = (() => {
       }
       return t2;
     };
-    return __assign9.apply(this, arguments);
+    return __assign8.apply(this, arguments);
   };
   var __awaiter4 = function(thisArg, _arguments, P2, generator) {
     function adopt(value) {
@@ -7799,7 +6303,7 @@ var Inkleaf = (() => {
       return { value: op[0] ? op[1] : void 0, done: true };
     }
   };
-  var __values14 = globalThis.__fast && globalThis.__fast.__values || function(o2) {
+  var __values12 = globalThis.__fast && globalThis.__fast.__values || function(o2) {
     var s2 = typeof Symbol === "function" && Symbol.iterator, m2 = s2 && o2[s2], i2 = 0;
     if (m2) return m2.call(o2);
     if (o2 && typeof o2.length === "number") return {
@@ -7810,7 +6314,7 @@ var Inkleaf = (() => {
     };
     throw new TypeError(s2 ? "Object is not iterable." : "Symbol.iterator is not defined.");
   };
-  var __read14 = globalThis.__fast && globalThis.__fast.__read || function(o2, n2) {
+  var __read12 = globalThis.__fast && globalThis.__fast.__read || function(o2, n2) {
     var m2 = typeof Symbol === "function" && o2[Symbol.iterator];
     if (!m2) return o2;
     var i2 = m2.call(o2), r2, ar = [], e2;
@@ -7827,7 +6331,7 @@ var Inkleaf = (() => {
     }
     return ar;
   };
-  var __spreadArray10 = globalThis.__fast && globalThis.__fast.__spreadArray || function(to, from, pack) {
+  var __spreadArray8 = globalThis.__fast && globalThis.__fast.__spreadArray || function(to, from, pack) {
     if (pack || arguments.length === 2) for (var i2 = 0, l2 = from.length, ar; i2 < l2; i2++) {
       if (ar || !(i2 in from)) {
         if (!ar) ar = Array.prototype.slice.call(from, 0, i2);
@@ -7852,7 +6356,7 @@ var Inkleaf = (() => {
       var m2 = JSON.parse(nb.meta);
       if (m2.kind !== "daftar" || !Array.isArray(m2.classes))
         return null;
-      return __assign9({ year: "", region: "", directorate: "", school: "", teacher: "", payroll: "", subject: "", timetable: [], holidays: [] }, m2);
+      return __assign8({ year: "", region: "", directorate: "", school: "", teacher: "", payroll: "", subject: "", timetable: [], holidays: [] }, m2);
     } catch (_a) {
       return null;
     }
@@ -7904,8 +6408,8 @@ var Inkleaf = (() => {
     var v2 = values(meta, cls);
     var out = [];
     try {
-      for (var _b = __values14(Object.entries(slots)), _c = _b.next(); !_c.done; _c = _b.next()) {
-        var _d = __read14(_c.value, 2), key = _d[0], slot = _d[1];
+      for (var _b = __values12(Object.entries(slots)), _c = _b.next(); !_c.done; _c = _b.next()) {
+        var _d = __read12(_c.value, 2), key = _d[0], slot = _d[1];
         if (!v2[key])
           continue;
         var size = Math.max(8.5, Math.min(13, slot.w / Math.max(1, v2[key].length) * 1.9));
@@ -7921,9 +6425,9 @@ var Inkleaf = (() => {
       }
     }
     if (template === "daftar-timetable")
-      out.push.apply(out, __spreadArray10([], __read14(timetableElements(meta, w2, h3)), false));
+      out.push.apply(out, __spreadArray8([], __read12(timetableElements(meta, w2, h3)), false));
     if (template === "daftar-holidays")
-      out.push.apply(out, __spreadArray10([], __read14(holidayElements(meta, w2, h3, out.length)), false));
+      out.push.apply(out, __spreadArray8([], __read12(holidayElements(meta, w2, h3, out.length)), false));
     return out;
   }
   var CLASS_COLORS = ["#ead7f0", "#bfdbfe", "#bbf7d0", "#fbcfe8", "#c7d2fe", "#fed7aa", "#a5f3fc", "#e5e7eb"];
@@ -7948,7 +6452,7 @@ var Inkleaf = (() => {
     var out = [];
     var z = 10;
     var base = { kind: "text", role: "daftar-field", font: "sans" };
-    out.push(__assign9(__assign9({}, base), { id: newId(), z: z++, x: p2.x + 30, y: p2.y + 186, w: p2.w - 60, text: "Cahier de textes", fontSize: 20, color: "#6b7280", align: "center" }));
+    out.push(__assign8(__assign8({}, base), { id: newId(), z: z++, x: p2.x + 30, y: p2.y + 186, w: p2.w - 60, text: "Cahier de textes", fontSize: 20, color: "#6b7280", align: "center" }));
     var rows = [
       { ar: "المؤسسة", fr: "Établissement", value: meta.school },
       { ar: "المادة", fr: "Matière", value: meta.subject },
@@ -7963,9 +6467,9 @@ var Inkleaf = (() => {
     var step = Math.min(78, (p2.y + p2.h - 100 - top) / Math.max(1, rows.length));
     rows.forEach(function(r2, i2) {
       var y2 = top + i2 * step;
-      out.push(__assign9(__assign9({}, base), { id: newId(), z: z++, x: x2, y: y2, w: rw, text: r2.ar, fontSize: 13, color: "#6b7280" }));
-      out.push(__assign9(__assign9({}, base), { id: newId(), z: z++, x: x2, y: y2, w: rw, text: r2.fr, fontSize: 12, color: "#6b7280", align: "left" }));
-      out.push(__assign9(__assign9({}, base), { id: newId(), z: z++, x: x2, y: y2 + 22, w: rw, text: r2.value, fontSize: 19, color: "#1f2937", bold: true, align: "center" }));
+      out.push(__assign8(__assign8({}, base), { id: newId(), z: z++, x: x2, y: y2, w: rw, text: r2.ar, fontSize: 13, color: "#6b7280" }));
+      out.push(__assign8(__assign8({}, base), { id: newId(), z: z++, x: x2, y: y2, w: rw, text: r2.fr, fontSize: 12, color: "#6b7280", align: "left" }));
+      out.push(__assign8(__assign8({}, base), { id: newId(), z: z++, x: x2, y: y2 + 22, w: rw, text: r2.value, fontSize: 19, color: "#1f2937", bold: true, align: "center" }));
     });
     return out;
   }
@@ -7986,11 +6490,11 @@ var Inkleaf = (() => {
     if (!today.length)
       return null;
     var mins = function(s2) {
-      var _a = __read14(s2.split(":").map(Number), 2), hh = _a[0], mm = _a[1];
+      var _a = __read12(s2.split(":").map(Number), 2), hh = _a[0], mm = _a[1];
       return hh * 60 + (mm || 0);
     };
     var t2 = now.getHours() * 60 + now.getMinutes();
-    return __spreadArray10([], __read14(today), false).sort(function(a2, b2) {
+    return __spreadArray8([], __read12(today), false).sort(function(a2, b2) {
       var da = t2 >= mins(a2.start) && t2 <= mins(a2.end) ? -1 : Math.min(Math.abs(t2 - mins(a2.start)), Math.abs(t2 - mins(a2.end)));
       var db = t2 >= mins(b2.start) && t2 <= mins(b2.end) ? -1 : Math.min(Math.abs(t2 - mins(b2.start)), Math.abs(t2 - mins(b2.end)));
       return da - db;
@@ -8004,7 +6508,7 @@ var Inkleaf = (() => {
     var L2 = lessonLayout(w2, h3);
     var bottom = -Infinity;
     try {
-      for (var ink_1 = __values14(ink), ink_1_1 = ink_1.next(); !ink_1_1.done; ink_1_1 = ink_1.next()) {
+      for (var ink_1 = __values12(ink), ink_1_1 = ink_1.next(); !ink_1_1.done; ink_1_1 = ink_1.next()) {
         var r2 = ink_1_1.value;
         if (r2.x1 < L2.x0 || r2.x0 > L2.x1 || r2.y1 < L2.bodyTop + 1 || r2.y0 > L2.bodyBottom)
           continue;
@@ -8090,7 +6594,7 @@ var Inkleaf = (() => {
     }
     var T2 = holidaysLayout(w2, h3);
     var out = [];
-    var list = __spreadArray10([], __read14(meta.holidays), false).sort(function(a2, b2) {
+    var list = __spreadArray8([], __read12(meta.holidays), false).sort(function(a2, b2) {
       return a2.from.localeCompare(b2.from);
     }).slice(0, T2.rows);
     list.forEach(function(hd, r2) {
@@ -8143,7 +6647,7 @@ var Inkleaf = (() => {
       out.push({ code, name: names.slice(0, 2).join(" ") });
     };
     try {
-      for (var _c = __values14(text2.split(/\r?\n/)), _d = _c.next(); !_d.done; _d = _c.next()) {
+      for (var _c = __values12(text2.split(/\r?\n/)), _d = _c.next(); !_d.done; _d = _c.next()) {
         var raw = _d.value;
         _loop_1(raw);
       }
@@ -8280,7 +6784,7 @@ var Inkleaf = (() => {
             nb = _j.sent();
             return [4, api.pages(nb.id)];
           case 2:
-            _a = __read14.apply(void 0, [_j.sent(), 2]), cover = _a[0], title = _a[1];
+            _a = __read12.apply(void 0, [_j.sent(), 2]), cover = _a[0], title = _a[1];
             return [4, api.setPageTemplate(cover.id, "cover-zellige", input.coverColor)];
           case 3:
             _j.sent();
@@ -8308,7 +6812,7 @@ var Inkleaf = (() => {
             _j.label = 5;
           case 5:
             _j.trys.push([5, 10, 11, 12]);
-            _b = __values14(["daftar-profile", "daftar-profile-2", "daftar-timetable", "daftar-holidays", "daftar-diagnostic"]), _c = _b.next();
+            _b = __values12(["daftar-profile", "daftar-profile-2", "daftar-timetable", "daftar-holidays", "daftar-diagnostic"]), _c = _b.next();
             _j.label = 6;
           case 6:
             if (!!_c.done) return [3, 9];
@@ -8338,11 +6842,11 @@ var Inkleaf = (() => {
             ];
           case 12:
             _j.trys.push([12, 20, 21, 22]);
-            _d = __values14(meta.classes.entries()), _e = _d.next();
+            _d = __values12(meta.classes.entries()), _e = _d.next();
             _j.label = 13;
           case 13:
             if (!!_e.done) return [3, 19];
-            _f = __read14(_e.value, 2), i2 = _f[0], cls = _f[1];
+            _f = __read12(_e.value, 2), i2 = _f[0], cls = _f[1];
             return [4, add("daftar-students", cls)];
           case 14:
             _j.sent();
@@ -8399,7 +6903,7 @@ var Inkleaf = (() => {
           case 0:
             return [4, api.pages(nb.id)];
           case 1:
-            _a = __read14.apply(void 0, [_c.sent(), 1]), cover = _a[0];
+            _a = __read12.apply(void 0, [_c.sent(), 1]), cover = _a[0];
             if (!cover)
               return [
                 2
@@ -8409,9 +6913,9 @@ var Inkleaf = (() => {
             return [4, api.elements(cover.id)];
           case 2:
             els = _b.apply(void 0, [_c.sent()]).map(function(e2) {
-              return e2.kind === "text" && e2.role === "cover-date" && meta.year ? __assign9(__assign9({}, e2), { text: meta.year }) : e2;
+              return e2.kind === "text" && e2.role === "cover-date" && meta.year ? __assign8(__assign8({}, e2), { text: meta.year }) : e2;
             });
-            return [4, api.saveElements(cover.id, __spreadArray10(__spreadArray10([], __read14(els), false), __read14(coverElements(meta, cover.width, cover.height)), false).map(toStored))];
+            return [4, api.saveElements(cover.id, __spreadArray8(__spreadArray8([], __read12(els), false), __read12(coverElements(meta, cover.width, cover.height)), false).map(toStored))];
           case 3:
             _c.sent();
             return [
@@ -8452,15 +6956,15 @@ var Inkleaf = (() => {
                     }).filter(function(e2) {
                       return !(p3.template === "daftar-timetable" && e2.kind === "sticky" && oldNote.has(e2.text));
                     }).map(function(e2) {
-                      return isCover && e2.kind === "text" && e2.role === "cover-date" && meta.year ? __assign9(__assign9({}, e2), { text: meta.year }) : e2;
+                      return isCover && e2.kind === "text" && e2.role === "cover-date" && meta.year ? __assign8(__assign8({}, e2), { text: meta.year }) : e2;
                     });
                     fresh = isCover ? coverElements(meta, p3.width, p3.height) : pageElements(p3.template, meta, p3.section, p3.width, p3.height);
-                    z0 = Math.min.apply(Math, __spreadArray10([0], __read14(keep.map(function(e2) {
+                    z0 = Math.min.apply(Math, __spreadArray8([0], __read12(keep.map(function(e2) {
                       return e2.z;
                     })), false)) - fresh.length - 1;
-                    return [4, api.saveElements(p3.id, __spreadArray10(__spreadArray10([], __read14(fresh.map(function(e2, k3) {
-                      return __assign9(__assign9({}, e2), { z: p3.template === "daftar-timetable" && e2.kind === "sticky" ? e2.z : z0 + k3 });
-                    })), false), __read14(keep), false).map(toStored))];
+                    return [4, api.saveElements(p3.id, __spreadArray8(__spreadArray8([], __read12(fresh.map(function(e2, k3) {
+                      return __assign8(__assign8({}, e2), { z: p3.template === "daftar-timetable" && e2.kind === "sticky" ? e2.z : z0 + k3 });
+                    })), false), __read12(keep), false).map(toStored))];
                   case 2:
                     _h.sent();
                     return [
@@ -8473,11 +6977,11 @@ var Inkleaf = (() => {
             _f.label = 2;
           case 2:
             _f.trys.push([2, 7, 8, 9]);
-            _a = __values14(pages.entries()), _b = _a.next();
+            _a = __values12(pages.entries()), _b = _a.next();
             _f.label = 3;
           case 3:
             if (!!_b.done) return [3, 6];
-            _c = __read14(_b.value, 2), i2 = _c[0], p2 = _c[1];
+            _c = __read12(_b.value, 2), i2 = _c[0], p2 = _c[1];
             return [5, _loop_2(i2, p2)];
           case 4:
             _f.sent();
@@ -8513,7 +7017,7 @@ var Inkleaf = (() => {
             _f.label = 10;
           case 10:
             _f.trys.push([10, 18, 19, 20]);
-            added_1 = __values14(added), added_1_1 = added_1.next();
+            added_1 = __values12(added), added_1_1 = added_1.next();
             _f.label = 11;
           case 11:
             if (!!added_1_1.done) return [3, 17];
@@ -8604,18 +7108,18 @@ var Inkleaf = (() => {
             _f.label = 8;
           case 8:
             _f.trys.push([8, 14, 15, 16]);
-            _a = __values14(pages.entries()), _b = _a.next();
+            _a = __values12(pages.entries()), _b = _a.next();
             _f.label = 9;
           case 9:
             if (!!_b.done) return [3, 13];
-            _c = __read14(_b.value, 2), k2 = _c[0], p2 = _c[1];
+            _c = __read12(_b.value, 2), k2 = _c[0], p2 = _c[1];
             _d = fromStored;
             return [4, api.elements(p2.id)];
           case 10:
             els = _d.apply(void 0, [_f.sent()]).filter(function(e2) {
               return !(e2.kind === "text" && e2.role === "daftar-student");
             });
-            return [4, api.saveElements(p2.id, __spreadArray10(__spreadArray10([], __read14(els), false), __read14(studentElements(students, k2 * STUDENTS_PER_PAGE, p2.width, p2.height)), false).map(toStored))];
+            return [4, api.saveElements(p2.id, __spreadArray8(__spreadArray8([], __read12(els), false), __read12(studentElements(students, k2 * STUDENTS_PER_PAGE, p2.width, p2.height)), false).map(toStored))];
           case 11:
             _f.sent();
             _f.label = 12;
@@ -8669,7 +7173,7 @@ var Inkleaf = (() => {
   }
 
   // src/colorPicker.ts
-  var __read15 = globalThis.__fast && globalThis.__fast.__read || function(o2, n2) {
+  var __read13 = globalThis.__fast && globalThis.__fast.__read || function(o2, n2) {
     var m2 = typeof Symbol === "function" && o2[Symbol.iterator];
     if (!m2) return o2;
     var i2 = m2.call(o2), r2, ar = [], e2;
@@ -8686,7 +7190,7 @@ var Inkleaf = (() => {
     }
     return ar;
   };
-  var __spreadArray11 = globalThis.__fast && globalThis.__fast.__spreadArray || function(to, from, pack) {
+  var __spreadArray9 = globalThis.__fast && globalThis.__fast.__spreadArray || function(to, from, pack) {
     if (pack || arguments.length === 2) for (var i2 = 0, l2 = from.length, ar; i2 < l2; i2++) {
       if (ar || !(i2 in from)) {
         if (!ar) ar = Array.prototype.slice.call(from, 0, i2);
@@ -8695,7 +7199,7 @@ var Inkleaf = (() => {
     }
     return to.concat(ar || Array.prototype.slice.call(from));
   };
-  var __values15 = globalThis.__fast && globalThis.__fast.__values || function(o2) {
+  var __values13 = globalThis.__fast && globalThis.__fast.__values || function(o2) {
     var s2 = typeof Symbol === "function" && Symbol.iterator, m2 = s2 && o2[s2], i2 = 0;
     if (m2) return m2.call(o2);
     if (o2 && typeof o2.length === "number") return {
@@ -8708,7 +7212,7 @@ var Inkleaf = (() => {
   };
 
   // src/editor/toolkit.ts
-  var __values16 = globalThis.__fast && globalThis.__fast.__values || function(o2) {
+  var __values14 = globalThis.__fast && globalThis.__fast.__values || function(o2) {
     var s2 = typeof Symbol === "function" && Symbol.iterator, m2 = s2 && o2[s2], i2 = 0;
     if (m2) return m2.call(o2);
     if (o2 && typeof o2.length === "number") return {
@@ -8719,7 +7223,7 @@ var Inkleaf = (() => {
     };
     throw new TypeError(s2 ? "Object is not iterable." : "Symbol.iterator is not defined.");
   };
-  var __read16 = globalThis.__fast && globalThis.__fast.__read || function(o2, n2) {
+  var __read14 = globalThis.__fast && globalThis.__fast.__read || function(o2, n2) {
     var m2 = typeof Symbol === "function" && o2[Symbol.iterator];
     if (!m2) return o2;
     var i2 = m2.call(o2), r2, ar = [], e2;
@@ -8736,7 +7240,7 @@ var Inkleaf = (() => {
     }
     return ar;
   };
-  var __spreadArray12 = globalThis.__fast && globalThis.__fast.__spreadArray || function(to, from, pack) {
+  var __spreadArray10 = globalThis.__fast && globalThis.__fast.__spreadArray || function(to, from, pack) {
     if (pack || arguments.length === 2) for (var i2 = 0, l2 = from.length, ar; i2 < l2; i2++) {
       if (ar || !(i2 in from)) {
         if (!ar) ar = Array.prototype.slice.call(from, 0, i2);
@@ -8790,7 +7294,7 @@ var Inkleaf = (() => {
         try {
           var saved = JSON.parse(getPref(KEY, "{}"));
           try {
-            for (var _b = __values16(Object.keys(DEFAULTS)), _c = _b.next(); !_c.done; _c = _b.next()) {
+            for (var _b = __values14(Object.keys(DEFAULTS)), _c = _b.next(); !_c.done; _c = _b.next()) {
               var t2 = _c.value;
               var s2 = saved[t2];
               if (!s2)
@@ -8858,7 +7362,7 @@ var Inkleaf = (() => {
   );
 
   // src/editor/ruler.ts
-  var __read17 = globalThis.__fast && globalThis.__fast.__read || function(o2, n2) {
+  var __read15 = globalThis.__fast && globalThis.__fast.__read || function(o2, n2) {
     var m2 = typeof Symbol === "function" && o2[Symbol.iterator];
     if (!m2) return o2;
     var i2 = m2.call(o2), r2, ar = [], e2;
@@ -8875,7 +7379,7 @@ var Inkleaf = (() => {
     }
     return ar;
   };
-  var __spreadArray13 = globalThis.__fast && globalThis.__fast.__spreadArray || function(to, from, pack) {
+  var __spreadArray11 = globalThis.__fast && globalThis.__fast.__spreadArray || function(to, from, pack) {
     if (pack || arguments.length === 2) for (var i2 = 0, l2 = from.length, ar; i2 < l2; i2++) {
       if (ar || !(i2 in from)) {
         if (!ar) ar = Array.prototype.slice.call(from, 0, i2);
@@ -8884,7 +7388,7 @@ var Inkleaf = (() => {
     }
     return to.concat(ar || Array.prototype.slice.call(from));
   };
-  var __values17 = globalThis.__fast && globalThis.__fast.__values || function(o2) {
+  var __values15 = globalThis.__fast && globalThis.__fast.__values || function(o2) {
     var s2 = typeof Symbol === "function" && Symbol.iterator, m2 = s2 && o2[s2], i2 = 0;
     if (m2) return m2.call(o2);
     if (o2 && typeof o2.length === "number") return {
@@ -8956,7 +7460,7 @@ var Inkleaf = (() => {
     var ys = v2.map(function(p2) {
       return p2[1];
     });
-    var box = { x: Math.min.apply(Math, __spreadArray13([], __read17(xs), false)), y: Math.min.apply(Math, __spreadArray13([], __read17(ys), false)), w: Math.max.apply(Math, __spreadArray13([], __read17(xs), false)) - Math.min.apply(Math, __spreadArray13([], __read17(xs), false)), h: Math.max.apply(Math, __spreadArray13([], __read17(ys), false)) - Math.min.apply(Math, __spreadArray13([], __read17(ys), false)) };
+    var box = { x: Math.min.apply(Math, __spreadArray11([], __read15(xs), false)), y: Math.min.apply(Math, __spreadArray11([], __read15(ys), false)), w: Math.max.apply(Math, __spreadArray11([], __read15(xs), false)) - Math.min.apply(Math, __spreadArray11([], __read15(xs), false)), h: Math.max.apply(Math, __spreadArray11([], __read15(ys), false)) - Math.min.apply(Math, __spreadArray11([], __read15(ys), false)) };
     var lines2 = v2.map(function(p2, i3) {
       return { a: p2, b: v2[(i3 + 1) % v2.length] };
     });
@@ -8969,8 +7473,8 @@ var Inkleaf = (() => {
       return [p2[0] * 0.4, p2[1] * 0.4];
     })), '"/>');
     try {
-      for (var markLegs_1 = __values17(markLegs), markLegs_1_1 = markLegs_1.next(); !markLegs_1_1.done; markLegs_1_1 = markLegs_1.next()) {
-        var _b = __read17(markLegs_1_1.value, 2), i2 = _b[0], j2 = _b[1];
+      for (var markLegs_1 = __values15(markLegs), markLegs_1_1 = markLegs_1.next(); !markLegs_1_1.done; markLegs_1_1 = markLegs_1.next()) {
+        var _b = __read15(markLegs_1_1.value, 2), i2 = _b[0], j2 = _b[1];
         var n2 = outward(v2[i2], v2[j2]).n;
         marks += tickMarks(v2[i2], v2[j2], [-n2[0], -n2[1]], 4 * MM2, true);
       }
@@ -9130,7 +7634,7 @@ var Inkleaf = (() => {
           k2.title = "Drag to measure an angle";
           return k2;
         }) : [];
-        (_a = this.el).append.apply(_a, __spreadArray13(__spreadArray13([this.label, this.readout], __read17(this.grips), false), __read17(this.armKnobs), false));
+        (_a = this.el).append.apply(_a, __spreadArray11(__spreadArray11([this.label, this.readout], __read15(this.grips), false), __read15(this.armKnobs), false));
       };
       Ruler2.prototype.show = function(center) {
         this.visible = true;
@@ -9157,7 +7661,7 @@ var Inkleaf = (() => {
         s2.width = "".concat(w2 * z, "px");
         s2.height = "".concat(h3 * z, "px");
         s2.transformOrigin = "".concat(-x2 * z, "px ").concat(-y2 * z, "px");
-        var _b = __read17(this.host.pageOrigin(), 2), ox = _b[0], oy = _b[1];
+        var _b = __read15(this.host.pageOrigin(), 2), ox = _b[0], oy = _b[1];
         s2.transform = "translate(".concat(ox + (this.cx + x2) * z, "px, ").concat(oy + (this.cy + y2) * z, "px) rotate(").concat(this.angle, "rad)");
         var at = function(el, p2) {
           el.style.left = "".concat((p2[0] - x2) * z, "px");
@@ -9199,10 +7703,10 @@ var Inkleaf = (() => {
       Ruler2.prototype.renderArms = function() {
         if (!this.armsG)
           return;
-        var _a = __read17([this.armEnd(0), this.armEnd(1)], 2), a2 = _a[0], b2 = _a[1];
+        var _a = __read15([this.armEnd(0), this.armEnd(1)], 2), a2 = _a[0], b2 = _a[1];
         var r2 = 14 * MM2;
-        var t0 = Math.min.apply(Math, __spreadArray13([], __read17(this.arms), false)) * Math.PI / 180;
-        var t1 = Math.max.apply(Math, __spreadArray13([], __read17(this.arms), false)) * Math.PI / 180;
+        var t0 = Math.min.apply(Math, __spreadArray11([], __read15(this.arms), false)) * Math.PI / 180;
+        var t1 = Math.max.apply(Math, __spreadArray11([], __read15(this.arms), false)) * Math.PI / 180;
         var p0 = [Math.cos(t0) * r2, -Math.sin(t0) * r2];
         var p1 = [Math.cos(t1) * r2, -Math.sin(t1) * r2];
         this.armsG.innerHTML = '<path class="arm" d="M0 0L'.concat(f2(a2[0]), " ").concat(f2(a2[1]), "M0 0L").concat(f2(b2[0]), " ").concat(f2(b2[1]), '"/><path class="arm-arc" d="M').concat(f2(p0[0]), " ").concat(f2(p0[1]), "A").concat(f2(r2), " ").concat(f2(r2), " 0 0 0 ").concat(f2(p1[0]), " ").concat(f2(p1[1]), '"/>');
@@ -9238,7 +7742,7 @@ var Inkleaf = (() => {
           return null;
         var q = this.toLocal(p2);
         try {
-          for (var _b = __values17(this.shape.lines), _c = _b.next(); !_c.done; _c = _b.next()) {
+          for (var _b = __values15(this.shape.lines), _c = _b.next(); !_c.done; _c = _b.next()) {
             var _d = _c.value, a2 = _d.a, b2 = _d.b;
             var _e = outward(a2, b2), d2 = _e.d, n2 = _e.n, len = _e.len;
             var rel = [q[0] - a2[0], q[1] - a2[1]];
@@ -9258,8 +7762,8 @@ var Inkleaf = (() => {
         }
         if (this.shape.arc) {
           var r2 = this.shape.arc.r;
-          var dist2 = Math.hypot(q[0], q[1]);
-          if (dist2 >= r2 - 2 && dist2 <= r2 + band && q[1] <= band)
+          var dist = Math.hypot(q[0], q[1]);
+          if (dist >= r2 - 2 && dist <= r2 + band && q[1] <= band)
             return { kind: "arc", c: [this.cx, this.cy], r: r2 };
         }
         return null;
@@ -9304,7 +7808,7 @@ var Inkleaf = (() => {
           _this.pointers.set(e2.pointerId, p2);
           var knob = target.closest(".ruler-arm-knob");
           if (_this.pointers.size === 2) {
-            var _b = __read17(__spreadArray13([], __read17(_this.pointers.values()), false), 2), a2 = _b[0], b2 = _b[1];
+            var _b = __read15(__spreadArray11([], __read15(_this.pointers.values()), false), 2), a2 = _b[0], b2 = _b[1];
             _this.drag = { kind: "twist", a0: Math.atan2(b2[1] - a2[1], b2[0] - a2[0]), angle0: _this.angle, m0: [(a2[0] + b2[0]) / 2, (a2[1] + b2[1]) / 2], c0: [_this.cx, _this.cy] };
           } else if (knob) {
             _this.drag = { kind: "arm", index: Number(knob.dataset.arm) };
@@ -9334,7 +7838,7 @@ var Inkleaf = (() => {
             deg = Math.min(180, Math.max(0, deg));
             _this.arms[d2.index] = e2.shiftKey ? Math.round(deg / 5) * 5 : Math.round(deg);
           } else if (_this.pointers.size >= 2) {
-            var _a = __read17(__spreadArray13([], __read17(_this.pointers.values()), false), 2), a2 = _a[0], b2 = _a[1];
+            var _a = __read15(__spreadArray11([], __read15(_this.pointers.values()), false), 2), a2 = _a[0], b2 = _a[1];
             var m2 = [(a2[0] + b2[0]) / 2, (a2[1] + b2[1]) / 2];
             _this.angle = snapAngle(d2.angle0 + Math.atan2(b2[1] - a2[1], b2[0] - a2[0]) - d2.a0, false);
             _this.cx = d2.c0[0] + m2[0] - d2.m0[0];
@@ -9347,7 +7851,7 @@ var Inkleaf = (() => {
           if (!_this.pointers.delete(e2.pointerId))
             return;
           if (_this.pointers.size === 1 && ((_a = _this.drag) === null || _a === void 0 ? void 0 : _a.kind) === "twist") {
-            var p2 = __spreadArray13([], __read17(_this.pointers.values()), false)[0];
+            var p2 = __spreadArray11([], __read15(_this.pointers.values()), false)[0];
             _this.drag = { kind: "move", start: p2, c0: [_this.cx, _this.cy] };
           } else if (!_this.pointers.size) {
             _this.drag = null;
@@ -9374,10 +7878,10 @@ var Inkleaf = (() => {
     if (coarse)
       return Math.round(deg / 15) * 15 * Math.PI / 180;
     try {
-      for (var _c = __values17([0, 180]), _d = _c.next(); !_d.done; _d = _c.next()) {
+      for (var _c = __values15([0, 180]), _d = _c.next(); !_d.done; _d = _c.next()) {
         var base = _d.value;
         try {
-          for (var SNAP_ANGLES_1 = (e_4 = void 0, __values17(SNAP_ANGLES)), SNAP_ANGLES_1_1 = SNAP_ANGLES_1.next(); !SNAP_ANGLES_1_1.done; SNAP_ANGLES_1_1 = SNAP_ANGLES_1.next()) {
+          for (var SNAP_ANGLES_1 = (e_4 = void 0, __values15(SNAP_ANGLES)), SNAP_ANGLES_1_1 = SNAP_ANGLES_1.next(); !SNAP_ANGLES_1_1.done; SNAP_ANGLES_1_1 = SNAP_ANGLES_1.next()) {
             var s2 = SNAP_ANGLES_1_1.value;
             var target = base + s2;
             if (Math.abs(deg - target) < SNAP_DEG)
@@ -9408,8 +7912,8 @@ var Inkleaf = (() => {
   }
 
   // qt/js/editorCore.ts
-  var __assign10 = function() {
-    __assign10 = Object.assign || function(t2) {
+  var __assign9 = function() {
+    __assign9 = Object.assign || function(t2) {
       for (var s2, i2 = 1, n2 = arguments.length; i2 < n2; i2++) {
         s2 = arguments[i2];
         for (var p2 in s2) if (Object.prototype.hasOwnProperty.call(s2, p2))
@@ -9417,9 +7921,9 @@ var Inkleaf = (() => {
       }
       return t2;
     };
-    return __assign10.apply(this, arguments);
+    return __assign9.apply(this, arguments);
   };
-  var __read18 = globalThis.__fast && globalThis.__fast.__read || function(o2, n2) {
+  var __read16 = globalThis.__fast && globalThis.__fast.__read || function(o2, n2) {
     var m2 = typeof Symbol === "function" && o2[Symbol.iterator];
     if (!m2) return o2;
     var i2 = m2.call(o2), r2, ar = [], e2;
@@ -9436,7 +7940,7 @@ var Inkleaf = (() => {
     }
     return ar;
   };
-  var __spreadArray14 = globalThis.__fast && globalThis.__fast.__spreadArray || function(to, from, pack) {
+  var __spreadArray12 = globalThis.__fast && globalThis.__fast.__spreadArray || function(to, from, pack) {
     if (pack || arguments.length === 2) for (var i2 = 0, l2 = from.length, ar; i2 < l2; i2++) {
       if (ar || !(i2 in from)) {
         if (!ar) ar = Array.prototype.slice.call(from, 0, i2);
@@ -9445,7 +7949,7 @@ var Inkleaf = (() => {
     }
     return to.concat(ar || Array.prototype.slice.call(from));
   };
-  var __values18 = globalThis.__fast && globalThis.__fast.__values || function(o2) {
+  var __values16 = globalThis.__fast && globalThis.__fast.__values || function(o2) {
     var s2 = typeof Symbol === "function" && Symbol.iterator, m2 = s2 && o2[s2], i2 = 0;
     if (m2) return m2.call(o2);
     if (o2 && typeof o2.length === "number") return {
@@ -9456,15 +7960,27 @@ var Inkleaf = (() => {
     };
     throw new TypeError(s2 ? "Object is not iterable." : "Symbol.iterator is not defined.");
   };
-  var N4 = globalThis.__native;
+  var N3 = globalThis.__native;
   var HOLD_MS = 550;
   var MAX_UNDO = 100;
   function call(cmd, args) {
-    var r2 = JSON.parse(N4.call(cmd, JSON.stringify(args)));
+    var r2 = JSON.parse(N3.call(cmd, JSON.stringify(args)));
     if (r2.error)
       throw new Error(r2.error);
     return r2.ok;
   }
+  var recognizeShape = function(points) {
+    return call("recognizeShape", { points });
+  };
+  var beautify = function(points) {
+    return call("beautify", { points });
+  };
+  var matchSymbol = function(strokes) {
+    return call("matchSymbol", { strokes });
+  };
+  var symbolShape = function(name, box) {
+    return call("symbolShape", __assign9({ name }, box));
+  };
   var isTextish = function(el) {
     return el.kind === "text" || el.kind === "sticky";
   };
@@ -9490,9 +8006,9 @@ var Inkleaf = (() => {
     var ys = pts.map(function(p2) {
       return p2[1];
     });
-    var x2 = Math.min.apply(Math, __spreadArray14([], __read18(xs), false));
-    var y2 = Math.min.apply(Math, __spreadArray14([], __read18(ys), false));
-    return { x: x2, y: y2, w: Math.max.apply(Math, __spreadArray14([], __read18(xs), false)) - x2, h: Math.max.apply(Math, __spreadArray14([], __read18(ys), false)) - y2 };
+    var x2 = Math.min.apply(Math, __spreadArray12([], __read16(xs), false));
+    var y2 = Math.min.apply(Math, __spreadArray12([], __read16(ys), false));
+    return { x: x2, y: y2, w: Math.max.apply(Math, __spreadArray12([], __read16(xs), false)) - x2, h: Math.max.apply(Math, __spreadArray12([], __read16(ys), false)) - y2 };
   };
   var EditorCore = (
     /** @class */
@@ -9588,7 +8104,7 @@ var Inkleaf = (() => {
         this.finishTextEdit();
         this.selection.clear();
         try {
-          for (var _b = __values18(this.pages), _c = _b.next(); !_c.done; _c = _b.next()) {
+          for (var _b = __values16(this.pages), _c = _b.next(); !_c.done; _c = _b.next()) {
             var p2 = _c.value;
             if (!p2.dirty)
               p2.elements = null;
@@ -9615,7 +8131,7 @@ var Inkleaf = (() => {
         var activeId = (_a = this.page) === null || _a === void 0 ? void 0 : _a.id;
         this.pages = pages.map(function(meta) {
           var was = old.get(meta.id);
-          return was ? __assign10(__assign10({}, was), { meta }) : { meta, elements: null, dirty: false };
+          return was ? __assign9(__assign9({}, was), { meta }) : { meta, elements: null, dirty: false };
         });
         var idx = this.pages.findIndex(function(p2) {
           return p2.meta.id === activeId;
@@ -9646,7 +8162,7 @@ var Inkleaf = (() => {
         var _d, _e;
         var byId = /* @__PURE__ */ new Map();
         try {
-          for (var _f = __values18(this.load(i2)), _g = _f.next(); !_g.done; _g = _f.next()) {
+          for (var _f = __values16(this.load(i2)), _g = _f.next(); !_g.done; _g = _f.next()) {
             var el = _g.value;
             byId.set(el.id, el);
           }
@@ -9662,7 +8178,7 @@ var Inkleaf = (() => {
         var n2 = 0;
         var els = [];
         try {
-          for (var ids_1 = __values18(ids), ids_1_1 = ids_1.next(); !ids_1_1.done; ids_1_1 = ids_1.next()) {
+          for (var ids_1 = __values16(ids), ids_1_1 = ids_1.next(); !ids_1_1.done; ids_1_1 = ids_1.next()) {
             var id = ids_1_1.value;
             var el = byId.get(id);
             if (!el)
@@ -9684,7 +8200,7 @@ var Inkleaf = (() => {
         var o2 = 0;
         var meta = [];
         try {
-          for (var els_1 = __values18(els), els_1_1 = els_1.next(); !els_1_1.done; els_1_1 = els_1.next()) {
+          for (var els_1 = __values16(els), els_1_1 = els_1.next(); !els_1_1.done; els_1_1 = els_1.next()) {
             var el = els_1_1.value;
             if (el.kind === "stroke") {
               var pts = el.points;
@@ -9782,7 +8298,7 @@ var Inkleaf = (() => {
             saved.push(i2);
           } catch (e2) {
             p2.dirty = true;
-            N4.log("save failed: ".concat(e2));
+            N3.log("save failed: ".concat(e2));
           }
         }
         return saved;
@@ -9811,7 +8327,7 @@ var Inkleaf = (() => {
         var els = this.load(i2);
         var n2 = 0;
         try {
-          for (var els_2 = __values18(els), els_2_1 = els_2.next(); !els_2_1.done; els_2_1 = els_2.next()) {
+          for (var els_2 = __values16(els), els_2_1 = els_2.next(); !els_2_1.done; els_2_1 = els_2.next()) {
             var el = els_2_1.value;
             if (el.kind === "stroke")
               n2 += el.points.length * 3;
@@ -9829,7 +8345,7 @@ var Inkleaf = (() => {
         var o2 = 0;
         var meta = [];
         try {
-          for (var els_3 = __values18(els), els_3_1 = els_3.next(); !els_3_1.done; els_3_1 = els_3.next()) {
+          for (var els_3 = __values16(els), els_3_1 = els_3.next(); !els_3_1.done; els_3_1 = els_3.next()) {
             var el = els_3_1.value;
             if (el.kind !== "stroke") {
               meta.push(el);
@@ -9876,7 +8392,7 @@ var Inkleaf = (() => {
             var edge = this.ruler.edgeNear([x2, y2], 26 / this.zoom);
             if (edge) {
               var offset = this.widths[tool] / 2 + 0.5 / this.zoom;
-              var _b = __read18(Ruler.project(edge, [x2, y2], offset), 2), px = _b[0], py = _b[1];
+              var _b = __read16(Ruler.project(edge, [x2, y2], offset), 2), px = _b[0], py = _b[1];
               this.gesture = { type: "draw", tool, points: [[px, py, p2]], times: [t2], preview: null, holdTimer: 0, held: null, ruler: { edge, offset } };
               return "ruler";
             }
@@ -9911,7 +8427,7 @@ var Inkleaf = (() => {
               });
               this.gesture = { type: "transform", handle: gh, start: [x2, y2], box: tbox, originals, previews: [], m: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }, sx: 1, sy: 1, angle: 0 };
               try {
-                for (var originals_1 = __values18(originals), originals_1_1 = originals_1.next(); !originals_1_1.done; originals_1_1 = originals_1.next()) {
+                for (var originals_1 = __values16(originals), originals_1_1 = originals_1.next(); !originals_1_1.done; originals_1_1 = originals_1.next()) {
                   var el = originals_1_1.value;
                   if (isTextish(el))
                     this.hiddenIds.add(el.id);
@@ -9945,17 +8461,17 @@ var Inkleaf = (() => {
           }
           case "text":
           case "sticky": {
-            var existing = __spreadArray14([], __read18(this.elements), false).reverse().find(function(el2) {
+            var existing = __spreadArray12([], __read16(this.elements), false).reverse().find(function(el2) {
               return el2.kind === tool && rectContains(bounds(el2), x2, y2);
             });
             if (existing && (existing.kind === "text" || existing.kind === "sticky"))
               this.startTextEdit(existing, false);
             else if (tool === "text") {
-              var el = __assign10({ id: newId(), z: nextZ(this.elements), kind: "text", x: x2, y: y2 - 12, w: Math.min(420, this.page.width - x2 - 20), text: "", fontSize: this.widths.text, color: this.colors.text, font: this.textFont }, this.textFormat);
+              var el = __assign9({ id: newId(), z: nextZ(this.elements), kind: "text", x: x2, y: y2 - 12, w: Math.min(420, this.page.width - x2 - 20), text: "", fontSize: this.widths.text, color: this.colors.text, font: this.textFont }, this.textFormat);
               el.w = Math.max(120, el.w);
               this.startTextEdit(el, true);
             } else {
-              var el = __assign10({ id: newId(), z: nextZ(this.elements), kind: "sticky", x: x2 - 20, y: y2 - 20, w: 220, h: 200, text: "", color: this.colors.sticky, font: this.textFont, fontSize: this.widths.sticky }, this.textFormat);
+              var el = __assign9({ id: newId(), z: nextZ(this.elements), kind: "sticky", x: x2 - 20, y: y2 - 20, w: 220, h: 200, text: "", color: this.colors.sticky, font: this.textFont, fontSize: this.widths.sticky }, this.textFormat);
               this.startTextEdit(el, true);
             }
             return "edit";
@@ -9982,7 +8498,7 @@ var Inkleaf = (() => {
               return;
             }
             if (g3.ruler) {
-              var _a = __read18(Ruler.project(g3.ruler.edge, [x2, y2], g3.ruler.offset), 2), px = _a[0], py = _a[1];
+              var _a = __read16(Ruler.project(g3.ruler.edge, [x2, y2], g3.ruler.offset), 2), px = _a[0], py = _a[1];
               var last = g3.points[g3.points.length - 1];
               if (Math.hypot(px - last[0], py - last[1]) >= 0.4 / this.zoom) {
                 g3.points.push([px, py, p2]);
@@ -10091,13 +8607,13 @@ var Inkleaf = (() => {
               shape = this.refine(g3);
             this.gesture = null;
             if (shape && g3.tool === "highlighter" && shape.shape.kind === "line") {
-              this.addElement(__assign10(__assign10({}, this.straightHighlight(g3, shape.shape.points)), { id: newId(), z: nextZ(this.elements) }));
+              this.addElement(__assign9(__assign9({}, this.straightHighlight(g3, shape.shape.points)), { id: newId(), z: nextZ(this.elements) }));
             } else if (shape) {
               shape.z = nextZ(this.elements);
               if ((_d = g3.absorb) === null || _d === void 0 ? void 0 : _d.length) {
                 var gone_2 = new Set(g3.absorb);
                 try {
-                  for (var gone_1 = __values18(gone_2), gone_1_1 = gone_1.next(); !gone_1_1.done; gone_1_1 = gone_1.next()) {
+                  for (var gone_1 = __values16(gone_2), gone_1_1 = gone_1.next(); !gone_1_1.done; gone_1_1 = gone_1.next()) {
                     var id = gone_1_1.value;
                     this.hiddenIds.delete(id);
                   }
@@ -10125,7 +8641,7 @@ var Inkleaf = (() => {
               var tool = g3.tool === "highlighter" ? "highlighter" : "pen";
               var points = thinPoints(tool === "highlighter" ? steadyHighlight(g3.points, this.widths.highlighter) : g3.points, Math.min(0.3, 0.6 / this.zoom));
               var id = newId();
-              this.addElement(__assign10({ id, z: nextZ(this.elements), kind: "stroke", tool, style: tool === "pen" ? this.penStyle : void 0, color: this.colors[g3.tool], width: this.widths[g3.tool], points }, tool === "pen" ? { smooth: this.streamline } : {}));
+              this.addElement(__assign9({ id, z: nextZ(this.elements), kind: "stroke", tool, style: tool === "pen" ? this.penStyle : void 0, color: this.colors[g3.tool], width: this.widths[g3.tool], points }, tool === "pen" ? { smooth: this.streamline } : {}));
               if (tool === "pen" && g3.tool === "pen") {
                 this.recentInk.push({ id, t: g3.times[g3.times.length - 1], pts: g3.points.map(function(p2) {
                   return [p2[0], p2[1]];
@@ -10149,10 +8665,10 @@ var Inkleaf = (() => {
             var ys = g3.points.map(function(p2) {
               return p2[1];
             });
-            var tap = Math.max.apply(Math, __spreadArray14([], __read18(xs), false)) - Math.min.apply(Math, __spreadArray14([], __read18(xs), false)) < 6 / this.zoom && Math.max.apply(Math, __spreadArray14([], __read18(ys), false)) - Math.min.apply(Math, __spreadArray14([], __read18(ys), false)) < 6 / this.zoom;
+            var tap = Math.max.apply(Math, __spreadArray12([], __read16(xs), false)) - Math.min.apply(Math, __spreadArray12([], __read16(xs), false)) < 6 / this.zoom && Math.max.apply(Math, __spreadArray12([], __read16(ys), false)) - Math.min.apply(Math, __spreadArray12([], __read16(ys), false)) < 6 / this.zoom;
             if (tap) {
-              var _e = __read18(g3.points[0], 2), tx_1 = _e[0], ty_1 = _e[1];
-              var hit = __spreadArray14([], __read18(this.elements), false).reverse().find(function(el2) {
+              var _e = __read16(g3.points[0], 2), tx_1 = _e[0], ty_1 = _e[1];
+              var hit = __spreadArray12([], __read16(this.elements), false).reverse().find(function(el2) {
                 return near(boxOfEl(el2), tx_1, ty_1, 8 / _this.zoom) && hitForSelect(el2, tx_1, ty_1, 6 / _this.zoom);
               });
               if (hit)
@@ -10160,7 +8676,7 @@ var Inkleaf = (() => {
             } else {
               var box = rectOfPts(g3.points);
               try {
-                for (var _f = __values18(this.elements), _g = _f.next(); !_g.done; _g = _f.next()) {
+                for (var _f = __values16(this.elements), _g = _f.next(); !_g.done; _g = _f.next()) {
                   var el = _g.value;
                   if (overlaps(boxOfEl(el), box) && insideLasso(el, g3.points))
                     this.selection.add(el.id);
@@ -10181,7 +8697,7 @@ var Inkleaf = (() => {
           case "transform": {
             this.gesture = null;
             try {
-              for (var _h = __values18(g3.originals), _j = _h.next(); !_j.done; _j = _h.next()) {
+              for (var _h = __values16(g3.originals), _j = _h.next(); !_j.done; _j = _h.next()) {
                 var el = _j.value;
                 this.hiddenIds.delete(el.id);
               }
@@ -10255,7 +8771,7 @@ var Inkleaf = (() => {
           if (g3.held)
             clearTimeout(g3.held.stillTimer);
           try {
-            for (var _d = __values18((_c = g3.absorb) !== null && _c !== void 0 ? _c : []), _e = _d.next(); !_e.done; _e = _d.next()) {
+            for (var _d = __values16((_c = g3.absorb) !== null && _c !== void 0 ? _c : []), _e = _d.next(); !_e.done; _e = _d.next()) {
               var id = _e.value;
               this.hiddenIds.delete(id);
             }
@@ -10273,7 +8789,7 @@ var Inkleaf = (() => {
           this.hiddenIds.delete(g3.original.id);
         if (g3.type === "transform")
           try {
-            for (var _f = __values18(g3.originals), _g = _f.next(); !_g.done; _g = _f.next()) {
+            for (var _f = __values16(g3.originals), _g = _f.next(); !_g.done; _g = _f.next()) {
               var el = _g.value;
               this.hiddenIds.delete(el.id);
             }
@@ -10322,7 +8838,7 @@ var Inkleaf = (() => {
           if (_this.gesture !== g3 || g3.preview || g3.points.length < 4)
             return;
           var now = performance.now();
-          var times = __spreadArray14(__spreadArray14([], __read18(g3.times.slice(0, -1)), false), [Math.max(now, g3.times[g3.times.length - 1])], false);
+          var times = __spreadArray12(__spreadArray12([], __read16(g3.times.slice(0, -1)), false), [Math.max(now, g3.times[g3.times.length - 1])], false);
           if (!isHeld(times, g3.points, HOLD_MS - 50, 4 / _this.zoom))
             return;
           var multi = _this.multiStrokeSymbol(g3);
@@ -10332,7 +8848,7 @@ var Inkleaf = (() => {
           g3.preview = shape;
           g3.absorb = multi === null || multi === void 0 ? void 0 : multi.absorb;
           try {
-            for (var _e = __values18((_c = g3.absorb) !== null && _c !== void 0 ? _c : []), _f = _e.next(); !_f.done; _f = _e.next()) {
+            for (var _e = __values16((_c = g3.absorb) !== null && _c !== void 0 ? _c : []), _f = _e.next(); !_f.done; _f = _e.next()) {
               var id = _f.value;
               _this.hiddenIds.add(id);
             }
@@ -10406,7 +8922,7 @@ var Inkleaf = (() => {
         }
         for (var n2 = group.length; n2 >= 1; n2--) {
           var used = group.slice(group.length - n2);
-          var strokes = __spreadArray14(__spreadArray14([], __read18(used.map(function(u2) {
+          var strokes = __spreadArray12(__spreadArray12([], __read16(used.map(function(u2) {
             return u2.pts;
           })), false), [pts], false);
           var m2 = matchSymbol(strokes);
@@ -10429,7 +8945,7 @@ var Inkleaf = (() => {
         var e_14, _a;
         var edge = g3.ruler.edge;
         if (edge.kind === "line") {
-          var _b = __read18(this.rulerExtent(g3), 2), a2 = _b[0], b2 = _b[1];
+          var _b = __read16(this.rulerExtent(g3), 2), a2 = _b[0], b2 = _b[1];
           return "".concat((Math.hypot(b2[0] - a2[0], b2[1] - a2[1]) / (10 * MM2)).toFixed(1), " cm");
         }
         var prev = Math.atan2(g3.points[0][1] - edge.c[1], g3.points[0][0] - edge.c[0]);
@@ -10437,7 +8953,7 @@ var Inkleaf = (() => {
         var lo = 0;
         var hi = 0;
         try {
-          for (var _c = __values18(g3.points.slice(1)), _d = _c.next(); !_d.done; _d = _c.next()) {
+          for (var _c = __values16(g3.points.slice(1)), _d = _c.next(); !_d.done; _d = _c.next()) {
             var p2 = _d.value;
             var a2 = Math.atan2(p2[1] - edge.c[1], p2[0] - edge.c[0]);
             var d2 = a2 - prev;
@@ -10471,7 +8987,7 @@ var Inkleaf = (() => {
           return p3[0] * dir[0] + p3[1] * dir[1];
         };
         try {
-          for (var _b = __values18(g3.points), _c = _b.next(); !_c.done; _c = _b.next()) {
+          for (var _b = __values16(g3.points), _c = _b.next(); !_c.done; _c = _b.next()) {
             var p2 = _c.value;
             if (t2(p2) < t2(lo))
               lo = p2;
@@ -10506,8 +9022,8 @@ var Inkleaf = (() => {
           var a2 = r2.armEnd(0);
           var b2 = r2.armEnd(1);
           var rr = 14 * MM2;
-          var t0 = Math.min.apply(Math, __spreadArray14([], __read18(r2.arms), false)) * Math.PI / 180;
-          var t1 = Math.max.apply(Math, __spreadArray14([], __read18(r2.arms), false)) * Math.PI / 180;
+          var t0 = Math.min.apply(Math, __spreadArray12([], __read16(r2.arms), false)) * Math.PI / 180;
+          var t1 = Math.max.apply(Math, __spreadArray12([], __read16(r2.arms), false)) * Math.PI / 180;
           var p0 = [Math.cos(t0) * rr, -Math.sin(t0) * rr];
           var p1 = [Math.cos(t1) * rr, -Math.sin(t1) * rr];
           var arms = '<path class="arm" d="M0 0L'.concat(a2[0].toFixed(2), " ").concat(a2[1].toFixed(2), "M0 0L").concat(b2[0].toFixed(2), " ").concat(b2[1].toFixed(2), '"/><path class="arm-arc" d="M').concat(p0[0].toFixed(2), " ").concat(p0[1].toFixed(2), "A").concat(rr.toFixed(2), " ").concat(rr.toFixed(2), " 0 0 0 ").concat(p1[0].toFixed(2), " ").concat(p1[1].toFixed(2), '"/>');
@@ -10571,7 +9087,7 @@ var Inkleaf = (() => {
         var r2 = this.ruler;
         if (!r2.visible)
           return false;
-        var _a = __read18(r2.toLocal([x2, y2]), 2), lx = _a[0], ly = _a[1];
+        var _a = __read16(r2.toLocal([x2, y2]), 2), lx = _a[0], ly = _a[1];
         var sh = r2.shape;
         if (sh.arc)
           return Math.hypot(lx, ly) <= sh.arc.r && ly <= sh.box.y + sh.box.h;
@@ -10580,8 +9096,8 @@ var Inkleaf = (() => {
         });
         var inside = false;
         for (var i2 = 0, j2 = poly.length - 1; i2 < poly.length; j2 = i2++) {
-          var _b = __read18(poly[i2], 2), xi = _b[0], yi = _b[1];
-          var _c = __read18(poly[j2], 2), xj = _c[0], yj = _c[1];
+          var _b = __read16(poly[i2], 2), xi = _b[0], yi = _b[1];
+          var _c = __read16(poly[j2], 2), xj = _c[0], yj = _c[1];
           if (yi > ly !== yj > ly && lx < (xj - xi) * (ly - yi) / (yj - yi) + xi)
             inside = !inside;
         }
@@ -10642,7 +9158,7 @@ var Inkleaf = (() => {
             shape = transformShape(h3.base.shape, h3.pivot, angle, scale);
           }
         }
-        g3.preview = __assign10(__assign10({}, h3.base), { shape });
+        g3.preview = __assign9(__assign9({}, h3.base), { shape });
       };
       EditorCore2.prototype.buildSnap = function(moving) {
         var e_16, _a;
@@ -10656,10 +9172,10 @@ var Inkleaf = (() => {
         }));
         var targets = [];
         try {
-          for (var _b = __values18(this.elements), _c = _b.next(); !_c.done; _c = _b.next()) {
+          for (var _b = __values16(this.elements), _c = _b.next(); !_c.done; _c = _b.next()) {
             var el = _c.value;
             if (!ids.has(el.id) && el.kind === "text" && el.text.trim() && !el.rotation)
-              targets.push.apply(targets, __spreadArray14([], __read18(anchorsAsTargets(textAnchors(el))), false));
+              targets.push.apply(targets, __spreadArray12([], __read16(anchorsAsTargets(textAnchors(el))), false));
           }
         } catch (e_16_1) {
           e_16 = { error: e_16_1 };
@@ -10671,7 +9187,7 @@ var Inkleaf = (() => {
           }
         }
         var paper = paperLayout(this.page.template, this.page.width, this.page.height);
-        targets.push.apply(targets, __spreadArray14([], __read18(paperTargets(paper.rules, paper.ruleSpan, paper.margin, this.page.width, this.page.height)), false));
+        targets.push.apply(targets, __spreadArray12([], __read16(paperTargets(paper.rules, paper.ruleSpan, paper.margin, this.page.width, this.page.height)), false));
         return { anchors: texts.flatMap(textAnchors), targets };
       };
       EditorCore2.prototype.makeShapeEl = function(shape) {
@@ -10701,7 +9217,7 @@ var Inkleaf = (() => {
         var changed = false;
         var next = [];
         try {
-          for (var _c = __values18(this.elements), _d = _c.next(); !_d.done; _d = _c.next()) {
+          for (var _c = __values16(this.elements), _d = _c.next(); !_d.done; _d = _c.next()) {
             var el = _d.value;
             if (el.kind === "image" || !near(boxOfEl(el), x2, y2, radius + 2 + ((_b = el.width) !== null && _b !== void 0 ? _b : 0))) {
               next.push(el);
@@ -10719,7 +9235,7 @@ var Inkleaf = (() => {
               next.push(el);
             else {
               changed = true;
-              next.push.apply(next, __spreadArray14([], __read18(pieces), false));
+              next.push.apply(next, __spreadArray12([], __read16(pieces), false));
             }
           }
         } catch (e_17_1) {
@@ -10768,7 +9284,7 @@ var Inkleaf = (() => {
       EditorCore2.prototype.selectAll = function() {
         var e_18, _a;
         try {
-          for (var _b = __values18(this.elements), _c = _b.next(); !_c.done; _c = _b.next()) {
+          for (var _b = __values16(this.elements), _c = _b.next(); !_c.done; _c = _b.next()) {
             var el = _c.value;
             this.selection.add(el.id);
           }
@@ -10822,12 +9338,12 @@ var Inkleaf = (() => {
           count: els.length,
           page: this.active,
           box: r2,
-          color: colors.size === 1 ? __spreadArray14([], __read18(colors), false)[0] : null,
+          color: colors.size === 1 ? __spreadArray12([], __read16(colors), false)[0] : null,
           hasInk: els.some(function(el) {
             return el.kind === "stroke" && el.tool === "pen";
           }),
           texts: texts.length,
-          font: fonts.size === 1 ? __spreadArray14([], __read18(fonts), false)[0] : null,
+          font: fonts.size === 1 ? __spreadArray12([], __read16(fonts), false)[0] : null,
           bold: texts.length > 0 && texts.every(function(t2) {
             return !!t2.bold;
           }),
@@ -10859,7 +9375,7 @@ var Inkleaf = (() => {
           var _a;
           if (!_this.selection.has(el.id) || el.kind !== "text" && el.kind !== "sticky")
             return el;
-          var next = __assign10({}, el);
+          var next = __assign9({}, el);
           if (change.font)
             next.font = change.font;
           if (change.bold !== void 0)
@@ -10887,9 +9403,9 @@ var Inkleaf = (() => {
           if (el.id !== single.id || el.kind !== "shape")
             return el;
           if (change === "width")
-            return __assign10(__assign10({}, el), { width: value !== null && value !== void 0 ? value : el.width });
+            return __assign9(__assign9({}, el), { width: value !== null && value !== void 0 ? value : el.width });
           if (change === "fill")
-            return __assign10(__assign10({}, el), { fill: el.fill ? null : "".concat(el.color, "33") });
+            return __assign9(__assign9({}, el), { fill: el.fill ? null : "".concat(el.color, "33") });
           return convertShape(el, change);
         });
         this.changed();
@@ -10912,9 +9428,9 @@ var Inkleaf = (() => {
           if (!_this.selection.has(el.id))
             return el;
           if (el.kind === "shape")
-            return __assign10(__assign10({}, el), { color, fill: el.fill ? "".concat(color, "33") : null });
+            return __assign9(__assign9({}, el), { color, fill: el.fill ? "".concat(color, "33") : null });
           if (el.kind === "stroke" || el.kind === "text")
-            return __assign10(__assign10({}, el), { color });
+            return __assign9(__assign9({}, el), { color });
           return el;
         });
         this.changed();
@@ -10952,9 +9468,9 @@ var Inkleaf = (() => {
         this.snapshot();
         var z = nextZ(this.elements);
         var copies = items.map(function(el) {
-          return __assign10(__assign10({}, translate(structuredClone(el), 24, 24)), { id: newId(), z: z++ });
+          return __assign9(__assign9({}, translate(structuredClone(el), 24, 24)), { id: newId(), z: z++ });
         });
-        (_a = this.elements).push.apply(_a, __spreadArray14([], __read18(copies), false));
+        (_a = this.elements).push.apply(_a, __spreadArray12([], __read16(copies), false));
         this.selection = new Set(copies.map(function(c2) {
           return c2.id;
         }));
@@ -10977,7 +9493,7 @@ var Inkleaf = (() => {
         this.elements = this.elements.filter(function(e2) {
           return !gone.has(e2.id);
         }).concat(add.map(function(e2) {
-          return __assign10(__assign10({}, e2), { z: z++ });
+          return __assign9(__assign9({}, e2), { z: z++ });
         }));
         this.selection = new Set(add.map(function(e2) {
           return e2.id;
@@ -11002,7 +9518,7 @@ var Inkleaf = (() => {
         var _c = fitTextToBox(value, font, box), fontSize = _c.fontSize, width = _c.width;
         var counts = /* @__PURE__ */ new Map();
         try {
-          for (var ink_1 = __values18(ink), ink_1_1 = ink_1.next(); !ink_1_1.done; ink_1_1 = ink_1.next()) {
+          for (var ink_1 = __values16(ink), ink_1_1 = ink_1.next(); !ink_1_1.done; ink_1_1 = ink_1.next()) {
             var s2 = ink_1_1.value;
             counts.set(s2.color, ((_b = counts.get(s2.color)) !== null && _b !== void 0 ? _b : 0) + s2.points.length);
           }
@@ -11015,7 +9531,7 @@ var Inkleaf = (() => {
             if (e_19) throw e_19.error;
           }
         }
-        var color = __spreadArray14([], __read18(counts.entries()), false).sort(function(a2, b2) {
+        var color = __spreadArray12([], __read16(counts.entries()), false).sort(function(a2, b2) {
           return b2[1] - a2[1];
         })[0][0];
         var lines2 = value.split("\n").length;
@@ -11060,7 +9576,7 @@ var Inkleaf = (() => {
         if (isNew)
           this.elements.push(el);
         else {
-          var live_1 = __assign10({}, el);
+          var live_1 = __assign9({}, el);
           this.elements = this.elements.map(function(x2) {
             return x2 === el ? live_1 : x2;
           });
@@ -11125,7 +9641,7 @@ var Inkleaf = (() => {
         } else if (el.kind === "text") {
           var natural = Math.ceil(naturalTextWidth(el) + 4);
           if (natural < el.w) {
-            var shrunk_1 = __assign10(__assign10({}, el), { w: Math.max(24, natural) });
+            var shrunk_1 = __assign9(__assign9({}, el), { w: Math.max(24, natural) });
             var rightAligned = isRtl(el.text) ? el.align !== "right" && el.align !== "center" : el.align === "right";
             if (el.align === "center")
               shrunk_1.x = el.x + (el.w - shrunk_1.w) / 2;
@@ -11137,7 +9653,7 @@ var Inkleaf = (() => {
           }
         }
         this.elements = this.elements.map(function(x2) {
-          return x2.id === el.id ? __assign10({}, x2) : x2;
+          return x2.id === el.id ? __assign9({}, x2) : x2;
         });
         var before = this.editingBefore;
         var same = before.length === this.elements.length && before.every(function(b2, k2) {
@@ -11177,7 +9693,7 @@ var Inkleaf = (() => {
           });
         } else if ((g3 === null || g3 === void 0 ? void 0 : g3.type) === "transform") {
           try {
-            for (var _b = __values18(g3.previews), _c = _b.next(); !_c.done; _c = _b.next()) {
+            for (var _b = __values16(g3.previews), _c = _b.next(); !_c.done; _c = _b.next()) {
               var el = _c.value;
               drawElement(ctx, el, this.images, function() {
               });
@@ -11195,7 +9711,7 @@ var Inkleaf = (() => {
         }
         var sel = (g3 === null || g3 === void 0 ? void 0 : g3.type) === "handle" ? bounds(g3.preview) : (g3 === null || g3 === void 0 ? void 0 : g3.type) === "transform" ? null : this.selectionBounds();
         if (sel) {
-          var r2 = (g3 === null || g3 === void 0 ? void 0 : g3.type) === "move" ? __assign10(__assign10({}, sel), { x: sel.x + g3.dx, y: sel.y + g3.dy }) : sel;
+          var r2 = (g3 === null || g3 === void 0 ? void 0 : g3.type) === "move" ? __assign9(__assign9({}, sel), { x: sel.x + g3.dx, y: sel.y + g3.dy }) : sel;
           drawSelection(ctx, r2, this.zoom);
         }
         var segment = (g3 === null || g3 === void 0 ? void 0 : g3.type) === "handle" ? g3.preview : g3 ? null : this.singleSegment();
@@ -11244,12 +9760,12 @@ var Inkleaf = (() => {
         if ((g3 === null || g3 === void 0 ? void 0 : g3.type) === "handle")
           parts.push(bounds(g3.preview));
         if ((g3 === null || g3 === void 0 ? void 0 : g3.type) === "move" && sel)
-          parts.push(__assign10(__assign10({}, sel), { x: sel.x + g3.dx, y: sel.y + g3.dy }));
+          parts.push(__assign9(__assign9({}, sel), { x: sel.x + g3.dx, y: sel.y + g3.dy }));
         if ((g3 === null || g3 === void 0 ? void 0 : g3.type) === "move" && g3.guides.length)
           parts.push({ x: 0, y: 0, w: this.page.width, h: this.page.height });
         if ((g3 === null || g3 === void 0 ? void 0 : g3.type) === "transform") {
           try {
-            for (var _b = __values18(g3.previews), _c = _b.next(); !_c.done; _c = _b.next()) {
+            for (var _b = __values16(g3.previews), _c = _b.next(); !_c.done; _c = _b.next()) {
               var el = _c.value;
               parts.push(bounds(el));
             }
@@ -11368,8 +9884,8 @@ var Inkleaf = (() => {
     update: () => update,
     validate: () => validate
   });
-  var __assign11 = function() {
-    __assign11 = Object.assign || function(t2) {
+  var __assign10 = function() {
+    __assign10 = Object.assign || function(t2) {
       for (var s2, i2 = 1, n2 = arguments.length; i2 < n2; i2++) {
         s2 = arguments[i2];
         for (var p2 in s2) if (Object.prototype.hasOwnProperty.call(s2, p2))
@@ -11377,7 +9893,7 @@ var Inkleaf = (() => {
       }
       return t2;
     };
-    return __assign11.apply(this, arguments);
+    return __assign10.apply(this, arguments);
   };
   var __awaiter5 = function(thisArg, _arguments, P2, generator) {
     function adopt(value) {
@@ -11475,7 +9991,7 @@ var Inkleaf = (() => {
       return { value: op[0] ? op[1] : void 0, done: true };
     }
   };
-  var __read19 = globalThis.__fast && globalThis.__fast.__read || function(o2, n2) {
+  var __read17 = globalThis.__fast && globalThis.__fast.__read || function(o2, n2) {
     var m2 = typeof Symbol === "function" && o2[Symbol.iterator];
     if (!m2) return o2;
     var i2 = m2.call(o2), r2, ar = [], e2;
@@ -11492,7 +10008,7 @@ var Inkleaf = (() => {
     }
     return ar;
   };
-  var __spreadArray15 = globalThis.__fast && globalThis.__fast.__spreadArray || function(to, from, pack) {
+  var __spreadArray13 = globalThis.__fast && globalThis.__fast.__spreadArray || function(to, from, pack) {
     if (pack || arguments.length === 2) for (var i2 = 0, l2 = from.length, ar; i2 < l2; i2++) {
       if (ar || !(i2 in from)) {
         if (!ar) ar = Array.prototype.slice.call(from, 0, i2);
@@ -11502,7 +10018,7 @@ var Inkleaf = (() => {
     return to.concat(ar || Array.prototype.slice.call(from));
   };
   function parseClasses(s2) {
-    return __spreadArray15([], __read19(new Set(String(s2 || "").split(/[,;،\n]+/).map(function(c2) {
+    return __spreadArray13([], __read17(new Set(String(s2 || "").split(/[,;،\n]+/).map(function(c2) {
       return c2.trim();
     }).filter(Boolean))), false).slice(0, 30);
   }
@@ -11598,7 +10114,7 @@ var Inkleaf = (() => {
             _b.sent();
             return [4, api.pages(nb.id)];
           case 4:
-            _a = __read19.apply(void 0, [_b.sent(), 1]), cover = _a[0];
+            _a = __read17.apply(void 0, [_b.sent(), 1]), cover = _a[0];
             if (!cover) return [3, 6];
             return [4, refreshCoverThumbnail(cover).catch(function() {
             })];
@@ -11724,7 +10240,7 @@ var Inkleaf = (() => {
             c2.snapshot();
             z = nextZ(core.elements);
             core.elements = core.elements.concat(entry.map(function(el) {
-              return __assign11(__assign11({}, el), { z: z++ });
+              return __assign10(__assign10({}, el), { z: z++ });
             }));
             c2.changed();
             L2 = lessonLayout(p2.width, p2.height);
@@ -11756,7 +10272,7 @@ var Inkleaf = (() => {
     });
     var row = null;
     if (sessionRows.length) {
-      var last = Math.max.apply(Math, __spreadArray15([], __read19(sessionRows), false));
+      var last = Math.max.apply(Math, __spreadArray13([], __read17(sessionRows), false));
       var top_1 = L2.bodyTop + last * L2.step + 1;
       var used = ink.some(function(r2) {
         return r2.x1 > act.x0 + 1 && r2.x0 < act.x1 - 1 && r2.y1 > top_1;
@@ -11772,7 +10288,7 @@ var Inkleaf = (() => {
     c2.snapshot();
     var z = nextZ(core.elements);
     core.elements = core.elements.concat(outlineElements(lines2, row, p2.width, p2.height).map(function(el) {
-      return __assign11(__assign11({}, el), { z: z++ });
+      return __assign10(__assign10({}, el), { z: z++ });
     }));
     c2.changed();
     return { goTo: core.active, y: L2.bodyTop + row * L2.step };
@@ -11814,7 +10330,7 @@ var Inkleaf = (() => {
   function exportPages(core, meta, cls, term) {
     var _a;
     var pages = core.pages.map(function(p2, i2) {
-      return __assign11(__assign11({}, p2.meta), { i: i2 });
+      return __assign10(__assign10({}, p2.meta), { i: i2 });
     });
     var sessions = function(p2) {
       return core.load(p2.i).flatMap(function(e2) {
@@ -11855,7 +10371,7 @@ var Inkleaf = (() => {
   }
 
   // qt/js/bridge.ts
-  var __values19 = globalThis.__fast && globalThis.__fast.__values || function(o2) {
+  var __values17 = globalThis.__fast && globalThis.__fast.__values || function(o2) {
     var s2 = typeof Symbol === "function" && Symbol.iterator, m2 = s2 && o2[s2], i2 = 0;
     if (m2) return m2.call(o2);
     if (o2 && typeof o2.length === "number") return {
@@ -11872,7 +10388,7 @@ var Inkleaf = (() => {
     if (background)
       ctx.drawImage(background, 0, 0, w2, h3);
     try {
-      for (var elements_1 = __values19(elements), elements_1_1 = elements_1.next(); !elements_1_1.done; elements_1_1 = elements_1.next()) {
+      for (var elements_1 = __values17(elements), elements_1_1 = elements_1.next(); !elements_1_1.done; elements_1_1 = elements_1.next()) {
         var el = elements_1_1.value;
         drawElement(ctx, el, images, function() {
         });

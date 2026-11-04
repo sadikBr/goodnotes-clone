@@ -14,6 +14,9 @@
 #include "draw/Elements.h"
 #include "draw/Fonts.h"
 #include "JsCanvas.h"
+#include "Core.h"
+#include <QJsonDocument>
+#include <random>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QBuffer>

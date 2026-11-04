@@ -16,6 +16,7 @@ use inkleaf_core::error::{AppError, AppResult};
 use inkleaf_core::export::{self, ExportPage, Format};
 use inkleaf_core::handwriting::{self, InkStroke};
 use inkleaf_core::ink::{self, InkPoint};
+use inkleaf_core::recognize;
 use inkleaf_core::sync::SyncManager;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -84,6 +85,19 @@ impl Core {
             "setPageSection" => to(&db.set_page_section(&a.s("pageId")?, a.opt_s("section").as_deref())?),
             "elements" => to(&db.elements(&a.s("pageId")?)?),
             "saveElements" => to(&db.save_elements(&a.s("pageId")?, &a.de::<Vec<Element>>("elements")?)?),
+            // shape and symbol recognition (points: [x, y, …])
+            "recognizeShape" => to(&recognize::beautify::recognize_shape(&p2s(&a.de::<Vec<Vec<f64>>>("points")?))),
+            "beautify" => to(&recognize::beautify::beautify(&p2s(&a.de::<Vec<Vec<f64>>>("points")?))),
+            "snapToAxis" => {
+                let p = p2s(&a.de::<Vec<Vec<f64>>>("points")?);
+                if p.len() < 2 {
+                    return Err(AppError::Invalid("snapToAxis: two points".into()));
+                }
+                to(&recognize::beautify::snap_to_axis(p[0], p[1], a.get("tolerance").and_then(Value::as_f64).unwrap_or(4.0)))
+            }
+            "matchSymbol" => to(&recognize::symbols::match_symbol(&a.de::<Vec<Vec<Vec<f64>>>>("strokes")?.iter().map(|s| p2s(s)).collect::<Vec<_>>())),
+            "rankSymbols" => to(&recognize::symbols::rank_symbols(&a.de::<Vec<Vec<Vec<f64>>>>("strokes")?.iter().map(|s| p2s(s)).collect::<Vec<_>>())),
+            "symbolShape" => to(&recognize::symbols::symbol_shape(&a.s("name")?, a.f("x")?, a.f("y")?, a.f("w")?, a.f("h")?)),
             "simplifyStroke" => to(&ink::simplify(&a.de::<Vec<InkPoint>>("points")?, a.f("epsilon")?)),
             // PDFs
             "storePdfAsset" => to(&db.store_pdf_asset(bytes)?),
@@ -143,6 +157,11 @@ mod erased {
 }
 
 /// Reading command arguments.
+/// [x, y] from [x, y, …] points.
+fn p2s(v: &[Vec<f64>]) -> Vec<inkleaf_core::recognize::P2> {
+    v.iter().map(|p| [p.first().copied().unwrap_or(0.0), p.get(1).copied().unwrap_or(0.0)]).collect()
+}
+
 struct Args<'a>(&'a Value);
 
 impl Args<'_> {

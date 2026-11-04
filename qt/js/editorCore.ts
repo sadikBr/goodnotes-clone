@@ -34,8 +34,6 @@ import {
   type Rect,
   type ShapeKind,
 } from "../../src/editor/geometry";
-import { beautify, recognizeShape } from "../../src/editor/beautify";
-import { matchSymbol, symbolShape } from "../../src/editor/symbols";
 import { fitTextToBox, drawElement, drawGroupHandles, drawGuides, drawHandles, drawLasso, drawSelection, drawStroke, drawTransformedBox, naturalTextWidth, paperLayout, renderPage, steadyHighlight, textAnchors, type ImageCache } from "../../src/editor/render";
 import { thinPoints, smoothPoints } from "../../src/editor/ink";
 import { anchorsAsTargets, paperTargets, snapMove, type Anchor, type Guide, type Target } from "../../src/editor/snap";
@@ -53,6 +51,12 @@ function call<T>(cmd: string, args: object): T {
   if (r.error) throw new Error(r.error);
   return r.ok as T;
 }
+
+// Shape and symbol recognition: the Rust core (core/src/recognize).
+const recognizeShape = (points: P2[]) => call<RecognizedShape | null>("recognizeShape", { points });
+const beautify = (points: P2[]) => call<RecognizedShape | null>("beautify", { points });
+const matchSymbol = (strokes: P2[][]) => call<{ name: string; distance: number } | null>("matchSymbol", { strokes });
+const symbolShape = (name: string, box: { x: number; y: number; w: number; h: number }) => call<RecognizedShape>("symbolShape", { name, ...box });
 
 export interface PageMeta {
   id: string;

@@ -8,8 +8,6 @@ import "./shims";
 export { drawTemplate, isDarkPaper, paperLayout, templateUsesText } from "../../src/editor/papers";
 export { drawElement, drawStroke, layoutText, measureText, naturalTextWidth, fitTextToBox, textAnchors, drawGuides, steadyHighlight, flattenSmooth } from "../../src/editor/render";
 export * as geometry from "../../src/editor/geometry";
-export { beautify, recognizeShape, smoothPath, snapToAxis } from "../../src/editor/beautify";
-export { matchSymbol, rankSymbols, symbolShape, SYMBOL_GLYPHS } from "../../src/editor/symbols";
 export { COVER_DESIGNS, coverDesignOf, coverTemplate, coverText, isCoverTemplate, drawCoverDesign } from "../../src/editor/covers";
 export { coverTextElements, coverPreview, setUpCover, applyCover, refreshCoverThumbnail } from "../../src/cover";
 export * as textFormat from "../../src/editor/textFormat";

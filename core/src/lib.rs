@@ -7,4 +7,5 @@ pub mod error;
 pub mod export;
 pub mod handwriting;
 pub mod ink;
+pub mod recognize;
 pub mod sync;
