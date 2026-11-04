@@ -103,6 +103,7 @@ qt_add_executable(inkleaf
   src/tests/TextAndSnapTests.cpp src/tests/DaftarTests.cpp src/tests/Samples.h src/tests/Samples.cpp src/tests/Golden.h src/tests/Golden.cpp src/tests/EditorSessions.h src/tests/EditorSessions.cpp src/tests/JsonCompare.h
   src/PaperImage.h src/PaperImage.cpp
   src/Pdf.h src/Pdf.cpp
+  src/Updater.h src/Updater.cpp
   src/LaserTrail.h src/LaserTrail.cpp
   src/VectorSvg.h src/VectorSvg.cpp
 )
@@ -178,6 +179,7 @@ qt_add_qml_module(inkleaf
     qml/editor/ToolGroup.qml
     qml/editor/ModeGroup.qml
     qml/editor/InkToText.qml
+    qml/editor/EraserCursor.qml
     qml/editor/Fonts.js
     qml/editor/ColorPopover.qml
     qml/editor/ToolDrawer.qml

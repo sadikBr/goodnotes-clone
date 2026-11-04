@@ -1453,7 +1453,9 @@ impl Db {
         }
         let conn = self.conn();
         let n = conn.execute(
-            "UPDATE pages SET template = ?2, paper_color = COALESCE(?3, paper_color), updated_at = ?4 WHERE id = ?1",
+            // Another paper: its picture is redrawn (the editor fills in missing ones).
+            "UPDATE pages SET thumbnail = CASE WHEN template = ?2 AND paper_color = COALESCE(?3, paper_color) THEN thumbnail ELSE NULL END,
+                              template = ?2, paper_color = COALESCE(?3, paper_color), updated_at = ?4 WHERE id = ?1",
             params![page_id, template, paper_color, now_ms()],
         )?;
         expect_one(n, page_id)

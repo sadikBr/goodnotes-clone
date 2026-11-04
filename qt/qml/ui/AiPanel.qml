@@ -34,9 +34,29 @@ Popup {
     signal insertRequested(string text)
     signal settingsRequested()
 
-    /// [{ role: "user" | "assistant" | "error", text }]
-    property var messages: []
+    /// { role: "user" | "assistant" | "error", text, live (still arriving) }
+    ListModel { id: convoModel }
+    readonly property int count: convoModel.count
     property bool waiting: false
+    /// Its first words have arrived.
+    readonly property bool streaming: waiting && count > 0 && convoModel.get(count - 1).live === true
+    /// The answer being streamed (askStream's id), to stop it.
+    property int streamId: -1
+    function stop() {
+        if (streamId >= 0) InkleafCore.cancelAsk(streamId)
+    }
+    function add(m) {
+        convoModel.append({ role: m.role, text: m.text, live: !!m.live })
+        Qt.callLater(() => list.positionViewAtEnd())
+    }
+    function reset() {
+        stop()
+        asking++
+        convoModel.clear()
+        system = ""
+        waiting = false
+        streamId = -1
+    }
     property int asking: 0
     property string system: ""
 
@@ -44,7 +64,7 @@ Popup {
 
     /// Opens on something new: { heading, notebookId, image, extra, useNotes, suggestions, canInsert, prompt (asked at once) }.
     function start(o) {
-        asking++
+        reset()
         heading = o.heading || "Ask AI"
         notebookId = o.notebookId || ""
         image = o.image || ""
@@ -52,9 +72,6 @@ Popup {
         useNotes = o.useNotes !== false
         suggestions = o.suggestions || []
         canInsert = !!o.canInsert
-        messages = []
-        system = ""
-        waiting = false
         input.text = ""
         Ai.refresh()
         open()
@@ -80,20 +97,40 @@ Popup {
     function send(text) {
         text = String(text || "").trim()
         if (!text || waiting || !Ai.ready) return
-        messages = messages.concat([{ role: "user", text: text }])
+        add({ role: "user", text: text })
         input.text = ""
         waiting = true
         const ticket = asking
         const go = () => {
             // The conversation so far (answers that failed left out); the picture with the first question.
             const convo = []
-            for (const m of messages)
-                if (m.role === "user" || m.role === "assistant") convo.push({ role: m.role, text: m.text, images: [] })
+            for (let i = 0; i < convoModel.count; ++i) {
+                const m = convoModel.get(i)
+                if ((m.role === "user" || m.role === "assistant") && m.text) convo.push({ role: m.role, text: m.text, images: [] })
+            }
             if (image && convo.length) convo[0].images = [image]
-            Ai.ask(system, convo, false, (answer, err) => {
+            // The answer appears as it's written.
+            let at = -1
+            root.streamId = Ai.askStream(system, convo, piece => {
+                if (ticket !== root.asking) return
+                if (at < 0) {
+                    root.add({ role: "assistant", text: "", live: true })
+                    at = convoModel.count - 1
+                }
+                convoModel.setProperty(at, "text", convoModel.get(at).text + piece)
+                if (list.atYEnd || list.contentHeight - list.contentY - list.height < 80) Qt.callLater(() => list.positionViewAtEnd())
+            }, (answer, err) => {
                 if (ticket !== root.asking) return
                 root.waiting = false
-                root.messages = root.messages.concat([err ? { role: "error", text: err } : { role: "assistant", text: answer || "(No answer.)" }])
+                root.streamId = -1
+                if (at >= 0) {
+                    convoModel.setProperty(at, "live", false)
+                    // A failure partway (or a refusal): what came is replaced by why.
+                    if (err) { convoModel.setProperty(at, "role", "error"); convoModel.setProperty(at, "text", err) }
+                    else if (answer) convoModel.setProperty(at, "text", answer)
+                } else {
+                    root.add(err ? { role: "error", text: err } : { role: "assistant", text: answer || "(No answer.)" })
+                }
                 Qt.callLater(() => list.positionViewAtEnd())
             })
         }
@@ -106,7 +143,7 @@ Popup {
             if (ticket !== root.asking) return
             if (err) {
                 root.waiting = false
-                root.messages = root.messages.concat([{ role: "error", text: String(err).startsWith("locked:") ? "This notebook is locked: unlock it first." : err }])
+                root.add({ role: "error", text: String(err).startsWith("locked:") ? "This notebook is locked: unlock it first." : err })
                 return
             }
             sys += notes
@@ -143,7 +180,7 @@ Popup {
                 Icon { anchors.centerIn: parent; name: "sparkle"; size: 17; color: Theme.accent }
             }
             Label { text: root.heading; font.pixelSize: 16; font.weight: Font.Bold; color: Theme.text; elide: Text.ElideRight; Layout.fillWidth: true }
-            IconButton { iconName: "plus"; tip: "New conversation"; visible: root.messages.length > 0; onClicked: { root.asking++; root.messages = []; root.system = ""; root.waiting = false } }
+            IconButton { iconName: "plus"; tip: "New conversation"; visible: root.count > 0; onClicked: root.reset() }
             IconButton { iconName: "close"; tip: "Close (Esc)"; onClicked: root.close() }
         }
         Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.border }
@@ -182,7 +219,7 @@ Popup {
             bottomMargin: 14
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollBar {}
-            model: root.messages
+            model: convoModel
             header: ColumnLayout {
                 width: list.width
                 spacing: 10
@@ -198,13 +235,13 @@ Popup {
                     Image { id: pic; anchors.fill: parent; anchors.margins: 8; source: root.image; fillMode: Image.PreserveAspectFit; smooth: true; mipmap: true }
                 }
                 Label {
-                    visible: root.messages.length === 0 && root.suggestions.length > 0
+                    visible: root.count === 0 && root.suggestions.length > 0
                     text: "Try:"
                     color: Theme.muted; font.pixelSize: 12
                     Layout.leftMargin: 18
                 }
                 Flow {
-                    visible: root.messages.length === 0
+                    visible: root.count === 0
                     Layout.leftMargin: 18; Layout.rightMargin: 18
                     Layout.fillWidth: true
                     spacing: 6
@@ -233,7 +270,7 @@ Popup {
                     }
                 }
                 Label {
-                    visible: root.messages.length === 0
+                    visible: root.count === 0
                     text: root.notebookId ? "Answers use this notebook's typed text" + (Ai.readingOn ? " and handwriting." : ". Turn on “Make handwriting searchable” in Settings → AI to include handwriting.")
                                           : root.useNotes ? "Answers use your library's typed text" + (Ai.readingOn ? " and handwriting (locked notebooks are left out)." : ". Turn on “Make handwriting searchable” in Settings → AI to include handwriting.") : ""
                     color: Theme.muted; font.pixelSize: 12; wrapMode: Text.Wrap
@@ -243,8 +280,10 @@ Popup {
             }
             delegate: Item {
                 id: msg
-                required property var modelData
-                readonly property bool mine: modelData.role === "user"
+                required property string role
+                required property string text
+                required property bool live
+                readonly property bool mine: role === "user"
                 width: list.width
                 height: bubble.height + (actions.visible ? actions.height + 4 : 0)
                 Rectangle {
@@ -254,8 +293,8 @@ Popup {
                     width: Math.min(parent.width - (msg.mine ? 72 : 36), body.implicitWidth + 24)
                     height: body.implicitHeight + 18
                     radius: 14
-                    color: msg.mine ? Theme.alpha(Theme.accent, 0.14) : msg.modelData.role === "error" ? Theme.alpha(Theme.danger, 0.1) : Theme.surface2
-                    border.color: msg.modelData.role === "error" ? Theme.alpha(Theme.danger, 0.4) : "transparent"
+                    color: msg.mine ? Theme.alpha(Theme.accent, 0.14) : msg.role === "error" ? Theme.alpha(Theme.danger, 0.1) : Theme.surface2
+                    border.color: msg.role === "error" ? Theme.alpha(Theme.danger, 0.4) : "transparent"
                     TextEdit {
                         id: body
                         x: 12; y: 9
@@ -263,9 +302,9 @@ Popup {
                         readOnly: true
                         selectByMouse: true
                         wrapMode: Text.Wrap
-                        textFormat: msg.modelData.role === "assistant" ? TextEdit.MarkdownText : TextEdit.PlainText
-                        text: msg.modelData.text
-                        color: msg.modelData.role === "error" ? Theme.danger : Theme.text
+                        textFormat: msg.role === "assistant" ? TextEdit.MarkdownText : TextEdit.PlainText
+                        text: msg.text
+                        color: msg.role === "error" ? Theme.danger : Theme.text
                         selectionColor: Theme.alpha(Theme.accent, 0.3)
                         selectedTextColor: Theme.text
                         font.pixelSize: 14
@@ -274,26 +313,26 @@ Popup {
                 }
                 RowLayout {
                     id: actions
-                    visible: msg.modelData.role === "assistant"
+                    visible: msg.role === "assistant" && !msg.live
                     anchors.top: bubble.bottom
                     anchors.topMargin: 4
                     x: 12
                     spacing: 2
                     UiButton {
                         kind: "ghost"; iconName: "copy"; text: "Copy"; implicitHeight: 30
-                        onClicked: { clip.text = msg.modelData.text; clip.selectAll(); clip.copy(); text = "Copied" }
+                        onClicked: { clip.text = msg.text; clip.selectAll(); clip.copy(); text = "Copied" }
                     }
                     UiButton {
                         visible: root.canInsert
                         kind: "ghost"; iconName: "text"; text: "Put on page"; implicitHeight: 30
-                        onClicked: root.insertRequested(root.plain(msg.modelData.text))
+                        onClicked: root.insertRequested(root.plain(msg.text))
                     }
                 }
             }
             footer: Item {
                 width: list.width
-                height: root.waiting ? 40 : 0
-                visible: root.waiting
+                height: root.waiting && !root.streaming ? 40 : 0
+                visible: root.waiting && !root.streaming
                 RowLayout {
                     x: 18
                     anchors.verticalCenter: parent.verticalCenter
@@ -317,7 +356,7 @@ Popup {
                 Layout.preferredHeight: Math.min(120, Math.max(40, input.implicitHeight))
                 TextArea {
                     id: input
-                    placeholderText: root.messages.length ? "Ask a follow-up…" : "Ask anything…"
+                    placeholderText: root.count ? "Ask a follow-up…" : "Ask anything…"
                     leftPadding: 12; rightPadding: 12; topPadding: 10; bottomPadding: 10
                     wrapMode: TextEdit.Wrap
                     color: Theme.text
@@ -331,10 +370,10 @@ Popup {
                 }
             }
             IconButton {
-                iconName: "send"
-                tip: "Send (Enter)"
-                enabled: !root.waiting && input.text.trim().length > 0
-                onClicked: root.send(input.text)
+                iconName: root.waiting ? "close" : "send"
+                tip: root.waiting ? "Stop" : "Send (Enter)"
+                enabled: root.waiting ? root.streamId >= 0 : input.text.trim().length > 0
+                onClicked: root.waiting ? root.stop() : root.send(input.text)
             }
         }
     }

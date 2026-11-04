@@ -27,6 +27,7 @@ struct InkleafResult {
 InkleafResult inkleaf_call(const ::Core* core, const char* cmd, const char* args, const uint8_t* bytes, size_t len);
 void inkleaf_free(InkleafResult r);
 void inkleaf_close(::Core* core);
+InkleafResult inkleaf_ai_stream(const ::Core* core, const char* args, bool (*on_text)(void*, const uint8_t*, size_t), void* user);
 }
 
 namespace {
@@ -177,6 +178,74 @@ void InkleafCore::callAsync(const QString& cmd, const QVariantMap& args, const Q
       if (self) self->finishAsync(id, QString::fromUtf8(name), out, ok);
     }, Qt::QueuedConnection);
   });
+}
+
+namespace {
+/// What the worker passes to the core's streaming call: where pieces go.
+struct StreamSink {
+  QPointer<InkleafCore> self;
+  int id;
+  std::shared_ptr<std::atomic_bool> stop;
+};
+extern "C" bool streamPiece(void* user, const uint8_t* text, size_t len) {
+  auto* sink = static_cast<StreamSink*>(user);
+  if (sink->stop->load()) return false;
+  const QString piece = QString::fromUtf8(reinterpret_cast<const char*>(text), qsizetype(len));
+  QPointer<InkleafCore> self = sink->self;
+  const int id = sink->id;
+  QMetaObject::invokeMethod(qApp, [self, id, piece]() {
+    if (self) self->streamText(id, piece);
+  }, Qt::QueuedConnection);
+  return true;
+}
+}  // namespace
+
+int InkleafCore::askStream(const QVariantMap& request, const QJSValue& onText, const QJSValue& onDone) {
+  static int next = 0;
+  const int id = ++next;
+  if (!m_core) {
+    QJSValue cb = onDone;
+    if (cb.isCallable()) cb.call({QJSValue(QString()), QJSValue(m_lastError)});
+    return id;
+  }
+  auto stop = std::make_shared<std::atomic_bool>(false);
+  m_streams.insert(id, {onText, onDone, stop});
+  const QByteArray a = QJsonDocument(QJsonObject{{"request", QJsonObject::fromVariantMap(request)}}).toJson(QJsonDocument::Compact);
+  const ::Core* core = m_core;
+  QPointer<InkleafCore> self(this);
+  QThreadPool::globalInstance()->start([core, a, id, self, stop]() {
+    StreamSink sink{self, id, stop};
+    InkleafResult r = inkleaf_ai_stream(core, a.constData(), &streamPiece, &sink);
+    const QByteArray out(reinterpret_cast<const char*>(r.data), int(r.len));
+    const bool ok = r.ok;
+    inkleaf_free(r);
+    QMetaObject::invokeMethod(qApp, [self, id, out, ok]() {
+      if (self) self->streamDone(id, out, ok);
+    }, Qt::QueuedConnection);
+  });
+  return id;
+}
+
+void InkleafCore::cancelAsk(int id) {
+  auto it = m_streams.find(id);
+  if (it != m_streams.end()) it->stop->store(true);
+}
+
+void InkleafCore::streamText(int id, const QString& piece) {
+  auto it = m_streams.find(id);
+  if (it == m_streams.end() || it->stop->load()) return;
+  QJSValue cb = it->onText;
+  if (cb.isCallable()) cb.call({QJSValue(piece)});
+}
+
+void InkleafCore::streamDone(int id, const QByteArray& out, bool ok) {
+  const Stream st = m_streams.take(id);
+  QJSValue cb = st.onDone;
+  if (!cb.isCallable()) return;
+  const QJsonDocument doc = QJsonDocument::fromJson("[" + out + "]");
+  const QJsonValue v = doc.array().isEmpty() ? QJsonValue() : doc.array().first();
+  if (!ok) cb.call({QJSValue(QString()), QJSValue(v.toObject().value("error").toString(QString::fromUtf8(out)))});
+  else cb.call({QJSValue(v.toString()), QJSValue(QString())});
 }
 
 void InkleafCore::finishAsync(quint64 id, const QString& cmd, const QByteArray& out, bool ok) {

@@ -475,6 +475,7 @@ Rectangle {
                 }
 
                 Instrument { anchors.fill: parent; canvas: canvas; z: 4 }
+                EraserCursor { anchors.fill: canvas; canvas: canvas; z: 6 }
                 TextEditor { anchors.fill: parent; canvas: canvas; z: 5 }
                 // The laser pointer (src/editor/laser.ts): a soft glow, a saturated
                 // tube and a thin white core, each layer drawn once with its own

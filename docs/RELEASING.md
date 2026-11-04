@@ -3,7 +3,13 @@
 Releases are built by GitHub Actions when a version tag is pushed: the Linux
 AppImage, the Windows installer (and a zip of the same files) and the
 Android APK. Installed apps see the new
-release (Settings → Updates) and offer its download.
+release (Settings → Updates) and install it themselves (Update now): they
+download the file for their system, check it against the SHA-256 GitHub
+publishes for each release file, and restart into it. That needs the file
+names to stay as they are (`…_setup.exe`, `….AppImage`, `….apk`), the APK to
+be signed with the same key every time, and the version (and so Android's
+version code) to go up. `INKLEAF_RELEASES_URL` points the app at another
+release description, for testing an update without publishing one.
 
 Everything below is a one-time setup. All keys go into the repository's
 **Settings → Secrets and variables → Actions**. Keep a copy of every key

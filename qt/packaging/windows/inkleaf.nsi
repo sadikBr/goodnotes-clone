@@ -8,6 +8,7 @@ ManifestDPIAware true
 SetCompressor /SOLID lzma
 
 !include "MUI2.nsh"
+!include "FileFunc.nsh"
 
 !ifndef VERSION
   !define VERSION "0.0.0"
@@ -42,6 +43,16 @@ VIAddVersionKey "LegalCopyright" "Inkleaf contributors"
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "English"
+
+; Updating from inside the app runs this silently with /RELAUNCH: Inkleaf
+; opens again once the new version is in place.
+Function .onInstSuccess
+  ${GetParameters} $0
+  ClearErrors
+  ${GetOptions} $0 "/RELAUNCH" $1
+  IfErrors +2 0
+    Exec '"$INSTDIR\Inkleaf.exe"'
+FunctionEnd
 
 Section "Inkleaf"
   ; A running Inkleaf would keep its files locked.

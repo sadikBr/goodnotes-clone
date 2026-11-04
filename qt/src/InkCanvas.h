@@ -66,6 +66,9 @@ class InkCanvas : public QQuickItem {
   Q_PROPERTY(QString penCursor READ penCursor WRITE setPenCursor NOTIFY settingsChanged)
 
   Q_PROPERTY(qreal zoom READ zoom NOTIFY viewChanged)
+  /// The pointer over the canvas (-1, -1 when away), and whether it's erasing now (eraser tool or the pen's eraser end).
+  Q_PROPERTY(QPointF pointer READ pointer NOTIFY pointerChanged)
+  Q_PROPERTY(bool rubbing READ rubbing NOTIFY pointerChanged)
   Q_PROPERTY(int pageCount READ pageCount NOTIFY pagesChanged)
   Q_PROPERTY(int currentPage READ currentPage NOTIFY viewChanged)
   Q_PROPERTY(int activePage READ activePage NOTIFY selectionChanged)
@@ -111,6 +114,8 @@ public:
   QString penCursor() const { return m_penCursor; }
   void setPenCursor(const QString& c);
   qreal zoom() const { return m_zoom; }
+  QPointF pointer() const { return m_hover; }
+  bool rubbing() const { return m_rubbing; }
   int pageCount() const { return int(m_pages.size()); }
   int currentPage() const;
   int activePage() const;
@@ -208,6 +213,7 @@ public:
   Q_INVOKABLE QString exportPdf(const QString& path, const QVariantList& indexes, const QString& title);
 
 signals:
+  void pointerChanged();
   void notebookIdChanged();
   void toolChanged();
   void toolStateChanged();
@@ -369,6 +375,8 @@ private:
   Gesture m_g;
   QPointer<QQuickWindow> m_window;
   QPointF m_hover{-1, -1};
+  bool m_rubbing = false;
+  void setHover(QPointF p);
   qreal m_pinchStartDist = 0, m_pinchStartZoom = 1;
   QPointF m_pinchMid;
 

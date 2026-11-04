@@ -197,6 +197,27 @@ QtObject {
         }
         return rel.html_url
     }
+    /** The release file this copy can install itself ({ url, sha256, size }), or null. */
+    function installableFor(rel) {
+        if (!Updater.canInstall) return null
+        const end = { setup: "_setup.exe", appimage: ".AppImage", apk: ".apk" }[Updater.kind]
+        const a = end ? (rel.assets || []).find(x => x.name.endsWith(end)) : null
+        if (!a) return null
+        // GitHub publishes each file's checksum ("sha256:…").
+        const digest = String(a.digest || "")
+        return { url: a.browser_download_url, sha256: digest.startsWith("sha256:") ? digest.slice(7) : "", size: a.size || 0 }
+    }
+    /** Downloads the update (the banner shows how far it got). */
+    function startUpdate() {
+        if (!update || !update.install) return downloadUpdate()
+        Updater.download(update.install.url, update.install.sha256, update.install.size, update.version)
+    }
+    /** Installs the downloaded update: saves the open notebook, then restarts into the new version. */
+    function installUpdate() {
+        try { prepare() } catch (e) {}
+        // Let the save finish, then hand over.
+        Qt.callLater(() => Updater.install())
+    }
     /** Looks for an update; `manual` also reports "up to date" and errors. */
     function checkForUpdates(manual) {
         if (pending) pending.abort()
@@ -221,9 +242,9 @@ QtObject {
             }
             const v = rel.tag_name.replace(/^v/, "")
             if (!manual && root.later.indexOf(v) >= 0) return
-            root.update = { version: v, notes: String(rel.body || "").trim(), url: root.assetFor(rel) }
+            root.update = { version: v, notes: String(rel.body || "").trim(), url: root.assetFor(rel), install: root.installableFor(rel) }
         }
-        xhr.open("GET", "https://api.github.com/repos/" + repo + "/releases/latest")
+        xhr.open("GET", Updater.releasesUrl(repo))
         xhr.setRequestHeader("Accept", "application/vnd.github+json")
         xhr.setRequestHeader("User-Agent", "Inkleaf/" + version)
         xhr.send()
@@ -247,6 +268,7 @@ QtObject {
     }
     function updateLater() {
         if (!update) return
+        Updater.cancel()
         later = later.concat([update.version])
         update = null
     }

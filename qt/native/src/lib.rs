@@ -295,6 +295,37 @@ pub unsafe extern "C" fn inkleaf_call(core: *const Core, cmd: *const c_char, arg
     }
 }
 
+/// Asks the AI (`args`: `{ "request": AskRequest }`) with the answer streamed:
+/// `on_text(user, text, len)` gets each new piece of UTF-8 text as it arrives,
+/// on this thread, and returns false to stop. The result is the whole answer
+/// (JSON string) or the error.
+///
+/// # Safety
+/// `core` from `inkleaf_open`; `args` NUL-terminated; `on_text` callable with `user`.
+#[no_mangle]
+pub unsafe extern "C" fn inkleaf_ai_stream(
+    core: *const Core,
+    args: *const c_char,
+    on_text: extern "C" fn(user: *mut std::ffi::c_void, text: *const u8, len: usize) -> bool,
+    user: *mut std::ffi::c_void,
+) -> InkleafResult {
+    let core = &*core;
+    let args: Value = match serde_json::from_str(&CStr::from_ptr(args).to_string_lossy()) {
+        Ok(v) => v,
+        Err(e) => return error_result(format!("bad arguments: {e}")),
+    };
+    let req: AskRequest = match args.get("request").cloned().map(serde_json::from_value) {
+        Some(Ok(r)) => r,
+        _ => return error_result("aiStream: a request"),
+    };
+    let run = || core.ai.ask_stream(&req, &mut |t: &str| on_text(user, t.as_ptr(), t.len()));
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(run)) {
+        Ok(Ok(text)) => result(true, true, Value::String(text).to_string().into_bytes()),
+        Ok(Err(e)) => error_result(e),
+        Err(_) => error_result("the AI request failed unexpectedly"),
+    }
+}
+
 /// Frees a result's data.
 ///
 /// # Safety

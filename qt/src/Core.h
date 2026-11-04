@@ -5,6 +5,8 @@
 #include <QJSValue>
 #include <QJsonValue>
 #include <QHash>
+#include <atomic>
+#include <memory>
 #include <QObject>
 #include <QPointer>
 #include <QJSEngine>
@@ -29,6 +31,11 @@ public:
   /// Runs a slow command (sync, backups) on a worker thread; then calls
   /// `callback(answer, error)` on the GUI thread (error "" on success).
   Q_INVOKABLE void callAsync(const QString& cmd, const QVariantMap& args, const QJSValue& callback);
+  /// Asks the AI ({ system, messages, quick }) with the answer streamed:
+  /// `onText(piece)` for each new piece, then `onDone(answer, error)`.
+  /// Returns an id for `cancelAsk` (the answer so far then comes to onDone).
+  Q_INVOKABLE int askStream(const QVariantMap& request, const QJSValue& onText, const QJSValue& onDone);
+  Q_INVOKABLE void cancelAsk(int id);
   /// The same from C++: the answer as JSON, `error` set on failure.
   QJsonValue callJson(const QString& cmd, const QJsonObject& args, QString* error = nullptr, const QByteArray& bytes = {});
   /// The answer's JSON text as it comes from the core (no parsing): for big answers.
@@ -52,7 +59,14 @@ signals:
 private:
   ::Core* m_core = nullptr;
   void finishAsync(quint64 id, const QString& cmd, const QByteArray& out, bool ok);
+public:
+  // (For the streaming worker's messages: GUI thread.)
+  void streamText(int id, const QString& piece);
+  void streamDone(int id, const QByteArray& out, bool ok);
+private:
   QHash<quint64, QJSValue> m_callbacks;  // callAsync's, by id (GUI thread only)
+  struct Stream { QJSValue onText, onDone; std::shared_ptr<std::atomic_bool> stop; };
+  QHash<int, Stream> m_streams;  // askStream's, by id (GUI thread only)
   quint64 m_nextCall = 0;
   QPointer<QJSEngine> m_engine;
   QString m_dir;

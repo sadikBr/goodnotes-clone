@@ -29,6 +29,10 @@
 #include "Canvas.h"
 #include "Pdf.h"
 
+/// Page pictures drawn the current way start with this (a data: URL parameter):
+/// older ones are redrawn in the background.
+static constexpr const char* kThumbPrefix = "data:image/jpeg;v=2;base64,";
+
 namespace {
 constexpr float kPageGap = 28;     // page units between pages
 constexpr qreal kPad = 32;         // screen pixels beside the pages
@@ -132,10 +136,12 @@ InkCanvas::InkCanvas(QQuickItem* parent) : QQuickItem(parent) {
     if (m_g.kind != Gesture::None || m_scrollGlide.isActive()) return m_thumbFill.start();
     for (int i = 0; i < int(m_pages.size()); ++i) {
       const QJsonObject& m = m_pages[i].meta;
-      if (!m["thumbnail"].toString().isEmpty()) continue;
+      // Up to date (pictures from before the current way of drawing them are redone).
+      const QString t = m["thumbnail"].toString();
+      if (t.startsWith(QLatin1String(kThumbPrefix)) || (m_pages[i].tmpl.startsWith("cover") && !t.isEmpty())) continue;
       storeThumbnail(i);
       emit pagesChanged();
-      if (!m_pages[i].meta["thumbnail"].toString().isEmpty()) m_thumbFill.start();
+      if (m_pages[i].meta["thumbnail"].toString().startsWith(QLatin1String(kThumbPrefix))) m_thumbFill.start();
       return;
     }
   });
@@ -532,41 +538,19 @@ void InkCanvas::storeThumbnail(int i) {
   if (i < 0 || i >= int(m_pages.size())) return;
   Page& p = m_pages[i];
   if (!p.synced) syncPage(i);
-  // Covers are drawn sharper: the library shows them full-size.
+  // Covers are drawn sharper: the library shows them full-size. Drawn at the
+  // picture's own size (not the screen's paper shrunk, which skipped rows: ruled
+  // lines came out uneven and thin lines like the margin vanished).
   const bool cover = p.tmpl.startsWith("cover");
-  const double s = (cover ? 420.0 : 200.0) / p.w;
-  QImage img(int(std::ceil(p.w * s)), int(std::ceil(p.h * s)), QImage::Format_RGB32);
-  img.fill(Canvas::parseColor(p.paper));
-  QPainter painter(&img);
-  painter.setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
-  painter.scale(s, s);
-  if (p.paperImg.isNull()) p.paperImg = paperWithBackground(p, std::max(s, 0.5), {}), p.paperScale = std::max(s, 0.5), p.paperDirty = true;
-  painter.drawImage(QRectF(0, 0, p.w, p.h), p.paperImg);
-  for (const auto& it : p.items) {
-    if (it->mesh) {
-      if (!it->tris || it->tris->tris.empty()) continue;
-      // The mesh's triangles as one path (overlaps fill once, as on screen per stroke).
-      QPainterPath path;
-      path.setFillRule(Qt::WindingFill);
-      const auto& t = it->tris->tris;
-      for (size_t k = 0; k + 2 < t.size(); k += 3) {
-        path.moveTo(t[k]);
-        path.lineTo(t[k + 1]);
-        path.lineTo(t[k + 2]);
-        path.closeSubpath();
-      }
-      painter.fillPath(path, it->color);
-    } else {
-      if (it->image.isNull()) it->image = draw::elementsImage(QJsonArray{it->data}, std::max(s * 2, 0.5), it->rect), it->scale = std::max(s * 2, 0.5), it->imageDirty = true;
-      painter.drawImage(it->rect, it->image);
-    }
-  }
-  painter.end();
+  const double s = (cover ? 420.0 : 300.0) / p.w;
+  QImage bg;
+  if (!p.meta["backgroundAsset"].toString().isEmpty() && !p.meta["backgroundPage"].isNull()) bg = paperWithBackground(p, s, {});
+  const auto c = draw::renderPage(p.tmpl, p.paper, p.w, p.h, sceneJson(i), s, bg);
   QByteArray bytes;
   QBuffer buf(&bytes);
   buf.open(QIODevice::WriteOnly);
-  img.save(&buf, "JPEG", 82);
-  const QString url = "data:image/jpeg;base64," + QString::fromLatin1(bytes.toBase64());
+  c->image().save(&buf, "JPEG", 85);
+  const QString url = QString::fromLatin1(kThumbPrefix) + QString::fromLatin1(bytes.toBase64());
   QString err;
   InkleafCore::instance()->callJson("setPageThumbnail", {{"pageId", p.id}, {"thumbnail", url}}, &err);
   if (!err.isEmpty()) return emit message(err, true);
@@ -1428,7 +1412,8 @@ void InkCanvas::press(QPointF s, float pressure, bool stylus, const QString& too
     m_g = Gesture();
     syncEditing();
   }
-  if (tool == "eraser") m_hover = s;
+  m_rubbing = tool == "eraser";
+  setHover(s);
   afterCore();
 }
 
@@ -1455,7 +1440,7 @@ void InkCanvas::drag(QPointF s, float pressure, bool stylus, Qt::KeyboardModifie
     case Gesture::Core: {
       const QPointF p = toPageOf(m_g.page, s);
       m_ed->move(p.x(), p.y(), pressure, nowMs(), bool(mods & Qt::ShiftModifier), bool(mods & Qt::AltModifier));
-      if (m_tool == "eraser" || m_g.kind == Gesture::Core) m_hover = s;
+      setHover(s);
       afterCore();
       return;
     }
@@ -1485,8 +1470,18 @@ void InkCanvas::drag(QPointF s, float pressure, bool stylus, Qt::KeyboardModifie
   }
 }
 
+void InkCanvas::setHover(QPointF p) {
+  if (p == m_hover) return;
+  m_hover = p;
+  emit pointerChanged();
+}
+
 void InkCanvas::release() {
   const Gesture::Kind k = m_g.kind;
+  if (m_rubbing) {
+    m_rubbing = false;
+    emit pointerChanged();
+  }
   if (k == Gesture::Pan) {
     m_g = Gesture();
     updateCursor();
@@ -1531,15 +1526,14 @@ bool InkCanvas::eventFilter(QObject* watched, QEvent* event) {
   }
   if (type == QEvent::TabletMove) {
     if (m_g.kind == Gesture::None) {
-      m_hover = local;
-      if (m_tool == "eraser") update();
+      setHover(inside ? local : QPointF(-1, -1));
       if (m_tool == "laser") {
         m_laserDot = inside ? local : QPointF(-1, -1);
         emit laserChanged();
       }
       return false;
     }
-    m_hover = local;
+    setHover(local);
     drag(local, curved(te->pressure()), true, te->modifiers());
     te->accept();
     return true;
@@ -1565,7 +1559,7 @@ void InkCanvas::mousePressEvent(QMouseEvent* e) {
 
 void InkCanvas::mouseMoveEvent(QMouseEvent* e) {
   if (e->device() && e->device()->type() == QInputDevice::DeviceType::Stylus) return e->ignore();
-  m_hover = e->position();
+  setHover(e->position());
   drag(e->position(), 0.5f, false, e->modifiers());
 }
 
@@ -1575,12 +1569,11 @@ void InkCanvas::mouseReleaseEvent(QMouseEvent* e) {
 }
 
 void InkCanvas::hoverMoveEvent(QHoverEvent* e) {
-  m_hover = e->position();
+  setHover(e->position());
   if (m_tool == "laser") {
     m_laserDot = e->position();
     emit laserChanged();
   }
-  if (m_tool == "eraser") update();
   if (m_tool == "lasso" && m_ed) {
     int pi = -1;
     const QPointF p = toPage(e->position(), &pi);
@@ -1593,7 +1586,7 @@ void InkCanvas::hoverMoveEvent(QHoverEvent* e) {
 }
 
 void InkCanvas::hoverLeaveEvent(QHoverEvent*) {
-  m_hover = QPointF(-1, -1);
+  setHover(QPointF(-1, -1));
   m_laserDot = QPointF(-1, -1);
   emit laserChanged();
   update();
@@ -1897,19 +1890,8 @@ QSGNode* InkCanvas::updatePaintNode(QSGNode* old, UpdatePaintNodeData*) {
 
   clearChildren(rulerT);  // (instruments are drawn in QML)
 
-  // Eraser ring under the pointer (screen pixels).
-  std::vector<QPointF> ringTris;
-  if ((m_tool == "eraser" || (m_g.kind == Gesture::Core && m_g.stylus && m_hover.x() >= 0 && false)) && m_hover.x() >= 0) {
-    const qreal r = m_widths.value("eraser", 14).toDouble() / 2 * m_zoom, t = 1.0;
-    const int n = 48;
-    for (int k = 0; k < n; ++k) {
-      const double a0 = 2 * M_PI * k / n, a1 = 2 * M_PI * (k + 1) / n;
-      const QPointF i0 = m_hover + QPointF(std::cos(a0), std::sin(a0)) * (r - t), o0 = m_hover + QPointF(std::cos(a0), std::sin(a0)) * r;
-      const QPointF i1 = m_hover + QPointF(std::cos(a1), std::sin(a1)) * (r - t), o1 = m_hover + QPointF(std::cos(a1), std::sin(a1)) * r;
-      ringTris.insert(ringTris.end(), {i0, o0, o1, i0, o1, i1});
-    }
-  }
-  setMesh(ring, ringTris, QColor(90, 90, 90, 210));
+  // (The eraser's ring is drawn in QML over the canvas: EraserCursor.)
+  setMesh(ring, {}, Qt::transparent);
 
   // (The laser is drawn by LaserTrail items over the canvas.)
   clearChildren(laser);

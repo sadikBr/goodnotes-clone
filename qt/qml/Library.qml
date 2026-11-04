@@ -482,17 +482,23 @@ Rectangle {
             Label { text: nav.text; color: nav.active ? Theme.accent : Theme.text; font.weight: nav.active ? Font.DemiBold : Font.Normal; elide: Text.ElideRight; Layout.fillWidth: true }
             Rectangle { antialiasing: true;
                 visible: nav.dot.a > 0
+                Layout.rightMargin: 6
                 Layout.preferredWidth: 13; Layout.preferredHeight: 13; radius: 6.5
                 color: Theme.surface
                 Rectangle { antialiasing: true; anchors.centerIn: parent; width: 9; height: 9; radius: 4.5; color: nav.dot }
             }
+            // How many: a soft pill in the accent when selected, quiet grey text otherwise.
             Rectangle { antialiasing: true;
                 visible: nav.count.length > 0
-                Layout.preferredHeight: 20
-                Layout.preferredWidth: Math.max(22, countText.implicitWidth + 12)
-                radius: 10
-                color: nav.active ? Theme.surface : Theme.surface2
-                Label { id: countText; anchors.centerIn: parent; text: nav.count; font.pixelSize: 11; font.weight: Font.DemiBold; color: nav.active ? Theme.accent : Theme.muted }
+                Layout.rightMargin: 6
+                Layout.preferredHeight: 22
+                Layout.preferredWidth: Math.max(26, countText.implicitWidth + 14)
+                radius: 11
+                color: nav.active ? Theme.alpha(Theme.accent, Theme.dark ? 0.22 : 0.16) : "transparent"
+                border.width: nav.active ? 1 : 0
+                border.color: Theme.alpha(Theme.accent, 0.35)
+                Behavior on color { ColorAnimation { duration: 150 } }
+                Label { id: countText; anchors.centerIn: parent; text: nav.count; font.pixelSize: 12; font.weight: Font.DemiBold; color: nav.active ? Theme.accent : Theme.muted }
             }
         }
     }

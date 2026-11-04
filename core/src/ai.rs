@@ -217,6 +217,11 @@ impl Ai {
         ask(&self.settings(), req)
     }
 
+    /// Asks with the answer streamed (see `ask_stream`).
+    pub fn ask_stream(&self, req: &AskRequest, on: &mut dyn FnMut(&str) -> bool) -> AppResult<String> {
+        ask_stream(&self.settings(), req, on)
+    }
+
     /// A tiny request, to check the settings work.
     pub fn test(&self) -> AppResult<String> {
         let req = AskRequest {
@@ -388,7 +393,128 @@ fn error_text(code: u16, body: &str) -> String {
     if detail.is_empty() { format!("{what} ({code}).") } else { format!("{what} ({code}): {detail}") }
 }
 
-pub fn ask(s: &AiSettings, req: &AskRequest) -> AppResult<String> {
+/// Hides a reasoning model's <think>…</think> from text that arrives in pieces.
+#[derive(Default)]
+pub struct ThinkFilter {
+    inside: bool,
+    held: String,
+}
+
+impl ThinkFilter {
+    /// The part of `piece` to show (a tag split across pieces is held back until whole).
+    pub fn push(&mut self, piece: &str) -> String {
+        self.held.push_str(piece);
+        let mut out = String::new();
+        loop {
+            let tag = if self.inside { "</think>" } else { "<think>" };
+            if let Some(i) = self.held.find(tag) {
+                if !self.inside {
+                    out.push_str(&self.held[..i]);
+                }
+                self.held = self.held[i + tag.len()..].to_string();
+                self.inside = !self.inside;
+                continue;
+            }
+            // Keep what could be the start of the tag; the rest is settled.
+            let keep = (1..tag.len()).rev().find(|&n| self.held.ends_with(&tag[..n])).unwrap_or(0);
+            let cut = self.held.len() - keep;
+            if !self.inside {
+                out.push_str(&self.held[..cut]);
+            }
+            self.held = self.held[cut..].to_string();
+            return out;
+        }
+    }
+    /// What's left at the end.
+    pub fn finish(&mut self) -> String {
+        if self.inside { String::new() } else { std::mem::take(&mut self.held) }
+    }
+}
+
+/// One server-sent event's data, read from a streamed answer: its text, or the end.
+enum Piece {
+    Text(String),
+    Done,
+    Nothing,
+}
+
+fn anthropic_piece(v: &Value) -> AppResult<Piece> {
+    match v.get("type").and_then(Value::as_str) {
+        Some("content_block_delta") if v.pointer("/delta/type").and_then(Value::as_str) == Some("text_delta") => {
+            Ok(Piece::Text(v.pointer("/delta/text").and_then(Value::as_str).unwrap_or("").to_string()))
+        }
+        Some("message_delta") if v.pointer("/delta/stop_reason").and_then(Value::as_str) == Some("refusal") => {
+            Err(AppError::Invalid("The model declined to answer that.".into()))
+        }
+        Some("message_stop") => Ok(Piece::Done),
+        Some("error") => Err(AppError::Invalid(format!(
+            "The AI service had a problem: {}",
+            v.pointer("/error/message").and_then(Value::as_str).unwrap_or("unknown error")
+        ))),
+        _ => Ok(Piece::Nothing),
+    }
+}
+
+fn openai_piece(v: &Value) -> AppResult<Piece> {
+    if let Some(e) = v.get("error") {
+        return Err(AppError::Invalid(format!("The AI service had a problem: {}", e.get("message").and_then(Value::as_str).unwrap_or("unknown error"))));
+    }
+    Ok(match v.pointer("/choices/0/delta/content").and_then(Value::as_str) {
+        Some(t) => Piece::Text(t.to_string()),
+        None => Piece::Nothing,
+    })
+}
+
+/// Asks with the answer streamed: `on` gets each new piece of text as it
+/// arrives (returning false stops). The whole answer comes back at the end.
+/// Servers that don't stream are read whole (one piece).
+pub fn ask_stream(s: &AiSettings, req: &AskRequest, on: &mut dyn FnMut(&str) -> bool) -> AppResult<String> {
+    use std::io::BufRead;
+    let resp = send(s, req, true)?;
+    let anthropic = s.provider == "anthropic";
+    if !resp.content_type().contains("event-stream") {
+        // Not streamed after all: the whole answer at once.
+        let v: Value = serde_json::from_str(&resp.into_string()?).map_err(|_| AppError::Invalid("The AI server's answer wasn't understood.".into()))?;
+        let text = if anthropic { anthropic_text(&v)? } else { openai_text(&v)? };
+        on(&text);
+        return Ok(text);
+    }
+    let mut all = String::new();
+    let mut think = ThinkFilter::default();
+    let reader = std::io::BufReader::new(resp.into_reader());
+    for line in reader.lines() {
+        let line = line.map_err(|e| AppError::Invalid(format!("The answer was cut off: {e}")))?;
+        let Some(data) = line.strip_prefix("data:") else { continue };
+        let data = data.trim();
+        if data == "[DONE]" {
+            break;
+        }
+        let Ok(v) = serde_json::from_str::<Value>(data) else { continue };
+        let piece = if anthropic { anthropic_piece(&v)? } else { openai_piece(&v)? };
+        match piece {
+            Piece::Text(t) => {
+                let shown = think.push(&t);
+                if !shown.is_empty() {
+                    all.push_str(&shown);
+                    if !on(&shown) {
+                        return Ok(all);
+                    }
+                }
+            }
+            Piece::Done => break,
+            Piece::Nothing => {}
+        }
+    }
+    let rest = think.finish();
+    if !rest.is_empty() {
+        all.push_str(&rest);
+        on(&rest);
+    }
+    Ok(all.trim().to_string())
+}
+
+/// Sends the request (streamed or not); the server's response, or a readable error.
+fn send(s: &AiSettings, req: &AskRequest, stream: bool) -> AppResult<ureq::Response> {
     let problem = s.problem();
     if !problem.is_empty() {
         return Err(AppError::Invalid(problem));
@@ -400,7 +526,7 @@ pub fn ask(s: &AiSettings, req: &AskRequest) -> AppResult<String> {
     let model = s.model_name();
     let local = is_local(&url);
     let agent = agent(local);
-    let (request, body) = if s.provider == "anthropic" {
+    let (request, mut body) = if s.provider == "anthropic" {
         let official = s.base_url.trim().is_empty();
         let mut r = agent
             .post(&format!("{url}/v1/messages"))
@@ -418,20 +544,25 @@ pub fn ask(s: &AiSettings, req: &AskRequest) -> AppResult<String> {
         }
         (r, openai_body(&s.provider, &model, req))
     };
-    let resp = match request.send_string(&body.to_string()) {
-        Ok(r) => r,
+    if stream {
+        body["stream"] = json!(true);
+    }
+    match request.send_string(&body.to_string()) {
+        Ok(r) => Ok(r),
         Err(ureq::Error::Status(code, resp)) => {
             let text = resp.into_string().unwrap_or_default();
-            return Err(AppError::Invalid(error_text(code, &text)));
+            Err(AppError::Invalid(error_text(code, &text)))
         }
-        Err(ureq::Error::Transport(t)) => {
-            return Err(AppError::Invalid(if local {
-                format!("Couldn't reach the local AI server at {url}. Is it running? ({t})")
-            } else {
-                format!("Couldn't reach the AI service; check the internet connection. ({t})")
-            }))
-        }
-    };
+        Err(ureq::Error::Transport(t)) => Err(AppError::Invalid(if local {
+            format!("Couldn't reach the local AI server at {url}. Is it running? ({t})")
+        } else {
+            format!("Couldn't reach the AI service; check the internet connection. ({t})")
+        })),
+    }
+}
+
+pub fn ask(s: &AiSettings, req: &AskRequest) -> AppResult<String> {
+    let resp = send(s, req, false)?;
     let v: Value = serde_json::from_str(&resp.into_string()?).map_err(|_| AppError::Invalid("The AI server's answer wasn't understood.".into()))?;
     if s.provider == "anthropic" { anthropic_text(&v) } else { openai_text(&v) }
 }
@@ -477,6 +608,27 @@ mod tests {
         assert!(anthropic_text(&json!({ "stop_reason": "refusal", "content": [] })).is_err());
         let o = json!({ "choices": [{ "message": { "content": "<think>hmm</think>Hi" } }] });
         assert_eq!(openai_text(&o).unwrap(), "Hi");
+    }
+
+    #[test]
+    fn thinking_is_hidden_even_split_across_pieces() {
+        let mut f = ThinkFilter::default();
+        let mut out = String::new();
+        for p in ["Hel", "lo <thi", "nk>secret", " stuff</th", "ink> world", " <", "b>"] {
+            out += &f.push(p);
+        }
+        out += &f.finish();
+        assert_eq!(out, "Hello  world <b>");
+    }
+
+    #[test]
+    fn streamed_pieces_are_read() {
+        let d = json!({ "type": "content_block_delta", "index": 0, "delta": { "type": "text_delta", "text": "Hi" } });
+        assert!(matches!(anthropic_piece(&d).unwrap(), Piece::Text(t) if t == "Hi"));
+        let r = json!({ "type": "message_delta", "delta": { "stop_reason": "refusal" } });
+        assert!(anthropic_piece(&r).is_err());
+        let o = json!({ "choices": [{ "delta": { "content": "Yo" } }] });
+        assert!(matches!(openai_piece(&o).unwrap(), Piece::Text(t) if t == "Yo"));
     }
 
     #[test]

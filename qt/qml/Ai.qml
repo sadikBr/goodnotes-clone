@@ -34,6 +34,10 @@ QtObject {
     function ask(system, messages, quick, cb) {
         InkleafCore.callAsync("aiAsk", { request: { system: system, messages: messages, quick: !!quick } }, (r, err) => cb(err ? "" : String(r || ""), err || ""))
     }
+    /// Asks with the answer streamed: onText(piece) as it's written, then onDone(answer, error). Returns an id for InkleafCore.cancelAsk.
+    function askStream(system, messages, onText, onDone) {
+        return InkleafCore.askStream({ system: system, messages: messages, quick: false }, onText, onDone)
+    }
     function test(cb) {
         InkleafCore.callAsync("aiTest", {}, (r, err) => cb(err ? "" : String(r || ""), err || ""))
     }
