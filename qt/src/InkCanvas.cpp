@@ -1602,6 +1602,7 @@ void InkCanvas::press(QPointF s, float pressure, bool stylus, const QString& too
     emit cellEditRequested(m_ed->takeCellRequest());
   }
   m_rubbing = tool == "eraser";
+  setWriting(m_g.kind == Gesture::Draw || m_g.kind == Gesture::Core);
   setHover(s);
   afterCore();
 }
@@ -1666,6 +1667,7 @@ void InkCanvas::setHover(QPointF p) {
 }
 
 void InkCanvas::release() {
+  setWriting(false);
   const Gesture::Kind k = m_g.kind;
   if (m_rubbing) {
     m_rubbing = false;

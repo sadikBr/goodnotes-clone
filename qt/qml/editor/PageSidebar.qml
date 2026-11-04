@@ -16,24 +16,49 @@ Rectangle {
     clip: true
 
     PopupMenu { id: menu }
+    /// Only bookmarked pages in the list.
+    property bool onlyBookmarks: false
+    readonly property int bookmarks: root.canvas.pages.filter(p => !!p.favourite).length
 
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
+        // "Pages 21", and a button that shows only the bookmarked ones.
         RowLayout {
             Layout.fillWidth: true
-            Layout.topMargin: 14
+            Layout.topMargin: 10
             Layout.leftMargin: 16
-            Layout.rightMargin: 16
-            Layout.bottomMargin: 6
-            Label { text: "PAGES"; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 0.7; color: Theme.muted; Layout.fillWidth: true }
-            Rectangle { antialiasing: true;
+            Layout.rightMargin: 8
+            Layout.bottomMargin: 4
+            spacing: 6
+            Label { text: root.onlyBookmarks ? "Bookmarks" : "Pages"; font.pixelSize: 13; font.weight: Font.DemiBold; color: Theme.text }
+            Rectangle {
+                antialiasing: true
                 Layout.preferredHeight: 18
-                Layout.preferredWidth: countLabel.implicitWidth + 14
+                Layout.preferredWidth: countLabel.implicitWidth + 12
                 radius: 9
                 color: Theme.surface2
-                Label { id: countLabel; anchors.centerIn: parent; text: root.canvas.pageCount; font.pixelSize: 11; font.weight: Font.Bold; color: Theme.muted }
+                Label { id: countLabel; anchors.centerIn: parent; text: root.onlyBookmarks ? root.bookmarks : root.canvas.pageCount; font.pixelSize: 11; font.weight: Font.Bold; color: Theme.muted }
             }
+            Item { Layout.fillWidth: true }
+            IconButton {
+                iconName: "bookmark"
+                iconSize: 16
+                implicitWidth: 30; implicitHeight: 30
+                active: root.onlyBookmarks
+                tip: root.onlyBookmarks ? "Show all pages" : "Show only bookmarked pages"
+                onClicked: root.onlyBookmarks = !root.onlyBookmarks
+            }
+        }
+        Label {
+            visible: root.onlyBookmarks && root.bookmarks === 0
+            text: "No bookmarks yet. Choose “Bookmark page” in a page's ⋯ menu to keep it here."
+            color: Theme.muted
+            font.pixelSize: 12
+            wrapMode: Text.Wrap
+            horizontalAlignment: Text.AlignHCenter
+            Layout.fillWidth: true
+            Layout.margins: 16
         }
         ListView {
             id: list
@@ -42,7 +67,7 @@ Rectangle {
             clip: true
             topMargin: 8
             bottomMargin: 8
-            spacing: 16
+            spacing: 0
             model: root.canvas.pages
             ScrollBar.vertical: ScrollBar {}
             currentIndex: root.canvas.currentPage
@@ -55,7 +80,8 @@ Rectangle {
                 // A daftar's list has a heading where each class's section starts.
                 readonly property string section: root.daftar && modelData.section && modelData.section !== ((root.canvas.pages[index - 1] || {}).section) ? modelData.section : ""
                 width: list.width
-                height: thumb.height + 24 + thumb.y
+                visible: !root.onlyBookmarks || !!modelData.favourite
+                height: visible ? thumb.height + 24 + thumb.y + 16 : 0
                 HoverHandler { id: hover }
                 Rectangle { antialiasing: true;
                     visible: cell.section !== ""

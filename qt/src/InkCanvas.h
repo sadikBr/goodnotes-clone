@@ -75,6 +75,9 @@ class InkCanvas : public QQuickItem {
   /// The pointer over the canvas (-1, -1 when away), and whether it's erasing now (eraser tool or the pen's eraser end).
   Q_PROPERTY(QPointF pointer READ pointer NOTIFY pointerChanged)
   Q_PROPERTY(bool rubbing READ rubbing NOTIFY pointerChanged)
+  /// Writing, erasing or selecting on the page right now (the zoom bar
+  /// fades meanwhile).
+  Q_PROPERTY(bool writing READ writing NOTIFY writingChanged)
   Q_PROPERTY(int pageCount READ pageCount NOTIFY pagesChanged)
   Q_PROPERTY(int currentPage READ currentPage NOTIFY viewChanged)
   Q_PROPERTY(int activePage READ activePage NOTIFY selectionChanged)
@@ -121,6 +124,7 @@ public:
   void setPenCursor(const QString& c);
   qreal zoom() const { return m_zoom; }
   QPointF pointer() const { return m_hover; }
+  bool writing() const { return m_writing; }
   bool rubbing() const { return m_rubbing; }
   int pageCount() const { return int(m_pages.size()); }
   int currentPage() const;
@@ -269,6 +273,7 @@ signals:
   void fingerTapped(bool redo);
   /// The text tool tapped a table: type in this cell ({ id, row, col }).
   void cellEditRequested(const QVariantMap& cell);
+  void writingChanged();
 
 protected:
   QSGNode* updatePaintNode(QSGNode* old, UpdatePaintNodeData*) override;
@@ -423,6 +428,12 @@ private:
     bool waiting = false;
   } m_pendingMove;
   void flushPendingMove();
+  bool m_writing = false;
+  void setWriting(bool on) {
+    if (on == m_writing) return;
+    m_writing = on;
+    emit writingChanged();
+  }
   QVariantMap m_instrument;
   double m_instrumentRev = -1;
 

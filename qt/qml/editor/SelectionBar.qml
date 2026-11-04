@@ -219,32 +219,48 @@ Item {
         }
         Rectangle { visible: (root.s.texts || 0) > 0; Layout.preferredWidth: 1; Layout.preferredHeight: 22; color: Theme.border }
 
-        // Colours (not for a graph alone: each curve has its own).
-        Repeater {
-            model: root.s.graph ? [] : root.inkColors
-            delegate: AbstractButton {
-                required property string modelData
-                implicitWidth: 22; implicitHeight: 22
-                hoverEnabled: true
-                scale: hovered ? 1.1 : 1
-                onClicked: root.canvas.recolorSelection(modelData)
-                background: Rectangle { antialiasing: true; radius: 11; color: parent.modelData; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4) }
-            }
-        }
+        // Colour: one button showing the selection's colour (a rainbow when
+        // mixed), the palette in a popover. Not for a graph alone (each
+        // curve has its own).
         AbstractButton {
-            id: custom
+            id: colorBtn
             visible: !root.s.graph
-            implicitWidth: 22; implicitHeight: 22
+            implicitWidth: colorRow.implicitWidth + 12
+            implicitHeight: 30
             hoverEnabled: true
-            onClicked: colorPop.show(custom, ["#111827", "#374151", "#6b7280", "#9ca3af", "#ffffff", "#7c2d12", "#1e3a8a", "#2563eb", "#0891b2", "#0d9488", "#16a34a", "#65a30d", "#ca8a04", "#ea580c", "#dc2626", "#be123c", "#db2777", "#9333ea"], root.s.color || "#111827", c => root.canvas.recolorSelection(c))
-            background: Image {
-                sourceSize: Qt.size(44, 44)
-                source: "data:image/svg+xml;utf8," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 12L12 0A12 12 0 0 1 22.4 6Z' fill='#ef4444'/><path d='M12 12L22.4 6A12 12 0 0 1 22.4 18Z' fill='#eab308'/><path d='M12 12L22.4 18A12 12 0 0 1 12 24Z' fill='#22c55e'/><path d='M12 12L12 24A12 12 0 0 1 1.6 18Z' fill='#06b6d4'/><path d='M12 12L1.6 18A12 12 0 0 1 1.6 6Z' fill='#3b82f6'/><path d='M12 12L1.6 6A12 12 0 0 1 12 0Z' fill='#a855f7'/><circle cx='12' cy='12' r='5' fill='white'/></svg>")
+            ToolTip.visible: hovered && !colorPop.opened
+            ToolTip.delay: 500
+            ToolTip.text: "Colour"
+            onClicked: colorPop.show(colorBtn, root.inkColors.concat(["#374151", "#6b7280", "#ffffff", "#7c2d12", "#1e3a8a", "#0891b2", "#0d9488", "#65a30d", "#ca8a04", "#be123c", "#db2777"]), root.s.color || "#111827", c => root.canvas.recolorSelection(c))
+            background: Rectangle { antialiasing: true; radius: 8; color: colorBtn.hovered || colorPop.opened ? Theme.surface2 : "transparent" }
+            contentItem: RowLayout {
+                id: colorRow
+                spacing: 4
+                Item {
+                    Layout.leftMargin: 6
+                    Layout.preferredWidth: 20; Layout.preferredHeight: 20
+                    Rectangle { visible: !!root.s.color; anchors.fill: parent; antialiasing: true; radius: 10; color: root.s.color || "transparent"; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.45) }
+                    Image {
+                        visible: !root.s.color
+                        anchors.fill: parent
+                        sourceSize: Qt.size(40, 40)
+                        source: "data:image/svg+xml;utf8," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 12L12 0A12 12 0 0 1 22.4 6Z' fill='#ef4444'/><path d='M12 12L22.4 6A12 12 0 0 1 22.4 18Z' fill='#eab308'/><path d='M12 12L22.4 18A12 12 0 0 1 12 24Z' fill='#22c55e'/><path d='M12 12L12 24A12 12 0 0 1 1.6 18Z' fill='#06b6d4'/><path d='M12 12L1.6 18A12 12 0 0 1 1.6 6Z' fill='#3b82f6'/><path d='M12 12L1.6 6A12 12 0 0 1 12 0Z' fill='#a855f7'/></svg>")
+                    }
+                }
+                Icon { name: "down"; size: 12; color: Theme.muted; Layout.rightMargin: 4 }
             }
         }
         Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 22; color: Theme.border }
-        SmallTool { iconName: "stack"; tip: "Save to my pieces (to use on any page)"; onClicked: root.savePieceRequested() }
-        SmallTool { iconName: "copy"; tip: "Duplicate (Ctrl+D)"; onClicked: root.canvas.duplicateSelection() }
+        SmallTool {
+            id: moreBtn
+            iconName: "more"
+            tip: "More"
+            onClicked: menu.show(moreBtn, [
+                { icon: "copy", label: "Duplicate", key: "Ctrl+D", action: () => root.canvas.duplicateSelection() },
+                { icon: "page", label: "Copy", key: "Ctrl+C", action: () => root.canvas.copySelection() },
+                { icon: "stack", label: "Save to my pieces", action: () => root.savePieceRequested() }
+            ], 240)
+        }
         SmallTool { iconName: "trash"; tip: "Delete"; onClicked: root.canvas.deleteSelection() }
     }
 }

@@ -12,6 +12,11 @@ section here before it can be published (`scripts/check-version.py`).
 - **New** on the shelf offers a notebook, a daftar, PDFs or a folder in one tap.
 - **Undo** right in the message when you move something to the trash; messages show what happened with an icon.
 - **Empty pages** of the library (favourites, a folder, no search results) say what to do next.
+- **Selection bar** is half as wide: one colour button, and duplicate, copy and *Save to my pieces* under ⋯.
+- **Daftar** controls (class, new lesson, outline, menu) sit together in one group.
+- **Pages** list: show only bookmarked pages.
+- **Ask** opens with clear suggestions and shows which AI answers.
+- **Zoom bar** fades while you write, so it doesn't cover the page.
 
 ## 0.13.0
 

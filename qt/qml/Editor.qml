@@ -114,24 +114,26 @@ Rectangle {
     function outlineMenu(anchor) {
         const mine = customOutlines()
         const builtIn = DaftarApi.outlines()
-        menu.show(anchor, builtIn.concat(mine).map(o => ({ label: o.name, action: () => root.insertOutline(o.lines) })).concat([
-            { label: "Write my own outline…", action: () => daftarUi.askOutline(o => {
+        menu.show(anchor, [{ header: "LESSON OUTLINE" }].concat(builtIn.concat(mine).map(o => ({ icon: "listNumber", label: o.name, action: () => root.insertOutline(o.lines) }))).concat([
+            { separator: true },
+            { icon: "pen", label: "Write my own outline…", action: () => daftarUi.askOutline(o => {
                 prefs.store.daftarOutlines = JSON.stringify(root.customOutlines().concat([o]).slice(-12))
                 root.insertOutline(o.lines)
             }) }
-        ]).concat(mine.length ? [{ label: "Remove my outlines", danger: true, action: () => { prefs.store.daftarOutlines = "[]"; root.notify("Your outlines were removed", false) } }] : []))
+        ]).concat(mine.length ? [{ icon: "trash", label: "Remove my outlines", danger: true, action: () => { prefs.store.daftarOutlines = "[]"; root.notify("Your outlines were removed", false) } }] : []))
     }
     function daftarMenu(anchor) {
         menu.show(anchor, [
-            { label: "لائحة التلاميذ · Paste the student list…", action: () => daftarUi.askStudents(daftar, daftarClass, (cls, text) => canvas.daftar("pasteStudents", [root.notebookId, cls, text])) },
-            { label: "تصدير القسم · Export this class as PDF…", action: () => daftarUi.askExport(daftar, daftarClass, (cls, term) => {
+            { icon: "listBullet", label: "لائحة التلاميذ · Paste the student list…", action: () => daftarUi.askStudents(daftar, daftarClass, (cls, text) => canvas.daftar("pasteStudents", [root.notebookId, cls, text])) },
+            { icon: "pdf", label: "تصدير القسم · Export this class as PDF…", action: () => daftarUi.askExport(daftar, daftarClass, (cls, term) => {
                 canvas.finishEdit()
                 canvas.flush()
                 const r = canvas.daftarQuery("exportPages", [daftar, cls, term])
                 if (!r) return root.notify("No lessons in that period for this class", true)
                 exporter.runPages(r.pages, r.name)
             }) },
-            { label: "إعدادات الدفتر · Daftar settings…", action: () => {
+            { separator: true },
+            { icon: "gear", label: "إعدادات الدفتر · Daftar settings…", action: () => {
                 canvas.finishEdit()
                 canvas.flush()
                 daftarUi.askSettings({ id: root.notebookId, title: root.title }, daftar, () => {
@@ -198,13 +200,12 @@ Rectangle {
                         contentItem: Label { id: titleLabel; text: root.title; font.pixelSize: 15; font.weight: Font.DemiBold; color: Theme.text; elide: Text.ElideRight; horizontalAlignment: Text.AlignLeft; leftPadding: 8; rightPadding: 8; verticalAlignment: Text.AlignVCenter }
                     }
                     // A daftar's class (switches section), New lesson, outline and its menu.
-                    RowLayout {
+                    Pill {
                         visible: !!root.daftar
                         Layout.leftMargin: 6
-                        spacing: 6
                         AbstractButton {
                             id: classChip
-                            implicitHeight: 32
+                            implicitHeight: 34
                             implicitWidth: classRow.implicitWidth + 18
                             hoverEnabled: true
                             ToolTip.visible: !!(hovered) && !tipDismissed
@@ -215,7 +216,7 @@ Rectangle {
                             ToolTip.text: "Switch class · القسم"
                             ToolTip.delay: 500
                             onClicked: menu.show(classChip, (root.daftar ? root.daftar.classes : []).map(c => ({ label: c, checked: c === root.daftarClass, action: () => canvas.daftar("goToClass", [c]) })))
-                            background: Rectangle { antialiasing: true; radius: 10; color: classChip.hovered ? Theme.surface2 : Theme.surface; border.color: Theme.border }
+                            background: Rectangle { antialiasing: true; radius: 10; color: classChip.hovered ? Theme.surface3 : "transparent" }
                             contentItem: Item {
                                 RowLayout {
                                     id: classRow
@@ -230,7 +231,7 @@ Rectangle {
                         }
                         AbstractButton {
                             id: lessonBtn
-                            implicitHeight: 32
+                            implicitHeight: 34
                             implicitWidth: lessonRow.implicitWidth + 24
                             hoverEnabled: true
                             ToolTip.visible: !!(hovered) && !tipDismissed
@@ -253,8 +254,8 @@ Rectangle {
                                 }
                             }
                         }
-                        IconButton { id: outlineBtn; iconName: "page"; tip: "Write a lesson outline (النشاط 1، النشاط 2…) on the lesson's lines"; implicitWidth: 34; implicitHeight: 34; onClicked: root.outlineMenu(outlineBtn) }
-                        IconButton { id: daftarMore; iconName: "more"; tip: "Student list, class export, daftar settings"; implicitWidth: 34; implicitHeight: 34; onClicked: root.daftarMenu(daftarMore) }
+                        IconButton { id: outlineBtn; iconName: "listNumber"; tip: "Lesson outline (النشاط 1، النشاط 2…) on the lesson's lines"; implicitWidth: 34; implicitHeight: 34; iconSize: 18; onClicked: root.outlineMenu(outlineBtn) }
+                        IconButton { id: daftarMore; iconName: "more"; tip: "Student list, class export, daftar settings"; implicitWidth: 34; implicitHeight: 34; iconSize: 18; onClicked: root.daftarMenu(daftarMore) }
                     }
                     Rectangle { antialiasing: true;
                         visible: !!(root.width > 1100 && !root.daftar)
@@ -586,12 +587,26 @@ Rectangle {
                     Behavior on x { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
                 }
 
-                // Page and zoom controls.
+                // Page and zoom controls (faded out while you write, back a
+                // moment after).
                 Item {
+                    id: zoomBar
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
                     anchors.margins: 16
                     z: 8
+                    property bool quiet: false
+                    opacity: quiet ? 0.12 : 1
+                    Behavior on opacity { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+                    Timer { id: zoomBack; interval: 900; onTriggered: zoomBar.quiet = false }
+                    Connections {
+                        target: canvas
+                        function onWritingChanged() {
+                            if (canvas.writing) { zoomBack.stop(); zoomBar.quiet = true }
+                            else zoomBack.restart()
+                        }
+                    }
+                    HoverHandler { onHoveredChanged: if (hovered) { zoomBack.stop(); zoomBar.quiet = false } }
                     width: status.implicitWidth + 10
                     height: 40
                     Shadow { anchors.fill: parent; radius: 20; level: 2 }

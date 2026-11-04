@@ -234,25 +234,70 @@ Popup {
                     border.color: Theme.border
                     Image { id: pic; anchors.fill: parent; anchors.margins: 8; source: root.image; fillMode: Image.PreserveAspectFit; smooth: true; mipmap: true }
                 }
-                Label {
-                    visible: root.count === 0 && root.suggestions.length > 0
-                    text: "Try:"
-                    color: Theme.muted; font.pixelSize: 12
-                    Layout.leftMargin: 18
-                }
-                Flow {
+                // Nothing asked yet: what this can do, the suggestions as
+                // cards, and which AI answers.
+                ColumnLayout {
                     visible: root.count === 0
-                    Layout.leftMargin: 18; Layout.rightMargin: 18
                     Layout.fillWidth: true
-                    spacing: 6
+                    Layout.leftMargin: 18; Layout.rightMargin: 18
+                    Layout.topMargin: root.image.length > 0 ? 0 : 18
+                    spacing: 8
+                    Rectangle {
+                        visible: root.image.length === 0
+                        antialiasing: true
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: 64; Layout.preferredHeight: 64; radius: 32
+                        color: Theme.alpha(Theme.accent, 0.12)
+                        Icon { anchors.centerIn: parent; name: "sparkle"; size: 28; color: Theme.accent }
+                    }
+                    Label {
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.topMargin: 4
+                        text: root.image.length > 0 ? "What about this?" : "What would you like to know?"
+                        font.pixelSize: 16; font.weight: Font.Bold; color: Theme.text
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.Wrap
+                        color: Theme.muted; font.pixelSize: 12; lineHeight: 1.15
+                        text: root.notebookId ? "Answers come from this notebook's typed text" + (Ai.readingOn ? " and handwriting." : ". Turn on “Make handwriting searchable” in Settings → AI for handwriting too.")
+                              : root.useNotes ? "Answers come from your library's typed text" + (Ai.readingOn ? " and handwriting (locked notebooks are left out)." : ". Turn on “Make handwriting searchable” in Settings → AI for handwriting too.")
+                              : "Ask anything about it."
+                    }
+                    // Which AI answers.
+                    Rectangle {
+                        antialiasing: true
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.topMargin: 2
+                        Layout.preferredHeight: 24
+                        Layout.preferredWidth: Math.min(list.width - 36, aiLabel.implicitWidth + 20)
+                        radius: 12
+                        color: Theme.surface2
+                        border.color: Theme.border
+                        Label {
+                            id: aiLabel
+                            anchors.centerIn: parent
+                            width: Math.min(implicitWidth, parent.width - 16)
+                            elide: Text.ElideRight
+                            font.pixelSize: 11
+                            color: Theme.muted
+                            text: {
+                                const st = Ai.status || {}
+                                const names = { anthropic: "Claude", openai: "ChatGPT", gemini: "Gemini", ollama: "Ollama", custom: "Your AI server" }
+                                return (names[st.provider] || "AI") + (st.effectiveModel ? " · " + st.effectiveModel : "") + (Ai.local ? " · on this computer" : "")
+                            }
+                        }
+                    }
+                    Item { Layout.preferredHeight: 6 }
                     Repeater {
                         model: root.suggestions
                         delegate: AbstractButton {
                             id: chip
                             required property var modelData
+                            Layout.fillWidth: true
                             hoverEnabled: true
-                            implicitHeight: 32
-                            implicitWidth: Math.min(list.width - 36, chipLabel.implicitWidth + 24)
+                            implicitHeight: 42
                             onClicked: {
                                 // A picture to go with it (the page), worked out when asked.
                                 if (modelData.attach) root.image = modelData.attach() || ""
@@ -264,18 +309,20 @@ Popup {
                                     root.send(modelData.prompt)
                                 }
                             }
-                            background: Rectangle { antialiasing: true; radius: 16; color: chip.hovered ? Theme.alpha(Theme.accent, 0.12) : Theme.surface2; border.color: chip.hovered ? Theme.accent : Theme.border }
-                            contentItem: Label { id: chipLabel; text: chip.modelData.label; color: Theme.text; font.pixelSize: 13; elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            background: Rectangle {
+                                antialiasing: true
+                                radius: 12
+                                color: chip.pressed ? Theme.alpha(Theme.accent, 0.16) : chip.hovered ? Theme.alpha(Theme.accent, 0.08) : Theme.surface2
+                                border.color: chip.hovered ? Theme.accent : Theme.border
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                            }
+                            contentItem: RowLayout {
+                                spacing: 8
+                                Label { id: chipLabel; text: chip.modelData.label; color: Theme.text; font.pixelSize: 13; elide: Text.ElideRight; Layout.fillWidth: true; Layout.leftMargin: 14 }
+                                Icon { name: chip.modelData.fill ? "pen" : "send"; size: 15; color: chip.hovered ? Theme.accent : Theme.muted; Layout.rightMargin: 12 }
+                            }
                         }
                     }
-                }
-                Label {
-                    visible: root.count === 0
-                    text: root.notebookId ? "Answers use this notebook's typed text" + (Ai.readingOn ? " and handwriting." : ". Turn on “Make handwriting searchable” in Settings → AI to include handwriting.")
-                                          : root.useNotes ? "Answers use your library's typed text" + (Ai.readingOn ? " and handwriting (locked notebooks are left out)." : ". Turn on “Make handwriting searchable” in Settings → AI to include handwriting.") : ""
-                    color: Theme.muted; font.pixelSize: 12; wrapMode: Text.Wrap
-                    Layout.leftMargin: 18; Layout.rightMargin: 18
-                    Layout.fillWidth: true
                 }
             }
             delegate: Item {
