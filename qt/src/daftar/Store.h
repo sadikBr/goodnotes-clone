@@ -18,6 +18,8 @@ struct StoreError : std::runtime_error {
 };
 
 QJsonObject createNotebook(const QJsonObject& input);
+/// The library: { notebooks, folders, … } (as the "library" command gives it).
+QJsonObject library();
 QJsonObject notebook(const QString& id);
 QJsonArray pages(const QString& notebookId);
 QJsonObject addPage(const QString& notebookId, int index, const QString& tmpl);

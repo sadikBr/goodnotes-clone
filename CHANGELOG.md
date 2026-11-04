@@ -5,6 +5,13 @@ Updates → What's new) and on its GitHub release. Keep them short, one line
 per change, written for the people using Inkleaf. A release needs its
 section here before it can be published (`scripts/check-version.py`).
 
+## 0.15.0
+
+- **Lesson plan · جذاذة:** a ready sheet (details, objectives, materials, the lesson's stages) in Arabic or French, filled in from your daftar.
+- **Test · فرض:** the school's header, the student's line and your exercises with room to answer.
+- **Class register · سجل:** your class's students from the daftar, attendance pages and a marks table whose averages work themselves out.
+- **Sketchbook:** blank landscape pages for drawing.
+
 ## 0.14.0
 
 - **Settings** shows one section at a time (Pen & touch, AI, Sync & backups, Appearance, Updates), in tidy groups.

@@ -326,7 +326,11 @@ Rectangle {
             { id: "notebook", icon: "book", title: "Notebook", sub: "Cover, paper and page size", key: "N", action: () => newNotebook(fid) },
             { id: "daftar", icon: "docs", title: "Daftar annossous", sub: "Lesson log for your classes", tint: "#7c3aed", action: () => daftarUi.askNew(fid, nb => root.openRequested(nb.id, nb.title)) },
             { id: "pdf", icon: "page", title: "Import PDFs", sub: "One or several, to write on", tint: "#dc2626", action: () => { pdfDialog.folder = fid; pdfDialog.open() } },
-            { id: "folder", icon: "folder", title: "Folder", sub: "Group your documents", tint: "#ca8a04", iconColor: "#b45309", action: () => newFolder(fid) }
+            { id: "folder", icon: "folder", title: "Folder", sub: "Group your documents", tint: "#ca8a04", iconColor: "#b45309", action: () => newFolder(fid) },
+            { id: "sketchbook", icon: "brush", title: "Sketchbook", sub: "Blank pages for drawing", tint: "#db2777", action: () => newNotebook(fid, { heading: "New sketchbook", title: "Untitled sketchbook", template: "blank", orientation: "landscape", paper: "#ffffff", cover: "#111827", design: "minimal" }) },
+            { id: "lesson", icon: "listNumber", title: "Lesson plan · جذاذة", sub: "Objectives, stages, activities", tint: "#0d9488", action: () => newDocDialog.show("lesson", fid) },
+            { id: "test", icon: "pen", title: "Test · فرض", sub: "Header, exercises, room to answer", tint: "#dc2626", action: () => newDocDialog.show("test", fid) },
+            { id: "register", icon: "table", title: "Class register · سجل", sub: "Attendance and marks, with averages", tint: "#2563eb", action: () => newDocDialog.show("register", fid) }
         ]
     }
     readonly property var templates: [
@@ -344,6 +348,11 @@ Rectangle {
     function newNotebook(fid, preset) {
         newNbDialog.folder = fid
         newNbDialog.show(preset)
+    }
+    NewDocumentDialog {
+        id: newDocDialog
+        onCreated: nb => root.openRequested(nb.id, nb.title)
+        onFailed: m => root.notify(m, true)
     }
     NewNotebookDialog {
         id: newNbDialog
@@ -998,6 +1007,7 @@ Rectangle {
                         visible: cell.modelData.type === "new"
                         width: parent.width - 28
                         options: root.createOptions()
+                        onMoreRequested: (anchor, list) => createMenu.show(anchor, list)
                     }
                     Card {
                         visible: cell.modelData.type !== "new"

@@ -13,7 +13,7 @@ math(EXPR INKLEAF_VERSION_CODE "${PROJECT_VERSION_MAJOR} * 10000 + ${PROJECT_VER
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/src/daftar ${CMAKE_CURRENT_SOURCE_DIR}/src/math)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/src/daftar ${CMAKE_CURRENT_SOURCE_DIR}/src/math ${CMAKE_CURRENT_SOURCE_DIR}/src/docs)
 
 find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Network Quick QuickControls2 Svg)
 # Qt PDF draws imported PDFs; where it isn't shipped (Android) the system's
@@ -98,6 +98,7 @@ qt_add_executable(inkleaf
   src/daftar/Store.h src/daftar/Store.cpp
   src/daftar/Daftar.h src/daftar/Daftar.cpp
   src/daftar/Cover.h src/daftar/Cover.cpp
+  src/docs/DocKinds.h src/docs/DocKinds.cpp
   src/daftar/DaftarApi.h src/daftar/DaftarApi.cpp
   src/daftar/DaftarEditor.h src/daftar/DaftarEditor.cpp
   src/tests/SelfTest.h src/tests/SelfTest.cpp
@@ -151,6 +152,7 @@ qt_add_qml_module(inkleaf
     qml/ui/SignInDialog.qml
     qml/ui/UpdateBanner.qml
     qml/ui/NewNotebookDialog.qml
+    qml/ui/NewDocumentDialog.qml
     qml/IconButton.qml
     qml/Icon.qml
     qml/IconData.js

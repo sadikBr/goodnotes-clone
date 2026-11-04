@@ -1536,6 +1536,7 @@ bool EditorCore::setTableCell(const QString& id, int row, int col, const QString
     if (row < 0 || col < 0 || row >= t.rowCount() || col >= t.colCount() || t.cell(row, col) == clean) return false;
     t.setCell(row, col, clean);
     setTableData(el, t);
+    computeAverages(el);
     fitTableRows(el);
     return true;
   });

@@ -2,6 +2,7 @@
 
 #include <QJsonArray>
 #include <QMap>
+#include <QRegularExpression>
 #include <algorithm>
 #include <cmath>
 
@@ -147,6 +148,41 @@ bool changeTable(El& el, const QString& op, int index) {
   }
   setTableData(el, t);
   return true;
+}
+
+bool computeAverages(El& el) {
+  if (!el.extra.contains("average")) return false;
+  const bool rtl = el.extra.value("average").toObject().value("rtl").toBool();
+  TableData t = tableData(el);
+  const int cols = t.colCount();
+  if (cols < 4) return false;
+  // Left to right: N°, name, marks…, average; right to left the other way round.
+  const int avgCol = rtl ? 0 : cols - 1;
+  const int first = rtl ? 1 : 2, last = rtl ? cols - 3 : cols - 2;
+  static const QRegularExpression number(QStringLiteral("^\\s*(\\d+(?:[.,]\\d+)?)\\s*(?:/\\s*\\d+)?\\s*$"));
+  bool changed = false;
+  for (int r = t.header ? 1 : 0; r < t.rowCount(); ++r) {
+    double sum = 0;
+    int n = 0;
+    for (int c = first; c <= last; ++c) {
+      const auto m = number.match(t.cell(r, c));
+      if (!m.hasMatch()) continue;
+      sum += m.captured(1).replace(',', '.').toDouble();
+      ++n;
+    }
+    QString avg;
+    if (n > 0) {
+      const double v = std::round(sum / n * 100) / 100;
+      avg = QString::number(v, 'f', v == std::floor(v) ? 0 : 2);
+      if (avg.contains('.')) {
+        while (avg.endsWith('0')) avg.chop(1);
+        avg.replace('.', ',');
+      }
+    }
+    if (t.cell(r, avgCol) != avg) t.setCell(r, avgCol, avg), changed = true;
+  }
+  if (changed) setTableData(el, t);
+  return changed;
 }
 
 // ------------------------------------------------------------ drawn grids

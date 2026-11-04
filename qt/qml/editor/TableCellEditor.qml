@@ -90,6 +90,8 @@ Item {
             selectedTextColor: color
             onActiveFocusChanged: if (!activeFocus && root.active) focusLost.restart()
             Keys.onEscapePressed: root.finish()
+            // Escape and Tab are this field's (not the editor's shortcuts).
+            Keys.onShortcutOverride: ev => { if (ev.key === Qt.Key_Escape || ev.key === Qt.Key_Tab || ev.key === Qt.Key_Backtab) ev.accepted = true }
             Keys.onTabPressed: ev => { root.step(0, 1); ev.accepted = true }
             Keys.onBacktabPressed: ev => { root.step(0, -1); ev.accepted = true }
             Keys.onPressed: ev => {
