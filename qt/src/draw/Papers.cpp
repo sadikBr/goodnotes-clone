@@ -5,6 +5,7 @@
 #include <cmath>
 
 #include "../JsCanvas.h"
+#include "Covers.h"
 #include "Fonts.h"
 
 namespace draw {
@@ -401,8 +402,10 @@ bool drawPaper(JsCanvas& c, const QString& t, double w, double h, const QString&
     drawDailyPlanner(c, w, h, ink);
   } else if (t == "planner-week") {
     drawWeeklyPlanner(c, w, h, ink);
+  } else if (isCoverTemplate(t)) {
+    drawCoverDesign(c, t, w, h, paper);
   } else if (t != "blank") {
-    return false;  // covers and daftar pages
+    return false;  // daftar pages
   }
   return true;
 }

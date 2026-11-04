@@ -72,7 +72,9 @@ read their list from a data file instead of `src/fonts.ts`.
 - [x] 1. Papers (`qt/src/draw/Papers.cpp`, `Fonts.cpp`): 1,033 cases identical. `papers.ts`
   stays until step 6 for the editor's alignment guides (`paperLayout`), which
   then use the C++ one.
-- [ ] 2. Covers
+- [x] 2. Covers (`qt/src/draw/Covers.cpp`): every design in every cover colour, all
+  sizes and orientations: 270 cases identical. `covers.ts` stays for the
+  cover setup (`cover.ts`) until step 7.
 - [ ] 3. Daftar pages
 - [ ] 4. Elements and export
 - [ ] 5. Recognisers and geometry (Rust)

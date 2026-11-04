@@ -81,6 +81,7 @@ qt_add_executable(inkleaf
   src/Js.h src/Js.cpp
   src/draw/Fonts.h src/draw/Fonts.cpp
   src/draw/Papers.h src/draw/Papers.cpp
+  src/draw/Covers.h src/draw/Covers.cpp
   src/CompareRender.h src/CompareRender.cpp
   src/PaperImage.h src/PaperImage.cpp
   src/Pdf.h src/Pdf.cpp

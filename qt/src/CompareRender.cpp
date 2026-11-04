@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "Js.h"
+#include "draw/Covers.h"
 
 namespace {
 
@@ -57,16 +58,33 @@ std::vector<Case> cases() {
   const Size sizes[] = {{"a4", 794, 1123}, {"a5", 559, 794}, {"letter", 816, 1056}, {"legal", 816, 1344}, {"square", 900, 900}};
   const char* colors[] = {"#ffffff", "#fffdf7", "#fdf3c8", "#eef1f4", "#22262d"};
   QJSValue list = js.fn("TEMPLATES");
-  const int n = list.property("length").toInt();
-  for (int k = 0; k < n; ++k) {
-    const QString id = list.property(k).property("id").toString();
-    const bool special = id.startsWith("daftar") || id.startsWith("cover");
+  QStringList ids;
+  for (int k = 0, n = list.property("length").toInt(); k < n; ++k) ids << list.property(k).property("id").toString();
+  // Covers aren't in the paper catalogue.
+  for (const draw::CoverDesign& d : draw::coverDesigns()) ids << d.tmpl;
+  for (const QString& id : ids) {
+    const bool special = id.startsWith("daftar");
+    if (id.startsWith("cover")) {
+      // Every design in every cover colour; all sizes and orientations in two.
+      const char* covers[] = {"#2563eb", "#0d9488", "#16a34a", "#ca8a04", "#ea580c", "#dc2626", "#db2777", "#7c3aed", "#475569", "#111827", "#f5f5f4"};
+      for (const Size& s : sizes)
+        for (int turn = 0; turn < 2; ++turn)
+          for (const char* c : covers) {
+            if ((std::string(s.id) != "a4" || turn) && std::string(c) != "#2563eb" && std::string(c) != "#ca8a04") continue;
+            const double w = turn ? s.h : s.w, h = turn ? s.w : s.h;
+            const QString color = c;
+            out.push_back({QString("%1-%2%3-%4").arg(id, s.id, turn ? "-landscape" : "", color.mid(1)), [=, &js] { return js.paperScript(id, color, w, h, 1.0); },
+                           [=, &js] { return js.paper(id, color, w, h, 1.0); }});
+          }
+      out.push_back({id + "-x2", [=, &js] { return js.paperScript(id, "#7c3aed", 794, 1123, 2.0); }, [=, &js] { return js.paper(id, "#7c3aed", 794, 1123, 2.0); }});
+      continue;
+    }
     for (const Size& s : sizes) {
       for (int turn = 0; turn < 2; ++turn) {
         const double w = turn ? s.h : s.w, h = turn ? s.w : s.h;
         for (const char* c : colors) {
-          // Covers and daftar pages: one size and colour each (they're drawn
-          // by the scripts both ways until their step).
+          // Daftar pages: one size and colour (drawn by the scripts both
+          // ways until their step).
           if (special && (std::string(s.id) != "a4" || turn || std::string(c) != "#ffffff")) continue;
           const QString color = c;
           const QString name = QString("paper-%1-%2%3-%4").arg(id, s.id, turn ? "-landscape" : "", color.mid(1));
