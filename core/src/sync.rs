@@ -1053,6 +1053,27 @@ mod tests {
     }
 
     #[test]
+    fn a_locked_notebook_travels_encrypted_and_opens_with_its_password() {
+        let (pc, tablet, mut drive) = (device(), device(), Mem::default());
+        let nb = notebook(&pc, "Private");
+        write(&pc, &nb, "secret plan");
+        pc.lock_notebook(&nb, "hunter22").unwrap();
+        sync_with(&pc, &mut drive, "PC", None).unwrap();
+        // What Drive holds is encrypted.
+        assert!(drive.files.values().all(|f| !String::from_utf8_lossy(&f.1).contains("secret plan")));
+        sync_with(&tablet, &mut drive, "Tablet", None).unwrap();
+        let page = tablet.pages(&nb).unwrap()[0].id.clone();
+        assert!(tablet.elements(&page).is_err());
+        tablet.unlock("notebook", &nb, "hunter22").unwrap();
+        assert_eq!(texts(&tablet, &nb), vec!["secret plan"]);
+        // Edited on the tablet, still encrypted, back on the PC.
+        write(&tablet, &nb, "new plan");
+        sync_with(&tablet, &mut drive, "Tablet", None).unwrap();
+        sync_with(&pc, &mut drive, "PC", None).unwrap();
+        assert_eq!(texts(&pc, &nb), vec!["new plan"]);
+    }
+
+    #[test]
     fn changes_on_both_sides_keep_both_versions() {
         let (pc, tablet, mut drive) = (device(), device(), Mem::default());
         let nb = notebook(&pc, "Daftar");

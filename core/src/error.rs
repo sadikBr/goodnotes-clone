@@ -8,6 +8,9 @@ pub enum AppError {
     NotFound(String),
     #[error("{0}")]
     Invalid(String),
+    /// Password protected and not unlocked (the app asks for the password).
+    #[error("locked: enter the password first")]
+    Locked,
     #[error("i/o error: {0}")]
     Io(#[from] std::io::Error),
 }

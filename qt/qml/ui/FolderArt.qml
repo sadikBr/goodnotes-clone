@@ -13,6 +13,8 @@ Item {
     property var sheets: []
     property int count: 0
     property bool open: false
+    property bool locked: false
+    property bool unlocked: false
 
     readonly property real backTop: height * 0.40
     readonly property real bottomY: height * 0.92
@@ -107,6 +109,14 @@ Item {
             width: Math.max(22, countLabel.implicitWidth + 14)
             color: Qt.rgba(1, 1, 1, 0.92)
             Label { id: countLabel; anchors.centerIn: parent; text: root.count; font.pixelSize: 12; font.weight: Font.Bold; color: Theme.mix(root.folderColor, "#000000", 0.3) }
+        }
+        // Password protected.
+        Rectangle { antialiasing: true;
+            visible: root.locked
+            anchors.left: parent.left; anchors.bottom: parent.bottom; anchors.leftMargin: 10; anchors.bottomMargin: 9
+            width: 22; height: 22; radius: 11
+            color: Qt.rgba(1, 1, 1, 0.92)
+            Icon { anchors.centerIn: parent; name: root.unlocked ? "unlock" : "lock"; size: 13; color: Theme.mix(root.folderColor, "#000000", 0.3) }
         }
     }
 }

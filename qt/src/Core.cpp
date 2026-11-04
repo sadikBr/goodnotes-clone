@@ -50,7 +50,7 @@ QString libraryDir() {
 
 /// Commands that change what the library shows.
 bool changesLibrary(const QString& cmd) {
-  static const QStringList reads = {"library", "trash", "search", "notebook", "pages", "elements", "assetBytes", "buildDocument", "backupStatus", "syncStatus", "dataDir", "simplifyStroke", "recognizeHandwriting", "inspectBackup"};
+  static const QStringList reads = {"library", "trash", "search", "notebook", "pages", "elements", "assetBytes", "buildDocument", "backupStatus", "syncStatus", "dataDir", "anyUnlocked", "simplifyStroke", "recognizeHandwriting", "inspectBackup"};
   return !reads.contains(cmd) && cmd != "saveElements" && cmd != "setPageThumbnail";
 }
 }  // namespace

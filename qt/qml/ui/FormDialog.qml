@@ -1,7 +1,7 @@
 // A modal form (the web app's formDialog / confirmDialog):
 //   dialog.ask("New folder", [{ name, label, type?, value, options?, colors? }],
 //              "Create", values => ..., { message?, danger?, aside? })
-// Field types: "text" (default), "select", "swatches", "segmented", "covers",
+// Field types: "text" (default), "password", "select", "swatches", "segmented", "covers",
 // "hidden", "custom" (field.component, given `field` and `dialog`).
 // Options: width, twoColumns (fields with `half` share a row), validate
 // (values => error text or null), message, danger, aside.
@@ -158,7 +158,7 @@ Popup {
                                     property var field: row.modelData
                                     property var dialog: root
                                     property bool first: row.index === 0
-                                    sourceComponent: { const t = row.modelData.type || "text"; return t === "custom" ? row.modelData.component : t === "select" ? selectField : t === "swatches" ? swatchField : t === "segmented" ? segField : t === "covers" ? coverField : textField }
+                                    sourceComponent: { const t = row.modelData.type || "text"; return t === "custom" ? row.modelData.component : t === "password" ? textField : t === "select" ? selectField : t === "swatches" ? swatchField : t === "segmented" ? segField : t === "covers" ? coverField : textField }
                                 }
                             }
                         }
@@ -191,6 +191,8 @@ Popup {
         UiField {
             text: root.values[parent.field.name] ?? ""
             placeholderText: parent.field.placeholder || ""
+            echoMode: parent.field.type === "password" ? TextInput.Password : TextInput.Normal
+            inputMethodHints: parent.field.type === "password" ? Qt.ImhSensitiveData | Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase : Qt.ImhNone
             onTextEdited: root.set(parent.field.name, text)
             onAccepted: root.submit()
             Component.onCompleted: if (parent.first) { forceActiveFocus(); selectAll() }

@@ -50,6 +50,8 @@ Item {
             hasCover: !!root.item.hasCover
             title: root.item.title || ""
             favourite: !!root.item.favourite
+            locked: !!root.item.locked
+            unlocked: !!root.item.unlocked
             raised: root.hot && !root.trash
             // Lifted on hover (no tilt: a tilted stack of layers shimmers at the edges).
             transform: Translate { y: root.hot && !root.trash ? -5 : 0; Behavior on y { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } } }
@@ -62,6 +64,8 @@ Item {
                 sheets: root.sheets
                 count: root.count
                 open: root.hot && !root.trash
+                locked: !!root.item.locked
+                unlocked: !!root.item.unlocked
             }
         }
     }

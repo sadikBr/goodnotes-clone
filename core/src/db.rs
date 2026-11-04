@@ -13,8 +13,10 @@ use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::error::{AppError, AppResult};
+use crate::lock::{self, ContentKey, LockInfo};
+use std::collections::HashMap;
 
-const SCHEMA_VERSION: i64 = 4;
+const SCHEMA_VERSION: i64 = 5;
 
 /// Ids of the folders in the trash and every folder inside them, at any
 /// depth: what's in a trashed folder is in the trash with it.
@@ -45,6 +47,17 @@ pub struct Folder {
     pub created_at: i64,
     pub updated_at: i64,
     pub trashed_at: Option<i64>,
+    /// Password protected (with everything inside), and whether it's unlocked now.
+    #[serde(default)]
+    pub locked: bool,
+    #[serde(default)]
+    pub unlocked: bool,
+    /// Which lock (shared by a folder and what's inside it): tells a lock of
+    /// its own from one that comes with its folder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lock_id: Option<String>,
+    #[serde(skip)]
+    pub lock: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -65,6 +78,18 @@ pub struct Notebook {
     pub has_cover: bool,
     /// App-defined settings as JSON (e.g. a daftar's classes and timetable).
     pub meta: Option<String>,
+    /// Password protected (its content is encrypted), and whether it's unlocked now
+    /// (when locked, its thumbnail and settings aren't shown).
+    #[serde(default)]
+    pub locked: bool,
+    #[serde(default)]
+    pub unlocked: bool,
+    /// Which lock (shared by a folder and what's inside it): tells a lock of
+    /// its own from one that comes with its folder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lock_id: Option<String>,
+    #[serde(skip)]
+    pub lock: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -242,6 +267,8 @@ fn validate_name(name: &str) -> AppResult<String> {
 
 pub struct Db {
     conn: Mutex<Connection>,
+    /// Content keys of the locks unlocked this session, by lock id (never stored).
+    keys: Mutex<HashMap<String, ContentKey>>,
     /// The database file (None in memory); needed to restore a backup.
     path: Option<PathBuf>,
 }
@@ -279,6 +306,7 @@ impl Db {
         Self::migrate(&conn)?;
         Ok(Db {
             conn: Mutex::new(conn),
+            keys: Mutex::new(HashMap::new()),
             path,
         })
     }
@@ -518,6 +546,19 @@ impl Db {
                     INSERT OR IGNORE INTO sync_changes VALUES ('__folders__');
                 END;",
             )?;
+            conn.pragma_update(None, "user_version", 4)?;
+        }
+        if version < 5 {
+            // v5: password protection (the lock's description; content is encrypted).
+            for table in ["notebooks", "folders"] {
+                let has: bool = conn
+                    .prepare(&format!("PRAGMA table_info({table})"))?
+                    .query_map([], |r| r.get::<_, String>(1))?
+                    .any(|c| c.is_ok_and(|c| c == "lock"));
+                if !has {
+                    conn.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN lock TEXT;"))?;
+                }
+            }
             conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         }
         // PDFs stored for an import that never finished.
@@ -528,11 +569,193 @@ impl Db {
         Ok(())
     }
 
+    // ---------------------------------------------------------------- locks
+
+    fn keys(&self) -> std::sync::MutexGuard<'_, HashMap<String, ContentKey>> {
+        self.keys.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// The content key of a lock column's lock, if it's unlocked.
+    fn key_of(&self, lock: &Option<String>) -> Option<ContentKey> {
+        let id = lock::lock_id(lock.as_deref()?)?;
+        self.keys().get(&id).copied()
+    }
+
+    /// No lock: None; locked and unlocked: its key; locked: Err(Locked).
+    fn need_key(&self, lock: &Option<String>) -> AppResult<Option<ContentKey>> {
+        match lock {
+            None => Ok(None),
+            Some(_) => self.key_of(lock).map(Some).ok_or(AppError::Locked),
+        }
+    }
+
+    fn reveal_notebook(&self, mut n: Notebook) -> Notebook {
+        if n.lock.is_none() {
+            return n;
+        }
+        n.locked = true;
+        n.lock_id = n.lock.as_deref().and_then(lock::lock_id);
+        match self.key_of(&n.lock) {
+            Some(k) => {
+                n.unlocked = true;
+                n.thumbnail = n.thumbnail.and_then(|t| lock::decrypt_text(&k, &t).ok());
+                n.meta = n.meta.and_then(|m| lock::decrypt_text(&k, &m).ok());
+            }
+            None => {
+                n.thumbnail = None;
+                n.meta = None;
+            }
+        }
+        n
+    }
+
+    fn reveal_folder(&self, mut f: Folder) -> Folder {
+        f.locked = f.lock.is_some();
+        f.unlocked = f.locked && self.key_of(&f.lock).is_some();
+        f.lock_id = f.lock.as_deref().and_then(lock::lock_id);
+        f
+    }
+
+    fn reveal_library(&self, lib: Library) -> Library {
+        Library {
+            folders: lib.folders.into_iter().map(|f| self.reveal_folder(f)).collect(),
+            notebooks: lib.notebooks.into_iter().map(|n| self.reveal_notebook(n)).collect(),
+        }
+    }
+
+    fn reveal_page(&self, mut p: Page, lock: &Option<String>) -> Page {
+        if lock.is_some() {
+            p.thumbnail = match self.key_of(lock) {
+                Some(k) => p.thumbnail.and_then(|t| lock::decrypt_text(&k, &t).ok()),
+                None => None,
+            };
+        }
+        p
+    }
+
+    /// Locks a notebook with a password: its pages, ink, text, pictures,
+    /// imported PDF and settings are encrypted. It stays unlocked this session.
+    pub fn lock_notebook(&self, id: &str, password: &str) -> AppResult<Notebook> {
+        let mut conn = self.conn();
+        if notebook_lock(&conn, id)?.is_some() {
+            return Err(AppError::Invalid("It already has a password: change it instead.".into()));
+        }
+        let (info, key) = lock::new_lock(password)?;
+        let tx = conn.transaction()?;
+        encrypt_notebook(&tx, id, &key)?;
+        tx.execute("UPDATE notebooks SET lock = ?2, updated_at = ?3 WHERE id = ?1", params![id, info.to_json(), now_ms()])?;
+        tx.commit()?;
+        self.keys().insert(info.id.clone(), key);
+        Ok(self.reveal_notebook(get_notebook(&conn, id)?))
+    }
+
+    /// Locks a folder with a password: everything in it (subfolders, their
+    /// notebooks, and anything added later) is encrypted and opens with it.
+    /// Notebooks with a password of their own keep it.
+    pub fn lock_folder(&self, id: &str, password: &str) -> AppResult<()> {
+        let mut conn = self.conn();
+        if folder_lock(&conn, id)?.is_some() {
+            return Err(AppError::Invalid("It already has a password: change it instead.".into()));
+        }
+        let (info, key) = lock::new_lock(password)?;
+        let tx = conn.transaction()?;
+        apply_lock_to_tree(&tx, id, &info.to_json(), &key)?;
+        tx.commit()?;
+        self.keys().insert(info.id, key);
+        Ok(())
+    }
+
+    /// Unlocks a notebook or folder ("notebook" | "folder") for this session.
+    pub fn unlock(&self, kind: &str, id: &str, password: &str) -> AppResult<()> {
+        let lock = self.lock_of(kind, id)?.ok_or_else(|| AppError::Invalid("It has no password.".into()))?;
+        let info = LockInfo::parse(&lock)?;
+        let key = lock::unlock(&info, password)?;
+        self.keys().insert(info.id, key);
+        Ok(())
+    }
+
+    /// Locks everything again (forgets every key).
+    pub fn lock_all(&self) {
+        self.keys().clear();
+    }
+
+    /// Whether anything is unlocked this session.
+    pub fn any_unlocked(&self) -> bool {
+        !self.keys().is_empty()
+    }
+
+    fn lock_of(&self, kind: &str, id: &str) -> AppResult<Option<String>> {
+        let conn = self.conn();
+        match kind {
+            "notebook" => notebook_lock(&conn, id),
+            "folder" => folder_lock(&conn, id),
+            _ => Err(AppError::Invalid(format!("unknown kind '{kind}'"))),
+        }
+    }
+
+    /// A new password for an unlocked notebook or folder (and everything
+    /// sharing its lock). The content isn't re-encrypted: only its key is.
+    pub fn change_password(&self, kind: &str, id: &str, password: &str) -> AppResult<()> {
+        let lock = self.lock_of(kind, id)?.ok_or_else(|| AppError::Invalid("It has no password.".into()))?;
+        let key = self.need_key(&Some(lock.clone()))?.expect("locked");
+        let info = LockInfo::parse(&lock)?;
+        let next = lock::rewrap(&info, &key, password)?.to_json();
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        let now = now_ms();
+        for table in ["folders", "notebooks"] {
+            let rows: Vec<(String, String)> = {
+                let mut stmt = tx.prepare(&format!("SELECT id, lock FROM {table} WHERE lock IS NOT NULL"))?;
+                let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+                rows.collect::<Result<_, _>>()?
+            };
+            for (row, l) in rows {
+                if lock::lock_id(&l).as_deref() == Some(info.id.as_str()) {
+                    tx.execute(&format!("UPDATE {table} SET lock = ?2, updated_at = ?3 WHERE id = ?1"), params![row, next, now])?;
+                }
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Removes the password from an unlocked notebook, or from a folder and
+    /// what's inside it that shares its lock: decrypted again.
+    pub fn remove_lock(&self, kind: &str, id: &str) -> AppResult<()> {
+        let lock = self.lock_of(kind, id)?.ok_or_else(|| AppError::Invalid("It has no password.".into()))?;
+        let key = self.need_key(&Some(lock.clone()))?.expect("locked");
+        let lock_id = lock::lock_id(&lock);
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        let now = now_ms();
+        let notebooks: Vec<String> = if kind == "notebook" {
+            vec![id.to_string()]
+        } else {
+            let folders = folder_tree(&tx, id)?;
+            for f in &folders {
+                let l: Option<String> = tx.query_row("SELECT lock FROM folders WHERE id = ?1", [f], |r| r.get(0))?;
+                if l.as_deref().and_then(lock::lock_id) == lock_id {
+                    tx.execute("UPDATE folders SET lock = NULL, updated_at = ?2 WHERE id = ?1", params![f, now])?;
+                }
+            }
+            notebooks_in(&tx, &folders)?
+        };
+        for n in notebooks {
+            let l = notebook_lock(&tx, &n)?;
+            if l.as_deref().and_then(lock::lock_id) == lock_id {
+                decrypt_notebook(&tx, &n, &key)?;
+                tx.execute("UPDATE notebooks SET lock = NULL, updated_at = ?2 WHERE id = ?1", params![n, now])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     // ---------------------------------------------------------------- library
 
     pub fn library(&self) -> AppResult<Library> {
         let conn = self.conn();
-        Ok(Library {
+        Ok(self.reveal_library(Library {
             folders: query_folders(
                 &conn,
                 &format!("WHERE id NOT IN {TRASHED_FOLDERS} ORDER BY name COLLATE NOCASE"),
@@ -544,12 +767,12 @@ impl Db {
                      ORDER BY n.updated_at DESC"
                 ),
             )?,
-        })
+        }))
     }
 
     pub fn trash(&self) -> AppResult<TrashContents> {
         let conn = self.conn();
-        Ok(TrashContents {
+        let lib = self.reveal_library(Library {
             folders: query_folders(
                 &conn,
                 "WHERE trashed_at IS NOT NULL ORDER BY trashed_at DESC",
@@ -558,7 +781,8 @@ impl Db {
                 &conn,
                 "WHERE n.trashed_at IS NOT NULL ORDER BY n.trashed_at DESC",
             )?,
-        })
+        });
+        Ok(TrashContents { folders: lib.folders, notebooks: lib.notebooks })
     }
 
     /// Deletes for good everything in the trash: trashed notebooks, and
@@ -585,6 +809,11 @@ impl Db {
         if let Some(parent) = parent_id {
             ensure_exists(&conn, "folders", parent)?;
         }
+        // Inside a locked folder: locked with it.
+        let lock = match parent_id {
+            Some(parent) => folder_lock(&conn, parent)?,
+            None => None,
+        };
         let now = now_ms();
         let folder = Folder {
             id: new_id(),
@@ -595,13 +824,17 @@ impl Db {
             created_at: now,
             updated_at: now,
             trashed_at: None,
+            locked: lock.is_some(),
+            unlocked: false,
+            lock_id: None,
+            lock: lock.clone(),
         };
         conn.execute(
-            "INSERT INTO folders (id, name, parent_id, color, favourite, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, 0, ?5, ?5)",
-            params![folder.id, folder.name, folder.parent_id, folder.color, now],
+            "INSERT INTO folders (id, name, parent_id, color, favourite, created_at, updated_at, lock)
+             VALUES (?1, ?2, ?3, ?4, 0, ?5, ?5, ?6)",
+            params![folder.id, folder.name, folder.parent_id, folder.color, now, lock],
         )?;
-        Ok(folder)
+        Ok(self.reveal_folder(folder))
     }
 
     pub fn rename_folder(&self, id: &str, name: &str) -> AppResult<()> {
@@ -637,11 +870,25 @@ impl Db {
                     .flatten();
             }
         }
-        let n = conn.execute(
+        ensure_exists(&conn, "folders", id)?;
+        // Into a locked folder: everything inside is locked with it.
+        let lock = match parent_id {
+            Some(parent) => folder_lock(&conn, parent)?,
+            None => None,
+        };
+        let key = self.need_key(&lock)?;
+        drop(conn);
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        tx.execute(
             "UPDATE folders SET parent_id = ?2, updated_at = ?3 WHERE id = ?1",
             params![id, parent_id, now_ms()],
         )?;
-        expect_one(n, id)
+        if let (Some(lock), Some(key)) = (&lock, &key) {
+            apply_lock_to_tree(&tx, id, lock, key)?;
+        }
+        tx.commit()?;
+        Ok(())
     }
 
     pub fn set_folder_trashed(&self, id: &str, trashed: bool) -> AppResult<()> {
@@ -710,21 +957,28 @@ impl Db {
         if let Some(folder) = &input.folder_id {
             ensure_exists(&conn, "folders", folder)?;
         }
+        // In a locked folder: locked with it (which needs the folder unlocked).
+        let lock = match &input.folder_id {
+            Some(folder) => folder_lock(&conn, folder)?,
+            None => None,
+        };
+        self.need_key(&lock)?;
         let cover_color = input.cover_color.clone().unwrap_or_else(|| "#3b82f6".into());
         validate_color(&cover_color)?;
         let now = now_ms();
         let id = new_id();
         let tx = conn.transaction()?;
         tx.execute(
-            "INSERT INTO notebooks (id, title, folder_id, cover_color, default_template, favourite, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?6)",
+            "INSERT INTO notebooks (id, title, folder_id, cover_color, default_template, favourite, created_at, updated_at, lock)
+             VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?6, ?7)",
             params![
                 id,
                 title,
                 input.folder_id,
                 cover_color,
                 template,
-                now
+                now,
+                lock
             ],
         )?;
         let width = input.width.unwrap_or(DEFAULT_PAGE_WIDTH);
@@ -742,11 +996,11 @@ impl Db {
             )?;
         }
         tx.commit()?;
-        get_notebook(&conn, &id)
+        Ok(self.reveal_notebook(get_notebook(&conn, &id)?))
     }
 
     pub fn notebook(&self, id: &str) -> AppResult<Notebook> {
-        get_notebook(&self.conn(), id)
+        Ok(self.reveal_notebook(get_notebook(&self.conn(), id)?))
     }
 
     pub fn rename_notebook(&self, id: &str, title: &str) -> AppResult<()> {
@@ -761,15 +1015,30 @@ impl Db {
     }
 
     pub fn move_notebook(&self, id: &str, folder_id: Option<&str>) -> AppResult<()> {
-        let conn = self.conn();
+        let mut conn = self.conn();
         if let Some(folder) = folder_id {
             ensure_exists(&conn, "folders", folder)?;
         }
-        let n = conn.execute(
+        // Into a locked folder, an unlocked notebook is locked with it. (A
+        // locked notebook keeps its own lock wherever it goes.)
+        let own = notebook_lock(&conn, id)?;
+        let dest = match folder_id {
+            Some(folder) => folder_lock(&conn, folder)?,
+            None => None,
+        };
+        let key = if own.is_none() { self.need_key(&dest)? } else { None };
+        let tx = conn.transaction()?;
+        let n = tx.execute(
             "UPDATE notebooks SET folder_id = ?2, updated_at = ?3 WHERE id = ?1",
             params![id, folder_id, now_ms()],
         )?;
-        expect_one(n, id)
+        expect_one(n, id)?;
+        if let (Some(lock), Some(key)) = (&dest, &key) {
+            encrypt_notebook(&tx, id, key)?;
+            tx.execute("UPDATE notebooks SET lock = ?2 WHERE id = ?1", params![id, lock])?;
+        }
+        tx.commit()?;
+        Ok(())
     }
 
     pub fn set_notebook_cover(&self, id: &str, color: &str) -> AppResult<()> {
@@ -800,9 +1069,14 @@ impl Db {
                 .map_err(|e| AppError::Invalid(format!("notebook settings are not valid JSON: {e}")))?;
         }
         let conn = self.conn();
+        let key = self.need_key(&notebook_lock(&conn, id)?)?;
+        let stored = match (&key, meta) {
+            (Some(k), Some(m)) => Some(lock::encrypt_text(k, m)),
+            _ => meta.map(str::to_string),
+        };
         let n = conn.execute(
             "UPDATE notebooks SET meta = ?2, updated_at = ?3 WHERE id = ?1",
-            params![id, meta, now_ms()],
+            params![id, stored, now_ms()],
         )?;
         if n == 0 {
             return Err(AppError::NotFound(id.to_string()));
@@ -870,17 +1144,9 @@ impl Db {
         let new_nb = new_id();
         let tx = conn.transaction()?;
         tx.execute(
-            "INSERT INTO notebooks (id, title, folder_id, cover_color, default_template, favourite, created_at, updated_at, meta)
-             VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?6, ?7)",
-            params![
-                new_nb,
-                format!("{} copy", source.title),
-                source.folder_id,
-                source.cover_color,
-                source.default_template,
-                now,
-                source.meta
-            ],
+            "INSERT INTO notebooks (id, title, folder_id, cover_color, default_template, favourite, created_at, updated_at, meta, lock)
+             SELECT ?1, ?2, folder_id, cover_color, default_template, 0, ?3, ?3, meta, lock FROM notebooks WHERE id = ?4",
+            params![new_nb, format!("{} copy", source.title), now, id],
         )?;
         let page_ids: Vec<String> = {
             let mut stmt =
@@ -915,7 +1181,7 @@ impl Db {
             )?;
         }
         tx.commit()?;
-        get_notebook(&conn, &new_nb)
+        Ok(self.reveal_notebook(get_notebook(&conn, &new_nb)?))
     }
 
     // ------------------------------------------------------------ imported PDFs
@@ -957,13 +1223,19 @@ impl Db {
         if let Some(folder) = &input.folder_id {
             ensure_exists(&conn, "folders", folder)?;
         }
+        // In a locked folder: locked with it, the PDF encrypted.
+        let lock = match &input.folder_id {
+            Some(folder) => folder_lock(&conn, folder)?,
+            None => None,
+        };
+        let key = self.need_key(&lock)?;
         let now = now_ms();
         let id = new_id();
         let tx = conn.transaction()?;
         tx.execute(
-            "INSERT INTO notebooks (id, title, folder_id, cover_color, default_template, favourite, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, 'blank', 0, ?5, ?5)",
-            params![id, title, input.folder_id, input.cover_color.clone().unwrap_or_else(|| "#dc2626".into()), now],
+            "INSERT INTO notebooks (id, title, folder_id, cover_color, default_template, favourite, created_at, updated_at, lock)
+             VALUES (?1, ?2, ?3, ?4, 'blank', 0, ?5, ?5, ?6)",
+            params![id, title, input.folder_id, input.cover_color.clone().unwrap_or_else(|| "#dc2626".into()), now, lock],
         )?;
         // Claim the stored PDF now that the notebook exists (foreign key).
         if tx.execute(
@@ -980,15 +1252,27 @@ impl Db {
                 params![new_id(), id, i as i64, p.width, p.height, now, input.asset_id],
             )?;
         }
+        if let Some(key) = &key {
+            encrypt_notebook(&tx, &id, key)?;
+        }
         tx.commit()?;
-        get_notebook(&conn, &id)
+        Ok(self.reveal_notebook(get_notebook(&conn, &id)?))
     }
 
     pub fn asset_bytes(&self, id: &str) -> AppResult<Vec<u8>> {
-        self.conn()
-            .query_row("SELECT data FROM assets WHERE id = ?1", [id], |r| r.get(0))
+        let conn = self.conn();
+        let (data, lock): (Vec<u8>, Option<String>) = conn
+            .query_row(
+                "SELECT a.data, n.lock FROM assets a LEFT JOIN notebooks n ON n.id = a.notebook_id WHERE a.id = ?1",
+                [id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
             .optional()?
-            .ok_or_else(|| AppError::NotFound(id.to_string()))
+            .ok_or_else(|| AppError::NotFound(id.to_string()))?;
+        match self.need_key(&lock)? {
+            Some(key) => lock::decrypt_blob(&key, &data),
+            None => Ok(data),
+        }
     }
 
     // ------------------------------------------------------------------ pages
@@ -1001,7 +1285,9 @@ impl Db {
              FROM pages WHERE notebook_id = ?1 ORDER BY position",
         )?;
         let rows = stmt.query_map([notebook_id], page_from_row)?;
-        Ok(rows.collect::<Result<_, _>>()?)
+        let pages: Vec<Page> = rows.collect::<Result<_, _>>()?;
+        let lock = notebook_lock(&conn, notebook_id)?;
+        Ok(pages.into_iter().map(|p| self.reveal_page(p, &lock)).collect())
     }
 
     /// Inserts a page at `index` (clamped; `None` appends). When no template
@@ -1051,7 +1337,8 @@ impl Db {
             params![notebook_id, now],
         )?;
         tx.commit()?;
-        get_page(&conn, &id)
+        let lock = notebook_lock(&conn, notebook_id)?;
+        Ok(self.reveal_page(get_page(&conn, &id)?, &lock))
     }
 
     pub fn duplicate_page(&self, page_id: &str) -> AppResult<Page> {
@@ -1071,7 +1358,8 @@ impl Db {
         )?;
         copy_elements(&tx, page_id, &id)?;
         tx.commit()?;
-        get_page(&conn, &id)
+        let lock = notebook_lock(&conn, &page.notebook_id)?;
+        Ok(self.reveal_page(get_page(&conn, &id)?, &lock))
     }
 
     /// Permanently removes a page. A notebook always keeps at least one page.
@@ -1169,9 +1457,14 @@ impl Db {
             ));
         }
         let conn = self.conn();
+        let (_, lock) = page_notebook(&conn, page_id)?;
+        let stored = match self.need_key(&lock)? {
+            Some(key) => lock::encrypt_text(&key, thumbnail),
+            None => thumbnail.to_string(),
+        };
         let n = conn.execute(
             "UPDATE pages SET thumbnail = ?2 WHERE id = ?1",
-            params![page_id, thumbnail],
+            params![page_id, stored],
         )?;
         expect_one(n, page_id)
     }
@@ -1180,7 +1473,8 @@ impl Db {
 
     pub fn elements(&self, page_id: &str) -> AppResult<Vec<Element>> {
         let conn = self.conn();
-        ensure_exists(&conn, "pages", page_id)?;
+        let (_, lock) = page_notebook(&conn, page_id)?;
+        let key = self.need_key(&lock)?;
         let mut stmt = conn
             .prepare("SELECT id, kind, z, data FROM elements WHERE page_id = ?1 ORDER BY z, id")?;
         let rows = stmt.query_map([page_id], |r| {
@@ -1190,6 +1484,10 @@ impl Db {
         let mut out = Vec::new();
         for row in rows {
             let (id, kind, z, raw): (String, String, i64, String) = row?;
+            let raw = match &key {
+                Some(k) => lock::decrypt_text(k, &raw)?,
+                None => raw,
+            };
             let data = serde_json::from_str(&raw).unwrap_or(serde_json::Value::Null);
             out.push(Element { id, kind, z, data });
         }
@@ -1199,14 +1497,8 @@ impl Db {
     /// Replaces the full element set of a page atomically.
     pub fn save_elements(&self, page_id: &str, elements: &[Element]) -> AppResult<()> {
         let mut conn = self.conn();
-        let notebook_id: String = conn
-            .query_row(
-                "SELECT notebook_id FROM pages WHERE id = ?1",
-                [page_id],
-                |r| r.get(0),
-            )
-            .optional()?
-            .ok_or_else(|| AppError::NotFound(page_id.to_string()))?;
+        let (notebook_id, lock) = page_notebook(&conn, page_id)?;
+        let key = self.need_key(&lock)?;
         let tx = conn.transaction()?;
         tx.execute("DELETE FROM elements WHERE page_id = ?1", [page_id])?;
         {
@@ -1214,19 +1506,12 @@ impl Db {
                 "INSERT INTO elements (id, page_id, kind, z, data, text_content) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             )?;
             for el in elements {
-                let text = el
-                    .data
-                    .get("text")
-                    .and_then(|t| t.as_str())
-                    .map(str::to_string);
-                insert.execute(params![
-                    el.id,
-                    page_id,
-                    el.kind,
-                    el.z,
-                    el.data.to_string(),
-                    text
-                ])?;
+                // Encrypted when locked (and kept out of search).
+                let (data, text) = match &key {
+                    Some(k) => (lock::encrypt_text(k, &el.data.to_string()), None),
+                    None => (el.data.to_string(), el.data.get("text").and_then(|t| t.as_str()).map(str::to_string)),
+                };
+                insert.execute(params![el.id, page_id, el.kind, el.z, data, text])?;
             }
         }
         let now = now_ms();
@@ -1380,9 +1665,147 @@ fn touch_row(conn: &Connection, sql: &str, id: &str, value: &str) -> AppResult<(
     expect_one(conn.execute(sql, params![id, value, now_ms()])?, id)
 }
 
+fn notebook_lock(conn: &Connection, id: &str) -> AppResult<Option<String>> {
+    conn.query_row("SELECT lock FROM notebooks WHERE id = ?1", [id], |r| r.get(0))
+        .optional()?
+        .ok_or_else(|| AppError::NotFound(id.to_string()))
+}
+
+fn folder_lock(conn: &Connection, id: &str) -> AppResult<Option<String>> {
+    conn.query_row("SELECT lock FROM folders WHERE id = ?1", [id], |r| r.get(0))
+        .optional()?
+        .ok_or_else(|| AppError::NotFound(id.to_string()))
+}
+
+/// A page's notebook and that notebook's lock.
+fn page_notebook(conn: &Connection, page_id: &str) -> AppResult<(String, Option<String>)> {
+    conn.query_row(
+        "SELECT p.notebook_id, n.lock FROM pages p JOIN notebooks n ON n.id = p.notebook_id WHERE p.id = ?1",
+        [page_id],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )
+    .optional()?
+    .ok_or_else(|| AppError::NotFound(page_id.to_string()))
+}
+
+/// A folder and every folder inside it.
+fn folder_tree(conn: &Connection, id: &str) -> AppResult<Vec<String>> {
+    let mut stmt = conn.prepare(
+        "WITH RECURSIVE tree(id) AS (SELECT ?1 UNION ALL SELECT f.id FROM folders f JOIN tree t ON f.parent_id = t.id) SELECT id FROM tree",
+    )?;
+    let rows = stmt.query_map([id], |r| r.get(0))?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+fn notebooks_in(conn: &Connection, folders: &[String]) -> AppResult<Vec<String>> {
+    let mut out = Vec::new();
+    let mut stmt = conn.prepare("SELECT id FROM notebooks WHERE folder_id = ?1")?;
+    for f in folders {
+        let rows = stmt.query_map([f], |r| r.get::<_, String>(0))?;
+        for r in rows {
+            out.push(r?);
+        }
+    }
+    Ok(out)
+}
+
+/// Locks a folder, the folders inside it and the notebooks in them (those
+/// without a password of their own) with one lock.
+fn apply_lock_to_tree(conn: &Connection, folder: &str, lock: &str, key: &ContentKey) -> AppResult<()> {
+    let now = now_ms();
+    let folders = folder_tree(conn, folder)?;
+    for f in &folders {
+        conn.execute("UPDATE folders SET lock = ?2, updated_at = ?3 WHERE id = ?1 AND lock IS NULL", params![f, lock, now])?;
+    }
+    for n in notebooks_in(conn, &folders)? {
+        if notebook_lock(conn, &n)?.is_none() {
+            encrypt_notebook(conn, &n, key)?;
+            conn.execute("UPDATE notebooks SET lock = ?2, updated_at = ?3 WHERE id = ?1", params![n, lock, now])?;
+        }
+    }
+    Ok(())
+}
+
+/// Encrypts a notebook's content (what isn't already): ink and text, page
+/// pictures, settings and imported PDFs. Typed text leaves the search index.
+fn encrypt_notebook(conn: &Connection, id: &str, key: &ContentKey) -> AppResult<()> {
+    let rows: Vec<(String, String)> = {
+        let mut stmt = conn.prepare("SELECT e.id, e.data FROM elements e JOIN pages p ON p.id = e.page_id WHERE p.notebook_id = ?1")?;
+        let rows = stmt.query_map([id], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        rows.collect::<Result<_, _>>()?
+    };
+    for (eid, data) in rows {
+        if !lock::is_encrypted_text(&data) {
+            conn.execute("UPDATE elements SET data = ?2, text_content = NULL WHERE id = ?1", params![eid, lock::encrypt_text(key, &data)])?;
+        }
+    }
+    let thumbs: Vec<(String, String)> = {
+        let mut stmt = conn.prepare("SELECT id, thumbnail FROM pages WHERE notebook_id = ?1 AND thumbnail IS NOT NULL")?;
+        let rows = stmt.query_map([id], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        rows.collect::<Result<_, _>>()?
+    };
+    for (pid, t) in thumbs {
+        if !lock::is_encrypted_text(&t) {
+            conn.execute("UPDATE pages SET thumbnail = ?2 WHERE id = ?1", params![pid, lock::encrypt_text(key, &t)])?;
+        }
+    }
+    let meta: Option<String> = conn.query_row("SELECT meta FROM notebooks WHERE id = ?1", [id], |r| r.get(0))?;
+    if let Some(m) = meta.filter(|m| !lock::is_encrypted_text(m)) {
+        conn.execute("UPDATE notebooks SET meta = ?2 WHERE id = ?1", params![id, lock::encrypt_text(key, &m)])?;
+    }
+    let assets: Vec<String> = {
+        let mut stmt = conn.prepare("SELECT id FROM assets WHERE notebook_id = ?1")?;
+        let rows = stmt.query_map([id], |r| r.get(0))?;
+        rows.collect::<Result<_, _>>()?
+    };
+    for aid in assets {
+        let data: Vec<u8> = conn.query_row("SELECT data FROM assets WHERE id = ?1", [&aid], |r| r.get(0))?;
+        if !lock::is_encrypted_blob(&data) {
+            conn.execute("UPDATE assets SET data = ?2 WHERE id = ?1", params![aid, lock::encrypt_blob(key, &data)])?;
+        }
+    }
+    Ok(())
+}
+
+/// Decrypts a notebook's content again (and puts its text back in search).
+fn decrypt_notebook(conn: &Connection, id: &str, key: &ContentKey) -> AppResult<()> {
+    let rows: Vec<(String, String)> = {
+        let mut stmt = conn.prepare("SELECT e.id, e.data FROM elements e JOIN pages p ON p.id = e.page_id WHERE p.notebook_id = ?1")?;
+        let rows = stmt.query_map([id], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        rows.collect::<Result<_, _>>()?
+    };
+    for (eid, data) in rows {
+        let plain = lock::decrypt_text(key, &data)?;
+        let text = serde_json::from_str::<serde_json::Value>(&plain).ok().and_then(|v| v.get("text").and_then(|t| t.as_str()).map(str::to_string));
+        conn.execute("UPDATE elements SET data = ?2, text_content = ?3 WHERE id = ?1", params![eid, plain, text])?;
+    }
+    let thumbs: Vec<(String, String)> = {
+        let mut stmt = conn.prepare("SELECT id, thumbnail FROM pages WHERE notebook_id = ?1 AND thumbnail IS NOT NULL")?;
+        let rows = stmt.query_map([id], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        rows.collect::<Result<_, _>>()?
+    };
+    for (pid, t) in thumbs {
+        conn.execute("UPDATE pages SET thumbnail = ?2 WHERE id = ?1", params![pid, lock::decrypt_text(key, &t)?])?;
+    }
+    let meta: Option<String> = conn.query_row("SELECT meta FROM notebooks WHERE id = ?1", [id], |r| r.get(0))?;
+    if let Some(m) = meta {
+        conn.execute("UPDATE notebooks SET meta = ?2 WHERE id = ?1", params![id, lock::decrypt_text(key, &m)?])?;
+    }
+    let assets: Vec<String> = {
+        let mut stmt = conn.prepare("SELECT id FROM assets WHERE notebook_id = ?1")?;
+        let rows = stmt.query_map([id], |r| r.get(0))?;
+        rows.collect::<Result<_, _>>()?
+    };
+    for aid in assets {
+        let data: Vec<u8> = conn.query_row("SELECT data FROM assets WHERE id = ?1", [&aid], |r| r.get(0))?;
+        conn.execute("UPDATE assets SET data = ?2 WHERE id = ?1", params![aid, lock::decrypt_blob(key, &data)?])?;
+    }
+    Ok(())
+}
+
 fn query_folders(conn: &Connection, clause: &str) -> AppResult<Vec<Folder>> {
     let mut stmt = conn.prepare(&format!(
-        "SELECT id, name, parent_id, color, favourite, created_at, updated_at, trashed_at FROM folders {clause}"
+        "SELECT id, name, parent_id, color, favourite, created_at, updated_at, trashed_at, lock FROM folders {clause}"
     ))?;
     let rows = stmt.query_map([], |r| {
         Ok(Folder {
@@ -1394,6 +1817,10 @@ fn query_folders(conn: &Connection, clause: &str) -> AppResult<Vec<Folder>> {
             created_at: r.get(5)?,
             updated_at: r.get(6)?,
             trashed_at: r.get(7)?,
+            locked: false,
+            unlocked: false,
+            lock_id: None,
+            lock: r.get(8)?,
         })
     })?;
     Ok(rows.collect::<Result<_, _>>()?)
@@ -1405,7 +1832,7 @@ const NOTEBOOK_SELECT: &str =
         (SELECT p.thumbnail FROM pages p WHERE p.notebook_id = n.id ORDER BY p.position LIMIT 1),
         n.created_at, n.updated_at, n.trashed_at,
         COALESCE((SELECT p.template LIKE 'cover%' FROM pages p WHERE p.notebook_id = n.id ORDER BY p.position LIMIT 1), 0),
-        n.meta
+        n.meta, n.lock
      FROM notebooks n LEFT JOIN folders f ON f.id = n.folder_id";
 
 fn notebook_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Notebook> {
@@ -1423,6 +1850,10 @@ fn notebook_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Notebook> {
         trashed_at: r.get(10)?,
         has_cover: r.get(11)?,
         meta: r.get(12)?,
+        locked: false,
+        unlocked: false,
+        lock_id: None,
+        lock: r.get(13)?,
     })
 }
 
@@ -1487,6 +1918,134 @@ mod tests {
             ..Default::default()
         })
         .unwrap()
+    }
+
+    fn write_text(db: &Db, nb: &str, text: &str) -> String {
+        let page = db.pages(nb).unwrap()[0].id.clone();
+        db.save_elements(&page, &[Element { id: new_id(), kind: "text".into(), z: 0, data: json!({ "text": text }) }]).unwrap();
+        page
+    }
+
+    /// Every stored value of a notebook's rows, as the database file holds them.
+    fn raw_rows(db: &Db, nb: &str) -> String {
+        db.with_conn(|c| {
+            let mut out = String::new();
+            let mut stmt = c.prepare("SELECT e.data || COALESCE(e.text_content, '') FROM elements e JOIN pages p ON p.id = e.page_id WHERE p.notebook_id = ?1")?;
+            for r in stmt.query_map([nb], |r| r.get::<_, String>(0))? {
+                out += &r?;
+            }
+            let mut stmt = c.prepare("SELECT COALESCE(thumbnail, '') FROM pages WHERE notebook_id = ?1")?;
+            for r in stmt.query_map([nb], |r| r.get::<_, String>(0))? {
+                out += &r?;
+            }
+            out += &c.query_row("SELECT COALESCE(meta, '') FROM notebooks WHERE id = ?1", [nb], |r| r.get::<_, String>(0))?;
+            Ok(out)
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn a_locked_notebook_is_encrypted_and_opens_only_with_its_password() {
+        let db = db();
+        let nb = notebook(&db, "Diary");
+        let page = write_text(&db, &nb.id, "my secret plan");
+        db.set_page_thumbnail(&page, "data:image/png;base64,SECRETPIC").unwrap();
+        db.set_notebook_meta(&nb.id, Some("{\"note\":\"hidden settings\"}")).unwrap();
+        assert_eq!(db.search("secret").unwrap().len(), 1);
+
+        let locked = db.lock_notebook(&nb.id, "hunter22").unwrap();
+        assert!(locked.locked && locked.unlocked);
+        let raw = raw_rows(&db, &nb.id);
+        assert!(!raw.contains("secret plan") && !raw.contains("SECRETPIC") && !raw.contains("hidden settings"), "{raw}");
+        // Out of search (its title is still found).
+        assert!(db.search("secret plan").unwrap().is_empty());
+        // Unlocked this session: it reads and writes as before.
+        assert_eq!(db.elements(&page).unwrap()[0].data["text"], "my secret plan");
+        write_text(&db, &nb.id, "another secret");
+        assert!(!raw_rows(&db, &nb.id).contains("another secret"));
+        assert_eq!(db.notebook(&nb.id).unwrap().meta.as_deref(), Some("{\"note\":\"hidden settings\"}"));
+
+        db.lock_all();
+        assert!(matches!(db.elements(&page), Err(AppError::Locked)));
+        assert!(matches!(db.save_elements(&page, &[]), Err(AppError::Locked)));
+        let shown = db.library().unwrap().notebooks.into_iter().find(|n| n.id == nb.id).unwrap();
+        assert!(shown.locked && !shown.unlocked && shown.thumbnail.is_none() && shown.meta.is_none());
+        assert!(db.pages(&nb.id).unwrap()[0].thumbnail.is_none());
+        assert!(db.unlock("notebook", &nb.id, "wrong pass").unwrap_err().to_string().contains("Wrong password"));
+        db.unlock("notebook", &nb.id, "hunter22").unwrap();
+        assert_eq!(db.elements(&page).unwrap()[0].data["text"], "another secret");
+        assert_eq!(db.pages(&nb.id).unwrap()[0].thumbnail.as_deref(), Some("data:image/png;base64,SECRETPIC"));
+
+        // A new password, then none at all: back in search, readable on disk.
+        db.change_password("notebook", &nb.id, "newpass1").unwrap();
+        db.lock_all();
+        assert!(db.unlock("notebook", &nb.id, "hunter22").is_err());
+        db.unlock("notebook", &nb.id, "newpass1").unwrap();
+        db.remove_lock("notebook", &nb.id).unwrap();
+        db.lock_all();
+        assert_eq!(db.elements(&page).unwrap()[0].data["text"], "another secret");
+        assert_eq!(db.search("another").unwrap().len(), 1);
+        assert!(!db.notebook(&nb.id).unwrap().locked);
+    }
+
+    #[test]
+    fn a_locked_folder_covers_everything_inside_it() {
+        let db = db();
+        let vault = db.create_folder("Private", None, None).unwrap();
+        let inner = db.create_folder("Inner", Some(&vault.id), None).unwrap();
+        let a = db.create_notebook(&NewNotebook { title: "A".into(), folder_id: Some(inner.id.clone()), ..Default::default() }).unwrap();
+        write_text(&db, &a.id, "alpha secret");
+        let own = db.create_notebook(&NewNotebook { title: "Own".into(), folder_id: Some(vault.id.clone()), ..Default::default() }).unwrap();
+        db.lock_notebook(&own.id, "ownpass1").unwrap();
+        db.lock_folder(&vault.id, "vaultpass").unwrap();
+        assert!(!raw_rows(&db, &a.id).contains("alpha"));
+        let lib = db.library().unwrap();
+        assert!(lib.folders.iter().all(|f| f.locked));
+
+        // Added later inside: locked with it.
+        let b = db.create_notebook(&NewNotebook { title: "B".into(), folder_id: Some(inner.id.clone()), ..Default::default() }).unwrap();
+        assert!(b.locked);
+        write_text(&db, &b.id, "bravo secret");
+        assert!(!raw_rows(&db, &b.id).contains("bravo"));
+        let plain = notebook(&db, "Plain");
+        write_text(&db, &plain.id, "charlie secret");
+        db.move_notebook(&plain.id, Some(&vault.id)).unwrap();
+        assert!(!raw_rows(&db, &plain.id).contains("charlie"));
+        let sub = db.create_folder("Later", Some(&vault.id), None).unwrap();
+        assert!(sub.locked);
+
+        db.lock_all();
+        // Locked: nothing can be added inside, and nothing read.
+        assert!(matches!(db.create_notebook(&NewNotebook { title: "C".into(), folder_id: Some(vault.id.clone()), ..Default::default() }), Err(AppError::Locked)));
+        let page_a = db.pages(&a.id).unwrap()[0].id.clone();
+        assert!(matches!(db.elements(&page_a), Err(AppError::Locked)));
+        // The folder's password opens all of it, but not a notebook's own lock.
+        db.unlock("folder", &vault.id, "vaultpass").unwrap();
+        assert_eq!(db.elements(&page_a).unwrap()[0].data["text"], "alpha secret");
+        let page_own = db.pages(&own.id).unwrap()[0].id.clone();
+        assert!(matches!(db.elements(&page_own), Err(AppError::Locked)));
+        // Removing the folder's password decrypts what shares it.
+        db.remove_lock("folder", &vault.id).unwrap();
+        db.lock_all();
+        assert_eq!(db.elements(&page_a).unwrap()[0].data["text"], "alpha secret");
+        assert!(db.notebook(&own.id).unwrap().locked);
+    }
+
+    #[test]
+    fn an_imported_pdf_in_a_locked_notebook_is_encrypted() {
+        let db = db();
+        let asset = db.store_pdf_asset(b"%PDF-1.7 secret worksheet").unwrap();
+        let nb = db.create_pdf_notebook(&NewPdfNotebook { title: "Worksheet".into(), folder_id: None, cover_color: None, asset_id: asset.clone(), pages: vec![PdfPageSize { width: 600.0, height: 800.0 }] }).unwrap();
+        db.lock_notebook(&nb.id, "pdfpass1").unwrap();
+        let raw: Vec<u8> = db.with_conn(|c| Ok(c.query_row("SELECT data FROM assets WHERE id = ?1", [&asset], |r| r.get(0))?)).unwrap();
+        assert!(!raw.windows(6).any(|w| w == b"secret"));
+        assert_eq!(db.asset_bytes(&asset).unwrap(), b"%PDF-1.7 secret worksheet");
+        db.lock_all();
+        assert!(matches!(db.asset_bytes(&asset), Err(AppError::Locked)));
+        // A copy is locked with the same password.
+        db.unlock("notebook", &nb.id, "pdfpass1").unwrap();
+        let copy = db.duplicate_notebook(&nb.id).unwrap();
+        assert!(copy.locked && copy.unlocked);
     }
 
     #[test]

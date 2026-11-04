@@ -101,7 +101,7 @@ Rectangle {
         const folders = entries.filter(e => e.type === "folder").map(e => e.item.id)
         dialog.ask("Move " + described(entries), [{ name: "folder", label: "Destination", type: "select", value: "", options: folderOptions(folders) }], "Move", r => {
             const to = r.folder || null
-            bulkRun(entries.map(e => e.type === "folder" ? ["moveFolder", { id: e.item.id, parentId: to }] : ["moveNotebook", { id: e.item.id, folderId: to }]), described(entries) + " moved")
+            intoFolder(to, () => bulkRun(entries.map(e => e.type === "folder" ? ["moveFolder", { id: e.item.id, parentId: to }] : ["moveNotebook", { id: e.item.id, folderId: to }]), described(entries) + " moved"))
         })
     }
 
@@ -121,7 +121,8 @@ Rectangle {
         try {
             library = InkleafCore.call("library")
             shown = view.kind === "trash" ? InkleafCore.call("trash") : library
-            if (view.kind === "folder" && !library.folders.some(f => f.id === view.id)) view = { kind: "all" }
+            // A folder that's gone, or locked again, isn't shown any more.
+            if (view.kind === "folder" && !library.folders.some(f => f.id === view.id && (!f.locked || f.unlocked))) view = { kind: "all" }
         } catch (e) {
             root.notify(String(e.message || e), true)
         }
@@ -143,8 +144,92 @@ Rectangle {
             if (message) root.notify(message, false)
             return r
         } catch (e) {
-            root.notify(String(e.message || e), true)
+            root.notify(errorText(e), true)
         }
+    }
+
+    // ------------------------------------------------------------ passwords
+
+    function errorText(e) {
+        const m = String(e.message || e)
+        return m.startsWith("locked:") ? "Unlock it first (it's password protected)." : m
+    }
+    /// Asks for the password of a locked item that isn't unlocked, then does `then`.
+    function withUnlocked(kind, item, then) {
+        if (!item || !item.locked || item.unlocked) { then(); return }
+        dialog.ask("Unlock “" + (kind === "folder" ? item.name : item.title) + "”", [
+            { name: "password", label: "Password", type: "password", value: "" }
+        ], "Unlock", () => then(), {
+            message: kind === "folder" ? "This folder is password protected." : "This notebook is password protected.",
+            validate: v => {
+                if (!v.password) return "Enter the password."
+                try { InkleafCore.call("unlock", { kind: kind, id: item.id, password: v.password }) }
+                catch (e) { return String(e.message || e) }
+                return ""
+            }
+        })
+    }
+    /// Opens a notebook (asking for its password first when it's locked).
+    function openNotebook(id, title) {
+        const nb = library.notebooks.find(n => n.id === id)
+        withUnlocked("notebook", nb, () => root.openRequested(id, title || (nb ? nb.title : "")))
+    }
+    function openFolder(f) {
+        withUnlocked("folder", f, () => root.show({ kind: "folder", id: f.id }))
+    }
+    /// The lock an item shares with the folder it's in (rather than one of its own).
+    function inheritedLock(kind, item) {
+        if (!item.locked) return false
+        const parent = library.folders.find(f => f.id === (kind === "folder" ? item.parentId : item.folderId))
+        return !!(parent && parent.lockId && parent.lockId === item.lockId)
+    }
+    readonly property var newPasswordFields: [
+        { name: "password", label: "Password", type: "password", value: "" },
+        { name: "confirm", label: "Password again", type: "password", value: "" }
+    ]
+    function checkNewPassword(v) {
+        if (String(v.password).length < 4) return "Use a password of at least 4 characters."
+        if (v.password !== v.confirm) return "The passwords don't match."
+        return ""
+    }
+    function lockItem(kind, item) {
+        const name = kind === "folder" ? item.name : item.title
+        dialog.ask("Protect “" + name + "” with a password", newPasswordFields, "Lock", r => {
+            run(kind === "folder" ? "lockFolder" : "lockNotebook", { id: item.id, password: r.password },
+                kind === "folder" ? "Folder locked: it stays open until you lock it or quit" : "Notebook locked: it stays open until you lock it or quit")
+        }, {
+            message: (kind === "folder" ? "Everything in this folder, and anything you add to it later, is encrypted" : "Its pages, writing, pictures and PDF are encrypted")
+                     + " on this device, in backups and in Drive sync. If you forget the password, it can't be recovered: there's no way back in."
+                     + (kind === "folder" ? " Notebooks that have a password of their own keep it." : ""),
+            validate: checkNewPassword
+        })
+    }
+    function changePassword(kind, item) {
+        withUnlocked(kind, item, () => dialog.ask("New password for “" + (kind === "folder" ? item.name : item.title) + "”", newPasswordFields, "Change", r => {
+            run("changePassword", { kind: kind, id: item.id, password: r.password }, "Password changed")
+        }, {
+            message: kind === "folder" ? "It changes for everything in the folder too. If you forget it, it can't be recovered." : "If you forget it, it can't be recovered.",
+            validate: checkNewPassword
+        }))
+    }
+    function removePassword(kind, item) {
+        withUnlocked(kind, item, () => dialog.ask("Remove the password from “" + (kind === "folder" ? item.name : item.title) + "”?", [], "Remove password", () => {
+            run("removeLock", { kind: kind, id: item.id }, "Password removed")
+        }, {
+            danger: true,
+            message: kind === "folder" ? "The folder and what's inside it are decrypted and open without a password." : "The notebook is decrypted and opens without a password."
+        }))
+    }
+    readonly property bool anyUnlocked: library.folders.some(f => f.unlocked) || library.notebooks.some(n => n.unlocked) || shown.notebooks.some(n => n.unlocked)
+    function lockNow() { run("lockAll", {}, "Locked") }
+    /// The menu entries about a password.
+    function lockEntries(kind, item) {
+        if (!item.locked) return [{ label: "Lock with password…", action: () => lockItem(kind, item) }]
+        if (inheritedLock(kind, item)) return []
+        return [
+            { label: "Change password…", action: () => changePassword(kind, item) },
+            { label: "Remove password…", action: () => removePassword(kind, item) }
+        ]
     }
 
     // ------------------------------------------------------------ helpers
@@ -323,13 +408,17 @@ Rectangle {
         }
         return [{ value: "", label: "Library (no folder)" }].concat(library.folders.filter(f => !blocked.has(f.id)).map(f => ({ value: f.id, label: f.name })))
     }
+    /// Moving into a locked folder: unlocked first (what moves in is encrypted with it).
+    function intoFolder(id, then) {
+        withUnlocked("folder", id ? library.folders.find(f => f.id === id) : null, then)
+    }
     function moveNotebook(n) {
         dialog.ask("Move notebook", [{ name: "folder", label: "Destination", type: "select", value: n.folderId || "", options: folderOptions() }], "Move",
-                   r => run("moveNotebook", { id: n.id, folderId: r.folder || null }, "Notebook moved"))
+                   r => intoFolder(r.folder, () => run("moveNotebook", { id: n.id, folderId: r.folder || null }, "Notebook moved")))
     }
     function moveFolder(f) {
         dialog.ask("Move folder", [{ name: "folder", label: "Destination", type: "select", value: f.parentId || "", options: folderOptions(f.id) }], "Move",
-                   r => run("moveFolder", { id: f.id, parentId: r.folder || null }, "Folder moved"))
+                   r => intoFolder(r.folder, () => run("moveFolder", { id: f.id, parentId: r.folder || null }, "Folder moved")))
     }
     function deleteForever(kind, id, name) {
         dialog.ask("Delete “" + name + "” forever?", [], "Delete", () => run(kind === "folder" ? "deleteFolder" : "deleteNotebook", { id: id }, "Deleted"), {
@@ -352,9 +441,10 @@ Rectangle {
             { label: n.favourite ? "Remove from favourites" : "Add to favourites", action: () => run("setNotebookFavourite", { id: n.id, favourite: !n.favourite }) },
             { label: "Change cover", action: () => changeCover(n) },
             { label: "Duplicate", action: () => run("duplicateNotebook", { id: n.id }, "Notebook duplicated") },
-            { label: "Move to…", action: () => moveNotebook(n) },
+            { label: "Move to…", action: () => moveNotebook(n) }
+        ].concat(lockEntries("notebook", n), [
             { label: "Move to trash", danger: true, action: () => run("setNotebookTrashed", { id: n.id, trashed: true }, "Notebook moved to trash") }
-        ])
+        ]))
     }
     function folderMenu(f, anchor) {
         menu.show(anchor, view.kind === "trash" ? [
@@ -363,9 +453,10 @@ Rectangle {
         ] : [
             { label: "Edit name and colour…", action: () => editFolder(f) },
             { label: f.favourite ? "Remove from favourites" : "Add to favourites", action: () => run("setFolderFavourite", { id: f.id, favourite: !f.favourite }) },
-            { label: "Move to…", action: () => moveFolder(f) },
+            { label: "Move to…", action: () => moveFolder(f) }
+        ].concat(lockEntries("folder", f), [
             { label: "Move to trash", danger: true, action: () => run("setFolderTrashed", { id: f.id, trashed: true }, "Folder moved to trash") }
-        ])
+        ]))
     }
     function runSearch() {
         const q = query.trim()
@@ -424,8 +515,7 @@ Rectangle {
         anchors.bottom: parent.bottom
         anchors.margins: 16
         onOpenRequested: id => {
-            const nb = root.library.notebooks.find(n => n.id === id)
-            root.openRequested(id, nb ? nb.title : "")
+            root.openNotebook(id, "")
         }
     }
     PopupMenu { id: menu }
@@ -597,11 +687,11 @@ Rectangle {
                             delegate: NavItem {
                                 required property var modelData
                                 text: modelData.f.name
-                                iconName: "folder"
+                                iconName: modelData.f.locked && !modelData.f.unlocked ? "lock" : "folder"
                                 dot: modelData.f.color
                                 indent: modelData.depth * 14
                                 active: !!(root.view.kind === "folder" && root.view.id === modelData.f.id)
-                                onClicked: root.show({ kind: "folder", id: modelData.f.id })
+                                onClicked: root.openFolder(modelData.f)
                             }
                         }
                     }
@@ -676,6 +766,13 @@ Rectangle {
                         }
                     }
                 }
+                IconButton {
+                    visible: root.anyUnlocked
+                    Layout.alignment: Qt.AlignBottom
+                    iconName: "lock"
+                    tip: "Lock now (locks every unlocked notebook and folder again)"
+                    onClicked: root.lockNow()
+                }
                 UiButton {
                     visible: root.shelf.some(e => e.type !== "new")
                     Layout.alignment: Qt.AlignBottom
@@ -730,7 +827,7 @@ Rectangle {
                     width: Math.min(760, results.width)
                     implicitHeight: hitCol.implicitHeight + 28
                     hoverEnabled: true
-                    onClicked: root.openRequested(modelData.notebookId, modelData.notebookTitle)
+                    onClicked: root.openNotebook(modelData.notebookId, modelData.notebookTitle)
                     transform: Translate { x: hit.hovered ? 2 : 0; Behavior on x { NumberAnimation { duration: 200 } } }
                     background: Item {
                         Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 1 }
@@ -842,8 +939,8 @@ Rectangle {
                         count: isFolder ? root.shown.notebooks.filter(n => n.folderId === cell.modelData.item.id).length : 0
                         onActivated: {
                             if (trash) return
-                            if (isFolder) root.show({ kind: "folder", id: item.id })
-                            else root.openRequested(item.id, item.title)
+                            if (isFolder) root.openFolder(item)
+                            else root.openNotebook(item.id, item.title)
                         }
                         onMoreRequested: anchor => isFolder ? root.folderMenu(item, anchor) : root.notebookMenu(item, anchor)
                     }

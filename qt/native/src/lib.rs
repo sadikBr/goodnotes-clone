@@ -132,6 +132,14 @@ impl Core {
             "syncSignOut" => to(&self.sync.sign_out(db)?),
             "syncNow" => to(&self.sync.sync_now(db, a.opt_s("open").as_deref())?),
             "dataDir" => ok(json!(self.dir.to_string_lossy())),
+            // passwords (encryption: core/src/lock.rs)
+            "lockNotebook" => to(&db.lock_notebook(&a.s("id")?, &a.s("password")?)?),
+            "lockFolder" => to(&db.lock_folder(&a.s("id")?, &a.s("password")?)?),
+            "unlock" => to(&db.unlock(&a.s("kind")?, &a.s("id")?, &a.s("password")?)?),
+            "lockAll" => to(&db.lock_all()),
+            "anyUnlocked" => ok(json!(db.any_unlocked())),
+            "changePassword" => to(&db.change_password(&a.s("kind")?, &a.s("id")?, &a.s("password")?)?),
+            "removeLock" => to(&db.remove_lock(&a.s("kind")?, &a.s("id")?)?),
             _ => Err(AppError::Invalid(format!("unknown command: {cmd}"))),
         }
     }

@@ -13,6 +13,9 @@ Item {
     property string title
     property bool favourite: false
     property bool raised: false
+    /// Password protected; `unlocked`: open this session.
+    property bool locked: false
+    property bool unlocked: false
     readonly property bool full: hasCover && thumbnail.length > 0
 
     // Lifted: a soft shadow.
@@ -52,12 +55,21 @@ Item {
     }
     // The spine.
     RoundImage { width: root.full ? 6 : 10; height: parent.height; color: Qt.rgba(0, 0, 0, 0.18); radiusTopLeft: 4; radiusBottomLeft: 4 }
-    // Favourite.
-    Rectangle { antialiasing: true;
-        visible: root.favourite
+    // Favourite, password.
+    Row {
         anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 8
-        width: 26; height: 26; radius: 13
-        color: Qt.rgba(1, 1, 1, 0.92)
-        Icon { anchors.centerIn: parent; name: "star"; size: 15; color: "#d99a00"; filled: true }
+        spacing: 4
+        Rectangle { antialiasing: true;
+            visible: root.locked
+            width: 26; height: 26; radius: 13
+            color: Qt.rgba(1, 1, 1, 0.92)
+            Icon { anchors.centerIn: parent; name: root.unlocked ? "unlock" : "lock"; size: 14; color: "#1d1f23" }
+        }
+        Rectangle { antialiasing: true;
+            visible: root.favourite
+            width: 26; height: 26; radius: 13
+            color: Qt.rgba(1, 1, 1, 0.92)
+            Icon { anchors.centerIn: parent; name: "star"; size: 15; color: "#d99a00"; filled: true }
+        }
     }
 }
