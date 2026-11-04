@@ -62,7 +62,29 @@ Section "Inkleaf"
   RMDir /r "$INSTDIR\qml"
   RMDir /r "$INSTDIR\plugins"
   SetOutPath "$INSTDIR"
-  File /r "${SOURCE}\*.*"
+  ; Windows or an antivirus can hold a file for a moment (scanning it, or
+  ; Inkleaf still closing). With a window, NSIS asks Retry / Ignore; silently
+  ; (an update from the app) it would skip the file and carry on, leaving
+  ; old and new files mixed. So: try again a few times, then say so.
+  StrCpy $R9 0
+  copy:
+    ClearErrors
+    File /r "${SOURCE}\*.*"
+    IfErrors 0 copied
+    IntOp $R9 $R9 + 1
+    IntCmp $R9 6 failed
+    DetailPrint "Some files were in use; trying again ($R9)…"
+    nsExec::Exec 'taskkill /IM Inkleaf.exe /F'
+    Sleep 2000
+    Goto copy
+  failed:
+    SetErrorLevel 2
+    MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "Windows (or an antivirus) kept some of Inkleaf's files in use, so the update isn't complete.$\r$\n$\r$\nClose Inkleaf if it's open and choose Retry. If it keeps happening, restart the computer and run the setup again. Your notebooks are safe either way." IDRETRY retry
+    Abort "Some files couldn't be replaced."
+  retry:
+    StrCpy $R9 0
+    Goto copy
+  copied:
   WriteUninstaller "$INSTDIR\uninstall.exe"
 
   CreateShortcut "$SMPROGRAMS\${NAME}.lnk" "$INSTDIR\Inkleaf.exe"
