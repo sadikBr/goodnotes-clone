@@ -320,7 +320,7 @@ std::vector<P2> flattenSmooth(const std::vector<Pt>& pts) {
   return out;
 }
 
-void drawStroke(JsCanvas& c, const QJsonObject& el) {
+void drawStroke(JsCanvas& c, const QJsonObject& el, bool live) {
   const std::vector<Pt> pts = pointsOf(el);
   if (pts.empty()) return;
   const QString color = el["color"].toString();
@@ -366,7 +366,7 @@ void drawStroke(JsCanvas& c, const QJsonObject& el) {
   if (isDot) c.arc(dot.x, dot.y, dot.r, 0, M_PI * 2);
   else {
     const double streamline = el["smooth"].isDouble() ? el["smooth"].toDouble() : kStreamlineNormal;
-    for (const auto& outline : strokeOutline(pts, style, width, true, streamline)) outlinePath(c, outline);
+    for (const auto& outline : strokeOutline(pts, style, width, !live, streamline)) outlinePath(c, outline);
   }
   if (style == "pencil") {
     double avg = 0;

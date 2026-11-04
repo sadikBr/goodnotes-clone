@@ -7,6 +7,7 @@
 #include <QJsonObject>
 #include <QString>
 #include <array>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -55,6 +56,12 @@ struct El {
   std::optional<double> rotation;
   /// Keys this model doesn't know, kept for saving.
   QJsonObject extra;
+  /// Changes whenever the element does (each new or changed element gets a
+  /// new one): the canvas redraws what changed. Not saved.
+  quint64 rev = 0;
+  /// Bounds, worked out once (elements aren't changed in place, except the
+  /// one being typed into, which clears it).
+  mutable std::optional<Rect> cachedBounds;
 
   bool isTextish() const { return kind == Kind::Text || kind == Kind::Sticky; }
   bool isBox() const { return kind == Kind::Text || kind == Kind::Sticky || kind == Kind::Image; }
@@ -63,6 +70,12 @@ struct El {
   QJsonObject toJson() const;
   static El fromJson(const QJsonObject& o);
 };
+
+/// Elements are shared between the page and its undo history; a change
+/// makes a new one (see EditorCore).
+using ElPtr = std::shared_ptr<El>;
+/// A new element (with a new rev).
+ElPtr makeEl(El e);
 
 QString kindName(Kind k);
 std::optional<Kind> kindOf(const QString& name);

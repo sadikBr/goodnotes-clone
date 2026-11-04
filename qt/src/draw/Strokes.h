@@ -25,6 +25,7 @@ std::vector<Pt> steadyHighlight(const std::vector<Pt>& pts, double width);
 std::vector<std::pair<double, double>> flattenSmooth(const std::vector<Pt>& pts);
 
 /// A stroke element (as the editor holds it: tool, style, color, width, points, smooth).
-void drawStroke(JsCanvas& c, const QJsonObject& el);
+/// `live`: still being drawn (its end isn't tapered yet).
+void drawStroke(JsCanvas& c, const QJsonObject& el, bool live = false);
 
 }  // namespace draw

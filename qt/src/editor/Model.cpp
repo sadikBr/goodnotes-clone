@@ -174,6 +174,13 @@ QJsonObject El::toJson() const {
   return o;
 }
 
+ElPtr makeEl(El e) {
+  static quint64 counter = 0;
+  e.rev = ++counter;
+  e.cachedBounds.reset();
+  return std::make_shared<El>(std::move(e));
+}
+
 QString newId() { return QUuid::createUuid().toString(QUuid::WithoutBraces); }
 
 double nextZ(const std::vector<El>& els) {

@@ -16,6 +16,7 @@
 #include <QQuickWindow>
 #include <QSurfaceFormat>
 
+#include "CompareEditor.h"
 #include "CompareRender.h"
 #include "tests/SelfTest.h"
 #include "Js.h"
@@ -85,6 +86,8 @@ int main(int argc, char* argv[]) {
   if (QCoreApplication::arguments().contains("--self-test")) return selftest::runAll();
   // Developer and CI check: the C++ drawing matches the scripts' (docs/MIGRATION.md).
   if (const int i = QCoreApplication::arguments().indexOf("--compare-render"); i > 0 && i + 1 < argc) return compareRender(QCoreApplication::arguments().at(i + 1));
+  // The same for the editor: both editors through the same sessions.
+  if (const int i = QCoreApplication::arguments().indexOf("--compare-editor"); i > 0 && i + 1 < argc) return compareEditor(QCoreApplication::arguments().at(i + 1));
   // Developer check: draws every paper with the web app's code, then quits
   // (inkleaf --render-papers <folder>).
   if (const int i = QCoreApplication::arguments().indexOf("--render-papers"); i > 0 && i + 1 < argc) {
