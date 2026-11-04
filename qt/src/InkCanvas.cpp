@@ -975,6 +975,38 @@ bool InkCanvas::updateGraph(const QVariantMap& spec) {
   return true;
 }
 
+QVariantMap InkCanvas::selectionPiece(int maxSide) {
+  if (!m_ed) return {};
+  finishEdit();
+  const QJsonObject piece = m_ed->selectionAsPiece();
+  if (piece.isEmpty()) return {};
+  const double w = piece["width"].toDouble(), h = piece["height"].toDouble();
+  const QJsonArray els = piece["elements"].toArray();
+  const double scale = std::min(2.0, double(maxSide) / std::max(1.0, std::max(w, h)));
+  const QImage img = draw::elementsImage(els, scale, QRectF(-4, -4, w + 8, h + 8));
+  QByteArray bytes;
+  QBuffer buf(&bytes);
+  buf.open(QIODevice::WriteOnly);
+  img.save(&buf, "PNG");
+  return {{"elements", QString::fromUtf8(QJsonDocument(els).toJson(QJsonDocument::Compact))}, {"width", w}, {"height", h},
+          {"preview", "data:image/png;base64," + QString::fromLatin1(bytes.toBase64())}};
+}
+
+void InkCanvas::insertPiece(const QString& elements, double width, double height) {
+  if (!m_ed) return;
+  finishEdit();
+  const QJsonArray els = QJsonDocument::fromJson(elements.toUtf8()).array();
+  const int pi = currentPage();
+  if (els.isEmpty() || pi < 0 || pi >= int(m_pages.size())) return;
+  m_ed->activate(pi);
+  const QPointF c = toPageOf(pi, QPointF(this->width() / 2, this->height() / 2));
+  const double x = std::clamp(c.x() - width / 2, 0.0, std::max(0.0, double(m_pages[pi].w) - width));
+  const double y = std::clamp(c.y() - height / 2, 0.0, std::max(0.0, double(m_pages[pi].h) - height));
+  setTool("lasso");
+  m_ed->insertPiece(els, x, y);
+  afterCore();
+}
+
 bool InkCanvas::writeBeside(const QString& text, const QString& font) {
   if (!m_ed) return false;
   finishEdit();

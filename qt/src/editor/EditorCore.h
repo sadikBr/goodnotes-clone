@@ -140,6 +140,11 @@ public:
   void insertGraph(const QVariantMap& spec, double x, double y, double w, double h);
   /// Changes the selected graph (one graph selected); false when there's none.
   bool updateSelectedGraph(const QVariantMap& spec);
+  /// The selection as a reusable piece: its elements from the top left of
+  /// its box ({ elements, width, height }); empty with nothing selected.
+  QJsonObject selectionAsPiece();
+  /// A piece's elements put with their top left at (x, y), selected.
+  void insertPiece(const QJsonArray& els, double x, double y);
   /// `value` written to the right of the selection (under it when there's no
   /// room), in `font`, sized to it and in its ink's colour, selected.
   bool writeBeside(const QString& value, const QString& font);
@@ -221,7 +226,8 @@ private:
   std::optional<P2> m_cursor;
   bool m_shift = false;
   std::vector<Step> m_undo, m_redo;
-  std::vector<El> m_clipboard;
+  /// Copied elements, shared by every open page view (copy in one, paste in another).
+  static std::vector<El>& clipboard();
   ElPtr m_editing;
   bool m_editingNew = false;
   Els m_editingBefore;

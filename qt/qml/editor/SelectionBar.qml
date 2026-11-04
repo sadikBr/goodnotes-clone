@@ -42,6 +42,8 @@ Item {
     signal mathsRequested()
     /// Edit the selected graph.
     signal graphEditRequested(var graph)
+    /// Save the selection to my pieces.
+    signal savePieceRequested()
     ColorPopover { id: colorPop }
 
     Shadow { anchors.fill: parent; radius: 14; level: 3 }
@@ -211,6 +213,7 @@ Item {
             }
         }
         Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 22; color: Theme.border }
+        SmallTool { iconName: "stack"; tip: "Save to my pieces (to use on any page)"; onClicked: root.savePieceRequested() }
         SmallTool { iconName: "copy"; tip: "Duplicate (Ctrl+D)"; onClicked: root.canvas.duplicateSelection() }
         SmallTool { iconName: "trash"; tip: "Delete"; onClicked: root.canvas.deleteSelection() }
     }

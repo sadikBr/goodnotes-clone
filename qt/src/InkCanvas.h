@@ -172,6 +172,11 @@ public:
   Q_INVOKABLE void insertGraph(const QVariantMap& spec);
   /// Changes the selected graph.
   Q_INVOKABLE bool updateGraph(const QVariantMap& spec);
+  /// The selection as a reusable piece: { elements (JSON text), width,
+  /// height, preview (PNG data: URL about `maxSide` on its long side) }.
+  Q_INVOKABLE QVariantMap selectionPiece(int maxSide = 240);
+  /// A piece's elements (JSON text) put in the middle of the view, selected.
+  Q_INVOKABLE void insertPiece(const QString& elements, double width, double height);
   /// Writes `text` beside the selection in `font` (an answer next to a sum).
   Q_INVOKABLE bool writeBeside(const QString& text, const QString& font);
   /// Replaces the selected handwriting with `text` in `font` (keeping the ink if asked).

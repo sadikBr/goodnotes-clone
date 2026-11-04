@@ -16,7 +16,7 @@ use crate::error::{AppError, AppResult};
 use crate::lock::{self, ContentKey, LockInfo};
 use std::collections::HashMap;
 
-const SCHEMA_VERSION: i64 = 6;
+const SCHEMA_VERSION: i64 = 7;
 
 /// Ids of the folders in the trash and every folder inside them, at any
 /// depth: what's in a trashed folder is in the trash with it.
@@ -146,6 +146,21 @@ pub struct SearchHit {
     pub page_id: Option<String>,
     pub page_number: Option<i64>,
     pub snippet: String,
+}
+
+/// A saved selection to put on any page: its elements (JSON, from the top
+/// left of their box), a picture, and the box's size.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Snippet {
+    pub id: String,
+    pub name: String,
+    pub data: String,
+    pub preview: Option<String>,
+    pub width: f64,
+    pub height: f64,
+    pub created_at: i64,
+    pub used_at: Option<i64>,
 }
 
 /// A handwritten page for the AI to read.
@@ -577,6 +592,22 @@ impl Db {
             if !cols.iter().any(|c| c == "ink_text") {
                 conn.execute_batch("ALTER TABLE pages ADD COLUMN ink_text TEXT; ALTER TABLE pages ADD COLUMN ink_text_at INTEGER;")?;
             }
+            conn.pragma_update(None, "user_version", 6)?;
+        }
+        if version < 7 {
+            // v7: reusable pieces (a selection saved to put on any page).
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS snippets (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    data TEXT NOT NULL,
+                    preview TEXT,
+                    width REAL NOT NULL,
+                    height REAL NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    used_at INTEGER
+                );",
+            )?;
             conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         }
         // PDFs stored for an import that never finished.
@@ -1635,6 +1666,76 @@ impl Db {
         Ok(hits)
     }
 
+    // --------------------------------------------------------- reusable pieces
+
+    /// The saved pieces, most recently used (or saved) first.
+    pub fn snippets(&self) -> AppResult<Vec<Snippet>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id, name, data, preview, width, height, created_at, used_at FROM snippets ORDER BY COALESCE(used_at, created_at) DESC, used_at IS NULL, rowid DESC",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(Snippet {
+                id: r.get(0)?,
+                name: r.get(1)?,
+                data: r.get(2)?,
+                preview: r.get(3)?,
+                width: r.get(4)?,
+                height: r.get(5)?,
+                created_at: r.get(6)?,
+                used_at: r.get(7)?,
+            })
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    /// Saves a selection as a piece. Not from a locked notebook: the piece
+    /// isn't encrypted, so its content would no longer be protected.
+    pub fn save_snippet(&self, name: &str, data: &str, preview: Option<&str>, width: f64, height: f64, from_notebook: Option<&str>) -> AppResult<Snippet> {
+        let conn = self.conn();
+        if let Some(nb) = from_notebook {
+            if notebook_lock(&conn, nb)?.is_some() {
+                return Err(AppError::Invalid(
+                    "This notebook is password protected: what's in it can't go into the library (it would be kept unencrypted there).".into(),
+                ));
+            }
+        }
+        let name = validate_name(name)?;
+        serde_json::from_str::<serde_json::Value>(data).map_err(|e| AppError::Invalid(format!("damaged piece: {e}")))?;
+        let s = Snippet {
+            id: new_id(),
+            name,
+            data: data.to_string(),
+            preview: preview.map(str::to_string),
+            width,
+            height,
+            created_at: now_ms(),
+            used_at: None,
+        };
+        conn.execute(
+            "INSERT INTO snippets (id, name, data, preview, width, height, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![s.id, s.name, s.data, s.preview, s.width, s.height, s.created_at],
+        )?;
+        Ok(s)
+    }
+
+    pub fn rename_snippet(&self, id: &str, name: &str) -> AppResult<()> {
+        let name = validate_name(name)?;
+        let n = self.conn().execute("UPDATE snippets SET name = ?2 WHERE id = ?1", params![id, name])?;
+        expect_one(n, id)
+    }
+
+    pub fn delete_snippet(&self, id: &str) -> AppResult<()> {
+        self.conn().execute("DELETE FROM snippets WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    /// A piece put on a page: it moves to the front of the list.
+    pub fn use_snippet(&self, id: &str) -> AppResult<()> {
+        self.conn().execute("UPDATE snippets SET used_at = ?2 WHERE id = ?1", params![id, now_ms()])?;
+        Ok(())
+    }
+
     // ------------------------------------------------------------- AI reading
 
     /// Handwritten pages whose handwriting hasn't been read since they changed
@@ -2111,6 +2212,24 @@ mod tests {
             Ok(out)
         })
         .unwrap()
+    }
+
+    #[test]
+    fn pieces_are_kept_listed_and_never_taken_from_a_locked_notebook() {
+        let db = db();
+        let nb = notebook(&db, "Maths");
+        let a = db.save_snippet("Stamp", "[{\"kind\":\"text\",\"text\":\"Très bien\"}]", Some("data:image/png;base64,AA"), 120.0, 40.0, Some(&nb.id)).unwrap();
+        let b = db.save_snippet("Triangle", "[]", None, 80.0, 70.0, None).unwrap();
+        assert_eq!(db.snippets().unwrap().iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Triangle", "Stamp"]);
+        db.use_snippet(&a.id).unwrap();
+        assert_eq!(db.snippets().unwrap()[0].id, a.id);
+        db.rename_snippet(&b.id, "Right triangle").unwrap();
+        assert!(db.snippets().unwrap().iter().any(|s| s.name == "Right triangle"));
+        db.delete_snippet(&a.id).unwrap();
+        assert_eq!(db.snippets().unwrap().len(), 1);
+        assert!(db.save_snippet("Bad", "not json", None, 1.0, 1.0, None).is_err());
+        db.lock_notebook(&nb.id, "secret").unwrap();
+        assert!(db.save_snippet("Secret", "[]", None, 1.0, 1.0, Some(&nb.id)).unwrap_err().to_string().contains("password"));
     }
 
     #[test]

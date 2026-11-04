@@ -51,7 +51,7 @@ QString libraryDir() {
 
 /// Commands that change what the library shows.
 bool changesLibrary(const QString& cmd) {
-  static const QStringList reads = {"library", "trash", "search", "notebook", "pages", "elements", "assetBytes", "buildDocument", "backupStatus", "syncStatus", "dataDir", "anyUnlocked", "aiStatus", "aiTest", "aiAsk", "notesForAi", "pagesToRead", "readingProgress", "setPageInkText", "simplifyStroke", "recognizeHandwriting", "inspectBackup"};
+  static const QStringList reads = {"library", "trash", "search", "notebook", "pages", "elements", "assetBytes", "buildDocument", "backupStatus", "syncStatus", "dataDir", "anyUnlocked", "snippets", "saveSnippet", "renameSnippet", "deleteSnippet", "useSnippet", "aiStatus", "aiTest", "aiAsk", "notesForAi", "pagesToRead", "readingProgress", "setPageInkText", "simplifyStroke", "recognizeHandwriting", "inspectBackup"};
   return !reads.contains(cmd) && cmd != "saveElements" && cmd != "setPageThumbnail";
 }
 }  // namespace

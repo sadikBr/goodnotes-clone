@@ -1205,11 +1205,49 @@ void EditorCore::recolorSelection(const QString& color) {
   changed();
 }
 
+std::vector<El>& EditorCore::clipboard() {
+  static std::vector<El> shared;
+  return shared;
+}
+
+QJsonObject EditorCore::selectionAsPiece() {
+  const Els sel = selected().list;
+  if (sel.empty()) return {};
+  std::vector<Rect> rs;
+  for (const ElPtr& el : sel) rs.push_back(boxOfEl(*el));
+  const Rect box = *unionRects(rs);
+  QJsonArray els;
+  for (const ElPtr& el : sel) {
+    El c = translate(*el, -box.x, -box.y);
+    QJsonObject o = c.toJson();
+    o.remove("id");
+    els.append(o);
+  }
+  return {{"elements", els}, {"width", box.w}, {"height", box.h}};
+}
+
+void EditorCore::insertPiece(const QJsonArray& els, double x, double y) {
+  if (els.isEmpty()) return;
+  snapshot();
+  double z = nextZ();
+  QSet<QString> sel;
+  for (const QJsonValue& v : els) {
+    El c = translate(El::fromJson(v.toObject()), x, y);
+    c.id = newId();
+    c.z = z++;
+    sel.insert(c.id);
+    elements().push_back(makeEl(std::move(c)));
+  }
+  m_selection = sel;
+  ++selectionRev;
+  changed();
+}
+
 int EditorCore::copySelection() {
-  m_clipboard.clear();
+  clipboard().clear();
   for (const ElPtr& el : elements())
-    if (m_selection.contains(el->id)) m_clipboard.push_back(*el);
-  return int(m_clipboard.size());
+    if (m_selection.contains(el->id)) clipboard().push_back(*el);
+  return int(clipboard().size());
 }
 
 int EditorCore::cutSelection() {
@@ -1219,9 +1257,9 @@ int EditorCore::cutSelection() {
 }
 
 int EditorCore::pasteClipboard() {
-  if (m_clipboard.empty()) return 0;
-  placeCopies(m_clipboard);
-  return int(m_clipboard.size());
+  if (clipboard().empty()) return 0;
+  placeCopies(clipboard());
+  return int(clipboard().size());
 }
 
 void EditorCore::duplicateSelection() {

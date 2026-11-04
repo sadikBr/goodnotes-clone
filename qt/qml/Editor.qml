@@ -358,6 +358,7 @@ Rectangle {
                         }
                         IconButton { iconName: "image"; tip: "Insert image"; implicitWidth: 34; implicitHeight: 34; onClicked: imageDialog.open() }
                         IconButton { iconName: "graph"; tip: "Insert a graph"; implicitWidth: 34; implicitHeight: 34; onClicked: graphDialog.show(null, false) }
+                        IconButton { id: piecesBtn; iconName: "stack"; tip: "My pieces: put a saved piece on the page"; implicitWidth: 34; implicitHeight: 34; onClicked: piecesPanel.opened ? piecesPanel.close() : piecesPanel.show(piecesBtn) }
                         IconButton {
                             id: rulerBtn
                             iconName: "ruler"; tip: "Ruler, protractor, set squares (R)"; implicitWidth: 34; implicitHeight: 34
@@ -523,6 +524,7 @@ Rectangle {
                     onAskAi: what => root.askAboutSelection(what)
                     onMathsRequested: mathCard.start()
                     onGraphEditRequested: g => graphDialog.show(g, true)
+                    onSavePieceRequested: root.savePiece()
                 }
 
                 // The active tool's options.
@@ -596,6 +598,20 @@ Rectangle {
     // Export (PDF, PowerPoint, PNG).
     Exporter { id: exporter; canvas: canvas; title: root.title; onNotify: (m, e) => root.notify(m, e) }
     GraphDialog { id: graphDialog; canvas: canvas }
+    PiecesPanel { id: piecesPanel; canvas: canvas; onNotify: (m, e) => root.notify(m, e) }
+    /// The selection into my pieces, under a name.
+    function savePiece() {
+        const p = canvas.selectionPiece(240)
+        if (!p.elements) return
+        dialog.ask("Save to my pieces", [{ name: "name", label: "Name", value: "" , placeholder: "Triangle, signature, stamp…" }], "Save", r => {
+            try {
+                InkleafCore.call("saveSnippet", { name: r.name.trim(), data: p.elements, preview: p.preview, width: p.width, height: p.height, notebookId: root.notebookId })
+                root.notify("Saved to your pieces: find it under the pieces button at the top", false)
+            } catch (e) {
+                root.notify(String(e.message || e), true)
+            }
+        }, { message: "Put it on any page later from the pieces button in the toolbar." })
+    }
     MathCard {
         id: mathCard
         canvas: canvas
