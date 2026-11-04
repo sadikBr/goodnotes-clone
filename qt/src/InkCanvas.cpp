@@ -943,6 +943,47 @@ QString InkCanvas::selectionImage(int maxSide) {
   return "data:image/png;base64," + QString::fromLatin1(bytes.toBase64());
 }
 
+void InkCanvas::insertGraph(const QVariantMap& spec) {
+  if (!m_ed) return;
+  finishEdit();
+  const auto box = m_ed->selectionBounds();
+  const int pi = box ? activePage() : currentPage();
+  if (pi < 0 || pi >= int(m_pages.size())) return;
+  m_ed->activate(pi);
+  const double pw = m_pages[pi].w;
+  const double w = std::min(360.0, pw * 0.6), h = w * 0.8;
+  double x, y;
+  if (box && box->x + box->w + 16 + w <= pw) {
+    x = box->x + box->w + 16;
+    y = box->y;
+  } else if (box) {
+    x = box->x;
+    y = box->y + box->h + 16;
+  } else {
+    const QPointF c = toPageOf(pi, QPointF(width() / 2, height() / 2));
+    x = c.x() - w / 2;
+    y = c.y() - h / 2;
+  }
+  setTool("lasso");
+  m_ed->insertGraph(spec, x, y, w, h);
+  afterCore();
+}
+
+bool InkCanvas::updateGraph(const QVariantMap& spec) {
+  if (!m_ed || !m_ed->updateSelectedGraph(spec)) return false;
+  afterCore();
+  return true;
+}
+
+bool InkCanvas::writeBeside(const QString& text, const QString& font) {
+  if (!m_ed) return false;
+  finishEdit();
+  setTool("lasso");
+  const bool done = m_ed->writeBeside(text, font);
+  afterCore();
+  return done;
+}
+
 void InkCanvas::insertText(const QString& text) {
   if (!m_ed || text.trimmed().isEmpty()) return;
   finishEdit();

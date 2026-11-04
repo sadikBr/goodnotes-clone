@@ -31,7 +31,8 @@ struct Shape {
   QJsonObject toJson() const;
 };
 
-enum class Kind { Stroke, Shape, Text, Sticky, Image };
+/// Graph: a box with functions to plot (text: one per line; extra: xmin, xmax, ymin, ymax, grid).
+enum class Kind { Stroke, Shape, Text, Sticky, Image, Graph };
 
 struct El {
   QString id;
@@ -66,7 +67,7 @@ struct El {
   mutable std::optional<Rect> cachedFrame;
 
   bool isTextish() const { return kind == Kind::Text || kind == Kind::Sticky; }
-  bool isBox() const { return kind == Kind::Text || kind == Kind::Sticky || kind == Kind::Image; }
+  bool isBox() const { return kind == Kind::Text || kind == Kind::Sticky || kind == Kind::Image || kind == Kind::Graph; }
   double rot() const { return rotation.value_or(0); }
   /// The editor's JSON for it (what drawing and saving take); a stroke's
   /// points can be left out (saving writes them itself).

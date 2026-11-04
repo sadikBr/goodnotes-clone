@@ -1010,7 +1010,7 @@ void EditorCore::eraseAt(double x, double y) {
   next.reserve(els.size());
   for (const ElPtr& el : els) {
     const double w = el->kind == Kind::Stroke || el->kind == Kind::Shape ? el->width : 0;
-    if (el->kind == Kind::Image || !near(boxOfEl(*el), x, y, radius + 2 + w)) {
+    if (el->kind == Kind::Image || el->kind == Kind::Graph || !near(boxOfEl(*el), x, y, radius + 2 + w)) {
       next.push_back(el);
       continue;
     }
@@ -1128,6 +1128,12 @@ QVariantMap EditorCore::selectionInfo() {
   else if (!texts.empty() && all([](const ElPtr& t) { return currentList(t->text) == "number"; })) list = "number";
   out["list"] = list;
   out["shape"] = single ? QVariant(QVariantMap{{"kind", single->shape.kind}, {"closed", isClosedShape(single->shape)}, {"width", single->width}, {"fill", bool(single->fill)}}) : QVariant();
+  if (els.size() == 1 && els[0]->kind == Kind::Graph) {
+    const El& g = *els[0];
+    out["graph"] = QVariantMap{{"functions", g.text}, {"xmin", g.extra.value("xmin").toDouble(-5)}, {"xmax", g.extra.value("xmax").toDouble(5)},
+                               {"ymin", g.extra.value("ymin").toDouble(-5)}, {"ymax", g.extra.value("ymax").toDouble(5)}, {"grid", g.extra.value("grid").toBool(true)}};
+  }
+  out["hasText"] = std::any_of(els.begin(), els.end(), [](const ElPtr& e) { return e->kind == Kind::Text && !e->text.trimmed().isEmpty(); });
   return out;
 }
 
@@ -1276,6 +1282,97 @@ void EditorCore::insertText(const QString& value, double x, double y, double w) 
   addElement(makeEl(std::move(el)));
   m_selection = {id};
   ++selectionRev;
+}
+
+namespace {
+void applyGraphSpec(El& el, const QVariantMap& spec) {
+  if (spec.contains("functions")) el.text = spec.value("functions").toString().trimmed();
+  for (const char* k : {"xmin", "xmax", "ymin", "ymax"})
+    if (spec.contains(k)) el.extra[k] = spec.value(k).toDouble();
+  if (spec.contains("grid")) el.extra["grid"] = spec.value("grid").toBool();
+}
+}  // namespace
+
+void EditorCore::insertGraph(const QVariantMap& spec, double x, double y, double w, double h) {
+  El el;
+  el.id = newId();
+  el.z = nextZ();
+  el.kind = Kind::Graph;
+  el.color = "#111827";
+  el.x = std::max(0.0, std::min(x, pageWidth() - w));
+  el.y = std::max(0.0, std::min(y, pageHeight() - h));
+  el.w = w;
+  el.h = h;
+  el.extra = QJsonObject{{"xmin", -5}, {"xmax", 5}, {"ymin", -5}, {"ymax", 5}, {"grid", true}};
+  applyGraphSpec(el, spec);
+  const QString id = el.id;
+  addElement(makeEl(std::move(el)));
+  m_selection = {id};
+  ++selectionRev;
+}
+
+bool EditorCore::updateSelectedGraph(const QVariantMap& spec) {
+  const Els sel = selected().list;
+  if (sel.size() != 1 || sel[0]->kind != Kind::Graph) return false;
+  snapshot();
+  for (ElPtr& el : elements())
+    if (el->id == sel[0]->id) {
+      El next = *el;
+      applyGraphSpec(next, spec);
+      el = makeEl(std::move(next));
+    }
+  ++selectionRev;
+  changed();
+  return true;
+}
+
+bool EditorCore::writeBeside(const QString& value, const QString& font) {
+  const auto box = selectionBounds();
+  if (!box || value.trimmed().isEmpty()) return false;
+  // The colour with the most ink in the selection (else the usual text colour).
+  QString color = "#1d1f23";
+  size_t most = 0;
+  QHash<QString, size_t> ink;
+  for (const ElPtr& el : selected().list)
+    if (el->kind == Kind::Stroke) ink[el->color] += el->points.size();
+  for (auto it = ink.begin(); it != ink.end(); ++it)
+    if (it.value() > most) most = it.value(), color = it.key();
+  // About the height of one written line of it; typed text: its own size,
+  // font and line, so the answer reads as part of it.
+  const Els sel = selected().list;
+  const El* typed = nullptr;
+  for (const ElPtr& el : sel)
+    if (el->kind == Kind::Text) typed = el.get();
+  const bool onlyText = typed && std::all_of(sel.begin(), sel.end(), [](const ElPtr& e) { return e->kind == Kind::Text; });
+  const double lines = std::max(1.0, std::round(box->h / std::max(30.0, box->w / 3)));
+  const double size = onlyText ? typed->fontSize.value_or(20) : std::clamp(box->h / lines * 0.62, 14.0, 72.0);
+  const QString face = onlyText ? typed->font.value_or(font) : font;
+  if (onlyText) color = typed->color.isEmpty() ? color : typed->color;
+  const Fit fit = fitTextToBox(value, face, {0, 0, 10000, size * 1.35});
+  const double width = std::min(std::max(fit.width + size, 60.0), pageWidth());
+  El text;
+  text.id = newId();
+  text.z = nextZ();
+  text.kind = Kind::Text;
+  text.text = value.trimmed();
+  text.fontSize = size;
+  text.color = color;
+  text.font = face;
+  text.w = width;
+  // Beside it, lined up with its middle (typed text: its last line); under it
+  // when the page ends first.
+  if (box->x + box->w + size * 0.4 + width <= pageWidth()) {
+    text.x = box->x + box->w + size * 0.4;
+    text.y = onlyText ? typed->y + boxOfEl(*typed).h - size * 1.35 : box->y + box->h / 2 - size * 1.35 / 2;
+  } else {
+    text.x = std::max(0.0, std::min(box->x, pageWidth() - width));
+    text.y = std::min(box->y + box->h + size * 0.3, pageHeight() - size * 1.35);
+  }
+  const QString id = text.id;
+  addElement(makeEl(std::move(text)));
+  m_selection = {id};
+  ++selectionRev;
+  return true;
 }
 
 Els EditorCore::selectedInk() {

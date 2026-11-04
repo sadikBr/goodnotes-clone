@@ -70,6 +70,7 @@ QString kindName(Kind k) {
     case Kind::Text: return "text";
     case Kind::Sticky: return "sticky";
     case Kind::Image: return "image";
+    case Kind::Graph: return "graph";
   }
   return "stroke";
 }
@@ -80,6 +81,7 @@ std::optional<Kind> kindOf(const QString& n) {
   if (n == "text") return Kind::Text;
   if (n == "sticky") return Kind::Sticky;
   if (n == "image") return Kind::Image;
+  if (n == "graph") return Kind::Graph;
   return std::nullopt;
 }
 

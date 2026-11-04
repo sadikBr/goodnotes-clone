@@ -1,5 +1,7 @@
 #include "Elements.h"
 
+#include "../math/MathExpr.h"
+
 #include "Render.h"
 
 #include <QRegularExpression>
@@ -194,6 +196,135 @@ void drawImage(Canvas& c, const QJsonObject& el) {
   }
 }
 
+/// A tidy step for ticks: 1, 2 or 5 × 10ⁿ, about `span / want` long.
+double niceStep(double span, double want) {
+  const double raw = span / std::max(1.0, want);
+  const double p = std::pow(10.0, std::floor(std::log10(raw)));
+  for (double m : {1.0, 2.0, 5.0, 10.0})
+    if (raw <= m * p) return m * p;
+  return 10 * p;
+}
+
+/// A graph: a white card with a grid, axes and labelled ticks, and each
+/// function (one per line of its text) as a curve, broken where it isn't
+/// defined or jumps (1/x, tan x). Ranges in xmin, xmax, ymin, ymax.
+void drawGraph(Canvas& c, const QJsonObject& el) {
+  const double x = el["x"].toDouble(), y = el["y"].toDouble(), w = el["w"].toDouble(), h = el["h"].toDouble();
+  if (w < 4 || h < 4) return;
+  double x0 = el["xmin"].toDouble(-5), x1 = el["xmax"].toDouble(5), y0 = el["ymin"].toDouble(-5), y1 = el["ymax"].toDouble(5);
+  if (!(x1 > x0)) x1 = x0 + 1;
+  if (!(y1 > y0)) y1 = y0 + 1;
+  const bool grid = el["grid"].toBool(true);
+  // Page units for a graph value.
+  auto px = [&](double v) { return x + (v - x0) / (x1 - x0) * w; };
+  auto py = [&](double v) { return y + h - (v - y0) / (y1 - y0) * h; };
+  const double fs = std::clamp(std::min(w, h) / 26, 7.0, 14.0);
+  c.save();
+  // The card.
+  c.setFill("#ffffff");
+  c.beginPath();
+  c.roundRect(x, y, w, h, QJSValue(6));
+  c.fill();
+  c.setStroke("#d1d5db");
+  c.setLineWidth(1);
+  c.stroke();
+  c.beginPath();
+  c.rect(x, y, w, h);
+  c.clip();
+  const double sx = niceStep(x1 - x0, std::max(4.0, w / 45)), sy = niceStep(y1 - y0, std::max(4.0, h / 45));
+  if (grid) {
+    c.setStroke("#e5e7eb");
+    c.setLineWidth(0.75);
+    c.beginPath();
+    for (double v = std::ceil(x0 / sx) * sx; v <= x1 + 1e-9; v += sx) c.moveTo(px(v), y), c.lineTo(px(v), y + h);
+    for (double v = std::ceil(y0 / sy) * sy; v <= y1 + 1e-9; v += sy) c.moveTo(x, py(v)), c.lineTo(x + w, py(v));
+    c.stroke();
+  }
+  // The axes (at 0, or along the edge when 0 is off the graph), with arrows.
+  const double ax = std::clamp(py(0), y, y + h), ay = std::clamp(px(0), x, x + w);
+  c.setStroke("#374151");
+  c.setLineWidth(1.3);
+  c.beginPath();
+  c.moveTo(x, ax), c.lineTo(x + w, ax);
+  c.moveTo(ay, y + h), c.lineTo(ay, y);
+  c.stroke();
+  const double ar = fs * 0.55;
+  c.setFill("#374151");
+  c.beginPath();
+  c.moveTo(x + w, ax), c.lineTo(x + w - ar * 1.4, ax - ar * 0.7), c.lineTo(x + w - ar * 1.4, ax + ar * 0.7);
+  c.moveTo(ay, y), c.lineTo(ay - ar * 0.7, y + ar * 1.4), c.lineTo(ay + ar * 0.7, y + ar * 1.4);
+  c.fill();
+  // Tick labels (decimal commas, as at school).
+  c.setFont(QStringLiteral("%1px \"Inter\", sans-serif").arg(jsNumber(fs)));
+  c.setFill("#6b7280");
+  auto label = [&](double v) { return mathx::format(v, true, false, 4); };
+  c.setTextAlign("center");
+  c.setTextBaseline("top");
+  for (double v = std::ceil(x0 / sx) * sx; v <= x1 + 1e-9; v += sx) {
+    if (std::abs(v) < sx / 2 || px(v) > x + w - fs * 2) continue;
+    c.beginPath();
+    c.moveTo(px(v), ax - 3), c.lineTo(px(v), ax + 3);
+    c.stroke();
+    c.fillText(label(v), px(v), std::min(ax + 4, y + h - fs * 1.3));
+  }
+  c.setTextAlign("right");
+  c.setTextBaseline("middle");
+  for (double v = std::ceil(y0 / sy) * sy; v <= y1 + 1e-9; v += sy) {
+    if (std::abs(v) < sy / 2 || py(v) < y + fs * 2) continue;
+    c.beginPath();
+    c.moveTo(ay - 3, py(v)), c.lineTo(ay + 3, py(v));
+    c.stroke();
+    c.fillText(label(v), std::max(ay - 5, x + fs * 2.4), py(v));
+  }
+  c.setTextAlign("left");
+  c.setTextBaseline("top");
+  c.fillText(QStringLiteral("0"), ay + 3, std::min(ax + 3, y + h - fs * 1.3));
+  // The curves, and a legend in their colours.
+  static const QStringList palette = {"#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c"};
+  const QJsonArray colors = el["colors"].toArray();
+  const QStringList lines = el["text"].toString().split('\n', Qt::SkipEmptyParts);
+  const int n = std::max(2, int(w * 1.5));
+  const double jump = (y1 - y0) * 3;
+  double legendY = y + 6;
+  for (int i = 0; i < lines.size(); ++i) {
+    const QString col = i < colors.size() && !colors[i].toString().isEmpty() ? colors[i].toString() : palette[i % palette.size()];
+    const mathx::Function f = mathx::function(lines[i]);
+    c.setFont(QStringLiteral("600 %1px \"Inter\", sans-serif").arg(jsNumber(fs * 1.05)));
+    c.setFill(col);
+    c.setTextAlign("left");
+    c.setTextBaseline("top");
+    QString name = lines[i].trimmed();
+    if (!name.contains('=')) name = "y = " + name;
+    c.fillText(f.ok() ? mathx::pretty(name) : name + "  (?)", x + 8, legendY);
+    legendY += fs * 1.45;
+    if (!f.ok()) continue;
+    c.setStroke(col);
+    c.setLineWidth(std::clamp(std::min(w, h) / 160, 1.6, 3.0));
+    c.setLineCap("round");
+    c.setLineJoin("round");
+    c.beginPath();
+    bool down = false;
+    double prev = NAN;
+    for (int k = 0; k <= n; ++k) {
+      const double xv = x0 + (x1 - x0) * k / n;
+      const double yv = f.at(xv);
+      if (!std::isfinite(yv) || (std::isfinite(prev) && std::abs(yv - prev) > jump)) {
+        down = false;
+        prev = yv;
+        continue;
+      }
+      // Far outside: clamped so the line still leaves the card the right way.
+      const double yc = std::clamp(yv, y0 - (y1 - y0), y1 + (y1 - y0));
+      if (down) c.lineTo(px(xv), py(yc));
+      else c.moveTo(px(xv), py(yc));
+      down = true;
+      prev = yv;
+    }
+    c.stroke();
+  }
+  c.restore();
+}
+
 }  // namespace
 
 TextStyle TextStyle::of(const QJsonObject& el) { return {el["font"].toString(), el["bold"].toBool(), el["italic"].toBool(), el["align"].toString()}; }
@@ -273,7 +404,7 @@ double naturalTextWidth(const QJsonObject& el) {
 void drawElement(Canvas& c, const QJsonObject& el) {
   const QString kind = el["kind"].toString();
   // Text boxes, sticky notes and pictures can be rotated around their centre.
-  if ((kind == "text" || kind == "sticky" || kind == "image") && el["rotation"].toDouble() != 0) {
+  if ((kind == "text" || kind == "sticky" || kind == "image" || kind == "graph") && el["rotation"].toDouble() != 0) {
     const QRectF r = boxOf(el);
     const double cx = r.x() + r.width() / 2, cy = r.y() + r.height() / 2;
     c.save();
@@ -291,6 +422,7 @@ void drawElement(Canvas& c, const QJsonObject& el) {
   else if (kind == "text") drawText(c, el);
   else if (kind == "sticky") drawSticky(c, el);
   else if (kind == "image") drawImage(c, el);
+  else if (kind == "graph") drawGraph(c, el);
 }
 
 void paintPage(Canvas& c, const QString& tmpl, const QString& paper, double w, double h, const QJsonArray& els, const QImage& background) {

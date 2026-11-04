@@ -135,6 +135,14 @@ public:
   void insertImage(const QString& src, double naturalW, double naturalH, double cx, double cy);
   /// A text box with `value` at (x, y) on the active page (`w` wide), selected.
   void insertText(const QString& value, double x, double y, double w);
+  /// A graph ({ functions (one per line), xmin, xmax, ymin, ymax, grid }) in
+  /// the box (x, y, w, h), selected.
+  void insertGraph(const QVariantMap& spec, double x, double y, double w, double h);
+  /// Changes the selected graph (one graph selected); false when there's none.
+  bool updateSelectedGraph(const QVariantMap& spec);
+  /// `value` written to the right of the selection (under it when there's no
+  /// room), in `font`, sized to it and in its ink's colour, selected.
+  bool writeBeside(const QString& value, const QString& font);
   QVariantList selectedInkStrokes();
   /// The selected elements' text (typed text and notes), in order.
   QString selectedText();

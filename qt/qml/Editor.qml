@@ -357,6 +357,7 @@ Rectangle {
                             }
                         }
                         IconButton { iconName: "image"; tip: "Insert image"; implicitWidth: 34; implicitHeight: 34; onClicked: imageDialog.open() }
+                        IconButton { iconName: "graph"; tip: "Insert a graph"; implicitWidth: 34; implicitHeight: 34; onClicked: graphDialog.show(null, false) }
                         IconButton {
                             id: rulerBtn
                             iconName: "ruler"; tip: "Ruler, protractor, set squares (R)"; implicitWidth: 34; implicitHeight: 34
@@ -517,7 +518,12 @@ Rectangle {
                     }
                 }
 
-                SelectionBar { id: selectionBar; canvas: canvas; z: 6; onAskAi: what => root.askAboutSelection(what) }
+                SelectionBar {
+                    id: selectionBar; canvas: canvas; z: 6
+                    onAskAi: what => root.askAboutSelection(what)
+                    onMathsRequested: mathCard.start()
+                    onGraphEditRequested: g => graphDialog.show(g, true)
+                }
 
                 // The active tool's options.
                 ToolDrawer {
@@ -589,6 +595,27 @@ Rectangle {
 
     // Export (PDF, PowerPoint, PNG).
     Exporter { id: exporter; canvas: canvas; title: root.title; onNotify: (m, e) => root.notify(m, e) }
+    GraphDialog { id: graphDialog; canvas: canvas }
+    MathCard {
+        id: mathCard
+        canvas: canvas
+        onNotify: (m, e) => root.notify(m, e)
+        onGraphRequested: f => {
+            graphDialog.show({ functions: f, xmin: -5, xmax: 5, ymin: -5, ymax: 5, grid: true }, false)
+            graphDialog.fitY()
+        }
+        onStepsRequested: expr => {
+            if (!Ai.ready) { root.notify("Set up an AI in Settings → AI to see the steps", true); return }
+            aiPanel.start({
+                heading: "Steps",
+                notebookId: root.notebookId,
+                useNotes: false,
+                canInsert: true,
+                extra: "The user is a maths teacher or student working in their notebook; answer in the language they use, at school level, with clear numbered steps and the final answer at the end.",
+                prompt: "Solve step by step: " + expr
+            })
+        }
+    }
     AiPanel {
         id: aiPanel
         onSettingsRequested: root.settingsRequested()

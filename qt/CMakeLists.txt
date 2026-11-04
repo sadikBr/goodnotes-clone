@@ -13,7 +13,7 @@ math(EXPR INKLEAF_VERSION_CODE "${PROJECT_VERSION_MAJOR} * 10000 + ${PROJECT_VER
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/src/daftar)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/src/daftar ${CMAKE_CURRENT_SOURCE_DIR}/src/math)
 
 find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Network Quick QuickControls2 Svg)
 # Qt PDF draws imported PDFs; where it isn't shipped (Android) the system's
@@ -100,10 +100,12 @@ qt_add_executable(inkleaf
   src/daftar/DaftarEditor.h src/daftar/DaftarEditor.cpp
   src/tests/SelfTest.h src/tests/SelfTest.cpp
   src/tests/GeometryTests.cpp
-  src/tests/TextAndSnapTests.cpp src/tests/DaftarTests.cpp src/tests/Samples.h src/tests/Samples.cpp src/tests/Golden.h src/tests/Golden.cpp src/tests/EditorSessions.h src/tests/EditorSessions.cpp src/tests/JsonCompare.h
+  src/tests/TextAndSnapTests.cpp src/tests/MathTests.cpp src/tests/DaftarTests.cpp src/tests/Samples.h src/tests/Samples.cpp src/tests/Golden.h src/tests/Golden.cpp src/tests/EditorSessions.h src/tests/EditorSessions.cpp src/tests/JsonCompare.h
   src/PaperImage.h src/PaperImage.cpp
   src/Pdf.h src/Pdf.cpp
   src/Updater.h src/Updater.cpp
+  src/math/MathExpr.h src/math/MathExpr.cpp
+  src/math/MathKit.h src/math/MathKit.cpp
   src/LaserTrail.h src/LaserTrail.cpp
   src/VectorSvg.h src/VectorSvg.cpp
 )
@@ -180,6 +182,8 @@ qt_add_qml_module(inkleaf
     qml/editor/ModeGroup.qml
     qml/editor/InkToText.qml
     qml/editor/EraserCursor.qml
+    qml/editor/MathCard.qml
+    qml/editor/GraphDialog.qml
     qml/editor/Fonts.js
     qml/editor/ColorPopover.qml
     qml/editor/ToolDrawer.qml

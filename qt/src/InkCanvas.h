@@ -167,6 +167,13 @@ public:
   Q_INVOKABLE QString selectionText();
   /// Adds `text` as a text box: under the selection, else in the middle of the view.
   Q_INVOKABLE void insertText(const QString& text);
+  /// A graph ({ functions, xmin, xmax, ymin, ymax, grid }): beside the
+  /// selection, else in the middle of the view.
+  Q_INVOKABLE void insertGraph(const QVariantMap& spec);
+  /// Changes the selected graph.
+  Q_INVOKABLE bool updateGraph(const QVariantMap& spec);
+  /// Writes `text` beside the selection in `font` (an answer next to a sum).
+  Q_INVOKABLE bool writeBeside(const QString& text, const QString& font);
   /// Replaces the selected handwriting with `text` in `font` (keeping the ink if asked).
   Q_INVOKABLE bool applyFontToInk(const QString& text, const QString& font, bool keepInk);
   Q_INVOKABLE void insertImage(const QString& fileUrl);

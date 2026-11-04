@@ -38,6 +38,10 @@ Item {
     InkToText { id: inkToText; canvas: root.canvas }
     /// Ask the AI about the selection: "explain", "solve", "translate", "summarise", "ask".
     signal askAi(string what)
+    /// Work out the maths in the selection.
+    signal mathsRequested()
+    /// Edit the selected graph.
+    signal graphEditRequested(var graph)
     ColorPopover { id: colorPop }
 
     Shadow { anchors.fill: parent; radius: 14; level: 3 }
@@ -77,6 +81,22 @@ Item {
             }
         }
         Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 22; color: Theme.border }
+
+        // Maths: work out what's written; a graph: change it.
+        SmallTool {
+            visible: !!(root.s.hasInk || root.s.hasText) && !root.s.graph
+            iconName: "math"
+            tip: "Maths: work it out, write the answer, typeset, graph"
+            onClicked: root.mathsRequested()
+        }
+        UiButton {
+            visible: !!root.s.graph
+            kind: "ghost"
+            iconName: "graph"
+            text: "Edit graph"
+            implicitHeight: 30
+            onClicked: root.graphEditRequested(root.s.graph)
+        }
 
         // Handwriting → text.
         AbstractButton {
@@ -167,9 +187,9 @@ Item {
         }
         Rectangle { visible: (root.s.texts || 0) > 0; Layout.preferredWidth: 1; Layout.preferredHeight: 22; color: Theme.border }
 
-        // Colours.
+        // Colours (not for a graph alone: each curve has its own).
         Repeater {
-            model: root.inkColors
+            model: root.s.graph ? [] : root.inkColors
             delegate: AbstractButton {
                 required property string modelData
                 implicitWidth: 22; implicitHeight: 22
@@ -181,6 +201,7 @@ Item {
         }
         AbstractButton {
             id: custom
+            visible: !root.s.graph
             implicitWidth: 22; implicitHeight: 22
             hoverEnabled: true
             onClicked: colorPop.show(custom, ["#111827", "#374151", "#6b7280", "#9ca3af", "#ffffff", "#7c2d12", "#1e3a8a", "#2563eb", "#0891b2", "#0d9488", "#16a34a", "#65a30d", "#ca8a04", "#ea580c", "#dc2626", "#be123c", "#db2777", "#9333ea"], root.s.color || "#111827", c => root.canvas.recolorSelection(c))

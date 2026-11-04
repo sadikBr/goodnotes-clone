@@ -356,7 +356,7 @@ std::optional<Shape> buildShape(const QString& kind, P2 a, P2 b, bool constrain)
   return s;
 }
 
-bool isResizable(const El& el) { return el.kind == Kind::Shape || el.kind == Kind::Image || el.kind == Kind::Sticky; }
+bool isResizable(const El& el) { return el.kind == Kind::Shape || el.kind == Kind::Image || el.kind == Kind::Sticky || el.kind == Kind::Graph; }
 
 Rect geomBox(const El& el) {
   if (el.kind == Kind::Shape) {
@@ -437,7 +437,7 @@ El resizeElement(const El& el, const QString& handle, P2 p, bool keepAspect) {
     }
     return out;
   }
-  if (el.kind == Kind::Image || el.kind == Kind::Sticky) {
+  if (el.kind == Kind::Image || el.kind == Kind::Sticky || el.kind == Kind::Graph) {
     out.x = x0;
     out.y = y0;
     out.w = x1 - x0;
