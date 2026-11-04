@@ -88,8 +88,12 @@ qt_add_executable(inkleaf
   src/draw/Elements.h src/draw/Elements.cpp
   src/editor/Model.h src/editor/Model.cpp
   src/editor/Geometry.h src/editor/Geometry.cpp
+  src/editor/TextFormat.h src/editor/TextFormat.cpp
+  src/editor/Snap.h src/editor/Snap.cpp
+  src/editor/Instrument.h src/editor/Instrument.cpp
   src/tests/SelfTest.h src/tests/SelfTest.cpp
   src/tests/GeometryTests.cpp
+  src/tests/TextAndSnapTests.cpp
   src/CompareRender.h src/CompareRender.cpp
   src/PaperImage.h src/PaperImage.cpp
   src/Pdf.h src/Pdf.cpp
