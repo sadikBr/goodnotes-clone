@@ -42,6 +42,9 @@ public:
   QHash<QString, QString> colors{{"pen", "#111827"}, {"highlighter", "#facc15"}, {"shape", "#111827"}, {"text", "#111827"}, {"sticky", "#fef08a"}, {"laser", "#ff1f1f"}};
   QHash<QString, double> widths{{"pen", 3}, {"highlighter", 18}, {"eraser", 14}, {"shape", 3}, {"text", 20}, {"sticky", 18}};
   QString penStyle = "fountain";
+  /// Construction lines: "dash" or "dot", and the spacing (1 = normal).
+  QString penDash = "dash";
+  double penGap = 1;
   double streamline = 0.38;
   QString shapeKind = "auto";
   bool shapeFill = false;
@@ -262,6 +265,8 @@ private:
   /// The ink the last scratch-out took (on the active page), while it fades.
   Els m_faded;
   bool scratchAway(const std::vector<Pt>& points);
+  /// A tap on masking tape: shows what's under it, or covers it again.
+  bool toggleTapeAt(double x, double y);
   bool m_editingNew = false;
   Els m_editingBefore;
   std::vector<Recent> m_recentInk;

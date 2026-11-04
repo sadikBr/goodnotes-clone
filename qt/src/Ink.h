@@ -18,12 +18,19 @@ struct Point {
   float x, y, p;  // page units, pressure 0..1
 };
 
-enum class Pen { Fountain, Ballpoint, Pencil, Calligraphy, Brush, Highlighter };
+enum class Pen { Fountain, Ballpoint, Pencil, Calligraphy, Brush, Highlighter, Marker, Watercolor, Neon, Construction, Tape };
 
 Pen penFromName(const QString& style, bool highlighter);
 QString penName(Pen pen);
 /// Fountain and brush widths follow speed.
 bool speedSensitive(Pen pen);
+/// Saved strokes of this style are drawn as one mesh (else as a picture:
+/// pencil grain, calligraphy, and the effect pens).
+bool meshDrawn(const QString& style, bool highlighter);
+/// Masking tape's band for a pen width (what a tape stroke saves as its width).
+float tapeWidth(float penWidth);
+/// The colour a live stroke is drawn in (see-through pens are lighter).
+QColor liveColor(const QColor& c, Pen pen);
 
 /// The smoothing levels (Settings → Writing).
 constexpr float kSmoothOff = 0.f, kSmoothLight = 0.2f, kSmoothNormal = 0.38f, kSmoothStrong = 0.62f;
@@ -48,10 +55,12 @@ private:
 /// A drawable stroke: triangles in page units.
 struct Mesh {
   std::vector<QPointF> tris;  // 3 per triangle
+  std::vector<QPointF> glow;  // neon: a soft halo under the line
 };
 
 /// Builds the mesh of a stroke as written. `width` is the stroke's nominal width.
-void strokeMesh(const std::vector<Point>& raw, Pen pen, float width, float streamline, Mesh& out);
+/// `dashed`: construction lines (0 solid, 1 dashes, 2 dots; `gap` scales the spacing).
+void strokeMesh(const std::vector<Point>& raw, Pen pen, float width, float streamline, Mesh& out, int dashed = 0, float gap = 1.f);
 
 /// Distance from point to segment (hit-testing for the eraser).
 float segmentDistance(QPointF p, QPointF a, QPointF b);

@@ -9,6 +9,11 @@ section here before it can be published (`scripts/check-version.py`).
 
 - **Sketchbook:** blank landscape pages for drawing.
 - **Whiteboard:** one big dotted page that grows as you write near its edges.
+- **Pen case:** every pen shown as a stroke, in trays, with a line on what each does.
+- **New pens:** marker (see-through, darker where strokes cross), watercolour (soft washes that deepen as you layer them), neon (a glowing line), dashed construction lines (dashes or dots, close or wide) and masking tape (tap it to peek under it).
+- **Guides** show for anything you move, not just text: its edges and centre against the page and other items.
+- **Fixed:** both protractor arms can be dragged smoothly.
+- **Fixed:** Escape in a table cell finishes typing instead of leaving the page.
 
 ## 0.14.0
 

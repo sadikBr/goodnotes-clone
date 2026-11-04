@@ -137,7 +137,12 @@ Rect boxOf(const El& el) {
 
 Rect bounds(const El& el) {
   switch (el.kind) {
-    case Kind::Stroke: return rectOf(el.points, el.width / 2);
+    case Kind::Stroke: {
+      // How far the ink reaches from the line (the wide and glowing pens further).
+      const QString style = el.style.value_or(QString());
+      const double reach = style == "watercolor" ? 2.1 : style == "neon" ? 1.7 : style == "marker" ? 1.2 : 0.5;
+      return rectOf(el.points, el.width * reach);
+    }
     case Kind::Shape: {
       const Shape& s = el.shape;
       if (s.kind == "ellipse") return {s.cx - s.rx - el.width / 2, s.cy - s.ry - el.width / 2, 2 * s.rx + el.width, 2 * s.ry + el.width};

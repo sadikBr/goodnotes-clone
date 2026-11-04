@@ -74,12 +74,7 @@ void setMesh(QSGGeometryNode* n, const std::vector<QPointF>& tris, const QColor&
   }
 }
 
-QColor inkColor(const QColor& c, ink::Pen pen) {
-  if (pen != ink::Pen::Highlighter) return c;
-  QColor h = c;
-  h.setAlphaF(0.35f);
-  return h;
-}
+QColor inkColor(const QColor& c, ink::Pen pen) { return ink::liveColor(c, pen); }
 
 void clearChildren(QSGNode* n) {
   while (QSGNode* c = n->firstChild()) {
@@ -201,6 +196,8 @@ void InkCanvas::pushToolState() {
   for (auto it = m_colors.begin(); it != m_colors.end(); ++it) c.colors[it.key()] = it.value().toString();
   for (auto it = m_widths.begin(); it != m_widths.end(); ++it) c.widths[it.key()] = it.value().toDouble();
   c.penStyle = m_penStyleName;
+  c.penDash = m_penDash;
+  c.penGap = m_penGap;
   c.streamline = m_smoothing;
   c.shapeKind = m_shapeKind;
   c.shapeFill = m_shapeFill;
@@ -307,7 +304,7 @@ void InkCanvas::syncPage(int i) {
     if (el->kind == ed::Kind::Stroke) {
       const QString style = el->style.value_or(QString());
       const bool hl = el->tool == "highlighter";
-      if (hl || (style != "pencil" && style != "calligraphy")) {
+      if (ink::meshDrawn(style, hl)) {
         // Pen and highlighter ink: a mesh, as when it was written.
         std::vector<ink::Point> p;
         p.reserve(el->points.size());
@@ -747,6 +744,19 @@ void InkCanvas::setTool(const QString& t) {
 void InkCanvas::setPenStyle(const QString& s) {
   if (s == m_penStyleName) return;
   m_penStyleName = s;
+  pushToolState();
+  emit toolStateChanged();
+}
+void InkCanvas::setPenDash(const QString& s) {
+  if (s == m_penDash) return;
+  m_penDash = s;
+  pushToolState();
+  emit toolStateChanged();
+}
+void InkCanvas::setPenGap(double g) {
+  g = std::clamp(g, 0.5, 4.0);
+  if (g == m_penGap) return;
+  m_penGap = g;
   pushToolState();
   emit toolStateChanged();
 }
@@ -1590,10 +1600,12 @@ void InkCanvas::press(QPointF s, float pressure, bool stylus, const QString& too
     m_g.pen = hl ? ink::Pen::Highlighter : shape ? ink::Pen::Ballpoint : ink::penFromName(m_penStyleName, false);
     m_g.color = Canvas::parseColor(m_colors.value(tool).toString());
     m_g.width = float(m_widths.value(tool, 3).toDouble());
+    if (m_g.pen == ink::Pen::Tape) m_g.width = ink::tapeWidth(m_g.width);
+    m_g.dashed = m_g.pen == ink::Pen::Construction ? (m_penDash == "dot" ? 2 : 1) : 0;
     const float pr = ink::speedSensitive(m_g.pen) ? m_g.speed.next(float(p.x()), float(p.y()), nowMs(), stylus ? pressure : -1.f) : (stylus ? pressure : 0.5f);
     m_g.pts.push_back({float(p.x()), float(p.y()), pr});
     m_g.mesh = std::make_shared<ink::Mesh>();
-    ink::strokeMesh(m_g.pts, m_g.pen, m_g.width, shape ? 0.f : float(m_smoothing), *m_g.mesh);
+    ink::strokeMesh(m_g.pts, m_g.pen, m_g.width, shape ? 0.f : float(m_smoothing), *m_g.mesh, m_g.dashed, float(m_penGap));
     m_liveChanged = true;
   } else if (r == "edit") {
     m_g = Gesture();
@@ -1652,7 +1664,7 @@ void InkCanvas::drag(QPointF s, float pressure, bool stylus, Qt::KeyboardModifie
       if (std::hypot(p.x() - last.x, p.y() - last.y) < 0.4 / m_zoom) return;
       const float pr = ink::speedSensitive(m_g.pen) ? m_g.speed.next(float(p.x()), float(p.y()), nowMs(), stylus ? pressure : -1.f) : (stylus ? pressure : 0.5f);
       m_g.pts.push_back({float(p.x()), float(p.y()), pr});
-      ink::strokeMesh(m_g.pts, m_g.pen, m_g.width, m_g.pen == ink::Pen::Ballpoint && m_tool == "shape" ? 0.f : float(m_smoothing), *m_g.mesh);
+      ink::strokeMesh(m_g.pts, m_g.pen, m_g.width, m_g.pen == ink::Pen::Ballpoint && m_tool == "shape" ? 0.f : float(m_smoothing), *m_g.mesh, m_g.dashed, float(m_penGap));
       m_liveChanged = true;
       m_ed->move(p.x(), p.y(), pr, nowMs(), bool(mods & Qt::ShiftModifier), false);
       afterCore();
@@ -1976,7 +1988,7 @@ QSGNode* InkCanvas::updatePaintNode(QSGNode* old, UpdatePaintNodeData*) {
   // root → content transform → pages; live ink; overlay; eraser ring; laser (screen space).
   auto* root = old;
   QSGTransformNode *content, *liveT, *overlayT, *rulerT;
-  QSGGeometryNode *live, *ring, *laser;
+  QSGGeometryNode *live, *liveGlow, *ring, *laser;
   if (!root) {
     root = new QSGNode;
     content = new QSGTransformNode;
@@ -1984,9 +1996,11 @@ QSGNode* InkCanvas::updatePaintNode(QSGNode* old, UpdatePaintNodeData*) {
     overlayT = new QSGTransformNode;
     rulerT = new QSGTransformNode;
     live = meshNode({}, Qt::black);
+    liveGlow = meshNode({}, Qt::transparent);
     ring = meshNode({}, QColor(100, 100, 100, 200));
     laser = meshNode({}, Qt::red);
     static_cast<QSGFlatColorMaterial*>(laser->material())->setFlag(QSGMaterial::Blending);
+    liveT->appendChildNode(liveGlow);
     liveT->appendChildNode(live);
     root->appendChildNode(content);
     root->appendChildNode(liveT);
@@ -2004,7 +2018,8 @@ QSGNode* InkCanvas::updatePaintNode(QSGNode* old, UpdatePaintNodeData*) {
     rulerT = static_cast<QSGTransformNode*>(overlayT->nextSibling());
     ring = static_cast<QSGGeometryNode*>(rulerT->nextSibling());
     laser = static_cast<QSGGeometryNode*>(ring->nextSibling());
-    live = static_cast<QSGGeometryNode*>(liveT->firstChild());
+    liveGlow = static_cast<QSGGeometryNode*>(liveT->firstChild());
+    live = static_cast<QSGGeometryNode*>(liveGlow->nextSibling());
   }
 
   // Nodes of items that went away.
@@ -2140,8 +2155,15 @@ QSGNode* InkCanvas::updatePaintNode(QSGNode* old, UpdatePaintNodeData*) {
   // The stroke being written.
   if (m_liveChanged) {
     m_liveChanged = false;
-    if (m_g.kind == Gesture::Draw && m_g.mesh && !m_liveHidden) setMesh(live, m_g.mesh->tris, inkColor(m_g.color, m_g.pen));
-    else setMesh(live, {}, Qt::black);
+    if (m_g.kind == Gesture::Draw && m_g.mesh && !m_liveHidden) {
+      setMesh(live, m_g.mesh->tris, inkColor(m_g.color, m_g.pen));
+      QColor glow = m_g.color;
+      glow.setAlphaF(0.16f);
+      setMesh(liveGlow, m_g.mesh->glow, glow);
+    } else {
+      setMesh(live, {}, Qt::black);
+      setMesh(liveGlow, {}, Qt::transparent);
+    }
   }
   if (m_g.kind == Gesture::Draw && m_g.page >= 0 && m_g.page < int(m_pages.size())) {
     const Page& pg = m_pages[m_g.page];

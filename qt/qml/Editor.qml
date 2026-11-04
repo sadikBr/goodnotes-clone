@@ -495,6 +495,8 @@ Rectangle {
                     notebookId: root.notebookId
                     tool: prefs.store.tool
                     penStyle: prefs.store.penStyle
+                    penDash: prefs.store.penDash
+                    penGap: prefs.store.penGap
                     colors: prefs.colors
                     widths: prefs.widths
                     shapeKind: prefs.store.shapeKind
@@ -588,6 +590,8 @@ Rectangle {
                     // The pointer stays on the tool while the drawer slides.
                     pointerX: root.toolCenter - x
                     Behavior on x { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+                    // A pen picked from the pen case: out of the way, so the next stroke writes.
+                    onPenPicked: if (!root.toolPrefs.store.drawerPinned) root.drawerOpen = false
                 }
 
                 // Page and zoom controls (faded out while you write, back a

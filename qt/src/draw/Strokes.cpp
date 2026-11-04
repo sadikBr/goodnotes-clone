@@ -43,6 +43,14 @@ FreehandOptions options(const QString& style, double width, bool last) {
     o.thinning = 0.82;
     o.startTaper = width * 3;
     o.endTaper = width * 4;
+  } else if (style == "marker") {
+    o.size = width * 2.4;
+    o.thinning = 0.1;
+  } else if (style == "watercolor") {
+    o.size = width * 3.2;
+    o.thinning = 0.55;
+    o.startTaper = width * 3;
+    o.endTaper = width * 4;
   } else {
     // Fountain: at medium pressure the width matches the size chosen.
     o.size = width * 0.875;
@@ -248,9 +256,162 @@ bool tapDot(const std::vector<Pt>& pts, const QString& style, double width, Dot*
     y1 = std::max(y1, p[1]);
   }
   if (std::max(x1 - x0, y1 - y0) > width * 0.6) return false;
-  const double k = style == "brush" ? 0.6 : style == "ballpoint" || style == "pencil" ? 0.42 : 0.5;
+  const double k = style == "marker" ? 1.1 : style == "watercolor" ? 1.5 : style == "brush" ? 0.6 : style == "ballpoint" || style == "pencil" ? 0.42 : 0.5;
   *out = {(x0 + x1) / 2, (y0 + y1) / 2, std::max(0.6, width * k)};
   return true;
+}
+
+
+/// The stroke's smoothed curve as a polyline.
+void polyPath(Canvas& c, const std::vector<P2>& line) {
+  c.beginPath();
+  c.moveTo(line[0].first, line[0].second);
+  if (line.size() == 1) c.lineTo(line[0].first + 0.01, line[0].second);
+  for (size_t i = 1; i < line.size(); ++i) c.lineTo(line[i].first, line[i].second);
+}
+
+QString mixWhite(const QString& color, double t) {
+  const QColor q = Canvas::parseColor(color);
+  return QColor::fromRgbF(float(q.redF() + (1 - q.redF()) * t), float(q.greenF() + (1 - q.greenF()) * t), float(q.blueF() + (1 - q.blueF()) * t)).name();
+}
+
+/// Marker, watercolour, neon, construction lines and masking tape.
+void drawEffect(Canvas& c, const QJsonObject& el, const std::vector<Pt>& pts, const QString& style, double width, const QString& color, bool live) {
+  const double streamline = el["smooth"].isDouble() ? el["smooth"].toDouble() : kStreamlineNormal;
+  std::vector<Pt> sm = smoothPoints(pts, streamline);
+  if (!live && pts.size() > 1) sm.back() = pts.back();
+  const std::vector<P2> line = flattenSmooth(sm);
+  if (style == "tape") {
+    // A straight strip with zigzag (torn) ends and a faint sheen; when
+    // peeked at, only a ghost of it.
+    const P2 a{pts.front()[0], pts.front()[1]}, b{pts.back()[0], pts.back()[1]};
+    double dx = b.first - a.first, dy = b.second - a.second, len = std::hypot(dx, dy);
+    if (len < 1) dx = 1, dy = 0, len = 1;
+    const double ux = dx / len, uy = dy / len, nx = -uy * width / 2, ny = ux * width / 2;
+    const double L = std::max(len, 1.0);
+    const double ax = len < 1 ? a.first - width / 2 : a.first, ay = a.second;
+    const double tooth = std::max(1.5, width / 9);
+    auto at = [&](double along, double across) { return P2{ax + ux * along + nx * across, ay + uy * along + ny * across}; };
+    const int teeth = 6;
+    c.beginPath();
+    P2 q = at(0, -1);
+    c.moveTo(q.first, q.second);
+    q = at(L, -1);
+    c.lineTo(q.first, q.second);
+    for (int i = 1; i <= teeth; ++i) {
+      q = at(L + (i % 2 ? tooth : 0), -1 + 2.0 * i / teeth);
+      c.lineTo(q.first, q.second);
+    }
+    q = at(0, 1);
+    c.lineTo(q.first, q.second);
+    for (int i = 1; i <= teeth; ++i) {
+      q = at(i % 2 ? -tooth : 0, 1 - 2.0 * i / teeth);
+      c.lineTo(q.first, q.second);
+    }
+    c.closePath();
+    if (el["peek"].toBool()) {
+      c.setGlobalAlpha(0.16);
+      c.setFill(color);
+      c.fill();
+      c.setGlobalAlpha(0.55);
+      c.setLineWidth(std::max(0.6, width / 30));
+      c.setDash({width / 6, width / 8});
+      c.stroke();
+      return;
+    }
+    c.setFill(color);
+    c.fill();
+    c.save();
+    c.clip();
+    c.setGlobalAlpha(0.13);
+    c.setStroke("#ffffff");
+    c.setLineWidth(width / 7);
+    for (double t = -width; t < L + width; t += width * 0.55) {
+      const P2 s0 = at(t, -1.2), s1 = at(t + width * 0.5, 1.2);
+      c.beginPath();
+      c.moveTo(s0.first, s0.second);
+      c.lineTo(s1.first, s1.second);
+      c.stroke();
+    }
+    c.restore();
+    return;
+  }
+  if (style == "construction") {
+    const bool dots = el["dash"].toString() == "dot";
+    const double gap = el["gap"].isDouble() ? std::clamp(el["gap"].toDouble(), 0.5, 4.0) : 1.0;
+    const double lw = dots ? std::max(1.1, width * 0.9) : std::max(0.7, width * 0.6), r = lw / 2;
+    c.setLineWidth(lw);
+    c.setStroke(color);
+    if (dots) c.setDash({0.001, r * 4.5 * gap});
+    else {
+      c.setLineCap("round");
+      c.setDash({r * 8 - lw, r * 5 * gap + lw});
+    }
+    polyPath(c, line);
+    c.stroke();
+    return;
+  }
+  if (style == "neon") {
+    // Soft rings of light, then the bright core.
+    c.setStroke(color);
+    const double core = std::max(0.8, width * 0.8);
+    const double rings[][2] = {{4.4, 0.07}, {3.3, 0.1}, {2.4, 0.16}, {1.7, 0.3}};
+    for (const auto& k : rings) {
+      c.setGlobalAlpha(k[1]);
+      c.setLineWidth(core * k[0]);
+      polyPath(c, line);
+      c.stroke();
+    }
+    c.setGlobalAlpha(1);
+    c.setLineWidth(core * 1.05);
+    c.setStroke(color);
+    polyPath(c, line);
+    c.stroke();
+    c.setLineWidth(core * 0.35);
+    c.setStroke(mixWhite(color, 0.5));
+    polyPath(c, line);
+    c.stroke();
+    return;
+  }
+  Dot dot{};
+  const bool isDot = tapDot(pts, style, width, &dot);
+  auto body = [&] {
+    c.beginPath();
+    if (isDot) c.arc(dot.x, dot.y, dot.r, 0, M_PI * 2);
+    else
+      for (const auto& outline : strokeOutline(pts, style, width, !live, streamline)) outlinePath(c, outline);
+  };
+  c.setComposite("multiply");
+  c.setFill(color);
+  if (style == "marker") {
+    // Felt tip: see-through, and darker where strokes cross.
+    c.setGlobalAlpha(0.62);
+    body();
+    c.fill("nonzero");
+    return;
+  }
+  // Watercolour: a soft wash spreading past the line, the pigment, and a
+  // darker rim where it dried.
+  c.setStroke(color);
+  if (!isDot) {
+    const double wash[][2] = {{4.2, 0.05}, {3.6, 0.06}, {2.9, 0.07}};
+    for (const auto& k : wash) {
+      c.setGlobalAlpha(k[1]);
+      c.setLineWidth(width * k[0]);
+      polyPath(c, line);
+      c.stroke();
+    }
+  }
+  c.setGlobalAlpha(0.22);
+  body();
+  c.fill("nonzero");
+  // Pigment pooling along the middle.
+  if (!isDot) {
+    c.setGlobalAlpha(0.1);
+    c.setLineWidth(width * 1.3);
+    polyPath(c, line);
+    c.stroke();
+  }
 }
 
 }  // namespace
@@ -346,6 +507,11 @@ void drawStroke(Canvas& c, const QJsonObject& el, bool live) {
     return;
   }
   const QString style = el["style"].toString().isEmpty() ? QStringLiteral("fountain") : el["style"].toString();
+  if (style == "marker" || style == "watercolor" || style == "neon" || style == "construction" || style == "tape") {
+    drawEffect(c, el, pts, style, width, color, live);
+    c.restore();
+    return;
+  }
   Dot dot{};
   const bool isDot = tapDot(pts, style, width, &dot);
   if (isDot && style == "calligraphy") {

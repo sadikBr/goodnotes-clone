@@ -17,8 +17,32 @@
 #include "../draw/Papers.h"
 #include "../draw/Strokes.h"
 #include "TextFormat.h"
+#include "../Ink.h"
+
+
 
 namespace ed {
+
+namespace {
+bool isTap(const std::vector<Pt>& pts, double within) {
+  double x0 = pts[0][0], x1 = x0, y0 = pts[0][1], y1 = y0;
+  for (const Pt& p : pts) x0 = std::min(x0, p[0]), x1 = std::max(x1, p[0]), y0 = std::min(y0, p[1]), y1 = std::max(y1, p[1]);
+  return x1 - x0 < within && y1 - y0 < within;
+}
+/// Scribbling with these is shading or painting, never a scratch-out.
+bool scratchable(const QString& style) { return style != "marker" && style != "watercolor" && style != "neon" && style != "tape"; }
+std::vector<Pt> straightTape(const std::vector<Pt>& pts, double width) {
+  const Pt a = pts.front(), b = pts.back();
+  const double len = std::hypot(b[0] - a[0], b[1] - a[1]);
+  const int n = std::max(1, int(std::ceil(len / std::max(2.0, width / 2))));
+  std::vector<Pt> out;
+  for (int i = 0; i <= n; ++i) {
+    const double t = double(i) / n;
+    out.push_back({a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, 0.5});
+  }
+  return out;
+}
+}  // namespace
 
 namespace {
 
@@ -593,7 +617,9 @@ void EditorCore::up() {
         } else {
           addElement(placed);
         }
-      } else if (!g.points.empty() && g.tool == "pen" && !g.ruler && scratchAway(g.points)) {
+      } else if (!g.points.empty() && g.tool == "pen" && isTap(g.points, 6 / zoom) && toggleTapeAt(g.points[0][0], g.points[0][1])) {
+        // A tap on tape peeks under it (no dot).
+      } else if (!g.points.empty() && g.tool == "pen" && !g.ruler && scratchable(penStyle) && scratchAway(g.points)) {
         // Scratched out: the ink under it went, and the scribble isn't kept.
       } else if (!g.points.empty()) {
         const QString tl = g.tool == "highlighter" ? "highlighter" : "pen";
@@ -607,6 +633,15 @@ void EditorCore::up() {
         el.width = widths.value(g.tool);
         el.points = thinPoints(tl == "highlighter" ? draw::steadyHighlight(g.points, widths.value("highlighter")) : g.points, std::min(0.3, 0.6 / zoom));
         if (tl == "pen") el.smooth = streamline;
+        if (tl == "pen" && penStyle == "construction") {
+          el.extra.insert("dash", penDash == "dot" ? "dot" : "dash");
+          if (penGap != 1) el.extra.insert("gap", penGap);
+        }
+        if (tl == "pen" && penStyle == "tape") {
+          // A straight strip, as wide as the tape (points along it, so the eraser can cut it).
+          el.width = ink::tapeWidth(float(el.width));
+          el.points = straightTape(g.points, el.width);
+        }
         const QString id = el.id;
         addElement(makeEl(std::move(el)));
         if (tl == "pen" && g.tool == "pen") {
@@ -1807,6 +1842,23 @@ void EditorCore::finishTextEdit() {
 }
 
 // ------------------------------------------------------------ gestures
+
+bool EditorCore::toggleTapeAt(double x, double y) {
+  Els& els = elements();
+  for (auto it = els.rbegin(); it != els.rend(); ++it) {
+    const El& e = **it;
+    if (e.kind != Kind::Stroke || e.style.value_or(QString()) != "tape" || e.points.empty()) continue;
+    const Pt a = e.points.front(), b = e.points.back();
+    if (ink::segmentDistance(QPointF(x, y), QPointF(a[0], a[1]), QPointF(b[0], b[1])) > e.width / 2 + 2 / zoom) continue;
+    El next = e;
+    if (next.extra["peek"].toBool()) next.extra.remove("peek");
+    else next.extra.insert("peek", true);
+    *it = makeEl(std::move(next));
+    changed();
+    return true;
+  }
+  return false;
+}
 
 bool EditorCore::scratchAway(const std::vector<Pt>& points) {
   if (!scratchOut) return false;

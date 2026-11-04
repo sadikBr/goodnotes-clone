@@ -299,7 +299,7 @@ std::vector<std::pair<QString, std::function<QImage()>>> pictures() {
     const QString tmpl = t;
     out.push_back({QString("page-%1").arg(t), [=] { return draw::renderPage(tmpl, "#fffdf7", 794, 1123, all, 0.8)->image(); }});
   }
-  for (const char* style : {"fountain", "ballpoint", "pencil", "calligraphy", "brush"})
+  for (const char* style : {"fountain", "ballpoint", "pencil", "calligraphy", "brush", "marker", "watercolor", "neon", "construction", "tape"})
     for (bool dark : {false, true}) {
       const QString s = style;
       out.push_back({QString("sample-%1-%2").arg(style).arg(dark ? "dark" : "light"), [=] {

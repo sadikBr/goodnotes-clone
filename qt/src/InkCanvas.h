@@ -39,6 +39,9 @@ class InkCanvas : public QQuickItem {
   Q_PROPERTY(QString notebookId READ notebookId WRITE setNotebookId NOTIFY notebookIdChanged)
   Q_PROPERTY(QString tool READ tool WRITE setTool NOTIFY toolChanged)
   Q_PROPERTY(QString penStyle READ penStyle WRITE setPenStyle NOTIFY toolStateChanged)
+  /// Construction lines: "dash" or "dot", and how far apart (1 = normal).
+  Q_PROPERTY(QString penDash READ penDash WRITE setPenDash NOTIFY toolStateChanged)
+  Q_PROPERTY(double penGap READ penGap WRITE setPenGap NOTIFY toolStateChanged)
   Q_PROPERTY(QVariantMap colors READ colors WRITE setColors NOTIFY toolStateChanged)
   Q_PROPERTY(QVariantMap widths READ widths WRITE setWidths NOTIFY toolStateChanged)
   Q_PROPERTY(QString shapeKind READ shapeKind WRITE setShapeKind NOTIFY toolStateChanged)
@@ -106,6 +109,10 @@ public:
   void setTool(const QString& t);
   QString penStyle() const { return m_penStyleName; }
   void setPenStyle(const QString& s);
+  QString penDash() const { return m_penDash; }
+  void setPenDash(const QString& s);
+  double penGap() const { return m_penGap; }
+  void setPenGap(double g);
   QVariantMap colors() const { return m_colors; }
   void setColors(const QVariantMap& c);
   QVariantMap widths() const { return m_widths; }
@@ -332,6 +339,7 @@ private:
     std::vector<ink::Point> pts;  // live ink, page units
     ink::SpeedInk speed;
     ink::Pen pen = ink::Pen::Fountain;
+    int dashed = 0;  // construction lines: 1 dashes, 2 dots
     QColor color;
     float width = 3;
     std::shared_ptr<ink::Mesh> mesh;
@@ -379,6 +387,8 @@ private:
   QString m_notebookId;
   QString m_tool = "pen";
   QString m_penStyleName = "fountain";
+  QString m_penDash = "dash";
+  double m_penGap = 1;
   QVariantMap m_colors, m_widths;
   QString m_shapeKind = "auto";
   bool m_shapeFill = false;

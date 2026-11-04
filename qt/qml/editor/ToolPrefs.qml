@@ -39,6 +39,9 @@ QtObject {
         property string daftarOutlines: "[]"
         property string tool: "pen"
         property string penStyle: "fountain"
+        property string penDash: "dash"
+        property real penGap: 1
+        property bool penCaseSeen: false
         property string shapeKind: "auto"
         property string eraserMode: "precise"
         property string laserMode: "trail"

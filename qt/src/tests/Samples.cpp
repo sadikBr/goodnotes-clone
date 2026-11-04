@@ -61,6 +61,20 @@ std::vector<std::pair<QString, QJsonObject>> sampleElements() {
     stroke(QString("%1-one").arg(style), "pen", style, "#9333ea", 4, {{150, 150, 0.5}});
     stroke(QString("%1-two").arg(style), "pen", style, "#ea580c", 4, {{100, 100, 0.5}, {220, 160, 0.5}});
   }
+  for (const char* style : {"marker", "watercolor", "neon", "construction"}) {
+    stroke(QString("%1-scribble").arg(style), "pen", style, "#2563eb", 4, scribble(60, 120, 90, 1.3));
+    stroke(QString("%1-vee").arg(style), "pen", style, "#dc2626", 5, vee);
+    stroke(QString("%1-tap").arg(style), "pen", style, "#16a34a", 5, {{150, 150, 0.6}, {150.5, 150.4, 0.6}});
+  }
+  {
+    // Construction dots, far apart; tape covering and peeked at.
+    stroke("construction-dots", "pen", "construction", "#111827", 3, vee);
+    out.back().second["dash"] = "dot";
+    out.back().second["gap"] = 2;
+    stroke("tape", "pen", "tape", "#f9a8d4", 24, {{60, 120, 0.5}, {160, 130, 0.5}, {260, 140, 0.5}});
+    stroke("tape-peek", "pen", "tape", "#93c5fd", 24, {{60, 120, 0.5}, {260, 140, 0.5}});
+    out.back().second["peek"] = true;
+  }
   stroke("default-style", "pen", "", "#111827", 3, scribble(60, 120, 80, 0.4));
   stroke("smooth-off", "pen", "fountain", "#111827", 3, scribble(60, 120, 80, 0.7), 0);
   stroke("smooth-strong", "pen", "fountain", "#111827", 3, scribble(60, 120, 80, 0.9), 0.62);

@@ -36,6 +36,6 @@ private:
 
 class Canvas;
 /// The tool drawer's pen preview: a wave in `style` (in a 56 × 22 box).
-void nibSample(Canvas& c, const QString& style, const QString& color, double size, bool dark);
+void nibSample(Canvas& c, const QString& style, const QString& color, double size, bool dark, const QString& dash = {}, double gap = 0);
 /// The smoothing preview: a jittery line smoothed by `streamline`.
 void smoothingSample(Canvas& c, double streamline, const QString& color, bool dark);

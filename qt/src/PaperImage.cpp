@@ -75,14 +75,31 @@ QJsonArray pts(const std::vector<std::array<double, 3>>& p) {
 
 }  // namespace
 
-void nibSample(Canvas& c, const QString& style, const QString& color, double size, bool dark) {
+void nibSample(Canvas& c, const QString& style, const QString& color, double size, bool dark, const QString& dash, double gap) {
   const double w = 56, hgt = 22;
   std::vector<std::array<double, 3>> points;
-  for (int i = 0; i <= 24; ++i) {
-    const double t = i / 24.0;
-    points.push_back({4 + t * (w - 8), hgt / 2 + std::sin(t * M_PI * 2) * 6, 0.35 + 0.5 * std::sin(t * M_PI)});
+  if (style == "tape") {
+    points = {{8, hgt / 2 + 2, 0.5}, {w - 10, hgt / 2 - 2, 0.5}};
+  } else {
+    // (The wide and glowing pens keep further from the edges.)
+    const bool wide = style == "neon" || style == "watercolor" || style == "marker";
+    const double amp = wide ? 4.5 : 6, inset = wide ? 7 : 4;
+    for (int i = 0; i <= 24; ++i) {
+      const double t = i / 24.0;
+      points.push_back({inset + t * (w - inset * 2), hgt / 2 + std::sin(t * M_PI * 2) * amp, 0.35 + 0.5 * std::sin(t * M_PI)});
+    }
   }
-  draw::drawStroke(c, {{"id", "sample"}, {"z", 0}, {"kind", "stroke"}, {"tool", "pen"}, {"style", style}, {"color", sampleInk(color, dark)}, {"width", std::min(6.5, std::max(1.4, size * 0.9))}, {"points", pts(points)}});
+  double width = std::min(6.5, std::max(1.4, size * 0.9));
+  if (style == "tape") width = 11;
+  else if (style == "marker") width = std::min(2.6, width);
+  else if (style == "watercolor") width = std::min(2.0, width);
+  else if (style == "neon") width = std::min(3.0, std::max(1.8, width));
+  QJsonObject el{{"id", "sample"}, {"z", 0}, {"kind", "stroke"}, {"tool", "pen"}, {"style", style}, {"color", sampleInk(color, dark)}, {"width", width}, {"points", pts(points)}};
+  if (style == "construction") {
+    el["dash"] = dash == "dot" ? "dot" : "dash";
+    if (gap > 0) el["gap"] = gap;
+  }
+  draw::drawStroke(c, el);
 }
 
 void smoothingSample(Canvas& c, double streamline, const QString& color, bool dark) {
@@ -106,7 +123,7 @@ QImage InkSampleImage::requestImage(const QString& id, QSize* size, const QSize&
   const QSize want = requested.isValid() && !requested.isEmpty() ? requested : QSize(112, 44);
   Canvas canvas(want.width(), want.height());
   canvas.setTransform(want.width() / 56.0, 0, 0, want.height() / 22.0, 0, 0);
-  if (p.value(0) == "nib") nibSample(canvas, p.value(1), "#" + p.value(2), p.value(3).toDouble(), p.value(4) == "1");
+  if (p.value(0) == "nib") nibSample(canvas, p.value(1), "#" + p.value(2), p.value(3).toDouble(), p.value(4) == "1", p.value(5), p.value(6).toDouble());
   else smoothingSample(canvas, p.value(1).toDouble(), "#" + p.value(2), p.value(3) == "1");
   QImage img = canvas.image();
   if (size) *size = img.size();
