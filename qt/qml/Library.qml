@@ -110,7 +110,7 @@ Rectangle {
         category: "library"
         property string sort: "recent"
     }
-    readonly property var sorts: [{ id: "recent", label: "Recently edited" }, { id: "created", label: "Recently created" }, { id: "name", label: "Name" }]
+    readonly property var sorts: [{ id: "recent", label: "Recently edited", icon: "pen" }, { id: "created", label: "Recently created", icon: "clock" }, { id: "name", label: "Name", icon: "az" }]
 
     function show(v) {
         view = v
@@ -146,6 +146,12 @@ Rectangle {
         } catch (e) {
             root.notify(errorText(e), true)
         }
+    }
+
+    /// Moves a notebook or folder to the trash, with Undo in the message.
+    function trashWithUndo(cmd, id, message) {
+        try { InkleafCore.call(cmd, { id: id, trashed: true }) } catch (e) { return root.notify(errorText(e), true) }
+        Notice.post(message, false, { icon: "trash", actionLabel: "Undo", action: () => run(cmd, { id: id, trashed: false }) })
     }
 
     // ------------------------------------------------------------ passwords
@@ -224,11 +230,11 @@ Rectangle {
     function lockNow() { run("lockAll", {}, "Locked") }
     /// The menu entries about a password.
     function lockEntries(kind, item) {
-        if (!item.locked) return [{ label: "Lock with password…", action: () => lockItem(kind, item) }]
+        if (!item.locked) return [{ icon: "lock", label: "Lock with password…", action: () => lockItem(kind, item) }]
         if (inheritedLock(kind, item)) return []
         return [
-            { label: "Change password…", action: () => changePassword(kind, item) },
-            { label: "Remove password…", action: () => removePassword(kind, item) }
+            { icon: "lock", label: "Change password…", action: () => changePassword(kind, item) },
+            { icon: "unlock", label: "Remove password…", action: () => removePassword(kind, item) }
         ]
     }
 
@@ -434,28 +440,32 @@ Rectangle {
     }
     function notebookMenu(n, anchor) {
         menu.show(anchor, view.kind === "trash" ? [
-            { label: "Recover", action: () => run("setNotebookTrashed", { id: n.id, trashed: false }, "Notebook recovered") },
-            { label: "Delete forever", danger: true, action: () => deleteForever("notebook", n.id, n.title) }
+            { icon: "undo", label: "Recover", action: () => run("setNotebookTrashed", { id: n.id, trashed: false }, "Notebook recovered") },
+            { separator: true },
+            { icon: "trash", label: "Delete forever", danger: true, action: () => deleteForever("notebook", n.id, n.title) }
         ] : [
-            { label: "Rename", action: () => renameNotebook(n) },
-            { label: n.favourite ? "Remove from favourites" : "Add to favourites", action: () => run("setNotebookFavourite", { id: n.id, favourite: !n.favourite }) },
-            { label: "Change cover", action: () => changeCover(n) },
-            { label: "Duplicate", action: () => run("duplicateNotebook", { id: n.id }, "Notebook duplicated") },
-            { label: "Move to…", action: () => moveNotebook(n) }
+            { icon: "pen", label: "Rename", action: () => renameNotebook(n) },
+            { icon: "star", label: n.favourite ? "Remove from favourites" : "Add to favourites", action: () => run("setNotebookFavourite", { id: n.id, favourite: !n.favourite }) },
+            { icon: "book", label: "Change cover", action: () => changeCover(n) },
+            { icon: "copy", label: "Duplicate", action: () => run("duplicateNotebook", { id: n.id }, "Notebook duplicated") },
+            { icon: "folder", label: "Move to…", action: () => moveNotebook(n) }
         ].concat(lockEntries("notebook", n), [
-            { label: "Move to trash", danger: true, action: () => run("setNotebookTrashed", { id: n.id, trashed: true }, "Notebook moved to trash") }
+            { separator: true },
+            { icon: "trash", label: "Move to trash", danger: true, action: () => trashWithUndo("setNotebookTrashed", n.id, "Notebook moved to trash") }
         ]))
     }
     function folderMenu(f, anchor) {
         menu.show(anchor, view.kind === "trash" ? [
-            { label: "Recover", action: () => run("setFolderTrashed", { id: f.id, trashed: false }) },
-            { label: "Delete forever", danger: true, action: () => deleteForever("folder", f.id, f.name) }
+            { icon: "undo", label: "Recover", action: () => run("setFolderTrashed", { id: f.id, trashed: false }) },
+            { separator: true },
+            { icon: "trash", label: "Delete forever", danger: true, action: () => deleteForever("folder", f.id, f.name) }
         ] : [
-            { label: "Edit name and colour…", action: () => editFolder(f) },
-            { label: f.favourite ? "Remove from favourites" : "Add to favourites", action: () => run("setFolderFavourite", { id: f.id, favourite: !f.favourite }) },
-            { label: "Move to…", action: () => moveFolder(f) }
+            { icon: "palette", label: "Edit name and colour…", action: () => editFolder(f) },
+            { icon: "star", label: f.favourite ? "Remove from favourites" : "Add to favourites", action: () => run("setFolderFavourite", { id: f.id, favourite: !f.favourite }) },
+            { icon: "folder", label: "Move to…", action: () => moveFolder(f) }
         ].concat(lockEntries("folder", f), [
-            { label: "Move to trash", danger: true, action: () => run("setFolderTrashed", { id: f.id, trashed: true }, "Folder moved to trash") }
+            { separator: true },
+            { icon: "trash", label: "Move to trash", danger: true, action: () => trashWithUndo("setFolderTrashed", f.id, "Folder moved to trash") }
         ]))
     }
     function runSearch() {
@@ -819,7 +829,7 @@ Rectangle {
                     kind: "ghost"
                     iconName: "sort"
                     text: (root.sorts.find(s => s.id === prefs.sort) || root.sorts[0]).label
-                    onClicked: menu.show(sortBtn, root.sorts.map(s => ({ label: s.label, checked: prefs.sort === s.id, action: () => prefs.sort = s.id })))
+                    onClicked: menu.show(sortBtn, [{ header: "SORT BY" }].concat(root.sorts.map(s => ({ icon: s.icon, label: s.label, checked: prefs.sort === s.id, action: () => prefs.sort = s.id }))))
                 }
                 UiButton {
                     visible: root.view.kind === "trash"
@@ -845,12 +855,29 @@ Rectangle {
                 spacing: 10
                 model: root.hits
                 ScrollBar.vertical: ScrollBar {}
-                Label {
+                // Nothing found: what was looked for, and how to find more.
+                ColumnLayout {
                     visible: root.hits.length === 0
                     anchors.horizontalCenter: parent.horizontalCenter
-                    y: 40
-                    text: "No results for “" + root.query + "”."
-                    color: Theme.muted
+                    y: 50
+                    width: Math.min(420, results.width - 40)
+                    spacing: 6
+                    Rectangle {
+                        antialiasing: true
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: 84; Layout.preferredHeight: 84; radius: 42
+                        color: Theme.alpha(Theme.accent, 0.10)
+                        Icon { anchors.centerIn: parent; name: "search"; size: 36; color: Theme.accent }
+                    }
+                    Label { Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 12; text: "Nothing found for “" + root.query + "”"; font.pixelSize: 17; font.weight: Font.Bold; color: Theme.text; elide: Text.ElideRight; Layout.maximumWidth: parent.width }
+                    Label {
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.Wrap
+                        color: Theme.muted
+                        lineHeight: 1.2
+                        text: "Try fewer or other words. Search looks in titles, typed text and PDFs" + (Ai.ready ? (Ai.readingOn ? ", and your handwriting." : "; turn on “Make handwriting searchable” in Settings → AI to search handwriting too.") : ".")
+                    }
                 }
                 delegate: AbstractButton {
                     id: hit
@@ -890,15 +917,30 @@ Rectangle {
                     y: 70
                     width: parent.width
                     spacing: 0
+                    // Trash, favourites, an empty folder: their own picture.
+                    Item {
+                        visible: root.view.kind === "trash" || root.view.kind === "favourites" || root.view.kind === "folder"
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: 120; Layout.preferredHeight: 120
+                        Rectangle { antialiasing: true; anchors.centerIn: parent; width: 108; height: 108; radius: 54; color: Theme.alpha(Theme.accent, 0.10) }
+                        Rectangle { antialiasing: true; anchors.centerIn: parent; width: 76; height: 76; radius: 38; color: Theme.alpha(Theme.accent, 0.12) }
+                        Icon {
+                            anchors.centerIn: parent
+                            name: root.view.kind === "trash" ? "trash" : root.view.kind === "favourites" ? "star" : "folder"
+                            size: 40
+                            color: Theme.accent
+                        }
+                    }
                     Image {
+                        visible: !(root.view.kind === "trash" || root.view.kind === "favourites" || root.view.kind === "folder")
                         Layout.alignment: Qt.AlignHCenter
                         sourceSize: Qt.size(320, 240)
                         Layout.preferredWidth: 160; Layout.preferredHeight: 120
                         source: "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" width="160" height="120"><ellipse cx="80" cy="108" rx="58" ry="7" fill="' + Theme.text + '" opacity="0.08"/><g transform="rotate(-8 60 70)"><rect x="34" y="28" width="52" height="70" rx="5" fill="#e07a5f"/><rect x="34" y="28" width="8" height="70" rx="3" fill="#000" opacity="0.15"/><rect x="48" y="44" width="30" height="12" rx="3" fill="#fff" opacity="0.9"/></g><g transform="rotate(6 98 66)"><rect x="70" y="22" width="54" height="74" rx="5" fill="' + Theme.accent + '"/><rect x="70" y="22" width="8" height="74" rx="3" fill="#000" opacity="0.15"/><rect x="84" y="38" width="32" height="13" rx="3" fill="#fff" opacity="0.92"/><path d="M84 66h30M84 74h24" stroke="#fff" stroke-opacity="0.5" stroke-width="2" stroke-linecap="round"/></g><g transform="rotate(38 128 40)"><rect x="122" y="6" width="9" height="58" rx="3" fill="#3d405b"/><path d="M122 64l4.5 10 4.5-10z" fill="#3d405b"/><rect x="122" y="6" width="9" height="10" rx="3" fill="#000" opacity="0.2"/></g></svg>')
                     }
                     readonly property var texts: root.view.kind === "trash" ? ["Trash is empty", "Notebooks and folders you delete wait here before they're gone for good."]
-                        : root.view.kind === "favourites" ? ["No favourites yet", "Star a notebook or folder from its ⋯ menu to keep it close at hand."]
-                        : root.view.kind === "folder" ? ["This folder is empty", "Create a notebook here, or move one in from its ⋯ menu."]
+                        : root.view.kind === "favourites" ? ["No favourites yet", "Choose “Add to favourites” in a notebook's or folder's ⋯ menu to keep it here, close at hand."]
+                        : root.view.kind === "folder" ? ["This folder is empty", "Make something new here, or move a notebook in with “Move to…” in its ⋯ menu."]
                         : ["Your shelf is empty", "Start a notebook, a daftar annossous, or write on a PDF."]
                     Label { Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 18; text: empty.texts[0]; font.pixelSize: 19; font.weight: Font.Bold; color: Theme.text }
                     Label { Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 6; Layout.maximumWidth: 380; text: empty.texts[1]; color: Theme.muted; wrapMode: Text.Wrap; horizontalAlignment: Text.AlignHCenter; lineHeight: 1.2 }
@@ -954,6 +996,7 @@ Rectangle {
                     NewTile {
                         visible: cell.modelData.type === "new"
                         width: parent.width - 28
+                        options: root.createOptions()
                         onClicked: createMenu.show(this, root.createOptions())
                     }
                     Card {

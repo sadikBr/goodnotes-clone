@@ -113,7 +113,7 @@ qt_add_executable(inkleaf
 )
 
 # Theme is a singleton (must be set before the module is declared).
-set_source_files_properties(qml/Theme.qml qml/AppSettings.qml qml/Ai.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(qml/Theme.qml qml/AppSettings.qml qml/Ai.qml qml/Notice.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 # Fonts: the UI's Inter and the handwriting faces for text (as in src/fonts.ts).
 file(GLOB INKLEAF_FONTS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/*.ttf)
@@ -142,6 +142,7 @@ qt_add_qml_module(inkleaf
     qml/Theme.qml
     qml/AppSettings.qml
     qml/Ai.qml
+    qml/Notice.qml
     qml/SettingsDialog.qml
     qml/Library.qml
     qml/Editor.qml

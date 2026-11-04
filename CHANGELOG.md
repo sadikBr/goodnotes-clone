@@ -5,6 +5,14 @@ Updates → What's new) and on its GitHub release. Keep them short, one line
 per change, written for the people using Inkleaf. A release needs its
 section here before it can be published (`scripts/check-version.py`).
 
+## 0.14.0
+
+- **Settings** shows one section at a time (Pen & touch, AI, Sync & backups, Appearance, Updates), in tidy groups.
+- **Menus** have icons, switches for settings and groups; Export lists formats under *Whole notebook* and *This page*.
+- **New** on the shelf offers a notebook, a daftar, PDFs or a folder in one tap.
+- **Undo** right in the message when you move something to the trash; messages show what happened with an icon.
+- **Empty pages** of the library (favourites, a folder, no search results) say what to do next.
+
 ## 0.13.0
 
 - **Scratch out to erase:** scribble back and forth over ink with the pen and it's gone (Undo brings it back). Writing, circling and shading are never mistaken for it.

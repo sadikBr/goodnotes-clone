@@ -1,52 +1,79 @@
-// The dashed "New…" tile at the start of the shelf.
+// The "New" card at the start of the shelf: what can be made, each a tap
+// away (a notebook, a daftar, PDFs, a folder); the rest of the card opens
+// the same as a menu.
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Shapes
+import QtQuick.Layouts
 import Inkleaf
 
 AbstractButton {
     id: root
+    /// What can be made (Library.createOptions).
+    property var options: []
     hoverEnabled: true
     readonly property real artHeight: width * 4 / 3
     implicitHeight: artHeight
-    readonly property color line: hovered ? Theme.accent : Theme.borderStrong
-    Behavior on y { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
     transform: Translate { y: root.hovered ? -3 : 0; Behavior on y { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } } }
 
     background: Item {
         width: root.width; height: root.artHeight
-        Shape {
+        Shadow { anchors.fill: parent; radius: 12; level: root.hovered ? 2 : 1 }
+        Rectangle {
             anchors.fill: parent
-            readonly property real w: width - 2
-            readonly property real h: height - 2
-            ShapePath {
-                strokeColor: root.line
-                strokeWidth: 2
-                strokeStyle: ShapePath.DashLine
-                dashPattern: [3, 2.5]
-                fillColor: root.hovered ? Theme.accentSoft : "transparent"
-                // A box with radii 6/12/12/6, inset by half the line.
-                PathSvg {
-                    readonly property real w: root.width - 2
-                    readonly property real h: root.artHeight - 2
-                    path: "M 7 1 L " + (w - 11) + " 1 A 12 12 0 0 1 " + (w + 1) + " 13 L " + (w + 1) + " " + (h - 11) + " A 12 12 0 0 1 " + (w - 11) + " " + (h + 1) + " L 7 " + (h + 1) + " A 6 6 0 0 1 1 " + (h - 5) + " L 1 7 A 6 6 0 0 1 7 1 Z"
-                }
-            }
+            antialiasing: true
+            radius: 12
+            color: Theme.surface
+            border.color: root.hovered ? Theme.accent : Theme.border
+            Behavior on border.color { ColorAnimation { duration: 150 } }
         }
     }
     contentItem: Item {
-        Column {
-            anchors.centerIn: parent
-            anchors.verticalCenterOffset: (root.artHeight - root.height) / 2
-            spacing: 12
-            Item {
-                anchors.horizontalCenter: parent.horizontalCenter
-                width: 48; height: 48
-                Shadow { anchors.fill: parent; radius: 24; level: 1 }
-                Rectangle { antialiasing: true; anchors.fill: parent; radius: 24; color: Theme.surface }
-                Icon { anchors.centerIn: parent; name: "plus"; color: Theme.accent; size: 22 }
+        ColumnLayout {
+            x: 12
+            y: 14
+            width: root.width - 24
+            height: root.artHeight - 26
+            spacing: 4
+            RowLayout {
+                spacing: 10
+                Layout.bottomMargin: 6
+                Rectangle {
+                    antialiasing: true
+                    Layout.preferredWidth: 34; Layout.preferredHeight: 34; radius: 17
+                    color: root.hovered ? Theme.accent : Theme.alpha(Theme.accent, 0.14)
+                    Behavior on color { ColorAnimation { duration: 150 } }
+                    Icon { anchors.centerIn: parent; name: "plus"; size: 18; color: root.hovered ? Theme.accentContrast : Theme.accent }
+                }
+                ColumnLayout {
+                    spacing: 0
+                    Layout.fillWidth: true
+                    Label { text: "New"; font.pixelSize: 15; font.weight: Font.Bold; color: Theme.text }
+                    Label { text: "Pick one to start"; font.pixelSize: 11; color: Theme.muted; elide: Text.ElideRight; Layout.fillWidth: true }
+                }
             }
-            Label { anchors.horizontalCenter: parent.horizontalCenter; text: "New…"; font.weight: Font.DemiBold; color: root.hovered ? Theme.accent : Theme.muted }
+            Repeater {
+                model: root.options.slice(0, 4)
+                delegate: AbstractButton {
+                    id: quick
+                    required property var modelData
+                    Layout.fillWidth: true
+                    implicitHeight: 40
+                    hoverEnabled: true
+                    onClicked: modelData.action()
+                    background: Rectangle { antialiasing: true; radius: 9; color: quick.pressed ? Theme.surface3 : quick.hovered ? Theme.surface2 : "transparent" }
+                    contentItem: RowLayout {
+                        spacing: 9
+                        Rectangle {
+                            antialiasing: true
+                            Layout.preferredWidth: 28; Layout.preferredHeight: 28; Layout.leftMargin: 4; radius: 8
+                            color: Theme.alpha(quick.modelData.tint || Theme.accent, 0.13)
+                            Icon { anchors.centerIn: parent; name: quick.modelData.icon; size: 16; color: quick.modelData.iconColor || quick.modelData.tint || Theme.accent }
+                        }
+                        Label { text: quick.modelData.title; font.pixelSize: 13; font.weight: Font.Medium; color: Theme.text; elide: Text.ElideRight; Layout.fillWidth: true }
+                    }
+                }
+            }
+            Item { Layout.fillHeight: true }
         }
     }
 }

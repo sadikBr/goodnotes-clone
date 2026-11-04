@@ -2,7 +2,7 @@
 //   menu.show(button, [{ label, action, checked?, toggle?, danger?, key?, icon?, sub? }, ...])
 // (sub: a short line under the label, saying what it does; toggle: true or
 // false shows a switch, for a setting; { separator: true } is a line
-// between groups.)
+// between groups; { header: "Whole notebook" } a small heading over one.)
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -29,7 +29,7 @@ Popup {
         items = list
         anchorItem = anchor
         const p = anchor.mapToItem(parent, 0, 0)
-        const h = list.reduce((t, i) => t + (i.separator ? 9 : i.sub ? 52 : 38), 0) + 12
+        const h = list.reduce((t, i) => t + (i.separator ? 9 : i.header ? 28 : i.sub ? 52 : 38), 0) + 12
         menuWidth = width || (list.some(i => !!i.sub) ? 280 : list.some(i => i.toggle !== undefined) ? 252 : list.some(i => !!i.image) ? 240 : 220)
         const below = p.y + anchor.height + 6 + h < parent.height
         x = Math.max(8, Math.min(parent.width - menuWidth - 8, p.x + anchor.width - menuWidth))
@@ -57,12 +57,13 @@ Popup {
                 required property var modelData
                 required property int index
                 readonly property bool line: !!modelData.separator
+                readonly property bool heading: !!modelData.header
                 readonly property bool isToggle: modelData.toggle !== undefined
                 Layout.fillWidth: true
-                implicitHeight: line ? 9 : modelData.sub ? 52 : 38
-                enabled: !line
-                hoverEnabled: !line
-                focusPolicy: line ? Qt.NoFocus : Qt.StrongFocus
+                implicitHeight: line ? 9 : heading ? 28 : modelData.sub ? 52 : 38
+                enabled: !line && !heading
+                hoverEnabled: enabled
+                focusPolicy: enabled ? Qt.StrongFocus : Qt.NoFocus
                 focus: index === 0
                 Keys.onDownPressed: nextItemInFocusChain().forceActiveFocus()
                 Keys.onUpPressed: nextItemInFocusChain(false).forceActiveFocus()
@@ -75,10 +76,11 @@ Popup {
                 background: Item {
                     // A line between groups.
                     Rectangle { visible: it.line; anchors.verticalCenter: parent.verticalCenter; x: 8; width: parent.width - 16; height: 1; color: Theme.border }
-                    Rectangle { visible: !it.line; anchors.fill: parent; antialiasing: true; radius: 8; color: it.pressed ? Theme.surface3 : it.hovered || it.activeFocus ? Theme.surface2 : "transparent" }
+                    Label { visible: it.heading; text: it.modelData.header || ""; x: 12; anchors.bottom: parent.bottom; anchors.bottomMargin: 4; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 0.6; color: Theme.muted }
+                    Rectangle { visible: !it.line && !it.heading; anchors.fill: parent; antialiasing: true; radius: 8; color: it.pressed ? Theme.surface3 : it.hovered || it.activeFocus ? Theme.surface2 : "transparent" }
                 }
                 contentItem: RowLayout {
-                    visible: !it.line
+                    visible: !it.line && !it.heading
                     spacing: 10
                     Item { Layout.preferredWidth: 2 }
                     // With a line under it: the icon in a soft square, like the create menu.

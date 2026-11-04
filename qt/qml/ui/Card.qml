@@ -30,6 +30,7 @@ Item {
 
     HoverHandler { id: hover; cursorShape: root.trash ? Qt.ArrowCursor : Qt.PointingHandCursor }
     TapHandler {
+        id: tap
         acceptedModifiers: Qt.NoModifier
         onTapped: root.selecting ? root.toggled(false) : root.activated()
         onLongPressed: root.toggled(false)
@@ -42,6 +43,9 @@ Item {
         id: art
         width: root.width
         height: root.artHeight
+        // Pressed in a little under the finger or the pointer.
+        scale: tap.pressed && !root.trash ? 0.97 : 1
+        Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
         Book {
             visible: !root.isFolder
             anchors.fill: parent
@@ -98,7 +102,8 @@ Item {
         elide: Text.ElideRight
         horizontalAlignment: Text.AlignLeft
         font.weight: Font.DemiBold
-        color: Theme.text
+        color: root.hot && !root.trash && !root.selecting ? Theme.accent : Theme.text
+        Behavior on color { ColorAnimation { duration: 150 } }
     }
     Label {
         y: title.y + title.height + 3

@@ -99,12 +99,14 @@ Rectangle {
                     Behavior on opacity { NumberAnimation { duration: 150 } }
                     Rectangle { antialiasing: true; anchors.fill: parent; z: -1; radius: 10; color: Theme.surface }
                     onClicked: menu.show(more, [
-                        { label: "Add page after", action: () => root.daftar && cell.modelData.section ? root.addDaftarPage() : root.canvas.addPage(cell.index + 1, "") },
-                        { label: "Duplicate page", action: () => root.canvas.duplicatePage(cell.index) },
-                        { label: "Move up", action: () => root.canvas.movePage(cell.index, cell.index - 1) },
-                        { label: "Move down", action: () => root.canvas.movePage(cell.index, cell.index + 1) },
-                        { label: cell.modelData.favourite ? "Remove bookmark" : "Bookmark page", action: () => root.canvas.togglePageFavourite(cell.index) },
-                        { label: "Delete page", danger: true, action: () => root.canvas.deletePage(cell.index) }
+                        { icon: "plus", label: "Add page after", action: () => root.daftar && cell.modelData.section ? root.addDaftarPage() : root.canvas.addPage(cell.index + 1, "") },
+                        { icon: "copy", label: "Duplicate page", action: () => root.canvas.duplicatePage(cell.index) },
+                        { separator: true },
+                        { icon: "up", label: "Move up", action: () => root.canvas.movePage(cell.index, cell.index - 1) },
+                        { icon: "down", label: "Move down", action: () => root.canvas.movePage(cell.index, cell.index + 1) },
+                        { icon: "bookmark", label: cell.modelData.favourite ? "Remove bookmark" : "Bookmark page", action: () => root.canvas.togglePageFavourite(cell.index) },
+                        { separator: true },
+                        { icon: "trash", label: "Delete page", danger: true, action: () => root.canvas.deletePage(cell.index) }
                     ])
                 }
                 Label {

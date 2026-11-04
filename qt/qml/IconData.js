@@ -1,6 +1,14 @@
 // The app's icons: SVG path data by name (24 × 24, stroked; see Icon.qml).
 .pragma library
 var paths = {
+ "palette": "<path d=\"M12 3.5a8.5 8.5 0 1 0 0 17c1.4 0 2-.9 2-1.8 0-1.3-1.2-1.6-1.2-2.8 0-1 .8-1.6 1.8-1.6h2.1a3.8 3.8 0 0 0 3.8-3.8C20.5 6.8 16.7 3.5 12 3.5z\"/><circle cx=\"7.8\" cy=\"11.5\" r=\"1\"/><circle cx=\"10.5\" cy=\"7.6\" r=\"1\"/><circle cx=\"15\" cy=\"7.8\" r=\"1\"/>",
+ "bookmark": "<path d=\"M7 3.5h10v17l-5-3.5-5 3.5z\"/>",
+ "info": "<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M12 11v5.5M12 7.6v.1\"/>",
+ "alert": "<path d=\"M12 3.5l9.5 16.5h-19z\"/><path d=\"M12 10v4.5M12 17.4v.1\"/>",
+ "az": "<path d=\"M4 17l3.5-10L11 17M5.2 13.6h4.6\"/><path d=\"M14 7h6l-6 10h6\"/>",
+ "clock": "<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M12 7.5V12l3 2\"/>",
+ "slides": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"12\" rx=\"1.5\"/><path d=\"M12 16v4M8 20h8\"/><path d=\"M7 12l3-3 2.5 2.5L17 7\"/>",
+ "pdf": "<path d=\"M6 3h9l4 4v14H6z\"/><path d=\"M14 3v5h5\"/><path d=\"M9 13.5h1.5a1.25 1.25 0 0 0 0-2.5H9v5\"/><path d=\"M13.5 11v5h1a2.5 2.5 0 0 0 0-5z\"/>",
  "pen": "<path d=\"M4 20l4-1 11-11-3-3L5 16l-1 4z\"/><path d=\"M14 6l3 3\"/>",
  "highlighter": "<path d=\"M9 15l-3 5h6l1-2\"/><path d=\"M8 14l8-10 4 4-10 8z\"/>",
  "ruler": "<path d=\"M3 16.5L16.5 3 21 7.5 7.5 21z\"/><path d=\"M7 13l1.5 1.5M9.5 10.5l2.5 2.5M12 8l1.5 1.5M14.5 5.5l2.5 2.5\"/>",

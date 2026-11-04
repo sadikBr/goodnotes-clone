@@ -422,11 +422,14 @@ Rectangle {
                         ToolTip.text: "Export as PDF, PowerPoint or image"
                         scale: pressed ? 0.96 : 1
                         onClicked: menu.show(exportBtn, [
-                            { label: "PDF — whole notebook", action: () => exporter.run("pdf", "all") },
-                            { label: "PDF — this page", action: () => exporter.run("pdf", "current") },
-                            { label: "PowerPoint (.pptx) — whole notebook", action: () => exporter.run("pptx", "all") },
-                            { label: "PowerPoint (.pptx) — this page", action: () => exporter.run("pptx", "current") },
-                            { label: "PNG image — this page", action: () => exporter.run("png", "current") }
+                            { header: "WHOLE NOTEBOOK" },
+                            { icon: "pdf", label: "PDF", action: () => exporter.run("pdf", "all") },
+                            { icon: "slides", label: "PowerPoint (.pptx)", action: () => exporter.run("pptx", "all") },
+                            { separator: true },
+                            { header: "THIS PAGE" },
+                            { icon: "pdf", label: "PDF", action: () => exporter.run("pdf", "current") },
+                            { icon: "slides", label: "PowerPoint (.pptx)", action: () => exporter.run("pptx", "current") },
+                            { icon: "image", label: "PNG image", action: () => exporter.run("png", "current") }
                         ])
                         background: Rectangle { antialiasing: true; radius: 13; color: exportBtn.hovered ? Qt.lighter(Theme.accent, 1.08) : Theme.accent }
                         contentItem: Item {
@@ -506,7 +509,7 @@ Rectangle {
                     scratchOut: AppSettings.store.scratchOut
                     fingerTaps: AppSettings.store.fingerTaps
                     onScratchedOut: scratchNotice.show(this)
-                    onFingerTapped: redo => root.notify(redo ? "Redone" : "Undone", false)
+                    onFingerTapped: redo => Notice.post(redo ? "Redone" : "Undone", false, { icon: redo ? "redo" : "undo" })
                     penCursor: AppSettings.store.penCursor
                     property bool penSeen: false
                     onPenUsed: if (!AppSettings.store.penOnly && !penSeen) { penSeen = true; AppSettings.store.penOnly = true }
@@ -686,7 +689,7 @@ Rectangle {
         dialog.ask("Save to my pieces", [{ name: "name", label: "Name", value: "" , placeholder: "Triangle, signature, stamp…" }], "Save", r => {
             try {
                 InkleafCore.call("saveSnippet", { name: r.name.trim(), data: p.elements, preview: p.preview, width: p.width, height: p.height, notebookId: view.notebookId })
-                root.notify("Saved to your pieces: find it under Insert → My pieces", false)
+                Notice.post("Saved to your pieces", false, { icon: "stack", actionLabel: "Show", action: () => piecesPanel.show(insertBtn) })
             } catch (e) {
                 root.notify(String(e.message || e), true)
             }

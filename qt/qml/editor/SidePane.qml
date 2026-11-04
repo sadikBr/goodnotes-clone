@@ -100,7 +100,7 @@ Rectangle {
                 scratchOut: AppSettings.store.scratchOut
                 fingerTaps: AppSettings.store.fingerTaps
                 onScratchedOut: root.editor.scratched(this)
-                onFingerTapped: redo => root.notify(redo ? "Redone" : "Undone", false)
+                onFingerTapped: redo => Notice.post(redo ? "Redone" : "Undone", false, { icon: redo ? "redo" : "undo" })
                 penCursor: AppSettings.store.penCursor
                 onMessage: (text, error) => root.notify(text, error)
                 onToolChanged: if (tool !== root.prefs.store.tool) root.prefs.store.tool = tool
