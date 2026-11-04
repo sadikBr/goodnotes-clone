@@ -1,5 +1,6 @@
 #include "draw/Elements.h"
 #include "InkCanvas.h"
+#include "editor/Geometry.h"
 
 #include "daftar/DaftarEditor.h"
 
@@ -1690,6 +1691,34 @@ void InkCanvas::release() {
   m_g = Gesture();
   m_liveChanged = true;
   afterCore();
+  if (m_growable) QTimer::singleShot(0, this, &InkCanvas::growIfNeeded);
+}
+
+void InkCanvas::growIfNeeded() {
+  if (!m_growable || !m_ed || m_g.kind != Gesture::None) return;
+  const int pi = activePage();
+  if (pi < 0 || pi >= int(m_pages.size())) return;
+  double right = 0, bottom = 0;
+  for (const ed::ElPtr& el : m_ed->load(pi)) {
+    const ed::Rect b = ed::bounds(*el);
+    right = std::max(right, b.x + b.w);
+    bottom = std::max(bottom, b.y + b.h);
+  }
+  // Writing near the right or bottom edge: room for more, in steps.
+  const double w = m_pages[pi].w, h = m_pages[pi].h, near = 360, step = 400;
+  if (right < w - near && bottom < h - near) return;
+  const double nw = right >= w - near ? std::ceil((right + 1200) / step) * step : w;
+  const double nh = bottom >= h - near ? std::ceil((bottom + 900) / step) * step : h;
+  flush();
+  QString err;
+  InkleafCore::instance()->callJson("setPageSize", {{"pageId", m_pages[pi].id}, {"width", nw}, {"height", nh}}, &err);
+  if (!err.isEmpty()) return emit message(err, true);
+  const QPointF scroll = m_scroll;
+  reloadPages(false);
+  m_scroll = scroll;
+  clampScroll();
+  emit viewChanged();
+  refresh();
 }
 
 bool InkCanvas::eventFilter(QObject* watched, QEvent* event) {

@@ -22,6 +22,8 @@ Rectangle {
     /// (`prefs: prefs` there would read their own, still empty).
     readonly property alias toolPrefs: prefs
     readonly property alias mainCanvas: canvas
+    /// What kind of document this is ("whiteboard", "register"…; "" for a notebook).
+    readonly property string docKind: DocKinds.kindOf(notebookId)
 
     readonly property var tools: [
         { id: "pen", label: "Pen", key: "P", tray: 0, icon: "pen" },
@@ -508,6 +510,7 @@ Rectangle {
                     sideButton: AppSettings.store.sideButton
                     palmRejection: AppSettings.store.palmRejection
                     scratchOut: AppSettings.store.scratchOut
+                    growable: root.docKind === "whiteboard"
                     fingerTaps: AppSettings.store.fingerTaps
                     onScratchedOut: scratchNotice.show(this)
                     onFingerTapped: redo => Notice.post(redo ? "Redone" : "Undone", false, { icon: redo ? "redo" : "undo" })

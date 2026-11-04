@@ -66,6 +66,8 @@ class InkCanvas : public QQuickItem {
   Q_PROPERTY(bool scratchOut MEMBER m_scratchOut NOTIFY settingsChanged)
   /// Two fingers tapped together: undo; three: redo.
   Q_PROPERTY(bool fingerTaps MEMBER m_fingerTaps NOTIFY settingsChanged)
+  /// A whiteboard: the page grows to the right and down as writing nears its edges.
+  Q_PROPERTY(bool growable MEMBER m_growable NOTIFY settingsChanged)
   /// View only: every gesture scrolls (a second view of the notebook being edited).
   Q_PROPERTY(bool readOnly MEMBER m_readOnly NOTIFY settingsChanged)
   // The cursor for drawing tools: "cross" | "dot" | "none".
@@ -391,6 +393,8 @@ private:
   bool m_palmRejection = true;
   bool m_scratchOut = true;
   bool m_fingerTaps = true;
+  bool m_growable = false;
+  void growIfNeeded();
   /// Scratch-outs seen, and the fading of what the last one took.
   int m_scratches = 0;
   double m_fadeStart = 0;

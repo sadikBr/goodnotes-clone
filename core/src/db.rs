@@ -1492,6 +1492,19 @@ impl Db {
         expect_one(n, page_id)
     }
 
+    /// A page's new size (a whiteboard grows as it fills up); its picture is redrawn.
+    pub fn set_page_size(&self, page_id: &str, width: f64, height: f64) -> AppResult<()> {
+        if !(width.is_finite() && height.is_finite() && (100.0..=40_000.0).contains(&width) && (100.0..=40_000.0).contains(&height)) {
+            return Err(AppError::Invalid(format!("page size {width} × {height}")));
+        }
+        let conn = self.conn();
+        let n = conn.execute(
+            "UPDATE pages SET width = ?2, height = ?3, thumbnail = NULL, updated_at = ?4 WHERE id = ?1",
+            params![page_id, width, height, now_ms()],
+        )?;
+        expect_one(n, page_id)
+    }
+
     pub fn set_page_favourite(&self, page_id: &str, favourite: bool) -> AppResult<()> {
         let conn = self.conn();
         let n = conn.execute(
@@ -2212,6 +2225,19 @@ mod tests {
             Ok(out)
         })
         .unwrap()
+    }
+
+    #[test]
+    fn a_page_can_grow() {
+        let db = db();
+        let nb = notebook(&db, "Board");
+        let page = db.pages(&nb.id).unwrap()[0].id.clone();
+        db.set_page_size(&page, 2400.0, 1800.0).unwrap();
+        let p = &db.pages(&nb.id).unwrap()[0];
+        assert_eq!((p.width, p.height), (2400.0, 1800.0));
+        assert!(db.set_page_size(&page, 0.0, 10.0).is_err());
+        assert!(db.set_page_size(&page, f64::NAN, 500.0).is_err());
+        assert!(db.set_page_size("nope", 500.0, 500.0).is_err());
     }
 
     #[test]

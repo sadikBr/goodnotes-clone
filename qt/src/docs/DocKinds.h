@@ -32,6 +32,11 @@ public:
   /// tests (count), daftarId }: attendance pages and a marks page with averages.
   Q_INVOKABLE QVariantMap classRegister(const QVariantMap& o, const QString& folderId);
 
+  /// A whiteboard: one big dotted page that grows as it fills up.
+  Q_INVOKABLE QVariantMap whiteboard(const QString& title, const QString& folderId);
+  /// The kind of document a notebook was made as ("whiteboard", "register"…; "" for a notebook).
+  Q_INVOKABLE QString kindOf(const QString& notebookId) const;
+
 signals:
   void failed(const QString& message);
 };

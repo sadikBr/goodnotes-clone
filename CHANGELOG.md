@@ -11,6 +11,7 @@ section here before it can be published (`scripts/check-version.py`).
 - **Test · فرض:** the school's header, the student's line and your exercises with room to answer.
 - **Class register · سجل:** your class's students from the daftar, attendance pages and a marks table whose averages work themselves out.
 - **Sketchbook:** blank landscape pages for drawing.
+- **Whiteboard:** one big dotted page that grows as you write near its edges.
 
 ## 0.14.0
 
