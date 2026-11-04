@@ -86,6 +86,10 @@ qt_add_executable(inkleaf
   src/draw/Freehand.h src/draw/Freehand.cpp
   src/draw/Strokes.h src/draw/Strokes.cpp
   src/draw/Elements.h src/draw/Elements.cpp
+  src/editor/Model.h src/editor/Model.cpp
+  src/editor/Geometry.h src/editor/Geometry.cpp
+  src/tests/SelfTest.h src/tests/SelfTest.cpp
+  src/tests/GeometryTests.cpp
   src/CompareRender.h src/CompareRender.cpp
   src/PaperImage.h src/PaperImage.cpp
   src/Pdf.h src/Pdf.cpp

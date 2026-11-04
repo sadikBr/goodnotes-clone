@@ -266,7 +266,7 @@ void addElementCases(std::vector<Case>& out) {
   // pictures the editor has loaded.)
   for (const auto& [name, el] : sampleElements())
     if (el["kind"].toString() != "image") all.append(el);
-  for (const char* t : {"ruled", "cover-zellige", "daftar"}) {
+  for (const char* t : {"ruled", "cover-zellige", "planner-week"}) {
     const QString tmpl = t;
     out.push_back({QString("page-%1").arg(t),
                    [=] {

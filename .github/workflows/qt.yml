@@ -68,6 +68,10 @@ jobs:
         run: |
           cargo test -p inkleaf-core
           npm test
+      - name: The C++ code's own tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ./build/qt/inkleaf --self-test
       - name: C++ drawing matches the scripts' (docs/MIGRATION.md)
         env:
           QT_QPA_PLATFORM: offscreen
