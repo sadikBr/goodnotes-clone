@@ -132,16 +132,14 @@ export function timetableElements(meta: DaftarMeta, w: number, h: number): Stick
 }
 
 /**
- * The cover's details under its title: "Cahier de textes", then school,
- * subject, teacher and classes — Arabic label right, French left, value in
- * the middle.
+ * The cover's details under its title: school, subject, teacher and
+ * classes — the Arabic label, then the value in the middle.
  */
 export function coverElements(meta: DaftarMeta, w: number, h: number): TextEl[] {
   const p = zelligePanel(w, h);
   const out: TextEl[] = [];
   let z = 10;
   const base = { kind: "text" as const, role: "daftar-field" as const, font: "sans" as const };
-  out.push({ ...base, id: newId(), z: z++, x: p.x + 30, y: p.y + 186, w: p.w - 60, text: "Cahier de textes", fontSize: 20, color: "#6b7280", align: "center" });
   const rows = [
     { ar: "المؤسسة", fr: "Établissement", value: meta.school },
     { ar: "المادة", fr: "Matière", value: meta.subject },
@@ -155,7 +153,6 @@ export function coverElements(meta: DaftarMeta, w: number, h: number): TextEl[] 
   rows.forEach((r, i) => {
     const y = top + i * step;
     out.push({ ...base, id: newId(), z: z++, x, y, w: rw, text: r.ar, fontSize: 13, color: "#6b7280" });
-    out.push({ ...base, id: newId(), z: z++, x, y, w: rw, text: r.fr, fontSize: 12, color: "#6b7280", align: "left" });
     out.push({ ...base, id: newId(), z: z++, x, y: y + 22, w: rw, text: r.value, fontSize: 19, color: "#1f2937", bold: true, align: "center" });
   });
   return out;

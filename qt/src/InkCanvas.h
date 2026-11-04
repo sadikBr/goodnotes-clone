@@ -351,12 +351,12 @@ private:
   bool m_fitPending = true;
   QTimer m_settle;  // the zoom stopped changing: sharper pictures
   QTimer m_saveTimer;
-  QTimer m_thumbFill;  // missing PDF page thumbnails
+  QTimer m_thumbFill;  // missing page thumbnails
   QTimer m_prefetch;  // idle: pages further off loaded and drawn ahead of scrolling
   QTimer m_scrollGlide;  // a wheel notch's eased scroll
   double m_glideLast = 0;
   QPointF m_glideTarget;
-  double m_lastWheel = -1e9, m_wheelBoost = 1;
+  double m_lastWheel = -1e9, m_wheelBoost = 1, m_wheelNotches = 0;
   bool m_dismissOnPress = false;  // missing PDF page thumbnails
   QTimer m_timers;  // the scripts' timers (holding a stroke still)
   QTimer m_laserTick;

@@ -114,10 +114,10 @@ void topStrip(JsCanvas& c, double w, const QString& accent) {
   c.fill();
 }
 
-/// A page heading: Arabic, large and bold, with a small French line under it.
+/// A page heading: Arabic, large and bold (`fr` is not shown: Arabic only).
 void heading(JsCanvas& c, const QString& ar, const QString& fr, double w, double y) {
-  text(c, ar, w / 2, y, T(26, true, {}, 'c'));
-  if (!fr.isEmpty()) text(c, fr, w / 2, y + 22, T(12.5, false, MUTED, 'c'));
+  Q_UNUSED(fr);
+  text(c, ar, w / 2, y + 8, T(26, true, {}, 'c'));
 }
 
 /// A rounded band across the page with a white section name.
@@ -125,8 +125,8 @@ void sectionBand(JsCanvas& c, const QString& label, const QString& fr, double x0
   c.setFill(accent);
   roundRect(c, x0, y, x1 - x0, 32, 14);
   c.fill();
-  const double tw = text(c, label, (x0 + x1) / 2 + (!fr.isEmpty() ? 40 : 0), y + 22, T(15, true, "#ffffff", 'c'));
-  if (!fr.isEmpty()) text(c, fr, (x0 + x1) / 2 + 40 - tw / 2 - 12, y + 21, T(11.5, false, "rgba(255,255,255,0.82)"));
+  Q_UNUSED(fr);
+  text(c, label, (x0 + x1) / 2, y + 22, T(15, true, "#ffffff", 'c'));
 }
 
 struct Col {
@@ -171,7 +171,7 @@ void table(JsCanvas& c, const std::vector<Col>& cols, double x0, double x1, doub
     const Col& col = cols[i];
     const Column& e = edges[i];
     const double cx = (e.x0 + e.x1) / 2;
-    const bool two = !col.fr.isEmpty() && headH >= 38;
+    const bool two = false;  // Arabic only: no French line under the labels
     // Long Arabic labels wrap onto two lines, as in the printed headers.
     const QStringList words = col.ar.split(' ');
     const bool fits = labelWidth(col.ar, 12.5, true) < e.x1 - e.x0 - 10 || words.size() < 2;
@@ -182,7 +182,6 @@ void table(JsCanvas& c, const std::vector<Col>& cols, double x0, double x1, doub
       text(c, words.mid(0, half).join(' '), cx, y0 + headH / 2 - (two ? 11 : 3), T(11.5, true, "#ffffff", 'c'));
       text(c, words.mid(half).join(' '), cx, y0 + headH / 2 + (two ? 2 : 11), T(11.5, true, "#ffffff", 'c'));
     }
-    if (two) text(c, col.fr, cx, y0 + headH - (fits ? 8 : 5), T(9.5, false, "rgba(255,255,255,0.8)", 'c'));
     if (i > 0) line(c, e.x1, y0 + headH, e.x1, bottom, accent, 1);
   }
   for (int r = 1; r < rows; r++) line(c, x0, y0 + headH + r * rowH, x1, y0 + headH + r * rowH, tint(accent, 0.45), 0.8);
@@ -393,7 +392,6 @@ QHash<QString, Slot> drawPage(JsCanvas& c, const QString& t, double w, double h)
     c.setFill(accent);
     c.fill();
     text(c, "دفتر النصوص", mid, 470, T(82, true, accent, 'c'));
-    text(c, "Cahier de textes", mid, 520, T(22, false, MUTED, 'c'));
     text(c, "خاص بالتعليم العمومي والخصوصي", mid, 600, T(20, true, {}, 'c'));
     out["school"] = field(c, "المؤسسة", w - 70, mid + 20, 860);
     out["teacher"] = field(c, "الأستاذ(ة)", mid - 20, 70, 860);
@@ -438,8 +436,7 @@ QHash<QString, Slot> drawPage(JsCanvas& c, const QString& t, double w, double h)
     c.fillRect(L.m, L.top, w - 2 * L.m, L.headH);
     for (const Day& d : L.days) {
       const double cx = (d.x0 + d.x1) / 2;
-      text(c, d.ar, cx, L.top + 20, T(13, true, "#fff", 'c'));
-      text(c, d.fr, cx, L.top + 36, T(9.5, false, "rgba(255,255,255,0.8)", 'c'));
+      text(c, d.ar, cx, L.top + 27, T(13, true, "#fff", 'c'));
       if (d.x0 > L.m + 1) line(c, d.x0, L.bodyTop, d.x0, L.bottom, tint(accent, 0.45), 1);
     }
     for (int hr = int(L.from); hr <= int(L.to); hr++) {
@@ -537,8 +534,7 @@ QHash<QString, Slot> drawPage(JsCanvas& c, const QString& t, double w, double h)
     for (const LessonCol& col : L.cols) {
       const double cx = (col.x0 + col.x1) / 2;
       const bool big = col.key == "activities";
-      text(c, col.ar, cx, L.headTop + (big ? 26 : 23), T(big ? 17 : 13, true, "#ffffff", 'c'));
-      text(c, col.fr, cx, L.headTop + 40, T(9.5, false, "rgba(255,255,255,0.8)", 'c'));
+      text(c, col.ar, cx, L.headTop + (big ? 30 : 28), T(big ? 17 : 13, true, "#ffffff", 'c'));
       if (col.x0 > L.x0 + 1) line(c, col.x0, L.headTop, col.x0, L.bodyBottom, accent, 1.1);
     }
     c.setStroke(accent);
@@ -555,7 +551,6 @@ QHash<QString, Slot> drawPage(JsCanvas& c, const QString& t, double w, double h)
     c.closePath();
     c.fill();
     text(c, "ملاحظات", L.x1 - 24, ty + 20, T(14, true, "#ffffff"));
-    text(c, "Remarques", L.x1 - 108, ty + 19, T(10.5, false, "rgba(255,255,255,0.8)"));
     line(c, L.x0, ty + 28, L.x1 - 206, ty + 28, accent, 1.2);
     for (double y = ty + 54; y < L.iy1 - 10; y += 22) line(c, L.x0, y, L.x1, y, "rgba(40,40,60,0.28)", 0.7);
   }

@@ -125,10 +125,13 @@ InkCanvas::InkCanvas(QQuickItem* parent) : QQuickItem(parent) {
   });
   m_thumbFill.setSingleShot(true);
   m_thumbFill.setInterval(250);
+  // Pages without a picture yet (new pages, the daftar's, imported PDFs'):
+  // one at a time while nothing else is going on.
   connect(&m_thumbFill, &QTimer::timeout, this, [this] {
+    if (m_g.kind != Gesture::None || m_scrollGlide.isActive()) return m_thumbFill.start();
     for (int i = 0; i < int(m_pages.size()); ++i) {
       const QJsonObject& m = m_pages[i].meta;
-      if (m["backgroundAsset"].toString().isEmpty() || !m["thumbnail"].toString().isEmpty()) continue;
+      if (!m["thumbnail"].toString().isEmpty()) continue;
       storeThumbnail(i);
       emit pagesChanged();
       if (!m_pages[i].meta["thumbnail"].toString().isEmpty()) m_thumbFill.start();
@@ -1616,19 +1619,24 @@ void InkCanvas::wheelEvent(QWheelEvent* e) {
     zoomAt(m_zoom * std::exp(e->angleDelta().y() * 0.0025), e->position());
     return;
   }
-  // Touchpads scroll by their pixels; a mouse wheel by a step per notch, as
-  // in a browser (on Wayland a wheel also reports a few pixels per notch,
-  // which would barely move the page).
+  // Touchpads (and other smooth scrolling) move by their pixels; a mouse
+  // wheel by a step per notch. Which it is: the platform marks finger and
+  // smooth scrolls as synthesized (Wayland) or the device is a touchpad
+  // (X11). Newer Qt also gives a wheel pixel deltas; they're ignored.
   const QPoint px = e->pixelDelta();
-  const bool touchpad = !px.isNull() && (e->phase() != Qt::NoScrollPhase || (e->pointingDevice() && e->pointingDevice()->type() == QInputDevice::DeviceType::TouchPad));
-  // A notch moves a good step, and notches that follow quickly (a flick of the
-  // wheel) move further and further: a flick of four notches passes a page.
+  const bool touchpad = !px.isNull() && (e->source() == Qt::MouseEventSynthesizedBySystem || (e->pointingDevice() && e->pointingDevice()->type() == QInputDevice::DeviceType::TouchPad));
+  // A notch moves a step; notches that follow quickly (a flick of the wheel)
+  // move a little further each: a flick of four notches passes about a page.
+  // Counted in notches (120 units), so high-resolution wheels, which send
+  // many small events per notch, scroll the same.
   const double now = nowMs();
   if (!touchpad) {
-    m_wheelBoost = now - m_lastWheel < 200 ? std::min(5.0, m_wheelBoost * 1.35) : 1.0;
+    if (now - m_lastWheel > 220) m_wheelNotches = 0;
+    m_wheelNotches += std::abs(e->angleDelta().y() ? e->angleDelta().y() : e->angleDelta().x()) / 120.0;
+    m_wheelBoost = std::min(3.5, std::pow(1.25, std::max(0.0, m_wheelNotches - 1)));
     m_lastWheel = now;
   }
-  const QPointF d = touchpad && !px.isNull() ? QPointF(px) : QPointF(e->angleDelta()) / 120.0 * 240.0 * m_wheelBoost;
+  const QPointF d = touchpad ? QPointF(px) : QPointF(e->angleDelta()) / 120.0 * 200.0 * m_wheelBoost;
   const QPointF step = (e->modifiers() & Qt::ShiftModifier) ? QPointF(d.y(), 0) : d;
   static const bool trace = qEnvironmentVariableIsSet("INKLEAF_TRACE");
   if (trace) qInfo("wheel angle %d px %d phase %d touchpad %d boost %.2f step %.0f", e->angleDelta().y(), px.y(), int(e->phase()), int(touchpad), m_wheelBoost, step.y());

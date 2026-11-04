@@ -109,6 +109,11 @@ configure_file(qml/Prefs.qml.in ${CMAKE_CURRENT_BINARY_DIR}/gen/Prefs.qml @ONLY)
 set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen/Prefs.qml PROPERTIES QT_RESOURCE_ALIAS qml/Prefs.qml
   # (generated outside the source folder: qmlcachegen's path for it breaks on Windows)
   QT_QML_SKIP_CACHEGEN TRUE)
+# Qt 6.8+ asks whether QML files in sub-folders (qml/editor, qml/ui) get
+# qmldir files of their own; they're part of the one module, as before.
+if(QT_KNOWN_POLICY_QTP0004)
+  qt_policy(SET QTP0004 OLD)
+endif()
 qt_add_qml_module(inkleaf
   URI Inkleaf
   VERSION 1.0

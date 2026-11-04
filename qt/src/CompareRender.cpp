@@ -76,6 +76,9 @@ std::vector<Case> cases() {
   // Covers aren't in the paper catalogue.
   for (const draw::CoverDesign& d : draw::coverDesigns()) ids << d.tmpl;
   for (const QString& id : ids) {
+    // Daftar pages: identical to the scripts' when ported (step 3), then
+    // changed on purpose (Arabic only); their value positions still compare.
+    if (id.startsWith("daftar")) continue;
     const bool special = false;
     if (id.startsWith("cover")) {
       // Every design in every cover colour; all sizes and orientations in two.

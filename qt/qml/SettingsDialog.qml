@@ -152,7 +152,7 @@ Popup {
                 SettingRow {
                     visible: !!(!!root.sync && root.sync.signedIn)
                     title: "Status"
-                    help: !root.sync ? "" : root.sync.lastError ? "<font color='" + Theme.danger + "'>" + root.esc(root.sync.lastError) + "</font>" : root.sync.lastSyncAt ? "Last synced " + root.services.relativeTime(root.sync.lastSyncAt) : "Not synced yet"
+                    help: !root.sync ? "" : root.sync.lastError ? "<font color='" + Theme.danger + "'>" + root.esc(root.sync.lastError) + "</font>" : (root.sync.lastSyncAt ? "Last synced " + root.services.relativeTime(root.sync.lastSyncAt) : "Not synced yet") + ". Notebooks are kept in Inkleaf's own private space in your Drive, which doesn't show among your files (Drive's Settings → Manage apps lists it)."
                     UiButton { text: root.services.syncing ? "Syncing…" : "Sync now"; enabled: !root.services.syncing; onClicked: root.services.syncNow(true) }
                 }
 
