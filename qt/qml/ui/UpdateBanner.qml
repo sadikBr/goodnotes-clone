@@ -56,6 +56,8 @@ Item {
         return out
     }
 
+    // Clicks and taps on it stop here (not on the buttons or page behind it).
+    MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; hoverEnabled: true; onWheel: w => w.accepted = true }
     Shadow { anchors.fill: parent; radius: Theme.radiusXl; level: 3 }
     Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusXl; color: Theme.surface; border.color: Theme.border }
     RowLayout {

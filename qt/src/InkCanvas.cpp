@@ -1722,16 +1722,29 @@ bool InkCanvas::eventFilter(QObject* watched, QEvent* event) {
       return false;
     }
     setHover(local);
-    drag(local, curved(te->pressure()), true, te->modifiers());
+    if (m_g.kind == Gesture::Core) {
+      const bool queued = m_pendingMove.waiting;
+      m_pendingMove = {local, curved(te->pressure()), te->modifiers(), true};
+      if (!queued) QMetaObject::invokeMethod(this, &InkCanvas::flushPendingMove, Qt::QueuedConnection);
+    } else {
+      drag(local, curved(te->pressure()), true, te->modifiers());
+    }
     te->accept();
     return true;
   }
   m_pendingPen.at = -1e9;
   if (m_g.kind == Gesture::None || !m_g.stylus) return false;
+  flushPendingMove();
   release();
   // Not accepted: Qt Quick still gets the matching mouse release, so the
   // press it gave this item ends (mouseReleaseEvent ignores it).
   return false;
+}
+
+void InkCanvas::flushPendingMove() {
+  if (!m_pendingMove.waiting) return;
+  m_pendingMove.waiting = false;
+  if (m_g.kind == Gesture::Core) drag(m_pendingMove.local, m_pendingMove.pressure, true, m_pendingMove.mods);
 }
 
 void InkCanvas::mousePressEvent(QMouseEvent* e) {

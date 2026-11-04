@@ -411,6 +411,18 @@ private:
     Qt::KeyboardModifiers mods;
     double at = -1e9;
   } m_pendingPen;
+  /// Pen moves for the eraser, lasso, moving and resizing come far more
+  /// often than the screen shows them (unlike the mouse's, Qt doesn't merge
+  /// them), and each erases or moves things on the page: the latest is kept
+  /// and done once, on the next turn of the event loop. (Strokes keep every
+  /// point.)
+  struct PendingMove {
+    QPointF local;
+    float pressure = 0.5f;
+    Qt::KeyboardModifiers mods;
+    bool waiting = false;
+  } m_pendingMove;
+  void flushPendingMove();
   QVariantMap m_instrument;
   double m_instrumentRev = -1;
 

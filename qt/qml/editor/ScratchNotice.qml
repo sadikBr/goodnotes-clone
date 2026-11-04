@@ -28,6 +28,8 @@ Rectangle {
     antialiasing: true
     Behavior on opacity { NumberAnimation { duration: 180 } }
     Behavior on y { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+    // Clicks and taps on it stop here (not on the buttons or page behind it).
+    MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; hoverEnabled: true; onWheel: w => w.accepted = true }
     Timer { id: hide; interval: 4000; onTriggered: root.shown = false }
     RowLayout {
         id: row

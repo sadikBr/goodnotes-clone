@@ -9,6 +9,9 @@ section here before it can be published (`scripts/check-version.py`).
 
 - **Scratch out to erase:** scribble back and forth over ink with the pen and it's gone (Undo brings it back). Writing, circling and shading are never mistaken for it.
 - **Finger taps:** tap with two fingers to undo, three to redo.
+- **Fixed:** the eraser keeps up with the pen.
+- **Fixed:** a tap next to typed text (an Arabic word, say) no longer selects it; only a tap on its letters does.
+- **Fixed:** clicks on the update card no longer reach the buttons behind it.
 
 ## 0.12.0
 

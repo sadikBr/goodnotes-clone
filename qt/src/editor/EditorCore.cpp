@@ -404,7 +404,7 @@ QString EditorCore::down(int pi, double x, double y, double p, double t, const Q
     const Els& els = elements();
     ElPtr existing;
     for (auto it = els.rbegin(); it != els.rend(); ++it)
-      if ((*it)->kind == want && rectContains(bounds(**it), x, y)) {
+      if ((*it)->kind == want && rectContains(want == Kind::Text ? pad(frameOfEl(**it), (*it)->fontSize.value_or(20) * 0.6) : bounds(**it), x, y)) {
         existing = *it;
         break;
       }
@@ -627,8 +627,11 @@ void EditorCore::up() {
       if (tap) {
         const double tx = g.lasso[0][0], ty = g.lasso[0][1];
         for (auto it = els.rbegin(); it != els.rend(); ++it)
-          if ((near(boxOfEl(**it), tx, ty, 8 / zoom) && hitForSelect(**it, tx, ty, 6 / zoom)) ||
-              ((*it)->kind == Kind::Text && rectContains(frameOfEl(**it), tx, ty))) {
+          // Typed text: near its letters (its box can be much wider, e.g.
+          // an Arabic line written from the right, and taps in the empty
+          // part shouldn't take it).
+          if ((*it)->kind == Kind::Text ? rectContains(pad(frameOfEl(**it), 6 / zoom), tx, ty)
+                                        : near(boxOfEl(**it), tx, ty, 8 / zoom) && hitForSelect(**it, tx, ty, 6 / zoom)) {
             m_selection.insert((*it)->id);
             // A table comes with what's written in it (to move it all together).
             if ((*it)->kind == Kind::Table) {
