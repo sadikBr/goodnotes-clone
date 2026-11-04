@@ -360,6 +360,9 @@ QString EditorCore::down(int pi, double x, double y, double p, double t, const Q
         bool anyText = false;
         for (const ElPtr& el : m_g.original)
           if (el->isTextish()) m_hidden.insert(el->id), anyText = true;
+        // Shown as they are until the pointer moves (hidden on the page already).
+        for (const ElPtr& el : m_g.original)
+          if (el->isTextish()) m_g.previews.push_back(el);
         if (anyText) ++rev;
       } else {
         const auto sel = selectionBounds();
@@ -488,7 +491,7 @@ void EditorCore::move(double x, double y, double p, double t, bool shift, bool a
       g.angle = tr.angle;
       g.previews.clear();
       for (const ElPtr& el : g.original)
-        if (el->isTextish()) g.previews.push_back(makeEl(transformElement(*el, g.m, g.sx, g.sy, g.angle)));
+        if (el->isTextish()) g.previews.push_back(makeEl(transformed(*el, g)));
       break;
     }
     case G::Shape: {
@@ -610,7 +613,8 @@ void EditorCore::up() {
       if (tap) {
         const double tx = g.lasso[0][0], ty = g.lasso[0][1];
         for (auto it = els.rbegin(); it != els.rend(); ++it)
-          if (near(boxOfEl(**it), tx, ty, 8 / zoom) && hitForSelect(**it, tx, ty, 6 / zoom)) {
+          if ((near(boxOfEl(**it), tx, ty, 8 / zoom) && hitForSelect(**it, tx, ty, 6 / zoom)) ||
+              ((*it)->kind == Kind::Text && rectContains(frameOfEl(**it), tx, ty))) {
             m_selection.insert((*it)->id);
             break;
           }
@@ -633,7 +637,7 @@ void EditorCore::up() {
       if (anyText) ++rev;
       if (!g.m.identity()) {
         std::unordered_map<QString, ElPtr> next;
-        for (const ElPtr& el : g.original) next.emplace(el->id, makeEl(transformElement(*el, g.m, g.sx, g.sy, g.angle)));
+        for (const ElPtr& el : g.original) next.emplace(el->id, makeEl(transformed(*el, g)));
         snapshot();
         for (ElPtr& el : elements())
           if (auto f = next.find(el->id); f != next.end()) el = f->second;
@@ -1496,13 +1500,48 @@ void EditorCore::drawOverlay(Canvas& c, int pi) {
   }
 }
 
+El EditorCore::transformed(const El& el, const Gesture& g) const {
+  // Text alone, pulled by a side: its wrap width changes by as much as the
+  // frame did (the frame fits the letters, so a ratio of the frame would
+  // stretch the wider wrap box further than the pointer went), and the
+  // other side stays where it is.
+  const bool side = (g.handle == "e" || g.handle == "w") && !g.angle && std::abs(g.sy - 1) < 1e-9;
+  const bool allText = std::all_of(g.original.begin(), g.original.end(), [](const ElPtr& e) { return e->kind == Kind::Text; });
+  if (el.kind == Kind::Text && side && allText && !el.rot()) {
+    El out = el;
+    if (g.original.size() == 1) {
+      // One text box: it wraps to the frame being dragged (the frame is a few
+      // units around the letters), so the pulled edge stays under the pointer.
+      const P2 a = applyAffine(g.m, {g.box.x, g.box.y}), b = applyAffine(g.m, {g.box.x + g.box.w, g.box.y});
+      const double left = std::min(a[0], b[0]), right = std::max(a[0], b[0]);
+      out.w = std::max(40.0, right - left - 8);
+      out.x = g.handle == "w" ? right - 4 - out.w : left + 4;
+      return out;
+    }
+    const double dw = g.box.w * (g.sx - 1);
+    out.w = std::max(40.0, el.w + dw);
+    if (g.handle == "w") out.x = el.x - (out.w - el.w);
+    return out;
+  }
+  return transformElement(el, g.m, g.sx, g.sy, g.angle);
+}
+
 std::vector<P2> EditorCore::transformOutline() const {
   const Gesture& g = m_g;
   if (!g.previews.empty() && g.previews.size() == g.original.size() && !g.angle) {
     std::vector<Rect> rs;
-    for (const ElPtr& el : g.previews) rs.push_back(bounds(*el));
+    // Around where the text will be: the same fit as the selection frame;
+    // pulled by a side, the width it wraps to as well (that's what changes).
+    const bool side = g.handle == "e" || g.handle == "w";
+    for (const ElPtr& el : g.previews) rs.push_back(frameOfEl(*el));
+    // Pulled by a side: the frame being dragged too (the width it wraps to).
+    if (side) {
+      std::vector<P2> box = {{g.box.x, g.box.y}, {g.box.x + g.box.w, g.box.y + g.box.h}};
+      for (P2& p : box) p = applyAffine(g.m, p);
+      rs.push_back(rectOf(box));
+    }
     if (const auto u = unionRects(rs)) {
-      const Rect b{u->x - 6, u->y - 6, u->w + 12, u->h + 12};
+      const Rect b = *u;
       return {{b.x, b.y}, {b.x + b.w, b.y}, {b.x + b.w, b.y + b.h}, {b.x, b.y + b.h}};
     }
   }
@@ -1527,7 +1566,7 @@ std::optional<Rect> EditorCore::overlayBounds() {
   if (g.type == G::Move && sel) parts.push_back({sel->x + g.dx, sel->y + g.dy, sel->w, sel->h});
   if (g.type == G::Move && !g.guides.empty()) parts.push_back({0, 0, pageWidth(), pageHeight()});
   if (g.type == G::Transform) {
-    for (const ElPtr& el : g.previews) parts.push_back(bounds(*el));
+    for (const ElPtr& el : g.previews) parts.push_back(bounds(*el)), parts.push_back(frameOfEl(*el));
     parts.push_back(rectOf(transformOutline()));
   }
   const auto u = unionRects(parts);

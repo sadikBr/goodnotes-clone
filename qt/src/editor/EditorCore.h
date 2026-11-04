@@ -252,6 +252,8 @@ private:
   Els selectedInk();
   void startTextEdit(const ElPtr& el, bool isNew);
   std::vector<P2> transformOutline() const;
+  /// An element as the group transform `g` leaves it.
+  El transformed(const El& el, const Gesture& g) const;
   void drawHeldHint(Canvas& c, const El& el, const QString& mode) const;
   double nextZ() { return nextZOf(elements()); }
   static double nextZOf(const Els& els);
