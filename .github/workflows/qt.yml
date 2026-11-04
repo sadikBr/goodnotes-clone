@@ -21,8 +21,10 @@ on:
         type: boolean
         default: false
 
+# A newer push replaces a running build of the same branch; a release's
+# build (run from the Release workflow) is never replaced by a push.
 concurrency:
-  group: qt-${{ github.ref }}
+  group: qt-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
