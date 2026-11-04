@@ -72,6 +72,13 @@ QDate dateOf(const QString& iso) { return QDate::fromString(iso.left(10), "yyyy-
 
 }  // namespace
 
+namespace {
+QDateTime g_fixedNow;
+}
+
+QDateTime now() { return g_fixedNow.isValid() ? g_fixedNow : QDateTime::currentDateTime(); }
+void setNowForTests(const QDateTime& t) { g_fixedNow = t; }
+
 // --- details -----------------------------------------------------------------------------
 
 QJsonObject Meta::toJson() const {
@@ -289,7 +296,7 @@ std::optional<Holiday> holidayOn(const Meta& meta, const QDate& d) {
 std::vector<Holiday> nationalHolidays(const QString& year) {
   static const QRegularExpression re("^([0-9]{4})");
   const auto m = re.match(year);
-  const int y = m.hasMatch() ? m.captured(1).toInt() : QDate::currentDate().year();
+  const int y = m.hasMatch() ? m.captured(1).toInt() : today().year();
   auto one = [](const QString& name, int yy, int mm, int dd) {
     const QString d = QString::number(yy) + "-" + pad(mm) + "-" + pad(dd);
     return Holiday{name, d, d};

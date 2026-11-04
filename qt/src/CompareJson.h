@@ -98,4 +98,30 @@ void compare(const QJsonValue& a, const QJsonValue& b, const QString& path, QStr
 }
 
 
+/// The same, with room for another Qt version's text measuring: numbers
+/// within 0.05 (or 0.1%), whitespace between SVG tags ignored.
+inline void compareLoose(const QJsonValue& a, const QJsonValue& b, const QString& path, QStringList& out) {
+  if (out.size() > 12) return;
+  if (a.isDouble() && b.isDouble()) {
+    const double x = a.toDouble(), y = b.toDouble();
+    if (std::abs(x - y) > std::max(0.05, 1e-3 * std::abs(x))) out << QString("%1: %2 vs %3").arg(path).arg(x, 0, 'g', 10).arg(y, 0, 'g', 10);
+    return;
+  }
+  if (a.isObject() && b.isObject()) {
+    const QJsonObject x = a.toObject(), y = b.toObject();
+    QStringList keys = x.keys();
+    for (const QString& k : y.keys())
+      if (!keys.contains(k)) keys << k;
+    for (const QString& k : keys) compareLoose(x.value(k), y.value(k), path + "." + k, out);
+    return;
+  }
+  if (a.isArray() && b.isArray()) {
+    const QJsonArray x = a.toArray(), y = b.toArray();
+    if (x.size() != y.size()) out << QString("%1: %2 vs %3 items").arg(path).arg(x.size()).arg(y.size());
+    for (int k = 0; k < std::min(x.size(), y.size()); ++k) compareLoose(x[k], y[k], QString("%1[%2]").arg(path).arg(k), out);
+    return;
+  }
+  compare(a, b, path, out);
+}
+
 }  // namespace

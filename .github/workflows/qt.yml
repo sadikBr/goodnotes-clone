@@ -86,6 +86,33 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: ./build/qt/inkleaf --compare-daftar
+      - name: Same results as recorded (qt/tests/golden)
+        if: success() || failure()
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          if [ -f qt/tests/golden/editor.json ]; then
+            ./build/qt/inkleaf --golden check qt/tests/golden "$RUNNER_TEMP/golden-diffs"
+          else
+            echo "No recorded results yet (see the golden-new artifact)."
+          fi
+      - name: Results as they are now (to record after an intended change)
+        if: success() || failure()
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ./build/qt/inkleaf --golden record "$RUNNER_TEMP/golden-new"
+      - uses: actions/upload-artifact@v4
+        if: success() || failure()
+        with:
+          name: golden-new
+          path: ${{ runner.temp }}/golden-new
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: golden-diffs
+          path: ${{ runner.temp }}/golden-diffs
+          if-no-files-found: ignore
       - name: Differing pictures
         if: failure()
         uses: actions/upload-artifact@v4

@@ -8,6 +8,7 @@
 #include "../JsCanvas.h"
 #include "../draw/Covers.h"
 #include "../draw/Elements.h"
+#include "Daftar.h"
 #include "Store.h"
 
 namespace cover {
@@ -74,7 +75,7 @@ QJsonArray json(const std::vector<ed::El>& els) {
 
 }  // namespace
 
-QString monthYear() { return QLocale().toString(QDate::currentDate(), "MMMM yyyy"); }
+QString monthYear() { return QLocale().toString(daftar::today(), "MMMM yyyy"); }
 
 std::vector<ed::El> coverTextElements(const QString& design, const QString& title, const QString& date, double w, double h) {
   Placed l = layoutText(design, title, date, w, h);

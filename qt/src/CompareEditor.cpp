@@ -26,6 +26,7 @@
 #include "Core.h"
 #include "Js.h"
 #include "JsCanvas.h"
+#include "draw/Render.h"
 #include "editor/EditorCore.h"
 #include "CompareJson.h"
 
@@ -253,8 +254,9 @@ struct Session {
 
 class Runner {
 public:
-  Runner(const QString& name, const QJsonArray& pages, const QString& outDir) : m_name(name), m_out(outDir) {
-    m_eds.emplace_back(new ScriptDriver(pages));
+  /// Both editors compared (with the scripts), or the C++ one alone with each step handed to `onStep`.
+  Runner(const QString& name, const QJsonArray& pages, const QString& outDir, EditorStepFn onStep = {}) : m_name(name), m_out(outDir), m_onStep(std::move(onStep)) {
+    if (!m_onStep) m_eds.emplace_back(new ScriptDriver(pages));
     m_eds.emplace_back(new NativeDriver(pages));
     for (auto& e : m_eds) {
       e->set("colors", QVariantMap{{"pen", "#111827"}, {"highlighter", "#facc15"}, {"shape", "#2563eb"}, {"text", "#111827"}, {"sticky", "#fef08a"}, {"laser", "#ff1f1f"}});
@@ -268,13 +270,15 @@ public:
     for (auto& e : m_eds) e->set(prop, v);
   }
   void down(int pi, double x, double y, const QString& tool, bool shift = false) {
-    const double t = Js::clockMs();
+    const double t = draw::clockMs();
     QStringList r;
     for (auto& e : m_eds) r << e->down(pi, x, y, 0.5, t, tool, shift);
-    check(QString("down %1 %2,%3").arg(tool).arg(x).arg(y), r[0] != r[1] ? QStringList{QString("returned %1 vs %2").arg(r[0], r[1])} : QStringList{});
+    const QString step = QString("down %1 %2,%3").arg(tool).arg(x).arg(y);
+    if (m_onStep) return check(step, {}, QJsonValue(r[0]));
+    check(step, r[0] != r[1] ? QStringList{QString("returned %1 vs %2").arg(r[0], r[1])} : QStringList{});
   }
   void move(double x, double y, bool shift = false, bool alt = false, double p = 0.5) {
-    const double t = Js::clockMs();
+    const double t = draw::clockMs();
     for (auto& e : m_eds) e->move(x, y, p, t, shift, alt);
   }
   /// A drag from the press point along `pts`, then up.
@@ -289,6 +293,11 @@ public:
     call("up");
   }
   QJsonValue call(const QString& m, const QVariantList& args = {}) {
+    if (m_onStep) {
+      QJsonValue r = m_eds[0]->call(m, args);
+      check(m, {}, r);
+      return r;
+    }
     QJsonValue r[2];
     for (int k = 0; k < 2; ++k) r[k] = m_eds[k]->call(m, args);
     QStringList d;
@@ -309,8 +318,16 @@ public:
     }
     check(QString("wait %1").arg(ms), {});
   }
-  void check(const QString& step, QStringList diffs) {
+  void check(const QString& step, QStringList diffs, QJsonValue result = QJsonValue(QJsonValue::Undefined)) {
     ++steps;
+    if (m_onStep) {
+      QJsonValue st = m_eds[0]->state();
+      QHash<QString, QString> ids;
+      normalise(st, ids);
+      normalise(result, ids);
+      m_onStep(m_name, step, result, st, m_eds[0]->overlay(st.toObject()["active"].toInt()));
+      return;
+    }
     QJsonValue s[2] = {m_eds[0]->state(), m_eds[1]->state()};
     QHash<QString, QString> i0, i1;
     normalise(s[0], i0);
@@ -334,6 +351,7 @@ public:
 
 private:
   QString m_name, m_out;
+  EditorStepFn m_onStep;
   std::vector<std::unique_ptr<Driver>> m_eds;
 };
 
@@ -652,6 +670,17 @@ QJsonArray seed() {
 }
 
 }  // namespace
+
+void runEditorSessions(const EditorStepFn& onStep) {
+  QTemporaryDir data;
+  qputenv("INKLEAF_DATA_DIR", data.path().toUtf8());
+  const QJsonArray pages = seed();
+  for (const Session& s : sessions()) {
+    Runner r(s.name, pages, QString(), onStep);
+    r.check("start", {});
+    s.run(r);
+  }
+}
 
 int compareEditor(const QString& outDir) {
   QDir().mkpath(outDir);

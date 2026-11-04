@@ -40,6 +40,11 @@ struct Meta {
   static Meta fromJson(const QJsonObject& o);
 };
 
+/// Now: the clock, or the moment the reference checks fix (--golden).
+QDateTime now();
+inline QDate today() { return now().date(); }
+void setNowForTests(const QDateTime& t);
+
 /// The day names, Sunday first (index = day number).
 struct DayName {
   QString ar, fr;
@@ -49,7 +54,7 @@ const std::vector<DayName>& days();
 /// A notebook's daftar details (its `meta` JSON), or none when it isn't a daftar.
 std::optional<Meta> parseDaftar(const QJsonValue& notebookMeta);
 /// The school year a date falls in, e.g. "2026-2027" (years start in September).
-QString schoolYear(const QDate& d = QDate::currentDate());
+QString schoolYear(const QDate& d = today());
 QString isoDate(const QDate& d);
 
 // --- filling pages in
@@ -104,7 +109,7 @@ struct Range {
   QString from, to;
 };
 /// The dates a term ("year", "s1", "s2", "month") covers, or none for everything.
-std::optional<Range> termRange(const Meta& meta, const QString& term, const QDate& now = QDate::currentDate());
+std::optional<Range> termRange(const Meta& meta, const QString& term, const QDate& now = today());
 struct PageInfo {
   QString tmpl, section;
   QStringList sessions;  ///< "YYYY-MM-DD HH:MM" of its lessons

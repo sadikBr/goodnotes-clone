@@ -82,7 +82,7 @@ QVariant DaftarApi::info(const QString& notebookId) const {
 QString DaftarApi::holidayToday(const QVariant& meta) const {
   const auto m = metaOf(meta);
   if (!m) return {};
-  const auto h = daftar::holidayOn(*m, QDate::currentDate());
+  const auto h = daftar::holidayOn(*m, daftar::today());
   return h ? h->name : QString();
 }
 

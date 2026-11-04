@@ -1,4 +1,6 @@
 #include "Js.h"
+
+#include "draw/Render.h"
 #include "draw/Elements.h"
 #include "draw/Papers.h"
 
@@ -21,14 +23,7 @@ QObject* JsNative::canvas(int w, int h) { return new JsCanvas(w, h); }
 
 QObject* JsNative::image(const QString& src) { return Js::instance().imageFor(src); }
 
-double Js::clockMs() {
-  static QElapsedTimer t = [] {
-    QElapsedTimer e;
-    e.start();
-    return e;
-  }();
-  return double(t.nsecsElapsed()) / 1e6;
-}
+double Js::clockMs() { return draw::clockMs(); }
 
 double JsNative::now() const { return Js::clockMs(); }
 

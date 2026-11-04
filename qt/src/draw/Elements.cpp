@@ -1,5 +1,7 @@
 #include "Elements.h"
 
+#include "Render.h"
+
 #include <QRegularExpression>
 #include <cmath>
 
@@ -181,7 +183,7 @@ void drawSticky(JsCanvas& c, const QJsonObject& el) {
 void drawImage(JsCanvas& c, const QJsonObject& el) {
   const double x = el["x"].toDouble(), y = el["y"].toDouble(), w = el["w"].toDouble(), h = el["h"].toDouble();
   QImage img;
-  if (auto* im = qobject_cast<JsImage*>(Js::instance().imageFor(el["src"].toString()))) img = im->image();
+  if (const QImage* im = imageFor(el["src"].toString())) img = *im;
   if (!img.isNull() && img.width() > 0) {
     c.drawImage(img, x, y, w, h);
   } else {

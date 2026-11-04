@@ -92,6 +92,7 @@ qt_add_executable(inkleaf
   src/editor/Snap.h src/editor/Snap.cpp
   src/editor/Instrument.h src/editor/Instrument.cpp
   src/editor/EditorCore.h src/editor/EditorCore.cpp
+  src/draw/Render.h src/draw/Render.cpp
   src/editor/DaftarBridge.h
   src/Catalog.h src/Catalog.cpp
   src/daftar/Store.h src/daftar/Store.cpp
@@ -101,7 +102,7 @@ qt_add_executable(inkleaf
   src/daftar/DaftarEditor.h src/daftar/DaftarEditor.cpp
   src/tests/SelfTest.h src/tests/SelfTest.cpp
   src/tests/GeometryTests.cpp
-  src/tests/TextAndSnapTests.cpp src/tests/DaftarTests.cpp
+  src/tests/TextAndSnapTests.cpp src/tests/DaftarTests.cpp src/tests/Samples.h src/tests/Samples.cpp src/tests/Golden.h src/tests/Golden.cpp
   src/CompareRender.h src/CompareRender.cpp
   src/CompareEditor.h src/CompareEditor.cpp
   src/CompareDaftar.h src/CompareDaftar.cpp src/CompareJson.h

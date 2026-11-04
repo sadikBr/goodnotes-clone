@@ -75,7 +75,7 @@ QVariantMap newLesson(ed::EditorCore& core, const QString& notebookId, const QSt
   }
   const QJsonObject p = core.pages[size_t(target)].meta;
   core.activate(target);
-  const QDateTime now = QDateTime::currentDateTime();
+  const QDateTime now = daftar::now();
   const QString today = isoDate(now.date());
   QSet<QString> logged;
   for (const ed::ElPtr& e : core.elements())
@@ -148,7 +148,7 @@ QVariant exportPages(ed::EditorCore& core, const Meta& meta, const QString& cls,
   if (term == "year") period = meta.year;
   else if (term == "s1") period = "S1";
   else if (term == "s2") period = "S2";
-  else if (term == "month") period = isoDate(QDate::currentDate()).left(7);
+  else if (term == "month") period = isoDate(today()).left(7);
   QString name = cls;
   name.replace('\\', '-').replace('/', '-');
   QVariantList idx;

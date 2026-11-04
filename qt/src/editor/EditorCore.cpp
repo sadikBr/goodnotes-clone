@@ -9,7 +9,7 @@
 
 #include "../Core.h"
 #include "../JsCanvas.h"
-#include "../Js.h"
+#include "../draw/Render.h"
 #include "../draw/Elements.h"
 #include "../draw/Fonts.h"
 #include "../draw/Papers.h"
@@ -708,7 +708,7 @@ void EditorCore::armHold() {
 void EditorCore::holdFired() {
   Gesture& g = m_g;
   if (g.type != G::Draw || g.preview || g.points.size() < 4) return;
-  const double now = Js::clockMs();
+  const double now = draw::clockMs();
   std::vector<double> times = g.times;
   times.back() = std::max(now, g.times.back());
   if (!isHeld(times, g.points, HOLD_MS - 50, 4 / zoom)) return;

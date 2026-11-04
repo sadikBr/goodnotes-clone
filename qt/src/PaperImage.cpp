@@ -15,11 +15,11 @@
 
 #include "draw/Strokes.h"
 
-#include "Js.h"
+#include "draw/Render.h"
 #include "JsCanvas.h"
 
 QImage PaperImage::requestImage(const QString& id, QSize* size, const QSize& requested) {
-  // The script engine lives on the GUI thread.
+  // Drawn on the GUI thread (the fonts and caches live there).
   if (QThread::currentThread() != qApp->thread()) {
     QImage out;
     QMetaObject::invokeMethod(qApp, [&] { out = requestImage(id, size, requested); }, Qt::BlockingQueuedConnection);
@@ -32,12 +32,12 @@ QImage PaperImage::requestImage(const QString& id, QSize* size, const QSize& req
   const QSize want = requested.isValid() && !requested.isEmpty() ? requested : QSize(176, 220);
   QImage img;
   if (whole) {
-    img = Js::instance().paper(tmpl, color, 794, 1123, want.width() / 794.0);
+    img = draw::paperImage(tmpl, color, 794, 1123, want.width() / 794.0);
     img = img.copy(0, 0, want.width(), want.height());
   } else {
     // The page's top-left, a little above the first ruled line (300 units across).
     const double scale = want.width() / 300.0;
-    img = Js::instance().paper(tmpl, color, 794, 1123, scale, QRectF(40, 70, 300, want.height() / scale));
+    img = draw::paperImage(tmpl, color, 794, 1123, scale, QRectF(40, 70, 300, want.height() / scale));
   }
   if (size) *size = img.size();
   return img;

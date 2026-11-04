@@ -17,6 +17,7 @@
 #include <QSurfaceFormat>
 
 #include "CompareDaftar.h"
+#include "tests/Golden.h"
 #include "CompareEditor.h"
 #include "CompareRender.h"
 #include "tests/SelfTest.h"
@@ -89,6 +90,9 @@ int main(int argc, char* argv[]) {
   if (const int i = QCoreApplication::arguments().indexOf("--compare-render"); i > 0 && i + 1 < argc) return compareRender(QCoreApplication::arguments().at(i + 1));
   // The same for the editor: both editors through the same sessions.
   if (QCoreApplication::arguments().contains("--compare-daftar")) return compareDaftar();
+  // The reference results the C++ code is checked against (record or check).
+  if (const int i = QCoreApplication::arguments().indexOf("--golden"); i > 0 && i + 2 < argc)
+    return golden(QCoreApplication::arguments().at(i + 1), QCoreApplication::arguments().at(i + 2), QCoreApplication::arguments().value(i + 3));
   if (const int i = QCoreApplication::arguments().indexOf("--compare-editor"); i > 0 && i + 1 < argc) return compareEditor(QCoreApplication::arguments().at(i + 1));
   // Developer check: draws every paper with the web app's code, then quits
   // (inkleaf --render-papers <folder>).

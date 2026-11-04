@@ -25,7 +25,7 @@
 #include <cmath>
 
 #include "Core.h"
-#include "Js.h"
+#include "draw/Render.h"
 #include "JsCanvas.h"
 #include "Pdf.h"
 
@@ -39,7 +39,7 @@ constexpr float kLazyPen = 1.1f;   // screen pixels the ink may trail the pen
 constexpr int kMaxTexture = 4096;  // pixels per side of one picture
 constexpr double kLaserHold = 900, kLaserFade = 300, kLaserCoreFade = 480;
 
-double nowMs() { return Js::clockMs(); }
+double nowMs() { return draw::clockMs(); }
 
 QSGGeometryNode* meshNode(const std::vector<QPointF>& tris, const QColor& color) {
   auto* g = new QSGGeometry(QSGGeometry::defaultAttributes_Point2D(), int(tris.size()));
@@ -557,7 +557,7 @@ void InkCanvas::storeThumbnail(int i) {
       }
       painter.fillPath(path, it->color);
     } else {
-      if (it->image.isNull()) it->image = Js::instance().elements(QJsonArray{it->data}, std::max(s * 2, 0.5), it->rect), it->scale = std::max(s * 2, 0.5), it->imageDirty = true;
+      if (it->image.isNull()) it->image = draw::elementsImage(QJsonArray{it->data}, std::max(s * 2, 0.5), it->rect), it->scale = std::max(s * 2, 0.5), it->imageDirty = true;
       painter.drawImage(it->rect, it->image);
     }
   }
@@ -1155,12 +1155,11 @@ bool InkCanvas::prefetchStep() {
     p.paperScale = full;
     p.paperDirty = true;
   }
-  Js& js = Js::instance();
   for (auto& it : p.items) {
     if (it->mesh || it->scale > 0) continue;
     const double cap = kMaxTexture / std::max(1.0, std::max(it->rect.width(), it->rect.height()));
     const double want = std::min(s, cap);
-    it->image = js.elements(QJsonArray{it->data}, want, it->rect);
+    it->image = draw::elementsImage(QJsonArray{it->data}, want, it->rect);
     it->scale = want;
     it->imageDirty = true;
     p.version++;
@@ -1234,7 +1233,7 @@ void InkCanvas::updatePolish() {
 }
 
 QImage InkCanvas::paperWithBackground(const Page& p, double scale, QRectF region) {
-  QImage img = Js::instance().paper(p.tmpl, p.paper, p.w, p.h, scale, region);
+  QImage img = draw::paperImage(p.tmpl, p.paper, p.w, p.h, scale, region);
   // An imported PDF page goes over the paper, as in the web app.
   const QString asset = p.meta["backgroundAsset"].toString();
   if (!asset.isEmpty() && !p.meta["backgroundPage"].isNull()) {
@@ -1254,7 +1253,6 @@ QImage InkCanvas::paperWithBackground(const Page& p, double scale, QRectF region
 
 void InkCanvas::renderPictures(bool missingOnly) {
   if (m_pages.empty()) return;
-  Js& js = Js::instance();
   const double s = renderScale();
   const QPointF o = origin();
   const qreal viewTop = -o.y() / m_zoom, viewBottom = (height() - o.y()) / m_zoom;
@@ -1304,7 +1302,7 @@ void InkCanvas::renderPictures(bool missingOnly) {
         more = true;
         continue;
       }
-      it->image = js.elements(QJsonArray{it->data}, want, it->rect);
+      it->image = draw::elementsImage(QJsonArray{it->data}, want, it->rect);
       it->scale = want;
       it->imageDirty = true;
       p.version++;
