@@ -303,7 +303,11 @@ void InkCanvas::syncPage(int i) {
     } else {
       it->data = el->toJson();
       const double pad = el->kind == ed::Kind::Sticky ? 18 : el->kind == ed::Kind::Shape ? 12 : 6;
-      it->rect = box.adjusted(-pad, -pad, pad, pad);
+      // Text: room for what fonts draw outside the line (Arabic dots and marks
+      // above, tails below, swashes at the sides), which grows with the size.
+      const double fs = el->kind == ed::Kind::Text ? el->fontSize.value_or(20) : 0;
+      const double v = std::max(pad, fs * 0.75), h = std::max(pad, fs * 0.4);
+      it->rect = box.adjusted(-h, -v, h, v);
     }
     fresh.emplace(it->id, it);
   }
