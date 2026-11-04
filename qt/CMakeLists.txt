@@ -79,6 +79,9 @@ qt_add_executable(inkleaf
   src/ShadowImage.h src/ShadowImage.cpp
   src/JsCanvas.h src/JsCanvas.cpp
   src/Js.h src/Js.cpp
+  src/draw/Fonts.h src/draw/Fonts.cpp
+  src/draw/Papers.h src/draw/Papers.cpp
+  src/CompareRender.h src/CompareRender.cpp
   src/PaperImage.h src/PaperImage.cpp
   src/Pdf.h src/Pdf.cpp
   src/LaserTrail.h src/LaserTrail.cpp

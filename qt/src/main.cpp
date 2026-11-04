@@ -16,6 +16,7 @@
 #include <QQuickWindow>
 #include <QSurfaceFormat>
 
+#include "CompareRender.h"
 #include "Js.h"
 #include "Pdf.h"
 #include "PaperImage.h"
@@ -79,6 +80,8 @@ int main(int argc, char* argv[]) {
     return 0;
   }
 
+  // Developer and CI check: the C++ drawing matches the scripts' (docs/MIGRATION.md).
+  if (const int i = QCoreApplication::arguments().indexOf("--compare-render"); i > 0 && i + 1 < argc) return compareRender(QCoreApplication::arguments().at(i + 1));
   // Developer check: draws every paper with the web app's code, then quits
   // (inkleaf --render-papers <folder>).
   if (const int i = QCoreApplication::arguments().indexOf("--render-papers"); i > 0 && i + 1 < argc) {

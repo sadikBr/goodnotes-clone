@@ -1,4 +1,5 @@
 #include "Js.h"
+#include "draw/Papers.h"
 
 #include <QFile>
 #include <QJsonArray>
@@ -172,11 +173,21 @@ QImage Js::paper(const QString& tmpl, const QString& color, double w, double h, 
   auto* canvas = new JsCanvas(std::max(1, int(std::ceil(region.width() * scale))), std::max(1, int(std::ceil(region.height() * scale))));
   QJSValue ctx = m_engine.newQObject(canvas);
   canvas->setTransform(scale, 0, 0, scale, -region.x() * scale, -region.y() * scale);
-  call("drawTemplate", {ctx, tmpl, w, h, color});
+  // Papers in C++; covers and daftar pages still in the scripts (docs/MIGRATION.md).
+  if (!draw::drawPaper(*canvas, tmpl, w, h, color)) call("drawTemplate", {ctx, tmpl, w, h, color});
   QImage out = canvas->image();
   m_papers.push_front({key, out});
   if (m_papers.size() > 10) m_papers.pop_back();
   return out;
+}
+
+QImage Js::paperScript(const QString& tmpl, const QString& color, double w, double h, double scale, QRectF region) {
+  if (region.isEmpty()) region = QRectF(0, 0, w, h);
+  auto* canvas = new JsCanvas(std::max(1, int(std::ceil(region.width() * scale))), std::max(1, int(std::ceil(region.height() * scale))));
+  QJSValue ctx = m_engine.newQObject(canvas);
+  canvas->setTransform(scale, 0, 0, scale, -region.x() * scale, -region.y() * scale);
+  call("drawTemplate", {ctx, tmpl, w, h, color});
+  return canvas->image();
 }
 
 QImage Js::elements(const QJsonArray& els, double scale, QRectF region) {

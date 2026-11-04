@@ -61,6 +61,8 @@ public:
   /// A page's paper (template, colour) at `scale` pixels per page unit,
   /// only the `region` part of the page (page units), or all of it.
   QImage paper(const QString& tmpl, const QString& color, double w, double h, double scale, QRectF region = {});
+  /// The same, drawn by the scripts only (for --compare-render while both exist).
+  QImage paperScript(const QString& tmpl, const QString& color, double w, double h, double scale, QRectF region = {});
   /// Elements (stored JSON objects' "data") drawn in order, the same way:
   /// `region` of the page at `scale`, on a transparent picture.
   QImage elements(const QJsonArray& els, double scale, QRectF region);

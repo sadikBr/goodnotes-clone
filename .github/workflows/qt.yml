@@ -64,6 +64,16 @@ jobs:
           cmake -S qt -B build/qt -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
           cmake --build build/qt
           DESTDIR=$PWD/AppDir cmake --install build/qt
+      - name: C++ drawing matches the scripts' (docs/MIGRATION.md)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ./build/qt/inkleaf --compare-render "$RUNNER_TEMP/compare"
+      - name: Differing pictures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compare-render
+          path: ${{ runner.temp }}/compare
       - name: AppImage
         env:
           QML_SOURCES_PATHS: ${{ github.workspace }}/qt/qml

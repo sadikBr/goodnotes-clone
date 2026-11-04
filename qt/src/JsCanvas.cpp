@@ -410,6 +410,29 @@ void JsCanvas::setStrokeStyle(const QJSValue& v) {
   st().strokeBrush = brushFor(v, &st().strokeUser);
 }
 
+void JsCanvas::setFill(const QBrush& brush) {
+  st().fillJs = QJSValue();
+  st().fill = brush;
+  st().fillUser = true;
+}
+void JsCanvas::setStroke(const QBrush& brush) {
+  st().strokeJs = QJSValue();
+  st().strokeBrush = brush;
+  st().strokeUser = true;
+}
+void JsCanvas::setDash(std::initializer_list<qreal> dashes) {
+  QVariantList l;
+  for (qreal d : dashes) l << d;
+  setLineDash(l);
+}
+void JsCanvas::drawImage(const QImage& img, double x, double y, double w, double h) {
+  if (img.isNull()) return;
+  auto* holder = new JsImage(img);
+  drawImage(holder, x, y, QJSValue(w), QJSValue(h));
+  delete holder;
+}
+double JsCanvas::textWidth(const QString& text) { return measureText(text).value("width").toDouble(); }
+
 QString JsCanvas::lineCap() const { return st().cap == Qt::RoundCap ? "round" : st().cap == Qt::SquareCap ? "square" : "butt"; }
 void JsCanvas::setLineCap(const QString& c) { st().cap = c == "round" ? Qt::RoundCap : c == "square" ? Qt::SquareCap : Qt::FlatCap; }
 QString JsCanvas::lineJoin() const { return st().join == Qt::RoundJoin ? "round" : st().join == Qt::BevelJoin ? "bevel" : "miter"; }

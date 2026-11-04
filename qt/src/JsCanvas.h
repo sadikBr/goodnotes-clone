@@ -169,6 +169,16 @@ public:
   Q_INVOKABLE void setLineDash(const QVariantList& dashes);
   Q_INVOKABLE QVariantList getLineDash() const;
 
+  // For drawing code in C++ (the same canvas the scripts draw on).
+  void setFill(const QString& css) { setFillStyle(QJSValue(css)); }
+  void setStroke(const QString& css) { setStrokeStyle(QJSValue(css)); }
+  /// A gradient or pattern brush in user space (as a CanvasGradient/Pattern is).
+  void setFill(const QBrush& userSpaceBrush);
+  void setStroke(const QBrush& userSpaceBrush);
+  void setDash(std::initializer_list<qreal> dashes);
+  void drawImage(const QImage& img, double x, double y, double w, double h);
+  double textWidth(const QString& text);
+
   // Properties
   QJSValue fillStyle() const { return st().fillJs; }
   void setFillStyle(const QJSValue& v);
