@@ -592,13 +592,15 @@ Rectangle {
     // Done typing: the keyboard goes back to the page (tool shortcuts work again).
     onTypingChanged: if (!typing) canvas.forceActiveFocus()
     Shortcut { sequences: [StandardKey.Undo]; enabled: !root.typing; onActivated: canvas.undo() }
-    Shortcut { sequences: [StandardKey.Redo, "Ctrl+Shift+Z", "Ctrl+Y"]; enabled: !root.typing; onActivated: canvas.redo() }
+    // Each key once: on Linux the standard Redo key is Ctrl+Shift+Z, and a key
+    // listed twice is ambiguous to Qt (it ignores the press).
+    Shortcut { sequences: ["Ctrl+Shift+Z", "Ctrl+Y"]; enabled: !root.typing; onActivated: canvas.redo(); onActivatedAmbiguously: canvas.redo() }
     Shortcut { sequences: [StandardKey.Copy]; enabled: !root.typing; onActivated: { const n = canvas.copySelection(); if (n) root.notify("Copied " + n + " item" + (n > 1 ? "s" : ""), false) } }
     Shortcut { sequences: [StandardKey.Cut]; enabled: !root.typing; onActivated: canvas.cutSelection() }
     Shortcut { sequences: [StandardKey.Paste]; enabled: !root.typing; onActivated: canvas.paste() }
     Shortcut { sequence: "Ctrl+D"; enabled: !root.typing; onActivated: canvas.duplicateSelection() }
     Shortcut { sequences: [StandardKey.SelectAll]; enabled: !root.typing; onActivated: canvas.selectAll() }
-    Shortcut { sequences: [StandardKey.ZoomIn, "Ctrl+="]; onActivated: canvas.zoomBy(1.2) }
+    Shortcut { sequences: [StandardKey.ZoomIn, "Ctrl+="]; onActivated: canvas.zoomBy(1.2); onActivatedAmbiguously: canvas.zoomBy(1.2) }
     Shortcut { sequences: [StandardKey.ZoomOut]; onActivated: canvas.zoomBy(1 / 1.2) }
     Shortcut { sequence: "Ctrl+0"; onActivated: canvas.fitWidth() }
     Shortcut { sequences: ["Delete", "Backspace"]; enabled: !!(!root.typing && (canvas.selection.count || 0) > 0); onActivated: canvas.deleteSelection() }
