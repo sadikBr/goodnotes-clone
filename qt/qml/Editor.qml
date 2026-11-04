@@ -294,6 +294,21 @@ Rectangle {
                                         Component.onCompleted: if (active) drawer.anchorItem = this
                                     }
                                 }
+                                // The instruments, with the tools you draw with.
+                                ToolBtn {
+                                    id: rulerBtn
+                                    visible: tray.index === 1
+                                    iconName: "ruler"
+                                    readonly property bool on: !!canvas.instrument.visible
+                                    active: on
+                                    tip: "Ruler, protractor, set squares (R)"
+                                    onClicked: menu.show(rulerBtn, [
+                                        { label: "Ruler", checked: on && canvas.instrument.kind === "ruler", action: () => canvas.showInstrument("ruler") },
+                                        { label: "Protractor", checked: on && canvas.instrument.kind === "protractor", action: () => canvas.showInstrument("protractor") },
+                                        { label: "Set square 45°", checked: on && canvas.instrument.kind === "square45", action: () => canvas.showInstrument("square45") },
+                                        { label: "Set square 30°/60°", checked: on && canvas.instrument.kind === "square60", action: () => canvas.showInstrument("square60") }
+                                    ].concat(on ? [{ label: "Hide", action: () => canvas.showInstrument("") }] : []))
+                                }
                             }
                         }
                     }
@@ -326,7 +341,7 @@ Rectangle {
                             property bool tipDismissed: false
                             onPressedChanged: if (pressed) tipDismissed = true
                             onHoveredChanged: if (!hovered) tipDismissed = false
-                            ToolTip.text: cover ? "Cover design and colour" : "Page paper"
+                            ToolTip.text: cover ? "Cover design and colour" : "Page paper: " + (paperPicker.all.find(x => x.id === (meta.template || "blank")) || { label: meta.template || "blank" }).label
                             readonly property bool cover: String(meta.template || "").startsWith("cover")
                             onClicked: {
                                 if (paperPicker.opened || coverPicker.opened) { paperPicker.close(); coverPicker.close(); return }
@@ -347,40 +362,38 @@ Rectangle {
                                         source: "image://paper/" + (paperBtn.meta.template || "blank") + "/" + (paperBtn.meta.paperColor || "#fffdf7").replace("#", "") + "/whole"
                                     }
                                 }
-                                Label {
-                                    visible: root.width > 1320
-                                    text: {
-                                        const id = paperBtn.meta.template || "blank"
-                                        return String(id).startsWith("cover") ? "Cover" : (paperPicker.all.find(x => x.id === id) || { label: id }).label
-                                    }
-                                    color: Theme.text; font.weight: Font.Medium
-                                }
                                 Icon { name: "down"; size: 14; color: Theme.muted; Layout.rightMargin: 4 }
                             }
                         }
-                        IconButton { iconName: "image"; tip: "Insert image"; implicitWidth: 34; implicitHeight: 34; onClicked: imageDialog.open() }
-                        IconButton { iconName: "graph"; tip: "Insert a graph"; implicitWidth: 34; implicitHeight: 34; onClicked: graphDialog.show(null, false) }
-                        IconButton { id: piecesBtn; iconName: "stack"; tip: "My pieces: put a saved piece on the page"; implicitWidth: 34; implicitHeight: 34; onClicked: piecesPanel.opened ? piecesPanel.close() : piecesPanel.show(piecesBtn) }
-                        IconButton {
-                            id: rulerBtn
-                            iconName: "ruler"; tip: "Ruler, protractor, set squares (R)"; implicitWidth: 34; implicitHeight: 34
-                            readonly property bool on: !!canvas.instrument.visible
-                            active: on; activeColor: Theme.accentSoft; iconColor: on ? Theme.accent : Theme.text
-                            onClicked: menu.show(rulerBtn, [
-                                { label: "Ruler", checked: on && canvas.instrument.kind === "ruler", action: () => canvas.showInstrument("ruler") },
-                                { label: "Protractor", checked: on && canvas.instrument.kind === "protractor", action: () => canvas.showInstrument("protractor") },
-                                { label: "Set square 45°", checked: on && canvas.instrument.kind === "square45", action: () => canvas.showInstrument("square45") },
-                                { label: "Set square 30°/60°", checked: on && canvas.instrument.kind === "square60", action: () => canvas.showInstrument("square60") }
-                            ].concat(on ? [{ label: "Hide", action: () => canvas.showInstrument("") }] : []))
-                        }
-                        IconButton {
-                            iconName: "stylus"
-                            tip: AppSettings.store.penOnly ? "Pen-only mode is on: touch and mouse scroll" : "Pen-only mode"
-                            implicitWidth: 34; implicitHeight: 34
-                            active: AppSettings.store.penOnly
-                            activeColor: Theme.accentSoft
-                            iconColor: AppSettings.store.penOnly ? Theme.accent : Theme.muted
-                            onClicked: AppSettings.store.penOnly = !AppSettings.store.penOnly
+                    }
+                    // Things to put on the page, in one menu.
+                    AbstractButton {
+                        id: insertBtn
+                        implicitHeight: 36
+                        implicitWidth: insertRow.implicitWidth + 20
+                        hoverEnabled: true
+                        ToolTip.visible: !!(hovered && !menu.opened) && !tipDismissed
+                        property bool tipDismissed: false
+                        onPressedChanged: if (pressed) tipDismissed = true
+                        onHoveredChanged: if (!hovered) tipDismissed = false
+                        ToolTip.text: "Insert a picture, a graph, one of your pieces or a page"
+                        scale: pressed ? 0.96 : 1
+                        onClicked: menu.show(insertBtn, [
+                            { icon: "image", label: "Image", sub: "A picture from your files", action: () => imageDialog.open() },
+                            { icon: "graph", label: "Graph", sub: "Plot functions, as you'd write them", action: () => graphDialog.show(null, false) },
+                            { icon: "stack", label: "My pieces", sub: "Something you saved to use again", action: () => piecesPanel.show(insertBtn) },
+                            { icon: "page", label: "Page", sub: "A new page after this one", action: () => root.activeCanvas.addPage(root.activeCanvas.currentPage + 1, "") }
+                        ])
+                        background: Rectangle { antialiasing: true; radius: 12; color: insertBtn.hovered || menu.opened ? Theme.surface : Theme.surface2; border.color: Theme.border }
+                        contentItem: Item {
+                            RowLayout {
+                                id: insertRow
+                                anchors.centerIn: parent
+                                spacing: 6
+                                Icon { name: "plus"; size: 16; color: Theme.text }
+                                Label { visible: root.width > 1320 || !root.daftar; text: "Insert"; font.pixelSize: 13; font.weight: Font.DemiBold; color: Theme.text }
+                                Icon { name: "down"; size: 13; color: Theme.muted }
+                            }
                         }
                     }
                     AbstractButton {
@@ -417,6 +430,7 @@ Rectangle {
                         id: moreBtn
                         iconName: "more"; tip: "More"; implicitWidth: 36; implicitHeight: 36
                         onClicked: menu.show(moreBtn, [
+                            { label: "Pen-only mode", checked: AppSettings.store.penOnly, action: () => AppSettings.store.penOnly = !AppSettings.store.penOnly },
                             { label: "Focus mode", key: "F", action: () => root.focusMode = !root.focusMode },
                             { label: root.sidebarShown ? "Hide pages" : "Show pages", key: "[", action: () => root.toggleSidebar() },
                             { label: "Settings…", action: () => root.settingsRequested() },

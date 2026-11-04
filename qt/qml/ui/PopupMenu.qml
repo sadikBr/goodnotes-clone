@@ -1,5 +1,6 @@
 // A small menu by a button (the web app's .popup-menu):
-//   menu.show(button, [{ label, action, checked?, danger?, key?, icon? }, ...])
+//   menu.show(button, [{ label, action, checked?, danger?, key?, icon?, sub? }, ...])
+// (sub: a short line under the label, saying what it does.)
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -23,8 +24,8 @@ Popup {
     function show(anchor, list, width) {
         items = list
         const p = anchor.mapToItem(parent, 0, 0)
-        const h = list.length * 36 + 12
-        menuWidth = width || (list.some(i => !!i.image) ? 240 : 220)
+        const h = list.reduce((t, i) => t + (i.sub ? 52 : 36), 0) + 12
+        menuWidth = width || (list.some(i => !!i.sub) ? 280 : list.some(i => !!i.image) ? 240 : 220)
         const below = p.y + anchor.height + 6 + h < parent.height
         x = Math.max(8, Math.min(parent.width - menuWidth - 8, p.x + anchor.width - menuWidth))
         y = below ? p.y + anchor.height + 6 : Math.max(8, p.y - 6 - h)
@@ -51,7 +52,7 @@ Popup {
                 required property var modelData
                 required property int index
                 Layout.fillWidth: true
-                implicitHeight: 36
+                implicitHeight: modelData.sub ? 52 : 36
                 hoverEnabled: true
                 focusPolicy: Qt.StrongFocus
                 focus: index === 0
@@ -67,9 +68,22 @@ Popup {
                 contentItem: RowLayout {
                     spacing: 10
                     Item { Layout.preferredWidth: 2 }
-                    Icon { visible: !!it.modelData.icon; name: it.modelData.icon || ""; size: 18; color: it.modelData.danger ? Theme.danger : Theme.muted }
+                    // With a line under it: the icon in a soft square, like the create menu.
+                    Rectangle {
+                        visible: !!it.modelData.icon && !!it.modelData.sub
+                        antialiasing: true
+                        Layout.preferredWidth: 32; Layout.preferredHeight: 32; radius: 9
+                        color: Theme.alpha(Theme.accent, 0.12)
+                        Icon { anchors.centerIn: parent; name: it.modelData.icon || ""; size: 18; color: Theme.accent }
+                    }
+                    Icon { visible: !!it.modelData.icon && !it.modelData.sub; name: it.modelData.icon || ""; size: 18; color: it.modelData.danger ? Theme.danger : Theme.muted }
                     Image { visible: !!it.modelData.image; source: it.modelData.image || ""; sourceSize: Qt.size(112, 44); Layout.preferredWidth: 56; Layout.preferredHeight: 22; cache: false }
-                    Label { text: "\u200E" + it.modelData.label; horizontalAlignment: Text.AlignLeft; color: it.fg; font.pixelSize: it.modelData.fontSize || 14; font.family: it.modelData.font || Theme.font; font.weight: it.modelData.checked ? Font.DemiBold : Font.Normal; Layout.fillWidth: true; elide: Text.ElideRight }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 1
+                        Label { text: "\u200E" + it.modelData.label; horizontalAlignment: Text.AlignLeft; color: it.fg; font.pixelSize: it.modelData.fontSize || 14; font.family: it.modelData.font || Theme.font; font.weight: it.modelData.checked || it.modelData.sub ? Font.DemiBold : Font.Normal; Layout.fillWidth: true; elide: Text.ElideRight }
+                        Label { visible: !!it.modelData.sub; text: it.modelData.sub || ""; color: Theme.muted; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
+                    }
                     Icon { visible: !!it.modelData.checked; name: "check"; size: 16; color: Theme.accent }
                     Label { visible: !!it.modelData.key; text: it.modelData.key || ""; color: Theme.muted; font.pixelSize: 12 }
                     Item { Layout.preferredWidth: 4 }
