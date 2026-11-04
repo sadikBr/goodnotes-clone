@@ -52,11 +52,14 @@ Item {
         y: root.pivot.y
         rotation: (root.ins.angle || 0) * 180 / Math.PI
         // Rotation grips.
+        // (By count, so a grip isn't made anew, and the drag lost, each time
+        // the instrument moves.)
         Repeater {
-            model: root.ins.grips || []
+            model: (root.ins.grips || []).length
             delegate: Rectangle { antialiasing: true;
                 id: grip
-                required property var modelData
+                required property int index
+                readonly property var modelData: (root.ins.grips || [])[index] || [0, 0]
                 x: modelData[0] * root.zm - 11
                 y: modelData[1] * root.zm - 11
                 width: 22; height: 22; radius: 11
@@ -79,11 +82,12 @@ Item {
             }
         }
         // Protractor arm knobs.
+        // (By count: the knob being dragged stays the same item as its arm moves.)
         Repeater {
-            model: root.ins.knobs || []
+            model: (root.ins.knobs || []).length
             delegate: Rectangle { antialiasing: true;
-                required property var modelData
                 required property int index
+                readonly property var modelData: (root.ins.knobs || [])[index] || [0, 0]
                 x: modelData[0] * root.zm - 9
                 y: modelData[1] * root.zm - 9
                 width: 18; height: 18; radius: 9
@@ -92,6 +96,9 @@ Item {
                 border.color: "#ffffff"
                 MouseArea {
                     anchors.fill: parent
+                    // A larger area than the dot, easier to catch with a finger or the pen.
+                    anchors.margins: -10
+                    preventStealing: true
                     cursorShape: Qt.PointingHandCursor
                     onPositionChanged: m => {
                         const q = root.local(mapToItem(root, m.x, m.y).x, mapToItem(root, m.x, m.y).y)
