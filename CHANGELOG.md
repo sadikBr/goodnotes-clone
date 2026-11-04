@@ -10,6 +10,7 @@ section here before it can be published (`scripts/check-version.py`).
 - **Tables:** draw a rough grid and choose *Make table* to get a clean one, or *Insert → Table*. Type in the cells, write in them, drag the lines to resize, add rows and columns.
 - **What's new** shows in the update card, and once more after updating (Settings → Updates → What's new).
 - **My pieces** has a new look, with *Save selection* right in it.
+- **Fixed:** with a pen, taps on menus, the tool drawer and buttons now reach them, instead of drawing a dot or closing the menu.
 
 ## 0.11.0
 
