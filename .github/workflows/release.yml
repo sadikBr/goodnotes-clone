@@ -70,7 +70,7 @@ jobs:
           TAG: ${{ needs.create-release.outputs.tag }}
         run: |
           ls -l out
-          for f in out/Inkleaf_*_x86_64.AppImage out/Inkleaf_*_windows_x64.zip out/Inkleaf_*_android_arm64.apk; do
+          for f in out/Inkleaf_*_x86_64.AppImage out/Inkleaf_*_windows_x64_setup.exe out/Inkleaf_*_windows_x64.zip out/Inkleaf_*_android_arm64.apk; do
             test -f "$f" || { echo "::error::missing $f"; exit 1; }
           done
           gh release upload "$TAG" out/Inkleaf_* --clobber --repo "${{ github.repository }}"

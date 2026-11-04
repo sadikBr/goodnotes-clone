@@ -189,7 +189,7 @@ QtObject {
     /** The download for this kind of computer in a release (else its page). */
     function assetFor(rel) {
         const os = Qt.platform.os
-        const ends = os === "windows" ? ["_windows_x64.zip", ".exe", ".msi"] : os === "android" ? [".apk"] : os === "osx" ? [".dmg"] : [".AppImage"]
+        const ends = os === "windows" ? ["_setup.exe", "_windows_x64.zip"] : os === "android" ? [".apk"] : os === "osx" ? [".dmg"] : [".AppImage"]
         const assets = rel.assets || []
         for (const e of ends) {
             const a = assets.find(x => x.name.endsWith(e))

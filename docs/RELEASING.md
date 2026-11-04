@@ -1,7 +1,8 @@
 # Releasing Inkleaf (Android signing, Google Drive sync)
 
 Releases are built by GitHub Actions when a version tag is pushed: the Linux
-AppImage, the Windows zip and the Android APK. Installed apps see the new
+AppImage, the Windows installer (and a zip of the same files) and the
+Android APK. Installed apps see the new
 release (Settings → Updates) and offer its download.
 
 Everything below is a one-time setup. All keys go into the repository's
@@ -78,7 +79,7 @@ Or, without a tag: **Actions → Release → Run workflow** releases the version
 `package.json`.
 
 The **Release** workflow checks the versions match, builds and checks the
-three downloads (the same build as every push, with the APK signed), attaches
+downloads (the same build as every push, with the APK signed), attaches
 them to the release and publishes it. Installed apps find it within a few
 hours (or at once with Settings → Updates → Check now). Edit the release notes
 on GitHub if you like; they are shown in the app's update banner.

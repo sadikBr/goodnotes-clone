@@ -1,5 +1,5 @@
-# Builds Inkleaf for Linux (AppImage), Windows (a folder with everything it
-# needs, zipped) and Android (APK), checks the desktop builds start, and
+# Builds Inkleaf for Linux (AppImage), Windows (an installer, and the same
+# folder zipped) and Android (APK), checks the desktop builds start, and
 # keeps them as downloadable artifacts of the run (Actions → Qt app). The
 # release workflow runs this too and publishes the results.
 #
@@ -139,11 +139,27 @@ jobs:
           # installed here, so a module missing from the folder fails.
           env -u QML_IMPORT_PATH -u QML2_IMPORT_PATH -u QT_PLUGIN_PATH INKLEAF_DATA_DIR="$RUNNER_TEMP/library" ./dist/Inkleaf/Inkleaf.exe --smoke
           version=$(node -p "require('./package.json').version")
-          cd dist && 7z a "../Inkleaf_${version}_windows_x64.zip" Inkleaf > /dev/null
+          (cd dist && 7z a "../Inkleaf_${version}_windows_x64.zip" Inkleaf > /dev/null)
+      - name: Installer (setup .exe)
+        shell: bash
+        run: |
+          makensis=$(command -v makensis || true)
+          [ -n "$makensis" ] || makensis="/c/Program Files (x86)/NSIS/makensis.exe"
+          if [ ! -x "$makensis" ]; then choco install nsis -y --no-progress > /dev/null; makensis="/c/Program Files (x86)/NSIS/makensis.exe"; fi
+          version=$(node -p "require('./package.json').version")
+          out="$PWD/Inkleaf_${version}_windows_x64_setup.exe"
+          "$makensis" -V2 -DVERSION="$version" -DSOURCE="$(cygpath -w "$PWD/dist/Inkleaf")" -DOUTFILE="$(cygpath -w "$out")" qt/packaging/windows/inkleaf.nsi
+          # It installs (quietly, into a test folder) and the installed app starts.
+          dir="$(cygpath -w "$RUNNER_TEMP/installed")"
+          powershell -NoProfile -Command "Start-Process -FilePath '$(cygpath -w "$out")' -ArgumentList '/S','/D=$dir' -Wait"
+          test -f "$RUNNER_TEMP/installed/Inkleaf.exe" && test -f "$RUNNER_TEMP/installed/uninstall.exe"
+          env -u QML_IMPORT_PATH -u QML2_IMPORT_PATH -u QT_PLUGIN_PATH INKLEAF_DATA_DIR="$RUNNER_TEMP/library2" "$RUNNER_TEMP/installed/Inkleaf.exe" --smoke
       - uses: actions/upload-artifact@v4
         with:
           name: inkleaf-qt-windows
-          path: Inkleaf_*_windows_x64.zip
+          path: |
+            Inkleaf_*_windows_x64_setup.exe
+            Inkleaf_*_windows_x64.zip
 
   android:
     runs-on: ubuntu-24.04
