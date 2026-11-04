@@ -22,7 +22,7 @@ Rectangle {
     /// (`prefs: prefs` there would read their own, still empty).
     readonly property alias toolPrefs: prefs
     readonly property alias mainCanvas: canvas
-    /// What kind of document this is ("whiteboard", "register"…; "" for a notebook).
+    /// What kind of document this is ("whiteboard"; "" for a notebook).
     readonly property string docKind: DocKinds.kindOf(notebookId)
 
     readonly property var tools: [

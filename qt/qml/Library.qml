@@ -328,10 +328,7 @@ Rectangle {
             { id: "pdf", icon: "page", title: "Import PDFs", sub: "One or several, to write on", tint: "#dc2626", action: () => { pdfDialog.folder = fid; pdfDialog.open() } },
             { id: "folder", icon: "folder", title: "Folder", sub: "Group your documents", tint: "#ca8a04", iconColor: "#b45309", action: () => newFolder(fid) },
             { id: "sketchbook", icon: "brush", title: "Sketchbook", sub: "Blank pages for drawing", tint: "#db2777", action: () => newNotebook(fid, { heading: "New sketchbook", title: "Untitled sketchbook", template: "blank", orientation: "landscape", paper: "#ffffff", cover: "#111827", design: "minimal" }) },
-            { id: "whiteboard", icon: "sidebar", title: "Whiteboard", sub: "One page with room to grow", tint: "#475569", action: () => { const nb = DocKinds.whiteboard("Whiteboard", fid || ""); if (nb && nb.id) root.openRequested(nb.id, nb.title) } },
-            { id: "lesson", icon: "listNumber", title: "Lesson plan · جذاذة", sub: "Objectives, stages, activities", tint: "#0d9488", action: () => newDocDialog.show("lesson", fid) },
-            { id: "test", icon: "pen", title: "Test · فرض", sub: "Header, exercises, room to answer", tint: "#dc2626", action: () => newDocDialog.show("test", fid) },
-            { id: "register", icon: "table", title: "Class register · سجل", sub: "Attendance and marks, with averages", tint: "#2563eb", action: () => newDocDialog.show("register", fid) }
+            { id: "whiteboard", icon: "sidebar", title: "Whiteboard", sub: "One page with room to grow", tint: "#475569", action: () => { const nb = DocKinds.whiteboard("Whiteboard", fid || ""); if (nb && nb.id) root.openRequested(nb.id, nb.title) } }
         ]
     }
     readonly property var templates: [
@@ -349,11 +346,6 @@ Rectangle {
     function newNotebook(fid, preset) {
         newNbDialog.folder = fid
         newNbDialog.show(preset)
-    }
-    NewDocumentDialog {
-        id: newDocDialog
-        onCreated: nb => root.openRequested(nb.id, nb.title)
-        onFailed: m => root.notify(m, true)
     }
     NewNotebookDialog {
         id: newNbDialog

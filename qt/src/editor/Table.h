@@ -29,10 +29,6 @@ void setTableData(El& el, const TableData& t);
 std::optional<std::pair<int, int>> tableCellAt(const El& el, double x, double y);
 /// A cell's box on the page.
 Rect tableCellRect(const El& el, int row, int col);
-/// A marks table (extra "average": { rtl }): each row's average of its marks
-/// (the columns between the name and the average, numbers with a comma or a
-/// point) in its last column (first, right to left). False when not one.
-bool computeAverages(El& el);
 /// Makes rows tall enough for their text (the table grows downwards).
 void fitTableRows(El& el);
 /// Adds or removes a row or column ("addRow", "addCol", "removeRow",

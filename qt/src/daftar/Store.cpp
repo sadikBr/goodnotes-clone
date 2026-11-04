@@ -14,7 +14,6 @@ QJsonValue call(const QString& cmd, const QJsonObject& args) {
 }  // namespace
 
 QJsonObject createNotebook(const QJsonObject& input) { return call("createNotebook", {{"input", input}}).toObject(); }
-QJsonObject library() { return call("library", {}).toObject(); }
 QJsonObject notebook(const QString& id) { return call("notebook", {{"id", id}}).toObject(); }
 QJsonArray pages(const QString& notebookId) { return call("pages", {{"notebookId", notebookId}}).toArray(); }
 QJsonObject addPage(const QString& notebookId, int index, const QString& tmpl) {
