@@ -36,6 +36,9 @@ struct LaidLine {
 std::vector<LaidLine> layoutText(Canvas& c, const QString& text, double x, double y, double w, double size, double lineH, const TextStyle& style);
 /// The same, on a canvas kept for measuring.
 std::vector<LaidLine> layoutText(const QString& text, double x, double y, double w, double size, double lineH, const TextStyle& style);
+/// Where text laid out as a text box at (x, y), `w` wide, actually puts ink
+/// (glyph outlines, tall letters and marks included); empty for no ink.
+QRectF textInk(const QString& text, double x, double y, double w, double size, const TextStyle& style);
 /// Text box height including word-wrapped lines.
 double textHeight(const QString& text, double fontSize, double width, const TextStyle& style);
 /// A text box's, sticky note's or picture's box (unrotated).

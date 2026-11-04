@@ -177,6 +177,10 @@ public:
   void setDash(std::initializer_list<qreal> dashes);
   void drawImage(const QImage& img, double x, double y, double w, double h);
   double textWidth(const QString& text);
+  /// Where `text` drawn at (x, y) with the current font, direction and
+  /// baseline actually puts ink (its glyphs' outlines, with fallback fonts),
+  /// in user units, left-aligned. Empty for no ink.
+  QRectF textInk(const QString& text, double x, double y);
 
   // Properties
   QJSValue fillStyle() const { return st().fillJs; }

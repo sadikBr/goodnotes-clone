@@ -692,6 +692,32 @@ void Canvas::drawText(const QString& text, double x, double y, bool strokeIt, co
   l.layout->draw(&p, QPointF(0, 0));
 }
 
+QRectF Canvas::textInk(const QString& text, double x, double y) {
+  if (text.isEmpty()) return {};
+  const State& s = st();
+  Laid l = layOut(text, s.font, s.direction == "rtl");
+  const QFontMetricsF fm(s.font, &m_img);
+  const double em = fm.ascent() + fm.descent();
+  const double px = s.font.pointSizeF() / 0.75;
+  // The baseline as drawText puts it.
+  const double a = fm.ascent(), d = fm.descent();
+  double base = y;
+  if (s.baseline == "top") base = y + px * a / em;
+  else if (s.baseline == "hanging") base = y + px * a / em * 0.8;
+  else if (s.baseline == "middle") base = y + px * a / em - px / 2;
+  else if (s.baseline == "bottom" || s.baseline == "ideographic") base = y - px * d / em;
+  QPainterPath glyphs;
+  QTextLine line = l.layout->lineAt(0);
+  for (const QGlyphRun& run : line.glyphRuns()) {
+    const QRawFont raw = run.rawFont();
+    const auto idx = run.glyphIndexes();
+    const auto pos = run.positions();
+    for (int i = 0; i < idx.size(); ++i) glyphs.addPath(raw.pathForGlyph(idx[i]).translated(pos[i]));
+  }
+  if (glyphs.isEmpty()) return {};
+  return glyphs.boundingRect().translated(x, base - l.ascent);
+}
+
 void Canvas::fillText(const QString& text, double x, double y, const QJSValue& maxWidth) { drawText(text, x, y, false, maxWidth); }
 void Canvas::strokeText(const QString& text, double x, double y, const QJSValue& maxWidth) { drawText(text, x, y, true, maxWidth); }
 

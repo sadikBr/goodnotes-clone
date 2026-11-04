@@ -65,6 +65,23 @@ const Rect& boxOfEl(const El& el) {
   if (!el.cachedBounds) el.cachedBounds = bounds(el);
   return *el.cachedBounds;
 }
+/// The selection frame around an element: its box, except unrotated text,
+/// whose frame fits its letters (a few units around them), so it neither
+/// leaves empty room nor cuts through tall letters and marks.
+const Rect& frameOfEl(const El& el) {
+  if (el.cachedFrame) return *el.cachedFrame;
+  const Rect& box = boxOfEl(el);
+  el.cachedFrame = box;
+  if (el.kind == Kind::Text && !el.rot() && !el.text.trimmed().isEmpty()) {
+    const draw::TextStyle ts{el.font.value_or(QString()), el.bold.value_or(false), el.italic.value_or(false), el.align.value_or(QString())};
+    const QRectF ink = draw::textInk(el.text, el.x, el.y, el.w, el.fontSize.value_or(20), ts);
+    if (!ink.isEmpty()) {
+      const double pad = 4;
+      el.cachedFrame = Rect{ink.x() - pad, ink.y() - pad, ink.width() + 2 * pad, ink.height() + 2 * pad};
+    }
+  }
+  return *el.cachedFrame;
+}
 bool near(const Rect& r, double x, double y, double pad) { return x >= r.x - pad && x <= r.x + r.w + pad && y >= r.y - pad && y <= r.y + r.h + pad; }
 bool overlaps(const Rect& a, const Rect& b) { return a.x <= b.x + b.w && b.x <= a.x + a.w && a.y <= b.y + b.h && b.y <= a.y + a.h; }
 /// rectOfPts as the script had it (Math.min over the points; no padding).
@@ -1032,7 +1049,7 @@ const EditorCore::SelCache& EditorCore::selected() {
       if (m_selection.contains(el->id)) next.list.push_back(el);
   if (!next.list.empty()) {
     std::vector<Rect> rs;
-    for (const ElPtr& el : next.list) rs.push_back(boxOfEl(*el));
+    for (const ElPtr& el : next.list) rs.push_back(frameOfEl(*el));
     next.box = unionRects(rs);
   }
   m_selCache = std::move(next);
@@ -1358,6 +1375,7 @@ void EditorCore::updateEdit(const QString& text) {
   if (m_editingNew && el->kind == Kind::Text && el->text.isEmpty() && hasLetter(text) && draw::isRtl(text)) el->x = std::max(0.0, el->x - el->w);
   el->text = text;
   el->cachedBounds.reset();
+  el->cachedFrame.reset();
 }
 
 QVariantMap continueListFor(const QString& text, int caret) {
@@ -1385,6 +1403,7 @@ void EditorCore::applyFormat(const QVariantMap& change) {
   if (const double fs = change.value("fontSize").toDouble(); fs != 0) el->fontSize = fs;
   if (!change.value("color").toString().isEmpty()) el->color = change.value("color").toString();
   el->cachedBounds.reset();
+  el->cachedFrame.reset();
 }
 
 void EditorCore::finishTextEdit() {
@@ -1393,6 +1412,7 @@ void EditorCore::finishTextEdit() {
   m_editing = nullptr;
   el->text = trimEnd(el->text);
   el->cachedBounds.reset();
+  el->cachedFrame.reset();
   m_hidden.remove(el->id);
   Els& els = elements();
   if (el->kind == Kind::Text && trimmed(el->text).isEmpty()) {

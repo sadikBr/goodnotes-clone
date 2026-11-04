@@ -180,6 +180,7 @@ ElPtr makeEl(El e) {
   static quint64 counter = 0;
   e.rev = ++counter;
   e.cachedBounds.reset();
+  e.cachedFrame.reset();
   return std::make_shared<El>(std::move(e));
 }
 

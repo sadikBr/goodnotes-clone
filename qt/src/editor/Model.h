@@ -62,6 +62,8 @@ struct El {
   /// Bounds, worked out once (elements aren't changed in place, except the
   /// one being typed into, which clears it).
   mutable std::optional<Rect> cachedBounds;
+  /// What a selection frame goes around (text: where its letters are).
+  mutable std::optional<Rect> cachedFrame;
 
   bool isTextish() const { return kind == Kind::Text || kind == Kind::Sticky; }
   bool isBox() const { return kind == Kind::Text || kind == Kind::Sticky || kind == Kind::Image; }

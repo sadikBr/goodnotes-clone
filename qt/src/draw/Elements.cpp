@@ -227,6 +227,23 @@ std::vector<LaidLine> layoutText(Canvas& c, const QString& text, double x, doubl
 
 std::vector<LaidLine> layoutText(const QString& text, double x, double y, double w, double size, double lineH, const TextStyle& style) { return layoutText(measurer(), text, x, y, w, size, lineH, style); }
 
+QRectF textInk(const QString& text, double x, double y, double w, double size, const TextStyle& style) {
+  Canvas& c = measurer();
+  QRectF out;
+  for (const LaidLine& line : layoutText(c, text, x, y, w, size, size * 1.35, style)) {
+    // As fillLine draws it.
+    c.save();
+    c.setFont(line.font);
+    c.setDirection(line.rtl ? "rtl" : "ltr");
+    c.setTextAlign("left");
+    c.setTextBaseline("top");
+    const QRectF r = c.textInk(line.text, line.x, line.y);
+    c.restore();
+    if (!r.isEmpty()) out = out.isNull() ? r : out.united(r);
+  }
+  return out;
+}
+
 double textHeight(const QString& text, double fontSize, double width, const TextStyle& style) {
   return std::max(1.0, double(layoutText(text, 0, 0, width, fontSize, fontSize, style).size())) * fontSize * 1.35;
 }
