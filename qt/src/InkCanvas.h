@@ -62,6 +62,8 @@ class InkCanvas : public QQuickItem {
   // What the pen's side button does while held: "eraser" | "lasso" | "none".
   Q_PROPERTY(QString sideButton MEMBER m_sideButton NOTIFY settingsChanged)
   Q_PROPERTY(bool palmRejection MEMBER m_palmRejection NOTIFY settingsChanged)
+  /// View only: every gesture scrolls (a second view of the notebook being edited).
+  Q_PROPERTY(bool readOnly MEMBER m_readOnly NOTIFY settingsChanged)
   // The cursor for drawing tools: "cross" | "dot" | "none".
   Q_PROPERTY(QString penCursor READ penCursor WRITE setPenCursor NOTIFY settingsChanged)
 
@@ -388,6 +390,7 @@ private:
   QPointer<QQuickWindow> m_window;
   QPointF m_hover{-1, -1};
   bool m_rubbing = false;
+  bool m_readOnly = false;
   void setHover(QPointF p);
   qreal m_pinchStartDist = 0, m_pinchStartZoom = 1;
   QPointF m_pinchMid;

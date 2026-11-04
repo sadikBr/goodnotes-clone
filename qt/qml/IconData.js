@@ -39,6 +39,7 @@ var paths = {
  "moon": "<path d=\"M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z\"/>",
  "docs": "<path d=\"M8 3h7l4 4v11a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z\"/><path d=\"M15 3v4h4\"/><path d=\"M4 7v13a1 1 0 0 0 1 1h10\"/>",
  "check": "<path d=\"M5 12.5l4.5 4.5L19 7.5\"/>",
+ "split": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"16\" rx=\"2\"/><path d=\"M12 4v16\"/>",
  "stack": "<rect x=\"4\" y=\"9\" width=\"16\" height=\"11\" rx=\"2\"/><path d=\"M6.5 6h11M9 3h6\"/>",
  "math": "<path d=\"M17.5 5H6.5l6.5 7-6.5 7h11\"/>",
  "graph": "<path d=\"M4 4v16h16\"/><path d=\"M7 17c2.5-7 5-9.5 11-11\"/>",

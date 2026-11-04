@@ -1438,7 +1438,9 @@ void InkCanvas::press(QPointF s, float pressure, bool stylus, const QString& too
     emit dismissed();
     return;
   }
-  const QString tool = toolOverride.isEmpty() ? m_tool : toolOverride;
+  // A view-only page (the same notebook beside itself) only scrolls.
+  const QString tool = m_readOnly ? QStringLiteral("hand") : toolOverride.isEmpty() ? m_tool : toolOverride;
+  if (!hasActiveFocus()) forceActiveFocus();
   m_g.lastScreen = s;
   m_g.touch = touch;
   m_g.stylus = stylus;

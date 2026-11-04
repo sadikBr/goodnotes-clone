@@ -56,7 +56,7 @@ Rectangle {
         id: imageDialog
         title: "Insert image"
         nameFilters: ["Images (*.png *.jpg *.jpeg *.gif *.webp *.bmp)"]
-        onAccepted: canvas.insertImage(selectedFile.toString())
+        onAccepted: root.activeCanvas.insertImage(selectedFile.toString())
     }
     PopupMenu { id: menu }
     PaperPicker { id: paperPicker; canvas: canvas }
@@ -79,6 +79,7 @@ Rectangle {
     function saveForSync() {
         canvas.finishEdit()
         canvas.flush()
+        if (sidePane.item) { sidePane.item.canvas.finishEdit(); sidePane.item.canvas.flush() }
         return notebookId
     }
 
@@ -169,8 +170,9 @@ Rectangle {
                     // on narrow windows the tools move right instead of covering them.
                     Layout.minimumWidth: implicitWidth - (titleBtn.visible ? titleBtn.implicitWidth - titleBtn.Layout.minimumWidth : 0)
                     spacing: 2
-                    IconButton { iconName: "back"; tip: "Library"; implicitWidth: 36; implicitHeight: 36; onClicked: { canvas.finishEdit(); canvas.flush(); root.back() } }
+                    IconButton { iconName: "back"; tip: "Library"; implicitWidth: 36; implicitHeight: 36; onClicked: { canvas.finishEdit(); canvas.flush(); if (sidePane.item) { sidePane.item.canvas.finishEdit(); sidePane.item.canvas.flush() } root.back() } }
                     IconButton { iconName: "sidebar"; tip: "Pages sidebar"; implicitWidth: 36; implicitHeight: 36; iconColor: Theme.muted; onClicked: root.toggleSidebar() }
+                    IconButton { iconName: "split"; tip: root.split ? "Close the side view" : "Side by side: another page or notebook beside this one"; active: root.split; implicitWidth: 36; implicitHeight: 36; iconColor: root.split ? Theme.accentContrast : Theme.muted; onClicked: root.toggleSplit() }
                     AbstractButton {
                         id: titleBtn
                         // In a daftar the bar beside it needs room: the title gives way (to 5.5em),
@@ -309,8 +311,8 @@ Rectangle {
                         IconButton { iconName: "sparkle"; tip: "Ask AI about this notebook"; implicitWidth: 34; implicitHeight: 34; iconColor: Theme.accent; onClicked: aiPanel.opened ? aiPanel.close() : root.askAboutNotebook() }
                     }
                     Pill {
-                        IconButton { iconName: "undo"; tip: "Undo (Ctrl+Z)"; implicitWidth: 34; implicitHeight: 34; enabled: canvas.canUndo; onClicked: canvas.undo() }
-                        IconButton { iconName: "redo"; tip: "Redo (Ctrl+Shift+Z)"; implicitWidth: 34; implicitHeight: 34; enabled: canvas.canRedo; onClicked: canvas.redo() }
+                        IconButton { iconName: "undo"; tip: "Undo (Ctrl+Z)"; implicitWidth: 34; implicitHeight: 34; enabled: root.activeCanvas.canUndo; onClicked: root.activeCanvas.undo() }
+                        IconButton { iconName: "redo"; tip: "Redo (Ctrl+Shift+Z)"; implicitWidth: 34; implicitHeight: 34; enabled: root.activeCanvas.canRedo; onClicked: root.activeCanvas.redo() }
                     }
                     Pill {
                         AbstractButton {
@@ -432,6 +434,7 @@ Rectangle {
             Layout.fillHeight: true
             spacing: 0
             PageSidebar {
+                id: pageSidebar
                 canvas: canvas
                 daftar: !!root.daftar
                 onAddDaftarPage: { if (canvas.daftar("addClassPage", [root.notebookId]).plain) canvas.addPage(-1, "") }
@@ -474,6 +477,8 @@ Rectangle {
                     onPenUsed: if (!AppSettings.store.penOnly && !penSeen) { penSeen = true; AppSettings.store.penOnly = true }
                     onMessage: (text, error) => root.notify(text, error)
                     onToolChanged: if (tool !== prefs.store.tool) prefs.store.tool = tool
+                    onActiveFocusChanged: if (activeFocus) root.activeCanvas = canvas
+                    onPagesChanged: if (sidePane.item) sidePane.item.mainChanged()
                 }
 
                 Instrument { anchors.fill: parent; canvas: canvas; z: 4 }
@@ -592,20 +597,54 @@ Rectangle {
                     }
                 }
             }
+            // The side view: another page or notebook beside this one.
+            Loader {
+                id: sidePane
+                active: root.split
+                visible: active
+                Layout.fillHeight: true
+                // Half of what's beside the page list; the page takes the rest.
+                readonly property real half: Math.max(280, (parent.width - (pageSidebar.visible ? pageSidebar.width : 0)) / 2)
+                Layout.preferredWidth: half
+                Layout.maximumWidth: half
+                sourceComponent: SidePane {
+                    prefs: prefs
+                    mainNotebookId: root.notebookId
+                    editor: root
+                    onCloseRequested: root.toggleSplit()
+                    onNotify: (m, e) => root.notify(m, e)
+                }
+                onLoaded: item.canvas.activeFocusChanged.connect(() => { if (item && item.canvas.activeFocus) root.activeCanvas = item.canvas })
+                onActiveChanged: if (!active) root.activeCanvas = canvas
+            }
         }
     }
 
     // Export (PDF, PowerPoint, PNG).
     Exporter { id: exporter; canvas: canvas; title: root.title; onNotify: (m, e) => root.notify(m, e) }
-    GraphDialog { id: graphDialog; canvas: canvas }
-    PiecesPanel { id: piecesPanel; canvas: canvas; onNotify: (m, e) => root.notify(m, e) }
+    GraphDialog { id: graphDialog; canvas: root.activeCanvas }
+    PiecesPanel { id: piecesPanel; canvas: root.activeCanvas; onNotify: (m, e) => root.notify(m, e) }
+    /// The page view last used: the notebook, or the side view. Tools, the
+    /// maths card, graphs, pieces, undo and the clipboard act on it.
+    property InkCanvas activeCanvas: canvas
+    property bool split: false
+    function toggleSplit() {
+        if (split && sidePane.item) { sidePane.item.canvas.finishEdit(); sidePane.item.canvas.flush() }
+        split = !split
+        if (!split) activeCanvas = canvas
+        fitMain.restart()
+    }
+    Timer { id: fitMain; interval: 150; onTriggered: canvas.fitWidth() }
+    function openMaths() { mathCard.start() }
+    function editGraph(g) { graphDialog.show(g, true) }
     /// The selection into my pieces, under a name.
     function savePiece() {
-        const p = canvas.selectionPiece(240)
+        const view = root.activeCanvas
+        const p = view.selectionPiece(240)
         if (!p.elements) return
         dialog.ask("Save to my pieces", [{ name: "name", label: "Name", value: "" , placeholder: "Triangle, signature, stamp…" }], "Save", r => {
             try {
-                InkleafCore.call("saveSnippet", { name: r.name.trim(), data: p.elements, preview: p.preview, width: p.width, height: p.height, notebookId: root.notebookId })
+                InkleafCore.call("saveSnippet", { name: r.name.trim(), data: p.elements, preview: p.preview, width: p.width, height: p.height, notebookId: view.notebookId })
                 root.notify("Saved to your pieces: find it under the pieces button at the top", false)
             } catch (e) {
                 root.notify(String(e.message || e), true)
@@ -614,7 +653,7 @@ Rectangle {
     }
     MathCard {
         id: mathCard
-        canvas: canvas
+        canvas: root.activeCanvas
         onNotify: (m, e) => root.notify(m, e)
         onGraphRequested: f => {
             graphDialog.show({ functions: f, xmin: -5, xmax: 5, ymin: -5, ymax: 5, grid: true }, false)
@@ -635,7 +674,7 @@ Rectangle {
     AiPanel {
         id: aiPanel
         onSettingsRequested: root.settingsRequested()
-        onInsertRequested: text => { canvas.insertText(text); root.notify("Added to the page as text", false) }
+        onInsertRequested: text => { root.activeCanvas.insertText(text); root.notify("Added to the page as text", false) }
     }
     /// The page being looked at, as a picture for the AI.
     function pagePicture() {
@@ -666,8 +705,8 @@ Rectangle {
     }
     /// Ask about the selection (its picture, and its typed text).
     function askAboutSelection(what) {
-        const image = canvas.selectionImage(1400)
-        const typed = canvas.selectionText()
+        const image = root.activeCanvas.selectionImage(1400)
+        const typed = root.activeCanvas.selectionText()
         const prompts = {
             explain: "Explain what's in the picture clearly, as a good teacher would.",
             solve: "Solve this step by step, explaining each step briefly. Check the answer at the end.",
@@ -702,20 +741,20 @@ Rectangle {
     readonly property bool typing: !!canvas.editing.id
     // Done typing: the keyboard goes back to the page (tool shortcuts work again).
     onTypingChanged: if (!typing) canvas.forceActiveFocus()
-    Shortcut { sequences: [StandardKey.Undo]; enabled: !root.typing; onActivated: canvas.undo() }
+    Shortcut { sequences: [StandardKey.Undo]; enabled: !root.typing; onActivated: root.activeCanvas.undo() }
     // Each key once: on Linux the standard Redo key is Ctrl+Shift+Z, and a key
     // listed twice is ambiguous to Qt (it ignores the press).
-    Shortcut { sequences: ["Ctrl+Shift+Z", "Ctrl+Y"]; enabled: !root.typing; onActivated: canvas.redo(); onActivatedAmbiguously: canvas.redo() }
-    Shortcut { sequences: [StandardKey.Copy]; enabled: !root.typing; onActivated: { const n = canvas.copySelection(); if (n) root.notify("Copied " + n + " item" + (n > 1 ? "s" : ""), false) } }
-    Shortcut { sequences: [StandardKey.Cut]; enabled: !root.typing; onActivated: canvas.cutSelection() }
-    Shortcut { sequences: [StandardKey.Paste]; enabled: !root.typing; onActivated: canvas.paste() }
-    Shortcut { sequence: "Ctrl+D"; enabled: !root.typing; onActivated: canvas.duplicateSelection() }
-    Shortcut { sequences: [StandardKey.SelectAll]; enabled: !root.typing; onActivated: canvas.selectAll() }
+    Shortcut { sequences: ["Ctrl+Shift+Z", "Ctrl+Y"]; enabled: !root.typing; onActivated: root.activeCanvas.redo(); onActivatedAmbiguously: root.activeCanvas.redo() }
+    Shortcut { sequences: [StandardKey.Copy]; enabled: !root.typing; onActivated: { const n = root.activeCanvas.copySelection(); if (n) root.notify("Copied " + n + " item" + (n > 1 ? "s" : ""), false) } }
+    Shortcut { sequences: [StandardKey.Cut]; enabled: !root.typing; onActivated: root.activeCanvas.cutSelection() }
+    Shortcut { sequences: [StandardKey.Paste]; enabled: !root.typing; onActivated: root.activeCanvas.paste() }
+    Shortcut { sequence: "Ctrl+D"; enabled: !root.typing; onActivated: root.activeCanvas.duplicateSelection() }
+    Shortcut { sequences: [StandardKey.SelectAll]; enabled: !root.typing; onActivated: root.activeCanvas.selectAll() }
     Shortcut { sequences: [StandardKey.ZoomIn, "Ctrl+="]; onActivated: canvas.zoomBy(1.2); onActivatedAmbiguously: canvas.zoomBy(1.2) }
     Shortcut { sequences: [StandardKey.ZoomOut]; onActivated: canvas.zoomBy(1 / 1.2) }
     Shortcut { sequence: "Ctrl+0"; onActivated: canvas.fitWidth() }
-    Shortcut { sequences: ["Delete", "Backspace"]; enabled: !!(!root.typing && (canvas.selection.count || 0) > 0); onActivated: canvas.deleteSelection() }
-    Shortcut { sequence: "Esc"; enabled: !root.typing; onActivated: { if ((canvas.selection.count || 0) > 0) canvas.clearSelection(); else if (root.focusMode) root.focusMode = false; else root.drawerOpen = prefs.store.drawerPinned } }
+    Shortcut { sequences: ["Delete", "Backspace"]; enabled: !!(!root.typing && (root.activeCanvas.selection.count || 0) > 0); onActivated: root.activeCanvas.deleteSelection() }
+    Shortcut { sequence: "Esc"; enabled: !root.typing; onActivated: { if ((root.activeCanvas.selection.count || 0) > 0) root.activeCanvas.clearSelection(); else if (root.focusMode) root.focusMode = false; else root.drawerOpen = prefs.store.drawerPinned } }
     Shortcut { sequences: ["PgDown", "Right"]; enabled: !root.typing; onActivated: canvas.goToPage(canvas.currentPage + 1) }
     Shortcut { sequences: ["PgUp", "Left"]; enabled: !root.typing; onActivated: canvas.goToPage(canvas.currentPage - 1) }
     Shortcut { sequence: "R"; enabled: !root.typing; onActivated: canvas.instrument.visible ? canvas.showInstrument("") : canvas.showInstrument(canvas.instrument.kind || "ruler") }

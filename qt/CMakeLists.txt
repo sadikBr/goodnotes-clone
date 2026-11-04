@@ -185,6 +185,7 @@ qt_add_qml_module(inkleaf
     qml/editor/MathCard.qml
     qml/editor/GraphDialog.qml
     qml/editor/PiecesPanel.qml
+    qml/editor/SidePane.qml
     qml/editor/Fonts.js
     qml/editor/ColorPopover.qml
     qml/editor/ToolDrawer.qml
