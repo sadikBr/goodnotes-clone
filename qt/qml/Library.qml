@@ -997,7 +997,6 @@ Rectangle {
                         visible: cell.modelData.type === "new"
                         width: parent.width - 28
                         options: root.createOptions()
-                        onClicked: createMenu.show(this, root.createOptions())
                     }
                     Card {
                         visible: cell.modelData.type !== "new"
