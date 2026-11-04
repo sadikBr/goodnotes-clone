@@ -1,3 +1,4 @@
+#include "draw/Elements.h"
 #include "InkCanvas.h"
 
 #include <QBuffer>
@@ -705,15 +706,12 @@ void InkCanvas::setPaper(int index, const QString& tmpl, const QString& color, b
   flush();
 }
 
+QJsonArray InkCanvas::sceneJson(int index) { return QJsonArray::fromVariantList(core("scene", jsArgs({index})).toVariant().toList()); }
+
 QString InkCanvas::pagePreview(int index, qreal scale) {
   if (index < 0 || index >= int(m_pages.size())) return {};
-  Js& js = Js::instance();
   const Page& p = m_pages[index];
-  QJSValue els = core("scene", jsArgs({index}));
-  QJSValue canvas = js.call("renderPage", {p.tmpl, p.paper, p.w, p.h, els, scale, coreProp("images")});
-  QObject* o = canvas.toQObject();
-  auto* c = qobject_cast<JsCanvas*>(o);
-  return c ? c->toDataURL("image/png") : QString();
+  return draw::renderPage(p.tmpl, p.paper, p.w, p.h, sceneJson(index), scale)->toDataURL("image/png");
 }
 
 QString InkCanvas::exportPdf(const QString& path, const QVariantList& indexes, const QString& title) {
@@ -721,7 +719,6 @@ QString InkCanvas::exportPdf(const QString& path, const QVariantList& indexes, c
   if (indexes.isEmpty()) return "Nothing to export";
   finishEdit();
   flush();
-  Js& js = Js::instance();
   // Pages are drawn by the same code as the screen, as vectors: lines and
   // ink stay sharp, text stays text (Qt embeds and shapes the fonts).
   QPdfWriter writer(file);
@@ -752,17 +749,17 @@ QString InkCanvas::exportPdf(const QString& path, const QVariantList& indexes, c
       writer.newPage();
     }
     started = true;
-    QJSValue bg(QJSValue::NullValue);
+    QImage bg;
     const QString asset = p.meta["backgroundAsset"].toString();
     if (!asset.isEmpty() && !p.meta["backgroundPage"].isNull()) {
       const int bp = p.meta["backgroundPage"].toInt();
       const QImage img = PdfDocs::instance().render(asset, bp, 3 * p.w / std::max(1.0, PdfDocs::instance().pageSize(asset, bp).width()));
-      if (!img.isNull()) bg = js.engine().newQObject(new JsImage(img.convertToFormat(QImage::Format_ARGB32_Premultiplied)));
+      if (!img.isNull()) bg = img.convertToFormat(QImage::Format_ARGB32_Premultiplied);
     }
-    auto* canvas = new JsCanvas(&painter, int(std::ceil(p.w)), int(std::ceil(p.h)));
-    QJSValue ctx = js.engine().newQObject(canvas);
-    js.call("paintPage", {ctx, p.tmpl, p.paper, p.w, p.h, core("scene", jsArgs({i})), coreProp("images"), bg});
-    delete canvas;  // restores the painter for the next page
+    {
+      JsCanvas canvas(&painter, int(std::ceil(p.w)), int(std::ceil(p.h)));
+      draw::paintPage(canvas, p.tmpl, p.paper, p.w, p.h, sceneJson(i), bg);
+    }  // the canvas restores the painter for the next page
   }
   painter.end();
   return {};
@@ -770,19 +767,15 @@ QString InkCanvas::exportPdf(const QString& path, const QVariantList& indexes, c
 
 QVariantMap InkCanvas::exportPage(int index, qreal scale, bool jpeg) {
   if (index < 0 || index >= int(m_pages.size())) return {};
-  Js& js = Js::instance();
   const Page& p = m_pages[index];
-  QJSValue els = core("scene", jsArgs({index}));
   // An imported PDF page as the background.
-  QJSValue bg(QJSValue::NullValue);
+  QImage bg;
   const QString asset = p.meta["backgroundAsset"].toString();
   if (!asset.isEmpty() && !p.meta["backgroundPage"].isNull()) {
     const QImage img = PdfDocs::instance().render(asset, p.meta["backgroundPage"].toInt(), scale * p.w / std::max(1.0, PdfDocs::instance().pageSize(asset, p.meta["backgroundPage"].toInt()).width()));
-    if (!img.isNull()) bg = js.engine().newQObject(new JsImage(img.convertToFormat(QImage::Format_ARGB32_Premultiplied)));
+    if (!img.isNull()) bg = img.convertToFormat(QImage::Format_ARGB32_Premultiplied);
   }
-  QJSValue canvas = js.call("renderPage", {p.tmpl, p.paper, p.w, p.h, els, scale, coreProp("images"), bg});
-  auto* c = qobject_cast<JsCanvas*>(canvas.toQObject());
-  if (!c) return {};
+  const auto c = draw::renderPage(p.tmpl, p.paper, p.w, p.h, sceneJson(index), scale, bg);
   return {{"dataUrl", c->toDataURL(jpeg ? "image/jpeg" : "image/png", 0.9)}, {"widthPx", c->width()}, {"heightPx", c->height()}, {"pageWidth", p.w}, {"pageHeight", p.h}};
 }
 

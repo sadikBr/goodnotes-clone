@@ -79,7 +79,14 @@ read their list from a data file instead of `src/fonts.ts`.
   orientation and colour, and where their filled-in values go: identical.
   All paper drawing is now C++ (`Js::paper` no longer runs scripts).
   `daftarPapers.ts` stays for the daftar setup until step 7.
-- [ ] 4. Elements and export
+- [x] 4. Elements and export (`qt/src/draw/Elements.cpp`, `Strokes.cpp`,
+  `Freehand.cpp`, a port of perfect-freehand): every pen style (taps, sharp
+  corners, short strokes), shapes, text in every font with wrapping, lists,
+  alignment and Arabic, sticky notes, pictures, rotation, whole pages: 171
+  element cases at two zooms and 3 pages, identical. The canvas's pictures,
+  thumbnails, image and PDF export now draw in C++. Still in the scripts
+  until their steps: the editor's overlay (selection, handles, guides) and
+  its text measuring (step 6), and the cover preview (step 7).
 - [ ] 5. Recognisers and geometry (Rust)
 - [ ] 6. Editor (C++)
 - [ ] 7. Daftar and cover setup (Rust)

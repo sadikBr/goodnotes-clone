@@ -66,6 +66,8 @@ public:
   /// Elements (stored JSON objects' "data") drawn in order, the same way:
   /// `region` of the page at `scale`, on a transparent picture.
   QImage elements(const QJsonArray& els, double scale, QRectF region);
+  /// The same, drawn by the scripts (for --compare-render while both exist).
+  QImage elementsScript(const QJsonArray& els, double scale, QRectF region);
   /// Decoded pictures for image elements, by src (data: URL or asset id).
   QObject* imageFor(const QString& src);
 

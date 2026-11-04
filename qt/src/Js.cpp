@@ -1,4 +1,5 @@
 #include "Js.h"
+#include "draw/Elements.h"
 #include "draw/Papers.h"
 
 #include <QFile>
@@ -170,12 +171,10 @@ QImage Js::paper(const QString& tmpl, const QString& color, double w, double h, 
       m_papers.push_front({key, hit});
       return hit;
     }
-  auto* canvas = new JsCanvas(std::max(1, int(std::ceil(region.width() * scale))), std::max(1, int(std::ceil(region.height() * scale))));
-  QJSValue ctx = m_engine.newQObject(canvas);
-  canvas->setTransform(scale, 0, 0, scale, -region.x() * scale, -region.y() * scale);
-  // Papers in C++; covers and daftar pages still in the scripts (docs/MIGRATION.md).
-  if (!draw::drawPaper(*canvas, tmpl, w, h, color)) call("drawTemplate", {ctx, tmpl, w, h, color});
-  QImage out = canvas->image();
+  JsCanvas canvas(std::max(1, int(std::ceil(region.width() * scale))), std::max(1, int(std::ceil(region.height() * scale))));
+  canvas.setTransform(scale, 0, 0, scale, -region.x() * scale, -region.y() * scale);
+  draw::drawPaper(canvas, tmpl, w, h, color);
+  QImage out = canvas.image();
   m_papers.push_front({key, out});
   if (m_papers.size() > 10) m_papers.pop_back();
   return out;
@@ -187,10 +186,19 @@ QImage Js::paperScript(const QString& tmpl, const QString& color, double w, doub
   QJSValue ctx = m_engine.newQObject(canvas);
   canvas->setTransform(scale, 0, 0, scale, -region.x() * scale, -region.y() * scale);
   call("drawTemplate", {ctx, tmpl, w, h, color});
-  return canvas->image();
+  QImage out = canvas->image();
+  delete canvas;  // not left for the script engine to collect (its wrapper goes null)
+  return out;
 }
 
 QImage Js::elements(const QJsonArray& els, double scale, QRectF region) {
+  JsCanvas canvas(std::max(1, int(std::ceil(region.width() * scale))), std::max(1, int(std::ceil(region.height() * scale))));
+  canvas.setTransform(scale, 0, 0, scale, -region.x() * scale, -region.y() * scale);
+  for (const QJsonValue& v : els) draw::drawElement(canvas, v.toObject());
+  return canvas.image();
+}
+
+QImage Js::elementsScript(const QJsonArray& els, double scale, QRectF region) {
   auto* canvas = new JsCanvas(std::max(1, int(std::ceil(region.width() * scale))), std::max(1, int(std::ceil(region.height() * scale))));
   QJSValue ctx = m_engine.newQObject(canvas);
   canvas->setTransform(scale, 0, 0, scale, -region.x() * scale, -region.y() * scale);
@@ -202,5 +210,7 @@ QImage Js::elements(const QJsonArray& els, double scale, QRectF region) {
     QJSValue r = draw.call({ctx, toJs(data), m_images, noop});
     if (r.isError()) qWarning().noquote() << "drawElement:" << r.toString();
   }
-  return canvas->image();
+  QImage out = canvas->image();
+  delete canvas;
+  return out;
 }

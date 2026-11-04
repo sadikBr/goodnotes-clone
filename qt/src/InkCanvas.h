@@ -305,6 +305,8 @@ private:
   void renderPictures(bool missingOnly = false);
   bool prefetchStep();
   /// The page's paper picture, with its imported PDF page on top (if any).
+  /// A page's elements as JSON (for drawing them in C++).
+  QJsonArray sceneJson(int index);
   QImage paperWithBackground(const Page& p, double scale, QRectF region);
   /// The library picture of page `i` (paper and items as drawn), stored with the page.
   void storeThumbnail(int i);  // papers and element pictures for what's in view

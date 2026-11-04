@@ -83,6 +83,9 @@ qt_add_executable(inkleaf
   src/draw/Papers.h src/draw/Papers.cpp
   src/draw/Covers.h src/draw/Covers.cpp
   src/draw/DaftarPapers.h src/draw/DaftarPapers.cpp
+  src/draw/Freehand.h src/draw/Freehand.cpp
+  src/draw/Strokes.h src/draw/Strokes.cpp
+  src/draw/Elements.h src/draw/Elements.cpp
   src/CompareRender.h src/CompareRender.cpp
   src/PaperImage.h src/PaperImage.cpp
   src/Pdf.h src/Pdf.cpp
