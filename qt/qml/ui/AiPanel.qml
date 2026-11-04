@@ -204,7 +204,7 @@ Popup {
                 color: Theme.muted; wrapMode: Text.Wrap; horizontalAlignment: Text.AlignHCenter
                 Layout.fillWidth: true
             }
-            UiButton { text: "Open Settings → AI"; kind: "primary"; Layout.alignment: Qt.AlignHCenter; onClicked: { root.close(); root.settingsRequested() } }
+            UiButton { text: "Open Settings → AI"; kind: "primary"; Layout.alignment: Qt.AlignHCenter; onClicked: { root.close(); AppSettings.settingsPage = "ai"; root.settingsRequested() } }
             Item { Layout.fillHeight: true }
         }
 

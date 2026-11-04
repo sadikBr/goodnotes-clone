@@ -6,6 +6,8 @@ QtObject {
     id: root
     readonly property var smoothingLevels: ({ off: 0, light: 0.2, normal: 0.38, strong: 0.62 })
 
+    /// The Settings section to open next (then cleared): "pen", "ai", "sync", "look", "about".
+    property string settingsPage: ""
     property Prefs store: Prefs {
         category: "settings"
         /// "off" | "light" | "normal" | "strong"
