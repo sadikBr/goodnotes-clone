@@ -59,7 +59,7 @@ Item {
             background: null
             wrapMode: TextEdit.Wrap
             color: root.sticky ? "#1f2937" : (root.e.color || "#111827")
-            font.family: Fonts.preset(root.e.font).face
+            font.family: Fonts.faceFor(root.e.font, text)
             font.pixelSize: Math.max(1, (root.sticky ? (root.e.fontSize || 18) : (root.e.fontSize || 20)) * root.canvas.zoom)
             font.bold: !!root.e.bold
             font.italic: !!root.e.italic

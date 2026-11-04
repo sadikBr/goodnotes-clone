@@ -143,7 +143,7 @@ Popup {
                             Layout.leftMargin: 6
                             Layout.rightMargin: 6
                             text: field.text.trim() || "Your text"
-                            font.family: card.modelData.face
+                            font.family: Fonts.faceFor(card.modelData.id, text)
                             font.pixelSize: 22
                             color: Theme.text
                             elide: Text.ElideRight

@@ -2,29 +2,39 @@
 
 #include <QHash>
 #include <QRegularExpression>
+#include <QStringList>
 #include <cmath>
 
 namespace draw {
 namespace {
 const QString AR = QStringLiteral("\"Noto Sans Arabic\"");
 const QString SANS = QStringLiteral("\"Inter\", ") + AR + QStringLiteral(", \"Segoe UI\", system-ui, -apple-system, sans-serif");
-// After a handwriting face: Arabic, then Inter for characters the face lacks.
-const QString HAND = AR + QStringLiteral(", \"Inter\", cursive");
+/// A handwriting face, then its Arabic partner (so Arabic has the same spirit
+/// in each preset rather than one face for all), then Noto Sans Arabic and
+/// Inter for characters they lack.
+QString hand(const QString& face, const QString& arabic) {
+  return "\"" + face + "\", \"" + arabic + "\", " + AR + QStringLiteral(", \"Inter\", cursive");
+}
+/// Every preset's Arabic face (for putting it first in right-to-left text).
+const QStringList& arabicFaces() {
+  static const QStringList faces = {"Noto Sans Arabic", "Noto Naskh Arabic", "Lemonada", "Katibeh", "Baloo Bhaijaan 2", "Aref Ruqaa", "Amiri", "Rakkas", "Changa", "Marhey", "El Messiri"};
+  return faces;
+}
 }  // namespace
 
 const std::vector<FontPreset>& fontPresets() {
   static const std::vector<FontPreset> presets = {
       {"sans", "Clean", SANS, "Inter", true, true},
-      {"book", "Book", "\"Lora\", " + AR + ", \"Inter\", serif", "Lora", true, true},
-      {"playpen", "Friendly", "\"Playpen Sans\", " + HAND, "Playpen Sans", true, false},
-      {"mynerve", "Natural", "\"Mynerve\", " + HAND, "Mynerve", false, false},
-      {"school", "School print", "\"Andika\", " + HAND, "Andika", true, false},
-      {"cursive-fr", "French cursive", "\"Playwrite FR Moderne\", " + HAND, "Playwrite FR Moderne", false, false},
-      {"cursive-trad", "Classic cursive", "\"Playwrite FR Trad\", " + HAND, "Playwrite FR Trad", false, false},
-      {"marker", "Marker", "\"Shantell Sans\", " + HAND, "Shantell Sans", true, false},
-      {"chalk", "Chalkboard", "\"Schoolbell\", " + HAND, "Schoolbell", false, false},
-      {"quick", "Quick notes", "\"Gochi Hand\", " + HAND, "Gochi Hand", false, false},
-      {"neat", "Neat", "\"Handlee\", " + HAND, "Handlee", false, false},
+      {"book", "Book", "\"Lora\", \"Noto Naskh Arabic\", " + AR + ", \"Inter\", serif", "Lora", true, true},
+      {"playpen", "Friendly", hand("Playpen Sans", "Lemonada"), "Playpen Sans", true, false},
+      {"mynerve", "Natural", hand("Mynerve", "Katibeh"), "Mynerve", false, false},
+      {"school", "School print", hand("Andika", "Baloo Bhaijaan 2"), "Andika", true, false},
+      {"cursive-fr", "French cursive", hand("Playwrite FR Moderne", "Aref Ruqaa"), "Playwrite FR Moderne", false, false},
+      {"cursive-trad", "Classic cursive", hand("Playwrite FR Trad", "Amiri"), "Playwrite FR Trad", false, false},
+      {"marker", "Marker", hand("Shantell Sans", "Rakkas"), "Shantell Sans", true, false},
+      {"chalk", "Chalkboard", hand("Schoolbell", "Changa"), "Schoolbell", false, false},
+      {"quick", "Quick notes", hand("Gochi Hand", "Marhey"), "Gochi Hand", false, false},
+      {"neat", "Neat", hand("Handlee", "El Messiri"), "Handlee", false, false},
   };
   return presets;
 }
@@ -42,11 +52,18 @@ const FontPreset& fontPreset(const QString& id) {
 }
 
 QString arabicFirst(const QString& family) {
+  // The list's first Arabic face moves to the front (its first mention only).
+  int best = -1;
+  QString face;
+  for (const QString& f : arabicFaces()) {
+    const int at = family.indexOf("\"" + f + "\"");
+    if (at >= 0 && (best < 0 || at < best)) best = at, face = "\"" + f + "\"";
+  }
+  if (best < 0) return AR + ", " + family;
   QString rest = family;
-  // Like String.replace with a string: the first occurrence only.
-  const int at = rest.indexOf(", " + AR);
-  if (at >= 0) rest.remove(at, AR.size() + 2);
-  return AR + ", " + rest;
+  if (best >= 2 && rest.mid(best - 2, 2) == ", ") rest.remove(best - 2, face.size() + 2);
+  else rest.remove(best, face.size() + (rest.mid(best + face.size(), 2) == ", " ? 2 : 0));
+  return face + ", " + rest;
 }
 
 QString jsNumber(double v) {
