@@ -156,10 +156,12 @@ jobs:
           env -u QML_IMPORT_PATH -u QML2_IMPORT_PATH -u QT_PLUGIN_PATH INKLEAF_DATA_DIR="$RUNNER_TEMP/library2" "$RUNNER_TEMP/installed/Inkleaf.exe" --smoke
       - uses: actions/upload-artifact@v4
         with:
-          name: inkleaf-qt-windows
-          path: |
-            Inkleaf_*_windows_x64_setup.exe
-            Inkleaf_*_windows_x64.zip
+          name: inkleaf-windows-setup
+          path: Inkleaf_*_windows_x64_setup.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inkleaf-windows-zip
+          path: Inkleaf_*_windows_x64.zip
 
   android:
     runs-on: ubuntu-24.04
