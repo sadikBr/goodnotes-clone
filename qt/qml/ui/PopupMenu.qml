@@ -10,6 +10,8 @@ Popup {
     id: root
     property var items: []
     property int menuWidth: 220
+    /// The button it was opened from (to show that button as pressed).
+    property Item anchorItem: null
     parent: Overlay.overlay
     padding: 6
     focus: true
@@ -23,6 +25,7 @@ Popup {
     /// Opens below `anchor` (or above it when there's no room).
     function show(anchor, list, width) {
         items = list
+        anchorItem = anchor
         const p = anchor.mapToItem(parent, 0, 0)
         const h = list.reduce((t, i) => t + (i.sub ? 52 : 36), 0) + 12
         menuWidth = width || (list.some(i => !!i.sub) ? 280 : list.some(i => !!i.image) ? 240 : 220)

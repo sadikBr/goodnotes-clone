@@ -348,7 +348,7 @@ Rectangle {
                                 if (cover) coverPicker.show(paperBtn)
                                 else paperPicker.show(paperBtn, canvas.currentPage)
                             }
-                            background: Rectangle { antialiasing: true; radius: 10; color: paperBtn.hovered || paperPicker.opened ? Theme.surface : "transparent" }
+                            background: Rectangle { antialiasing: true; radius: 10; color: paperBtn.hovered || paperPicker.opened || coverPicker.opened ? Theme.surface3 : "transparent"; Behavior on color { ColorAnimation { duration: 120 } } }
                             contentItem: RowLayout {
                                 id: paperRow
                                 spacing: 6
@@ -367,38 +367,46 @@ Rectangle {
                         }
                     }
                     // Things to put on the page, in one menu.
-                    AbstractButton {
-                        id: insertBtn
-                        implicitHeight: 36
-                        implicitWidth: insertRow.implicitWidth + 20
-                        hoverEnabled: true
-                        ToolTip.visible: !!(hovered && !menu.opened) && !tipDismissed
-                        property bool tipDismissed: false
-                        onPressedChanged: if (pressed) tipDismissed = true
-                        onHoveredChanged: if (!hovered) tipDismissed = false
-                        ToolTip.text: "Insert a picture, a graph, one of your pieces or a page"
-                        scale: pressed ? 0.96 : 1
-                        onClicked: menu.show(insertBtn, [
-                            { icon: "image", label: "Image", sub: "A picture from your files", action: () => imageDialog.open() },
-                            { icon: "graph", label: "Graph", sub: "Plot functions, as you'd write them", action: () => graphDialog.show(null, false) },
-                            { icon: "stack", label: "My pieces", sub: "Something you saved to use again", action: () => piecesPanel.show(insertBtn) },
-                            { icon: "page", label: "Page", sub: "A new page after this one", action: () => root.activeCanvas.addPage(root.activeCanvas.currentPage + 1, "") }
-                        ])
-                        background: Rectangle { antialiasing: true; radius: 12; color: insertBtn.hovered || menu.opened ? Theme.surface : Theme.surface2; border.color: Theme.border }
-                        contentItem: Item {
-                            RowLayout {
-                                id: insertRow
-                                anchors.centerIn: parent
-                                spacing: 6
-                                Icon { name: "plus"; size: 16; color: Theme.text }
-                                Label { visible: root.width > 1320 || !root.daftar; text: "Insert"; font.pixelSize: 13; font.weight: Font.DemiBold; color: Theme.text }
-                                Icon { name: "down"; size: 13; color: Theme.muted }
+                    Pill {
+                        AbstractButton {
+                            id: insertBtn
+                            readonly property bool open: menu.opened && menu.anchorItem === insertBtn
+                            implicitHeight: 34
+                            implicitWidth: insertRow.implicitWidth + 16
+                            hoverEnabled: true
+                            ToolTip.visible: !!(hovered && !open) && !tipDismissed
+                            ToolTip.delay: 500
+                            property bool tipDismissed: false
+                            onPressedChanged: if (pressed) tipDismissed = true
+                            onHoveredChanged: if (!hovered) tipDismissed = false
+                            ToolTip.text: "Insert a picture, a graph, one of your pieces or a page"
+                            onClicked: menu.show(insertBtn, [
+                                { icon: "image", label: "Image", sub: "A picture from your files", action: () => imageDialog.open() },
+                                { icon: "graph", label: "Graph", sub: "Plot functions, as you'd write them", action: () => graphDialog.show(null, false) },
+                                { icon: "stack", label: "My pieces", sub: "Something you saved to use again", action: () => piecesPanel.show(insertBtn) },
+                                { icon: "page", label: "Page", sub: "A new page after this one", action: () => root.activeCanvas.addPage(root.activeCanvas.currentPage + 1, "") }
+                            ])
+                            background: Rectangle {
+                                antialiasing: true
+                                radius: 10
+                                color: insertBtn.hovered || insertBtn.open ? Theme.surface3 : "transparent"
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                            }
+                            contentItem: Item {
+                                RowLayout {
+                                    id: insertRow
+                                    anchors.centerIn: parent
+                                    spacing: 5
+                                    Icon { name: "plus"; size: 18; color: Theme.text }
+                                    Label { visible: root.width > 1320 || !root.daftar; text: "Insert"; font.pixelSize: 13; font.weight: Font.DemiBold; color: Theme.text }
+                                    Icon { name: "down"; size: 14; color: Theme.muted }
+                                }
                             }
                         }
                     }
                     AbstractButton {
                         id: exportBtn
-                        implicitHeight: 36
+                        implicitHeight: 40
                         implicitWidth: exportRow.implicitWidth + 24
                         hoverEnabled: true
                         ToolTip.visible: !!(hovered) && !tipDismissed
@@ -415,7 +423,7 @@ Rectangle {
                             { label: "PowerPoint (.pptx) — this page", action: () => exporter.run("pptx", "current") },
                             { label: "PNG image — this page", action: () => exporter.run("png", "current") }
                         ])
-                        background: Rectangle { antialiasing: true; radius: 12; color: exportBtn.hovered ? Qt.lighter(Theme.accent, 1.08) : Theme.accent }
+                        background: Rectangle { antialiasing: true; radius: 13; color: exportBtn.hovered ? Qt.lighter(Theme.accent, 1.08) : Theme.accent }
                         contentItem: Item {
                             RowLayout {
                                 id: exportRow
@@ -426,17 +434,19 @@ Rectangle {
                             }
                         }
                     }
-                    IconButton {
-                        id: moreBtn
-                        iconName: "more"; tip: "More"; implicitWidth: 36; implicitHeight: 36
-                        onClicked: menu.show(moreBtn, [
-                            { label: "Pen-only mode", checked: AppSettings.store.penOnly, action: () => AppSettings.store.penOnly = !AppSettings.store.penOnly },
-                            { label: "Focus mode", key: "F", action: () => root.focusMode = !root.focusMode },
-                            { label: root.sidebarShown ? "Hide pages" : "Show pages", key: "[", action: () => root.toggleSidebar() },
-                            { label: "Settings…", action: () => root.settingsRequested() },
-                            { label: "Keyboard shortcuts", key: "?", action: () => shortcuts.open() },
-                            { label: Theme.dark ? "Light mode" : "Dark mode", action: () => AppSettings.store.theme = Theme.dark ? "light" : "dark" }
-                        ])
+                    Pill {
+                        IconButton {
+                            id: moreBtn
+                            iconName: "more"; tip: "More"; implicitWidth: 34; implicitHeight: 34
+                            onClicked: menu.show(moreBtn, [
+                                { label: "Pen-only mode", checked: AppSettings.store.penOnly, action: () => AppSettings.store.penOnly = !AppSettings.store.penOnly },
+                                { label: "Focus mode", key: "F", action: () => root.focusMode = !root.focusMode },
+                                { label: root.sidebarShown ? "Hide pages" : "Show pages", key: "[", action: () => root.toggleSidebar() },
+                                { label: "Settings…", action: () => root.settingsRequested() },
+                                { label: "Keyboard shortcuts", key: "?", action: () => shortcuts.open() },
+                                { label: Theme.dark ? "Light mode" : "Dark mode", action: () => AppSettings.store.theme = Theme.dark ? "light" : "dark" }
+                            ])
+                        }
                     }
                 }
             }
@@ -637,7 +647,7 @@ Rectangle {
     // Export (PDF, PowerPoint, PNG).
     Exporter { id: exporter; canvas: canvas; title: root.title; onNotify: (m, e) => root.notify(m, e) }
     GraphDialog { id: graphDialog; canvas: root.activeCanvas }
-    PiecesPanel { id: piecesPanel; canvas: root.activeCanvas; onNotify: (m, e) => root.notify(m, e) }
+    PiecesPanel { id: piecesPanel; canvas: root.activeCanvas; onNotify: (m, e) => root.notify(m, e); onSaveRequested: root.savePiece() }
     /// The page view last used: the notebook, or the side view. Tools, the
     /// maths card, graphs, pieces, undo and the clipboard act on it.
     property InkCanvas activeCanvas: canvas
@@ -659,11 +669,11 @@ Rectangle {
         dialog.ask("Save to my pieces", [{ name: "name", label: "Name", value: "" , placeholder: "Triangle, signature, stamp…" }], "Save", r => {
             try {
                 InkleafCore.call("saveSnippet", { name: r.name.trim(), data: p.elements, preview: p.preview, width: p.width, height: p.height, notebookId: view.notebookId })
-                root.notify("Saved to your pieces: find it under the pieces button at the top", false)
+                root.notify("Saved to your pieces: find it under Insert → My pieces", false)
             } catch (e) {
                 root.notify(String(e.message || e), true)
             }
-        }, { message: "Put it on any page later from the pieces button in the toolbar." })
+        }, { message: "Put it on any page later from Insert → My pieces." })
     }
     MathCard {
         id: mathCard
