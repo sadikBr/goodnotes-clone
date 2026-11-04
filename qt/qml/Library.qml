@@ -340,19 +340,20 @@ Rectangle {
         { value: "storyboard", label: "Storyboard", group: "Writing & art" },
         { value: "planner-day", label: "Daily plan", group: "Planner" }, { value: "planner-week", label: "Weekly plan", group: "Planner" }
     ]
-    function newNotebook(fid) {
-        dialog.ask("New notebook", [
-            { name: "title", label: "Title", value: "Untitled notebook" },
-            { name: "template", label: "Paper", type: "select", value: "ruled", options: templates },
-            { name: "size", label: "Page size", type: "select", value: "a4", half: true, options: Theme.paperSizes.map(p => ({ value: p.id, label: p.label })) },
-            { name: "orientation", label: "Orientation", type: "select", value: "portrait", half: true, options: [{ value: "portrait", label: "Portrait" }, { value: "landscape", label: "Landscape" }] },
-            { name: "paper", label: "Paper colour", type: "swatches", value: "#fffdf7", colors: Theme.paperColors },
-            { name: "cover", label: "Cover colour", type: "swatches", colors: Theme.coverColors },
-            { name: "design", label: "Cover design", type: "covers", value: "classic", options: coverDesigns }
-        ], "Create", r => {
+    /// A new notebook (or, with a preset, another kind: a sketchbook…) in `fid`.
+    function newNotebook(fid, preset) {
+        newNbDialog.folder = fid
+        newNbDialog.show(preset)
+    }
+    NewNotebookDialog {
+        id: newNbDialog
+        property var folder: null
+        templates: root.templates
+        designs: root.coverDesigns
+        onCreated: r => {
             const size = Theme.paperSizes.find(p => p.id === r.size) || Theme.paperSizes[0]
             const landscape = r.orientation === "landscape"
-            const nb = run("createNotebook", { input: { title: r.title.trim(), folderId: fid, template: r.template, coverColor: r.cover, paperColor: r.paper, width: landscape ? size.h : size.w, height: landscape ? size.w : size.h, coverPage: true } })
+            const nb = run("createNotebook", { input: { title: r.title, folderId: folder, template: r.template, coverColor: r.cover, paperColor: r.paper, width: landscape ? size.h : size.w, height: landscape ? size.w : size.h, coverPage: true } })
             if (!nb) return
             // The chosen cover design, its title and date, and its picture for the library.
             if (r.design !== "classic") {
@@ -361,7 +362,7 @@ Rectangle {
             }
             DaftarApi.setUpCover(nb)
             root.openRequested(nb.id, nb.title)
-        }, { aside: coverPreview, twoColumns: true })
+        }
     }
     function newFolder(parentId) {
         dialog.ask("New folder", [

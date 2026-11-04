@@ -10,6 +10,7 @@ section here before it can be published (`scripts/check-version.py`).
 - **Settings** shows one section at a time (Pen & touch, AI, Sync & backups, Appearance, Updates), in tidy groups.
 - **Menus** have icons, switches for settings and groups; Export lists formats under *Whole notebook* and *This page*.
 - **New** on the shelf offers a notebook, a daftar, PDFs or a folder in one tap.
+- **New notebook** comes in two steps, cover then paper, with every design and paper shown as pictures and the result beside them.
 - **Undo** right in the message when you move something to the trash; messages show what happened with an icon.
 - **Empty pages** of the library (favourites, a folder, no search results) say what to do next.
 - **Selection bar** is half as wide: one colour button, and duplicate, copy and *Save to my pieces* under ⋯.
