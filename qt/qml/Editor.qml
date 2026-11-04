@@ -18,6 +18,10 @@ Rectangle {
     signal notify(string message, bool error)
 
     ToolPrefs { id: prefs }
+    /// The tool preferences, for children with a `prefs` property of their own
+    /// (`prefs: prefs` there would read their own, still empty).
+    readonly property alias toolPrefs: prefs
+    readonly property alias mainCanvas: canvas
 
     readonly property var tools: [
         { id: "pen", label: "Pen", key: "P", tray: 0, icon: "pen" },
@@ -459,7 +463,7 @@ Rectangle {
             spacing: 0
             PageSidebar {
                 id: pageSidebar
-                canvas: canvas
+                canvas: root.mainCanvas
                 daftar: !!root.daftar
                 onAddDaftarPage: { if (canvas.daftar("addClassPage", [root.notebookId]).plain) canvas.addPage(-1, "") }
                 Layout.fillHeight: true
@@ -559,8 +563,8 @@ Rectangle {
                 // The active tool's options.
                 ToolDrawer {
                     id: drawer
-                    canvas: canvas
-                    prefs: prefs
+                    canvas: root.mainCanvas
+                    prefs: root.toolPrefs
                     visible: !!(root.drawerOpen && !root.focusMode)
                     z: 9
                     y: 14
@@ -632,7 +636,7 @@ Rectangle {
                 Layout.preferredWidth: half
                 Layout.maximumWidth: half
                 sourceComponent: SidePane {
-                    prefs: prefs
+                    prefs: root.toolPrefs
                     mainNotebookId: root.notebookId
                     editor: root
                     onCloseRequested: root.toggleSplit()
