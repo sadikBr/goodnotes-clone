@@ -444,13 +444,15 @@ Rectangle {
                             id: moreBtn
                             iconName: "more"; tip: "More"; implicitWidth: 34; implicitHeight: 34
                             onClicked: menu.show(moreBtn, [
-                                { label: "Pen-only mode", checked: AppSettings.store.penOnly, action: () => AppSettings.store.penOnly = !AppSettings.store.penOnly },
-                                { label: "Focus mode", key: "F", action: () => root.focusMode = !root.focusMode },
-                                { label: root.sidebarShown ? "Hide pages" : "Show pages", key: "[", action: () => root.toggleSidebar() },
-                                { label: "Settings…", action: () => root.settingsRequested() },
-                                { label: "Keyboard shortcuts", key: "?", action: () => shortcuts.open() },
-                                { label: Theme.dark ? "Light mode" : "Dark mode", action: () => AppSettings.store.theme = Theme.dark ? "light" : "dark" }
-                            ])
+                                { icon: "stylus", label: "Pen-only mode", toggle: AppSettings.store.penOnly, action: () => AppSettings.store.penOnly = !AppSettings.store.penOnly },
+                                { icon: "focus", label: "Focus mode", key: "F", toggle: root.focusMode, action: () => root.focusMode = !root.focusMode },
+                                { separator: true },
+                                { icon: "sidebar", label: root.sidebarShown ? "Hide pages" : "Show pages", key: "[", action: () => root.toggleSidebar() },
+                                { icon: Theme.dark ? "sun" : "moon", label: Theme.dark ? "Light mode" : "Dark mode", action: () => AppSettings.store.theme = Theme.dark ? "light" : "dark" },
+                                { separator: true },
+                                { icon: "keyboard", label: "Shortcuts and gestures", key: "?", action: () => shortcuts.open() },
+                                { icon: "gear", label: "Settings…", action: () => root.settingsRequested() }
+                                ])
                         }
                     }
                 }
