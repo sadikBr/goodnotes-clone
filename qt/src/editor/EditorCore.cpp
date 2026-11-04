@@ -106,6 +106,21 @@ double EditorCore::nextZOf(const Els& els) {
   return m + 1;
 }
 
+const Rect& EditorCore::boxOf(const El& el) { return boxOfEl(el); }
+
+void EditorCore::setElementsJson(const QJsonArray& list) {
+  std::unordered_map<QString, ElPtr> old;
+  for (const ElPtr& e : elements()) old.emplace(e->id, e);
+  Els next;
+  for (const QJsonValue& v : list) {
+    El e = El::fromJson(v.toObject());
+    auto was = old.find(e.id);
+    if (was != old.end() && was->second->toJson() == e.toJson()) next.push_back(was->second);
+    else next.push_back(makeEl(std::move(e)));
+  }
+  elements() = std::move(next);
+}
+
 EditorCore::EditorCore(const QJsonArray& pageList) {
   for (const auto& v : pageList) pages.push_back({v.toObject(), std::nullopt, false});
   m_holdTimer.setSingleShot(true);

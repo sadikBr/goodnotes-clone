@@ -240,12 +240,12 @@ export function nationalHolidays(year: string): Holiday[] {
   const day = (yy: number, mm: number, dd: number): Holiday["from"] => `${yy}-${pad(mm)}-${pad(dd)}`;
   const one = (name: string, yy: number, mm: number, dd: number): Holiday => ({ name, from: day(yy, mm, dd), to: day(yy, mm, dd) });
   return [
-    one("ذكرى المسيرة الخضراء · Marche verte", y, 11, 6),
-    one("عيد الاستقلال · Fête de l'Indépendance", y, 11, 18),
-    one("رأس السنة الميلادية · Nouvel an", y + 1, 1, 1),
-    one("ذكرى تقديم وثيقة الاستقلال · Manifeste de l'Indépendance", y + 1, 1, 11),
-    one("رأس السنة الأمازيغية · Nouvel an amazigh", y + 1, 1, 14),
-    one("عيد الشغل · Fête du Travail", y + 1, 5, 1),
+    one("ذكرى المسيرة الخضراء", y, 11, 6),
+    one("عيد الاستقلال", y, 11, 18),
+    one("رأس السنة الميلادية", y + 1, 1, 1),
+    one("ذكرى تقديم وثيقة الاستقلال", y + 1, 1, 11),
+    one("رأس السنة الأمازيغية", y + 1, 1, 14),
+    one("عيد الشغل", y + 1, 5, 1),
   ];
 }
 
@@ -336,11 +336,11 @@ export interface Outline {
 }
 
 export const OUTLINES: Outline[] = [
-  { name: "درس · Leçon", lines: ["التمهيد · Mise en situation", "النشاط 1", "النشاط 2", "النشاط 3", "الخلاصة · Synthèse", "التقويم · Évaluation", "الواجب المنزلي · Devoir"] },
-  { name: "تمارين · Exercices", lines: ["تصحيح الواجب · Correction du devoir", "تمرين 1", "تمرين 2", "تمرين 3"] },
-  { name: "فرض محروس · Contrôle", lines: ["فرض محروس رقم …", "المدة: … · Durée", "المحاور: … · Thèmes"] },
-  { name: "تصحيح الفرض · Correction du contrôle", lines: ["تصحيح الفرض المحروس رقم …", "الأخطاء الشائعة · Erreurs fréquentes", "الدعم · Soutien"] },
-  { name: "دعم ومعالجة · Soutien", lines: ["التشخيص · Diagnostic", "أنشطة الدعم · Activités de soutien", "التقويم · Évaluation"] },
+  { name: "درس", lines: ["التمهيد", "النشاط 1", "النشاط 2", "النشاط 3", "الخلاصة", "التقويم", "الواجب المنزلي"] },
+  { name: "تمارين", lines: ["تصحيح الواجب", "تمرين 1", "تمرين 2", "تمرين 3"] },
+  { name: "فرض محروس", lines: ["فرض محروس رقم …", "المدة: …", "المحاور: …"] },
+  { name: "تصحيح الفرض", lines: ["تصحيح الفرض المحروس رقم …", "الأخطاء الشائعة", "الدعم"] },
+  { name: "دعم ومعالجة", lines: ["التشخيص", "أنشطة الدعم", "التقويم"] },
 ];
 
 /** An outline written down the activities column from row `row`, one line per row. */

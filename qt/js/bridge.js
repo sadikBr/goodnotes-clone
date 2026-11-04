@@ -6452,7 +6452,6 @@ var Inkleaf = (() => {
     var out = [];
     var z = 10;
     var base = { kind: "text", role: "daftar-field", font: "sans" };
-    out.push(__assign8(__assign8({}, base), { id: newId(), z: z++, x: p2.x + 30, y: p2.y + 186, w: p2.w - 60, text: "Cahier de textes", fontSize: 20, color: "#6b7280", align: "center" }));
     var rows = [
       { ar: "المؤسسة", fr: "Établissement", value: meta.school },
       { ar: "المادة", fr: "Matière", value: meta.subject },
@@ -6468,7 +6467,6 @@ var Inkleaf = (() => {
     rows.forEach(function(r2, i2) {
       var y2 = top + i2 * step;
       out.push(__assign8(__assign8({}, base), { id: newId(), z: z++, x: x2, y: y2, w: rw, text: r2.ar, fontSize: 13, color: "#6b7280" }));
-      out.push(__assign8(__assign8({}, base), { id: newId(), z: z++, x: x2, y: y2, w: rw, text: r2.fr, fontSize: 12, color: "#6b7280", align: "left" }));
       out.push(__assign8(__assign8({}, base), { id: newId(), z: z++, x: x2, y: y2 + 22, w: rw, text: r2.value, fontSize: 19, color: "#1f2937", bold: true, align: "center" }));
     });
     return out;
@@ -6580,12 +6578,12 @@ var Inkleaf = (() => {
       return { name, from: day(yy, mm, dd), to: day(yy, mm, dd) };
     };
     return [
-      one("ذكرى المسيرة الخضراء · Marche verte", y2, 11, 6),
-      one("عيد الاستقلال · Fête de l'Indépendance", y2, 11, 18),
-      one("رأس السنة الميلادية · Nouvel an", y2 + 1, 1, 1),
-      one("ذكرى تقديم وثيقة الاستقلال · Manifeste de l'Indépendance", y2 + 1, 1, 11),
-      one("رأس السنة الأمازيغية · Nouvel an amazigh", y2 + 1, 1, 14),
-      one("عيد الشغل · Fête du Travail", y2 + 1, 5, 1)
+      one("ذكرى المسيرة الخضراء", y2, 11, 6),
+      one("عيد الاستقلال", y2, 11, 18),
+      one("رأس السنة الميلادية", y2 + 1, 1, 1),
+      one("ذكرى تقديم وثيقة الاستقلال", y2 + 1, 1, 11),
+      one("رأس السنة الأمازيغية", y2 + 1, 1, 14),
+      one("عيد الشغل", y2 + 1, 5, 1)
     ];
   }
   function holidayElements(meta, w2, h3, z0) {
@@ -6682,11 +6680,11 @@ var Inkleaf = (() => {
     return out;
   }
   var OUTLINES = [
-    { name: "درس · Leçon", lines: ["التمهيد · Mise en situation", "النشاط 1", "النشاط 2", "النشاط 3", "الخلاصة · Synthèse", "التقويم · Évaluation", "الواجب المنزلي · Devoir"] },
-    { name: "تمارين · Exercices", lines: ["تصحيح الواجب · Correction du devoir", "تمرين 1", "تمرين 2", "تمرين 3"] },
-    { name: "فرض محروس · Contrôle", lines: ["فرض محروس رقم …", "المدة: … · Durée", "المحاور: … · Thèmes"] },
-    { name: "تصحيح الفرض · Correction du contrôle", lines: ["تصحيح الفرض المحروس رقم …", "الأخطاء الشائعة · Erreurs fréquentes", "الدعم · Soutien"] },
-    { name: "دعم ومعالجة · Soutien", lines: ["التشخيص · Diagnostic", "أنشطة الدعم · Activités de soutien", "التقويم · Évaluation"] }
+    { name: "درس", lines: ["التمهيد", "النشاط 1", "النشاط 2", "النشاط 3", "الخلاصة", "التقويم", "الواجب المنزلي"] },
+    { name: "تمارين", lines: ["تصحيح الواجب", "تمرين 1", "تمرين 2", "تمرين 3"] },
+    { name: "فرض محروس", lines: ["فرض محروس رقم …", "المدة: …", "المحاور: …"] },
+    { name: "تصحيح الفرض", lines: ["تصحيح الفرض المحروس رقم …", "الأخطاء الشائعة", "الدعم"] },
+    { name: "دعم ومعالجة", lines: ["التشخيص", "أنشطة الدعم", "التقويم"] }
   ];
   function outlineElements(lines2, row, w2, h3) {
     var L2 = lessonLayout(w2, h3);
@@ -9866,6 +9864,7 @@ var Inkleaf = (() => {
     addClassPage: () => addClassPage,
     create: () => create,
     currentClass: () => currentClass,
+    editorProxy: () => editorProxy,
     exportPages: () => exportPages,
     formValues: () => formValues,
     goToClass: () => goToClass,
@@ -10017,6 +10016,43 @@ var Inkleaf = (() => {
     }
     return to.concat(ar || Array.prototype.slice.call(from));
   };
+  function editorProxy(n2) {
+    var proxy = {
+      get pages() {
+        return JSON.parse(n2.pagesJson()).map(function(meta) {
+          return { meta };
+        });
+      },
+      get page() {
+        return JSON.parse(n2.pagesJson())[n2.active()];
+      },
+      get active() {
+        return n2.active();
+      },
+      activate: function(i2) {
+        return n2.activate(i2);
+      },
+      finishTextEdit: function() {
+        return n2.finishTextEdit();
+      },
+      load: function(i2) {
+        return JSON.parse(n2.elementsJson(i2));
+      },
+      get elements() {
+        return proxy.load(proxy.active);
+      },
+      set elements(els) {
+        n2.setElementsJson(JSON.stringify(els));
+      },
+      snapshot: function() {
+        return n2.snapshot();
+      },
+      changed: function() {
+        return n2.changed();
+      }
+    };
+    return proxy;
+  }
   function parseClasses(s2) {
     return __spreadArray13([], __read17(new Set(String(s2 || "").split(/[,;،\n]+/).map(function(c2) {
       return c2.trim();

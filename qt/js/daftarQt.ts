@@ -34,6 +34,37 @@ import { nextZ, type El } from "../../src/editor/model";
 import { refreshCoverThumbnail, setUpCover } from "../../src/cover";
 import type { EditorCore } from "./editorCore";
 
+/**
+ * The editor as the functions below use it, over the C++ editor's bridge
+ * (qt/src/editor/DaftarBridge.h): pages, their elements, the active page.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function editorProxy(n: any): EditorCore {
+  const proxy = {
+    get pages() {
+      return (JSON.parse(n.pagesJson()) as unknown[]).map((meta) => ({ meta }));
+    },
+    get page() {
+      return JSON.parse(n.pagesJson())[n.active()];
+    },
+    get active() {
+      return n.active() as number;
+    },
+    activate: (i: number) => n.activate(i),
+    finishTextEdit: () => n.finishTextEdit(),
+    load: (i: number) => JSON.parse(n.elementsJson(i)) as El[],
+    get elements() {
+      return proxy.load(proxy.active);
+    },
+    set elements(els: El[]) {
+      n.setElementsJson(JSON.stringify(els));
+    },
+    snapshot: () => n.snapshot(),
+    changed: () => n.changed(),
+  };
+  return proxy as unknown as EditorCore;
+}
+
 /** "1AC-2, 1AC-3 ; TC-1" → ["1AC-2", "1AC-3", "TC-1"] (no duplicates). */
 export function parseClasses(s: string): string[] {
   return [...new Set(String(s || "").split(/[,;،\n]+/).map((c) => c.trim()).filter(Boolean))].slice(0, 30);

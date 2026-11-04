@@ -92,6 +92,7 @@ qt_add_executable(inkleaf
   src/editor/Snap.h src/editor/Snap.cpp
   src/editor/Instrument.h src/editor/Instrument.cpp
   src/editor/EditorCore.h src/editor/EditorCore.cpp
+  src/editor/DaftarBridge.h
   src/tests/SelfTest.h src/tests/SelfTest.cpp
   src/tests/GeometryTests.cpp
   src/tests/TextAndSnapTests.cpp

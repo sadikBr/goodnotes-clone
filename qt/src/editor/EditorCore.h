@@ -73,6 +73,12 @@ public:
   void forgetAll();
   void setPages(const QJsonArray& pages);
   bool isHidden(int i, const QString& id) const { return i == active && m_hidden.contains(id); }
+  /// An element's bounds, worked out once.
+  static const Rect& boxOf(const El& el);
+  /// Replaces the active page's elements from their JSON (the daftar's
+  /// changes); unchanged ones are kept as they were.
+  void setElementsJson(const QJsonArray& els);
+  QVariantMap textFormatMap() const { return {{"bold", textFormat.bold}, {"italic", textFormat.italic}, {"align", textFormat.align}}; }
 
   // ------------------------------------------------------------ history and saving
   void undo();

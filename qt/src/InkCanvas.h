@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "Ink.h"
+#include "editor/EditorCore.h"
 
 class QSGNode;
 class QSGTexture;
@@ -184,7 +185,7 @@ public:
   bool laserTrail() const { return !m_laser.empty(); }
   /// The trail so far, in item coordinates (one list per stroke).
   const std::vector<std::vector<QPointF>>& laserRuns() const { return m_laser; }
-  QVariantMap textFormat() { return coreProp("textFormat").toVariant().toMap(); }
+  QVariantMap textFormat() { return m_ed ? m_ed->textFormatMap() : QVariantMap(); }
   /**
    * Runs Inkleaf.daftarQt.<fn>(core, ...args) for the daftar bar and does
    * what it asks: reload the pages, go to a page (and a line on it).
@@ -282,8 +283,6 @@ private:
   };
 
   // Script side
-  QJSValue core(const QString& method, const QJSValueList& args = {});
-  QJSValue coreProp(const QString& name);
   void pushToolState();
   void afterCore();  // syncs whatever the core changed
   void syncPage(int i);
@@ -339,7 +338,7 @@ private:
   QVariantMap m_instrument;
   double m_instrumentRev = -1;
 
-  QJSValue m_core;
+  std::unique_ptr<ed::EditorCore> m_ed;  // the editor for the open notebook
   double m_coreRev = -1, m_overlayRev = -1, m_selectionRev = -1;
   QVariantMap m_selection, m_editing;
 
@@ -358,7 +357,6 @@ private:
   QPointF m_glideTarget;
   double m_lastWheel = -1e9, m_wheelBoost = 1, m_wheelNotches = 0;
   bool m_dismissOnPress = false;  // missing PDF page thumbnails
-  QTimer m_timers;  // the scripts' timers (holding a stroke still)
   QTimer m_laserTick;
 
   Gesture m_g;

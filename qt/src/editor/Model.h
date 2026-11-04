@@ -66,8 +66,9 @@ struct El {
   bool isTextish() const { return kind == Kind::Text || kind == Kind::Sticky; }
   bool isBox() const { return kind == Kind::Text || kind == Kind::Sticky || kind == Kind::Image; }
   double rot() const { return rotation.value_or(0); }
-  /// The editor's JSON for it (what drawing and saving take).
-  QJsonObject toJson() const;
+  /// The editor's JSON for it (what drawing and saving take); a stroke's
+  /// points can be left out (saving writes them itself).
+  QJsonObject toJson(bool withPoints = true) const;
   static El fromJson(const QJsonObject& o);
 };
 

@@ -92,6 +92,16 @@ read their list from a data file instead of `src/fonts.ts`.
   and maths symbols, with their 24 tests ported; before the switch, script
   and Rust gave the same answers on 1,783 generated hand-drawn strokes (every
   shape, brace orientation and symbol). The editor calls them natively.
-- [ ] 6. Editor and its geometry (C++)
+- [ ] 6. Editor and its geometry (C++): `qt/src/editor/` (model, geometry,
+  lists, alignment guides, instruments with their 45 self-tests, and
+  `EditorCore`, the editor itself with its overlay). The canvas now runs on
+  it; the daftar script reaches it through `DaftarBridge` until step 7.
+  `inkleaf --compare-editor` runs 11 editing sessions (304 steps: ink,
+  shapes, erasing, the lasso, moving with guides, handles, turning, text,
+  sticky notes, undo, copying, pictures, handwriting to text, instruments,
+  holding a stroke still) through the script's editor and the C++ one and
+  compares everything the app shows after each step: identical. Left: delete
+  `editorCore.ts` and this check once the C++ editor has been used for a
+  while; the TypeScript geometry and model go with the daftar setup (step 7).
 - [ ] 7. Daftar and cover setup (Rust)
 - [ ] 8. Script engine removed

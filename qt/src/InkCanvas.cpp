@@ -1,6 +1,8 @@
 #include "draw/Elements.h"
 #include "InkCanvas.h"
 
+#include "editor/DaftarBridge.h"
+
 #include <QBuffer>
 #include <QCursor>
 #include <QFile>
@@ -83,7 +85,6 @@ void clearChildren(QSGNode* n) {
 /// Picture scales in steps of √2, so small zoom changes reuse what's drawn.
 double bucket(double s) { return std::clamp(std::pow(2.0, std::ceil(std::log2(std::max(s, 0.05)) * 2) / 2), 0.25, 16.0); }
 
-QJSValueList jsArgs(std::initializer_list<QJSValue> l) { return QJSValueList(l); }
 }  // namespace
 
 // --- setup ------------------------------------------------------------------------
@@ -144,14 +145,6 @@ InkCanvas::InkCanvas(QQuickItem* parent) : QQuickItem(parent) {
     renderPictures();
     update();
   });
-  m_timers.setInterval(30);
-  connect(&m_timers, &QTimer::timeout, this, [this] {
-    Js& js = Js::instance();
-    QJSValue g = js.engine().globalObject();
-    g.property("__runTimers").call();
-    if (!g.property("__timersPending").call().toBool()) m_timers.stop();
-    afterCore();
-  });
   m_laserTick.setInterval(16);
   connect(&m_laserTick, &QTimer::timeout, this, [this] {
     const double now = nowMs();
@@ -179,98 +172,73 @@ void InkCanvas::itemChange(ItemChange change, const ItemChangeData& value) {
 
 // --- the editor core ----------------------------------------------------------------------
 
-QJSValue InkCanvas::core(const QString& method, const QJSValueList& args) {
-  if (m_core.isUndefined() || m_core.isNull()) return {};
-  QJSValue f = m_core.property(method);
-  if (!f.isCallable()) return {};
-  static const bool trace = qEnvironmentVariableIsSet("INKLEAF_TRACE");
-  QElapsedTimer t;
-  if (trace) t.start();
-  QJSValue r = f.callWithInstance(m_core, args);
-  if (trace && t.nsecsElapsed() > 3e6) qInfo("core.%s %.1f ms", qPrintable(method), t.nsecsElapsed() / 1e6);
-  if (r.isError()) qWarning().noquote() << "editor:" << method << r.toString() << r.property("stack").toString();
-  return r;
-}
-
-QJSValue InkCanvas::coreProp(const QString& name) { return m_core.property(name); }
-
 void InkCanvas::pushToolState() {
-  if (m_core.isUndefined()) return;
-  Js& js = Js::instance();
-  m_core.setProperty("tool", m_tool);
-  m_core.setProperty("colors", js.toJs(QJsonObject::fromVariantMap(m_colors)));
-  m_core.setProperty("widths", js.toJs(QJsonObject::fromVariantMap(m_widths)));
-  m_core.setProperty("penStyle", m_penStyleName);
-  m_core.setProperty("streamline", m_smoothing);
-  m_core.setProperty("shapeKind", m_shapeKind);
-  m_core.setProperty("shapeFill", m_shapeFill);
-  m_core.setProperty("eraserMode", m_eraserMode);
-  m_core.setProperty("textFont", m_textFont);
-  m_core.setProperty("zoom", m_zoom);
-  m_core.setProperty("viewWidth", width());
+  if (!m_ed) return;
+  ed::EditorCore& c = *m_ed;
+  c.tool = m_tool;
+  for (auto it = m_colors.begin(); it != m_colors.end(); ++it) c.colors[it.key()] = it.value().toString();
+  for (auto it = m_widths.begin(); it != m_widths.end(); ++it) c.widths[it.key()] = it.value().toDouble();
+  c.penStyle = m_penStyleName;
+  c.streamline = m_smoothing;
+  c.shapeKind = m_shapeKind;
+  c.shapeFill = m_shapeFill;
+  c.eraserMode = m_eraserMode;
+  c.textFont = m_textFont;
+  c.zoom = m_zoom;
+  c.viewWidth = width();
 }
 
 void InkCanvas::afterCore() {
-  if (m_core.isUndefined()) return;
-  const double rev = coreProp("rev").toNumber();
-  if (rev != m_coreRev) {
-    m_coreRev = rev;
+  if (!m_ed) return;
+  ed::EditorCore& c = *m_ed;
+  if (double(c.rev) != m_coreRev) {
+    m_coreRev = double(c.rev);
     for (int i = 0; i < int(m_pages.size()); ++i)
       if (m_pages[i].synced) syncPage(i);
     emit historyChanged();
-    if (core("dirty").toBool()) m_saveTimer.start();
+    if (c.dirty()) m_saveTimer.start();
   }
-  const double orev = coreProp("overlayRev").toNumber();
-  if (orev != m_overlayRev) {
-    m_overlayRev = orev;
+  if (double(c.overlayRev) != m_overlayRev) {
+    m_overlayRev = double(c.overlayRev);
     m_overlayDirty = true;
   }
-  const double irev = coreProp("instrumentRev").toNumber();
-  if (irev != m_instrumentRev) {
-    m_instrumentRev = irev;
-    m_instrument = core("instrument").toVariant(QJSValue::ConvertJSObjects).toMap();
+  if (double(c.instrumentRev) != m_instrumentRev) {
+    m_instrumentRev = double(c.instrumentRev);
+    m_instrument = c.instrument();
     emit instrumentChanged();
   }
-  const double srev = coreProp("selectionRev").toNumber();
-  if (srev != m_selectionRev) {
-    m_selectionRev = srev;
+  if (double(c.selectionRev) != m_selectionRev) {
+    m_selectionRev = double(c.selectionRev);
     syncSelection();
   }
   // Selected items following the pointer.
-  QJSValue lt = core("liveTransform");
   QHash<QString, QTransform> next;
-  if (lt.isObject()) {
-    const QJSValue m = lt.property("m");
-    const QTransform t(m.property("a").toNumber(), m.property("b").toNumber(), m.property("c").toNumber(), m.property("d").toNumber(), m.property("e").toNumber(),
-                       m.property("f").toNumber());
-    const QJSValue ids = lt.property("ids");
-    const int n = ids.property("length").toInt();
-    for (int k = 0; k < n; ++k) next.insert(ids.property(k).toString(), t);
+  if (const auto lt = c.liveTransform()) {
+    const QTransform t(lt->m.a, lt->m.b, lt->m.c, lt->m.d, lt->m.e, lt->m.f);
+    for (const QString& id : lt->ids) next.insert(id, t);
   }
   if (next != m_liveTransform) {
     m_liveTransform = next;
     m_liveTransformDirty = true;
   }
-  const bool hidden = core("liveHidden").toBool();
+  const bool hidden = c.liveHidden();
   if (hidden != m_liveHidden) {
     m_liveHidden = hidden;
     m_liveChanged = true;
   }
-  if (Js::instance().engine().globalObject().property("__timersPending").call().toBool() && !m_timers.isActive()) m_timers.start();
   refresh();
 }
 
 void InkCanvas::syncSelection() {
-  m_selection = core("selectionInfo").toVariant(QJSValue::ConvertJSObjects).toMap();
+  m_selection = m_ed ? m_ed->selectionInfo() : QVariantMap();
   emit selectionChanged();
 }
 
 void InkCanvas::syncEditing() {
-  QJSValue e = coreProp("editing");
   QVariantMap next;
-  if (e.isObject()) {
-    next = e.toVariant(QJSValue::ConvertJSObjects).toMap();
-    next["page"] = int(coreProp("active").toInt());
+  if (m_ed && m_ed->editing()) {
+    next = m_ed->editing()->toJson().toVariantMap();
+    next["page"] = m_ed->active;
   }
   if (next != m_editing) {
     m_editing = next;
@@ -284,79 +252,54 @@ void InkCanvas::syncPage(int i) {
   QElapsedTimer timer;
   timer.start();
   Page& pg = m_pages[i];
-  Js& js = Js::instance();
-  // "id rev[ h]" per element, in z order.
-  const QString keys = core("sceneKeys", jsArgs({i})).toString();
-  const QStringList lines = keys.split('\n', Qt::SkipEmptyParts);
+  // What changed since the page's items were built (an element's rev
+  // changes when it does), in z order; hidden ones (being edited, or part
+  // of a gesture) left out.
   struct Want {
     QString id;
     double rev;
   };
   std::vector<Want> want;
-  want.reserve(size_t(lines.size()));
-  QStringList fetch;
-  for (const QString& line : lines) {
-    const QStringList f = line.split(' ');
-    if (f.size() < 2) continue;
-    if (f.size() > 2) continue;  // hidden (being edited, or part of a gesture)
-    const double rev = f[1].toDouble();
-    want.push_back({f[0], rev});
-    auto found = pg.byId.find(f[0]);
-    if (found == pg.byId.end() || found->second->rev != rev) fetch << f[0];
-  }
-  // The changed elements, with stroke points packed.
   std::unordered_map<QString, std::shared_ptr<Item>> fresh;
-  if (!fetch.isEmpty()) {
-    QJSValue ids = js.engine().newArray(uint(fetch.size()));
-    for (int k = 0; k < fetch.size(); ++k) ids.setProperty(quint32(k), fetch[k]);
-    QJSValue packed = core("packElements", {i, ids});
-    const QJsonArray meta = QJsonDocument::fromJson(packed.property("meta").toString().toUtf8()).array();
-    const QByteArray pts = packed.property("pts").toVariant().toByteArray();
-    const float* f = reinterpret_cast<const float*>(pts.constData());
-    const size_t nf = size_t(pts.size()) / sizeof(float);
-    size_t o = 0;
-    for (const auto& v : meta) {
-      const QJsonObject m = v.toObject();
-      auto it = std::make_shared<Item>();
-      it->id = m["id"].toString();
-      it->rev = m["rev"].toDouble();
-      const QString kind = m["kind"].toString();
-      const QJsonObject b = m["b"].toObject();
-      const QRectF box(b["x"].toDouble(), b["y"].toDouble(), b["w"].toDouble(), b["h"].toDouble());
-      if (kind == "stroke") {
-        const int n = m["n"].toInt();
+  const ed::Els& els = m_ed->load(i);
+  want.reserve(els.size());
+  int fetched = 0;
+  for (const ed::ElPtr& el : els) {
+    if (m_ed->isHidden(i, el->id)) continue;
+    const double rev = double(el->rev);
+    want.push_back({el->id, rev});
+    auto found = pg.byId.find(el->id);
+    if (found != pg.byId.end() && found->second->rev == rev) continue;
+    ++fetched;
+    auto it = std::make_shared<Item>();
+    it->id = el->id;
+    it->rev = rev;
+    const ed::Rect& b = ed::EditorCore::boxOf(*el);
+    const QRectF box(b.x, b.y, b.w, b.h);
+    if (el->kind == ed::Kind::Stroke) {
+      const QString style = el->style.value_or(QString());
+      const bool hl = el->tool == "highlighter";
+      if (hl || (style != "pencil" && style != "calligraphy")) {
+        // Pen and highlighter ink: a mesh, as when it was written.
         std::vector<ink::Point> p;
-        p.reserve(size_t(n));
-        for (int q = 0; q < n && o + 2 < nf; ++q, o += 3) p.push_back({f[o], f[o + 1], f[o + 2]});
-        const QString style = m["style"].toString();
-        const bool hl = m["tool"].toString() == "highlighter";
-        if (hl || (style != "pencil" && style != "calligraphy")) {
-          // Pen and highlighter ink: a mesh, as when it was written.
-          it->mesh = true;
-          const ink::Pen pen = ink::penFromName(style, hl);
-          it->tris = std::make_shared<ink::Mesh>();
-          ink::strokeMesh(p, pen, float(m["width"].toDouble(3)), m["smooth"].isUndefined() || m["smooth"].isNull() ? ink::kSmoothNormal : float(m["smooth"].toDouble()), *it->tris);
-          it->color = inkColor(JsCanvas::parseColor(m["color"].toString("#111827")), pen);
-        } else {
-          // Textured nibs: drawn by the web code.
-          QJsonObject d = m;
-          d.remove("n");
-          d.remove("b");
-          d.remove("rev");
-          QJsonArray arr;
-          for (const ink::Point& q : p) arr.append(QJsonArray{q.x, q.y, q.p});
-          d["points"] = arr;
-          if (d["smooth"].isNull()) d.remove("smooth");
-          it->data = d;
-          it->rect = box.adjusted(-6, -6, 6, 6);
-        }
+        p.reserve(el->points.size());
+        for (const ed::Pt& q : el->points) p.push_back({float(q[0]), float(q[1]), float(q[2])});
+        it->mesh = true;
+        const ink::Pen pen = ink::penFromName(style, hl);
+        it->tris = std::make_shared<ink::Mesh>();
+        ink::strokeMesh(p, pen, float(el->width), el->smooth ? float(*el->smooth) : ink::kSmoothNormal, *it->tris);
+        it->color = inkColor(JsCanvas::parseColor(el->color.isEmpty() ? QStringLiteral("#111827") : el->color), pen);
       } else {
-        it->data = m["el"].toObject();
-        const double pad = kind == "sticky" ? 18 : kind == "shape" ? 12 : 6;
-        it->rect = box.adjusted(-pad, -pad, pad, pad);
+        // Textured nibs: drawn as pictures.
+        it->data = el->toJson();
+        it->rect = box.adjusted(-6, -6, 6, 6);
       }
-      fresh.emplace(it->id, it);
+    } else {
+      it->data = el->toJson();
+      const double pad = el->kind == ed::Kind::Sticky ? 18 : el->kind == ed::Kind::Shape ? 12 : 6;
+      it->rect = box.adjusted(-pad, -pad, pad, pad);
     }
+    fresh.emplace(it->id, it);
   }
   std::vector<std::shared_ptr<Item>> items;
   items.reserve(want.size());
@@ -386,7 +329,7 @@ void InkCanvas::syncPage(int i) {
   pg.byId = std::move(byId);
   pg.synced = true;
   if (changed) pg.version++;
-  if (trace && timer.nsecsElapsed() > 3e6) qInfo("syncPage %d %.1f ms (%d fetched)", i, timer.nsecsElapsed() / 1e6, int(fetch.size()));
+  if (trace && timer.nsecsElapsed() > 3e6) qInfo("syncPage %d %.1f ms (%d fetched)", i, timer.nsecsElapsed() / 1e6, fetched);
 }
 
 // --- loading --------------------------------------------------------------------------
@@ -404,15 +347,16 @@ void InkCanvas::loadNotebook() {
   m_g = Gesture();
   m_scroll = {};
   m_fitPending = true;
-  m_core = QJSValue();
+  m_ed.reset();
   m_coreRev = m_overlayRev = m_selectionRev = -1;
   QJsonArray pages;
   if (!m_notebookId.isEmpty()) {
     QString err;
     pages = InkleafCore::instance()->callJson("pages", {{"notebookId", m_notebookId}}, &err).toArray();
     if (!err.isEmpty()) emit message(err, true);
-    Js& js = Js::instance();
-    m_core = js.call("createEditor", {js.toJs(pages)});
+    m_ed = std::make_unique<ed::EditorCore>(pages);
+    // Holding a stroke still turns it into a shape when the timer fires.
+    m_ed->onTimer = [this] { afterCore(); };
     pushToolState();
   }
   applyPages(pages);
@@ -462,7 +406,7 @@ void InkCanvas::reloadPages(bool elementsToo) {
   if (m_notebookId.isEmpty()) return;
   flush();
   if (elementsToo) {
-    core("forgetAll");
+    if (m_ed) m_ed->forgetAll();
     for (Page& p : m_pages) {
       for (auto& it : p.items) m_graveyard.push_back(it);
       p.items.clear();
@@ -473,7 +417,7 @@ void InkCanvas::reloadPages(bool elementsToo) {
   QString err;
   const QJsonArray pages = InkleafCore::instance()->callJson("pages", {{"notebookId", m_notebookId}}, &err).toArray();
   if (!err.isEmpty()) return emit message(err, true);
-  core("setPages", {Js::instance().toJs(pages)});
+  if (m_ed) m_ed->setPages(pages);
   applyPages(pages);
   for (int i = 0; i < int(m_pages.size()); ++i) m_pages[i].synced = false;
   m_coreRev = -1;
@@ -481,15 +425,19 @@ void InkCanvas::reloadPages(bool elementsToo) {
 }
 
 QVariant InkCanvas::daftarQuery(const QString& fn, const QVariantList& args) {
-  if (m_core.isUndefined()) return {};
+  if (!m_ed) return {};
   Js& js = Js::instance();
-  QJSValueList list{m_core};
+  // The script sees the editor through a small bridge (until step 7).
+  auto* bridge = new DaftarBridge(m_ed.get());
+  QJSEngine::setObjectOwnership(bridge, QJSEngine::CppOwnership);
+  const std::unique_ptr<DaftarBridge> keep(bridge);
+  QJSValueList list{js.call("daftarQt.editorProxy", {js.engine().newQObject(bridge)})};
   for (const QVariant& a : args) list << js.engine().toScriptValue(a);
   return js.awaitCall("daftarQt." + fn, list).toVariant(QJSValue::ConvertJSObjects);
 }
 
 QVariantMap InkCanvas::daftar(const QString& fn, const QVariantList& args) {
-  if (m_core.isUndefined()) return {};
+  if (!m_ed) return {};
   flush();
   QVariantMap r = daftarQuery(fn, args).toMap();
   if (r.value("reloadAll").toBool() || r.value("reload").toBool()) {
@@ -519,33 +467,23 @@ QVariantMap InkCanvas::daftar(const QString& fn, const QVariantList& args) {
 
 void InkCanvas::flush() {
   m_saveTimer.stop();
-  if (m_core.isUndefined()) return;
-  if (!m_editing.isEmpty()) {
-    // Typing continues: save the rest when the box closes.
-  }
-  QJSValue dirty = core("takeDirty");
-  const int n = dirty.property("length").toInt();
-  if (n == 0) return;
-  for (int k = 0; k < n; ++k) {
-    const int i = dirty.property(k).toInt();
+  if (!m_ed) return;
+  const std::vector<int> dirty = m_ed->takeDirty();
+  if (dirty.empty()) return;
+  for (const int i : dirty) {
     if (i < 0 || i >= int(m_pages.size())) continue;
-    // The stored form, written here (much faster than in the script engine):
-    // [{ id, kind, z, data: element }] with each stroke's points put back.
-    QJSValue packed = core("packForSave", {i});
-    const QJsonArray meta = QJsonDocument::fromJson(packed.property("meta").toString().toUtf8()).array();
-    const QByteArray pts = packed.property("pts").toVariant().toByteArray();
-    const float* f = reinterpret_cast<const float*>(pts.constData());
-    const size_t nf = size_t(pts.size()) / sizeof(float);
-    size_t o = 0;
+    // The stored form, written here: [{ id, kind, z, data: element }] with
+    // each stroke's points written short.
+    const ed::Els& els = m_ed->load(i);
     QByteArray out;
-    out.reserve(pts.size() * 3 + 4096);
+    out.reserve(4096);
     out += "{\"pageId\":";
     out += QJsonDocument(QJsonArray{m_pages[i].id}).toJson(QJsonDocument::Compact).mid(1).chopped(1);
     out += ",\"elements\":[";
     bool first = true;
-    auto num = [&](float v, int decimals) {
+    auto num = [&](double v, int decimals) {
       // Short decimals, like the web app's stored points.
-      QByteArray t = QByteArray::number(double(v), 'f', decimals);
+      QByteArray t = QByteArray::number(double(float(v)), 'f', decimals);
       if (t.contains('.')) {
         while (t.endsWith('0')) t.chop(1);
         if (t.endsWith('.')) t.chop(1);
@@ -553,9 +491,9 @@ void InkCanvas::flush() {
       if (t == "-0") t = "0";
       out += t;
     };
-    for (const auto& v : meta) {
-      QJsonObject el = v.toObject();
-      const int np = el.take("__n").toInt(-1);
+    for (const ed::ElPtr& e : els) {
+      const bool stroke = e->kind == ed::Kind::Stroke;
+      const QJsonObject el = e->toJson(false);
       if (!first) out += ',';
       first = false;
       out += "{\"id\":" + QJsonDocument(QJsonArray{el["id"]}).toJson(QJsonDocument::Compact).mid(1).chopped(1);
@@ -563,18 +501,18 @@ void InkCanvas::flush() {
       out += ",\"z\":" + QByteArray::number(el["z"].toDouble());
       out += ",\"data\":";
       QByteArray data = QJsonDocument(el).toJson(QJsonDocument::Compact);
-      if (np >= 0) {
+      if (stroke) {
         data.chop(1);  // the closing brace: the points go in before it
         out += data;
         out += data.endsWith('{') ? "\"points\":[" : ",\"points\":[";
-        for (int q = 0; q < np && o + 2 < nf; ++q, o += 3) {
+        for (size_t q = 0; q < e->points.size(); ++q) {
           if (q) out += ',';
           out += '[';
-          num(f[o], 2);
+          num(e->points[q][0], 2);
           out += ',';
-          num(f[o + 1], 2);
+          num(e->points[q][1], 2);
           out += ',';
-          num(f[o + 2], 3);
+          num(e->points[q][2], 3);
           out += ']';
         }
         out += "]}";
@@ -587,7 +525,7 @@ void InkCanvas::flush() {
     QString err;
     InkleafCore::instance()->callRaw("saveElements", out, &err);
     if (!err.isEmpty()) {
-      core("markDirty", {i});
+      m_ed->markDirty(i);
       emit message(err, true);
       continue;
     }
@@ -703,13 +641,18 @@ void InkCanvas::setPaper(int index, const QString& tmpl, const QString& color, b
   // The library picture follows the new paper.
   for (int i = 0; i < int(m_pages.size()); ++i)
     if (allPages || i == index) {
-      core("load", {i});
-      m_core.property("pages").property(i).setProperty("dirty", true);
+      m_ed->load(i);
+      m_ed->markDirty(i);
     }
   flush();
 }
 
-QJsonArray InkCanvas::sceneJson(int index) { return QJsonArray::fromVariantList(core("scene", jsArgs({index})).toVariant().toList()); }
+QJsonArray InkCanvas::sceneJson(int index) {
+  QJsonArray out;
+  if (!m_ed) return out;
+  for (const ed::ElPtr& e : m_ed->load(index)) out.append(e->toJson());
+  return out;
+}
 
 QString InkCanvas::pagePreview(int index, qreal scale) {
   if (index < 0 || index >= int(m_pages.size())) return {};
@@ -787,9 +730,9 @@ QVariantMap InkCanvas::exportPage(int index, qreal scale, bool jpeg) {
 void InkCanvas::setTool(const QString& t) {
   if (t == m_tool) return;
   m_tool = t;
-  if (!m_core.isUndefined()) {
-    core("finishTextEdit");
-    if (t != "lasso") core("clearSelection");
+  if (m_ed) {
+    m_ed->finishTextEdit();
+    if (t != "lasso") m_ed->clearSelection();
   }
   pushToolState();
   updateCursor();
@@ -860,33 +803,33 @@ void InkCanvas::setPenCursor(const QString& c) {
   emit settingsChanged();
 }
 void InkCanvas::showInstrument(const QString& kind) {
-  if (m_core.isUndefined()) return;
+  if (!m_ed) return;
   const bool shown = m_instrument.value("visible").toBool();
   if (kind.isEmpty() || (shown && m_instrument.value("kind").toString() == kind)) {
-    core("hideInstrument");
+    m_ed->hideInstrument();
   } else {
     // In the middle of the view, on the page in view.
     const int pi = currentPage();
-    core("activate", {pi});
+    m_ed->activate(pi);
     QPointF c = toPageOf(pi, QPointF(width() / 2, height() / 2));
     if (pi < int(m_pages.size())) c = QPointF(std::clamp<qreal>(c.x(), 0, m_pages[pi].w), std::clamp<qreal>(c.y(), 0, m_pages[pi].h));
-    if (shown) core("hideInstrument");
-    core("showInstrument", {kind, c.x(), c.y()});
+    if (shown) m_ed->hideInstrument();
+    m_ed->showInstrument(kind, c.x(), c.y());
   }
   afterCore();
 }
 
 void InkCanvas::placeInstrument(qreal cx, qreal cy, qreal angle) {
-  core("placeInstrument", {cx, cy, angle});
+  if (m_ed) m_ed->placeInstrument(cx, cy, angle);
   afterCore();
 }
 
 void InkCanvas::setInstrumentArm(int arm, qreal degrees) {
-  core("setArm", {arm, degrees});
+  if (m_ed) m_ed->setArm(arm, degrees);
   afterCore();
 }
 
-bool InkCanvas::instrumentContains(qreal x, qreal y) { return core("instrumentContains", {x, y}).toBool(); }
+bool InkCanvas::instrumentContains(qreal x, qreal y) { return m_ed && m_ed->instrumentContains(x, y); }
 
 QPointF InkCanvas::itemToPage(QPointF p) const { return toPageOf(activePage(), p); }
 
@@ -936,65 +879,65 @@ void InkCanvas::updateCursor() {
 
 // --- editing commands --------------------------------------------------------------------
 
-bool InkCanvas::canUndo() const { return !m_core.isUndefined() && m_core.property("undoStack").property("length").toInt() > 0; }
-bool InkCanvas::canRedo() const { return !m_core.isUndefined() && m_core.property("redoStack").property("length").toInt() > 0; }
+bool InkCanvas::canUndo() const { return m_ed && m_ed->canUndo(); }
+bool InkCanvas::canRedo() const { return m_ed && m_ed->canRedo(); }
 
 void InkCanvas::undo() {
-  core("undo");
+  if (m_ed) m_ed->undo();
   syncEditing();
   afterCore();
 }
 void InkCanvas::redo() {
-  core("redo");
+  if (m_ed) m_ed->redo();
   syncEditing();
   afterCore();
 }
 void InkCanvas::deleteSelection() {
-  core("deleteSelection");
+  if (m_ed) m_ed->deleteSelection();
   afterCore();
 }
 void InkCanvas::duplicateSelection() {
-  core("duplicateSelection");
+  if (m_ed) m_ed->duplicateSelection();
   afterCore();
 }
-int InkCanvas::copySelection() { return core("copySelection").toInt(); }
+int InkCanvas::copySelection() { return m_ed ? m_ed->copySelection() : 0; }
 int InkCanvas::cutSelection() {
-  const int n = core("cutSelection").toInt();
+  const int n = m_ed ? m_ed->cutSelection() : 0;
   afterCore();
   return n;
 }
 int InkCanvas::paste() {
-  const int n = core("pasteClipboard").toInt();
+  const int n = m_ed ? m_ed->pasteClipboard() : 0;
   if (n) setTool("lasso");
   afterCore();
   return n;
 }
 void InkCanvas::selectAll() {
   setTool("lasso");
-  core("selectAll");
+  if (m_ed) m_ed->selectAll();
   afterCore();
 }
 void InkCanvas::clearSelection() {
-  core("clearSelection");
+  if (m_ed) m_ed->clearSelection();
   afterCore();
 }
 void InkCanvas::recolorSelection(const QString& color) {
-  core("recolorSelection", {color});
+  if (m_ed) m_ed->recolorSelection(color);
   afterCore();
 }
 void InkCanvas::styleSelection(const QVariantMap& change) {
-  core("styleSelectedText", {Js::instance().toJs(QJsonObject::fromVariantMap(change))});
+  if (m_ed) m_ed->styleSelectedText(change);
   afterCore();
 }
 void InkCanvas::changeShape(const QString& change, qreal value) {
-  core("updateSelectedShape", {change, value});
+  if (m_ed) m_ed->updateSelectedShape(change, value);
   afterCore();
 }
 
-QVariantList InkCanvas::selectedInkStrokes() { return core("selectedInkStrokes").toVariant(QJSValue::ConvertJSObjects).toList(); }
+QVariantList InkCanvas::selectedInkStrokes() { return m_ed ? m_ed->selectedInkStrokes() : QVariantList(); }
 
 bool InkCanvas::applyFontToInk(const QString& text, const QString& font, bool keepInk) {
-  const bool done = core("inkToText", {QJSValue(text), QJSValue(font), QJSValue(keepInk)}).toBool();
+  const bool done = m_ed && m_ed->inkToText(text, font, keepInk);
   syncSelection();
   afterCore();
   if (done) emit message("Handwriting replaced with text. Use the font menu above it to try other fonts, or Ctrl+Z to undo", false);
@@ -1016,29 +959,30 @@ void InkCanvas::insertImage(const QString& fileUrl) {
   else if (fmt == "webp") mime = "image/webp";
   const QString src = "data:" + mime + ";base64," + QString::fromLatin1(bytes.toBase64());
   const int pi = currentPage();
-  core("activate", {pi});
+  if (!m_ed) return;
+  m_ed->activate(pi);
   const QPointF c = toPageOf(pi, QPointF(width() / 2, height() / 2));
   setTool("lasso");
-  core("insertImage", {src, img.width(), img.height(), c.x(), c.y()});
+  m_ed->insertImage(src, img.width(), img.height(), c.x(), c.y());
   afterCore();
 }
 
 void InkCanvas::updateEdit(const QString& text) {
-  core("updateEdit", {text});
+  if (m_ed) m_ed->updateEdit(text);
   m_editing["text"] = text;
 }
 
-QVariantMap InkCanvas::continueList(const QString& text, int caret) { return core("continueList", {text, caret}).toVariant(QJSValue::ConvertJSObjects).toMap(); }
+QVariantMap InkCanvas::continueList(const QString& text, int caret) { return ed::continueListFor(text, caret); }
 
 void InkCanvas::editFormat(const QVariantMap& change) {
-  core("applyFormat", {Js::instance().toJs(QJsonObject::fromVariantMap(change))});
+  if (m_ed) m_ed->applyFormat(change);
   if (change.contains("font")) m_textFont = change["font"].toString();
   syncEditing();
   emit toolStateChanged();
 }
 
 void InkCanvas::finishEdit() {
-  core("finishTextEdit");
+  if (m_ed) m_ed->finishTextEdit();
   syncEditing();
   afterCore();
 }
@@ -1058,7 +1002,7 @@ void InkCanvas::layoutPages() {
 
 void InkCanvas::geometryChange(const QRectF& n, const QRectF& o) {
   QQuickItem::geometryChange(n, o);
-  if (!m_core.isUndefined()) m_core.setProperty("viewWidth", n.width());
+  if (m_ed) m_ed->viewWidth = n.width();
   if (m_fitPending && n.width() > 0 && !m_pages.empty()) fitWidth();
   clampScroll();
   emit viewChanged();
@@ -1126,7 +1070,7 @@ int InkCanvas::currentPage() const {
   return std::max(0, i);
 }
 
-int InkCanvas::activePage() const { return m_core.isUndefined() ? 0 : m_core.property("active").toInt(); }
+int InkCanvas::activePage() const { return m_ed ? m_ed->active : 0; }
 
 void InkCanvas::zoomAt(qreal z, QPointF anchor) {
   z = std::clamp(z, kMinZoom, kMaxZoom);
@@ -1182,7 +1126,7 @@ void InkCanvas::refresh() {
 }
 
 bool InkCanvas::prefetchStep() {
-  if (m_core.isUndefined() || m_pages.empty() || m_g.kind != Gesture::None || m_scrollGlide.isActive()) return false;
+  if (!m_ed || m_pages.empty() || m_g.kind != Gesture::None || m_scrollGlide.isActive()) return false;
   const QPointF o = origin();
   const qreal screen = height() / m_zoom;
   const qreal viewTop = -o.y() / m_zoom, viewBottom = (height() - o.y()) / m_zoom;
@@ -1234,7 +1178,7 @@ bool InkCanvas::prefetchStep() {
 
 void InkCanvas::updatePolish() {
   // GUI thread, before the frame: elements and pictures for pages coming into view.
-  if (m_core.isUndefined()) return;
+  if (!m_ed) return;
   static const bool trace = qEnvironmentVariableIsSet("INKLEAF_TRACE");
   QElapsedTimer pt;
   pt.start();
@@ -1273,23 +1217,21 @@ void InkCanvas::updatePolish() {
     m_overlayDirty = false;
     m_overlayImg = QImage();
     m_overlayPage = -1;
-    const int pi = coreProp("active").toInt();
-    QJSValue b = core("overlayBounds");
-    if (b.isObject() && pi >= 0 && pi < int(m_pages.size())) {
+    const int pi = m_ed->active;
+    const auto b = m_ed->overlayBounds();
+    if (b && pi >= 0 && pi < int(m_pages.size())) {
       const Page& pg = m_pages[pi];
       // Only what's on screen.
       const QRectF view(toPageOf(pi, QPointF(0, 0)), toPageOf(pi, QPointF(width(), height())));
-      const QRectF r = QRectF(b.property("x").toNumber(), b.property("y").toNumber(), b.property("w").toNumber(), b.property("h").toNumber()).intersected(view.adjusted(-20, -20, 20, 20));
+      const QRectF r = QRectF(b->x, b->y, b->w, b->h).intersected(view.adjusted(-20, -20, 20, 20));
       Q_UNUSED(pg);
       if (!r.isEmpty()) {
         const double dpr = window() ? window()->effectiveDevicePixelRatio() : 1.0;
         const double s = m_zoom * dpr;
-        Js& js = Js::instance();
-        auto* canvas = new JsCanvas(int(std::ceil(r.width() * s)), int(std::ceil(r.height() * s)));
-        QJSValue ctx = js.engine().newQObject(canvas);
-        canvas->setTransform(s, 0, 0, s, -r.x() * s, -r.y() * s);
-        core("drawOverlay", {ctx, pi});
-        m_overlayImg = canvas->image();
+        JsCanvas canvas(int(std::ceil(r.width() * s)), int(std::ceil(r.height() * s)));
+        canvas.setTransform(s, 0, 0, s, -r.x() * s, -r.y() * s);
+        m_ed->drawOverlay(canvas, pi);
+        m_overlayImg = canvas.image();
         m_overlayRect = r;
         m_overlayPage = pi;
       }
@@ -1384,7 +1326,7 @@ void InkCanvas::renderPictures(bool missingOnly) {
 bool InkCanvas::navigatesOnly(bool stylus) const { return m_penOnly && !stylus && m_tool != "laser"; }
 
 void InkCanvas::press(QPointF s, float pressure, bool stylus, const QString& toolOverride, bool touch, Qt::KeyboardModifiers mods) {
-  if (m_core.isUndefined()) return;
+  if (!m_ed) return;
   m_scrollGlide.stop();
   m_g = Gesture();
   if (m_dismissOnPress) {
@@ -1416,8 +1358,8 @@ void InkCanvas::press(QPointF s, float pressure, bool stylus, const QString& too
   }
   const int pi = pageAt(s);
   if (pi < 0) {
-    if (m_tool == "lasso") core("clearSelection");
-    core("finishTextEdit");
+    if (m_tool == "lasso") if (m_ed) m_ed->clearSelection();
+    if (m_ed) m_ed->finishTextEdit();
     syncEditing();
     afterCore();
     return;
@@ -1425,7 +1367,7 @@ void InkCanvas::press(QPointF s, float pressure, bool stylus, const QString& too
   if (!m_pages[pi].synced) syncPage(pi);
   const QPointF p = toPageOf(pi, s);
   m_g.page = pi;
-  const QString r = core("down", {pi, p.x(), p.y(), pressure, nowMs(), tool, bool(mods & Qt::ShiftModifier)}).toString();
+  const QString r = m_ed->down(pi, p.x(), p.y(), pressure, nowMs(), tool, bool(mods & Qt::ShiftModifier));
   m_g.kind = Gesture::Core;
   if (r == "draw") {
     m_g.kind = Gesture::Draw;
@@ -1469,7 +1411,7 @@ void InkCanvas::drag(QPointF s, float pressure, bool stylus, Qt::KeyboardModifie
       return;
     case Gesture::Core: {
       const QPointF p = toPageOf(m_g.page, s);
-      core("move", {p.x(), p.y(), pressure, nowMs(), bool(mods & Qt::ShiftModifier), bool(mods & Qt::AltModifier)});
+      m_ed->move(p.x(), p.y(), pressure, nowMs(), bool(mods & Qt::ShiftModifier), bool(mods & Qt::AltModifier));
       if (m_tool == "eraser" || m_g.kind == Gesture::Core) m_hover = s;
       afterCore();
       return;
@@ -1478,7 +1420,7 @@ void InkCanvas::drag(QPointF s, float pressure, bool stylus, Qt::KeyboardModifie
       QPointF p = toPageOf(m_g.page, s);
       if (m_liveHidden) {
         // A refined shape follows the pen (rotate, resize, move).
-        core("move", {p.x(), p.y(), pressure, nowMs(), bool(mods & Qt::ShiftModifier), false});
+        m_ed->move(p.x(), p.y(), pressure, nowMs(), bool(mods & Qt::ShiftModifier), false);
         afterCore();
         return;
       }
@@ -1493,7 +1435,7 @@ void InkCanvas::drag(QPointF s, float pressure, bool stylus, Qt::KeyboardModifie
       m_g.pts.push_back({float(p.x()), float(p.y()), pr});
       ink::strokeMesh(m_g.pts, m_g.pen, m_g.width, m_g.pen == ink::Pen::Ballpoint && m_tool == "shape" ? 0.f : float(m_smoothing), *m_g.mesh);
       m_liveChanged = true;
-      core("move", {p.x(), p.y(), pr, nowMs(), bool(mods & Qt::ShiftModifier), false});
+      m_ed->move(p.x(), p.y(), pr, nowMs(), bool(mods & Qt::ShiftModifier), false);
       afterCore();
       return;
     }
@@ -1515,7 +1457,7 @@ void InkCanvas::release() {
     emit laserChanged();
     return;
   }
-  if (k == Gesture::Core || k == Gesture::Draw) core("up");
+  if ((k == Gesture::Core || k == Gesture::Draw) && m_ed) m_ed->up();
   m_g = Gesture();
   m_liveChanged = true;
   afterCore();
@@ -1537,7 +1479,7 @@ bool InkCanvas::eventFilter(QObject* watched, QEvent* event) {
     if (!inside || !isVisible()) return false;
     emit penUsed();
     if (m_g.touch && m_palmRejection) {
-      core("cancel");
+      if (m_ed) m_ed->cancel();
       m_g = Gesture();
     }
     press(local, curved(te->pressure()), true, override, false, te->modifiers());
@@ -1596,11 +1538,11 @@ void InkCanvas::hoverMoveEvent(QHoverEvent* e) {
     emit laserChanged();
   }
   if (m_tool == "eraser") update();
-  if (m_tool == "lasso" && !m_core.isUndefined()) {
+  if (m_tool == "lasso" && m_ed) {
     int pi = -1;
     const QPointF p = toPage(e->position(), &pi);
     if (pi == activePage()) {
-      const QString c = core("cursorAt", {p.x(), p.y()}).toString();
+      const QString c = m_ed->cursorAt(p.x(), p.y());
       setCursor(c == "move" ? Qt::SizeAllCursor : c == "ns" ? Qt::SizeVerCursor : c == "ew" ? Qt::SizeHorCursor : c == "nwse" ? Qt::SizeFDiagCursor : c == "nesw" ? Qt::SizeBDiagCursor
                 : c == "rotate" || c == "crosshair" ? Qt::CrossCursor : Qt::ArrowCursor);
     }
@@ -1669,7 +1611,7 @@ void InkCanvas::touchEvent(QTouchEvent* e) {
   if (pts.size() >= 2) {
     // Two fingers: pinch to zoom and move (a second finger cancels a touch stroke).
     if (m_g.kind == Gesture::Draw || m_g.kind == Gesture::Core) {
-      core("cancel");
+      if (m_ed) m_ed->cancel();
       m_g = Gesture();
       afterCore();
     }

@@ -127,7 +127,7 @@ El El::fromJson(const QJsonObject& o) {
   return e;
 }
 
-QJsonObject El::toJson() const {
+QJsonObject El::toJson(bool withPoints) const {
   QJsonObject o = extra;
   o["id"] = id;
   o["z"] = z;
@@ -138,9 +138,11 @@ QJsonObject El::toJson() const {
       if (style) o["style"] = *style;
       o["color"] = color;
       o["width"] = width;
-      QJsonArray pts;
-      for (const Pt& p : points) pts.append(QJsonArray{p[0], p[1], p[2]});
-      o["points"] = pts;
+      if (withPoints) {
+        QJsonArray pts;
+        for (const Pt& p : points) pts.append(QJsonArray{p[0], p[1], p[2]});
+        o["points"] = pts;
+      }
       if (smooth) o["smooth"] = *smooth;
       break;
     }
