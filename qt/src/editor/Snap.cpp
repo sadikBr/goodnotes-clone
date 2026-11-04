@@ -17,12 +17,16 @@ bool pairs(const QString& anchor, const QString& target) {
   if (anchor == "left") return target == "left" || target == "margin";
   if (anchor == "right") return target == "right";
   if (anchor == "center") return target == "center" || target == "pagecenter";
+  if (anchor == "middle") return target == "middle" || target == "pagemiddle";
+  if (anchor == "boxleft" || anchor == "boxright" || anchor == "boxtop" || anchor == "boxbottom") return target == anchor;
   return false;
 }
 
 QString label(const QString& t) {
   static const QHash<QString, QString> l = {{"baseline", "Baseline"}, {"mid", "Text centre"}, {"left", "Left edge"},  {"right", "Right edge"},     {"center", "Centre"},
-                                            {"rule", "On the line"},  {"rulemid", "Centred in line"}, {"margin", "Margin"}, {"pagecenter", "Page centre"}};
+                                            {"rule", "On the line"},  {"rulemid", "Centred in line"}, {"margin", "Margin"}, {"pagecenter", "Page centre"},
+                                            {"middle", "Middle"}, {"pagemiddle", "Page middle"}, {"boxleft", "Left edges"}, {"boxright", "Right edges"},
+                                            {"boxtop", "Top edges"}, {"boxbottom", "Bottom edges"}};
   return l.value(t);
 }
 
@@ -46,7 +50,9 @@ SnapResult snapMove(const std::vector<Anchor>& anchors, const std::vector<Target
   const auto oy = bestOffset(ys, targets, dy, threshold);
   const double ndx = dx + ox.value_or(0), ndy = dy + oy.value_or(0);
   SnapResult out{ndx, ndy, {}};
-  QSet<QString> seen;
+  // One guide per line (a centred title and the page centre on the same
+  // line: one guide, the page's name on it, long enough for both).
+  QHash<QString, size_t> line;
   for (const Anchor& a : anchors) {
     const double delta = a.axis == 'x' ? ndx : ndy;
     const double shift = a.axis == 'x' ? ndy : ndx;  // the span runs along the other axis
@@ -54,10 +60,17 @@ SnapResult snapMove(const std::vector<Anchor>& anchors, const std::vector<Target
     for (const Target& t : targets) {
       if (t.axis != a.axis || !pairs(a.kind, t.kind)) continue;
       if (std::abs(t.value - (a.value + delta)) > 0.5) continue;
-      const QString key = QString("%1:%2:%3").arg(t.axis).arg(t.value, 0, 'f', 1).arg(t.kind);
-      if (seen.contains(key)) continue;
-      seen.insert(key);
-      Guide g{t.axis, t.value, std::min(a.from + shift, t.from), std::max(a.to + shift, t.to), label(t.kind), 0, 0};
+      const QString key = QString("%1:%2").arg(t.axis).arg(t.value, 0, 'f', 1);
+      const double from = std::min(a.from + shift, t.from), to = std::max(a.to + shift, t.to);
+      if (auto it = line.find(key); it != line.end()) {
+        Guide& g = out.guides[*it];
+        g.from = std::min(g.from, from);
+        g.to = std::max(g.to, to);
+        if (t.kind.startsWith("page") || t.kind.startsWith("rule") || t.kind == "margin") g.label = label(t.kind);
+        continue;
+      }
+      line.insert(key, out.guides.size());
+      Guide g{t.axis, t.value, from, to, label(t.kind), 0, 0};
       if (a.axis == 'y') {
         g.labelX = a.to + shift + 8;
         g.labelY = t.value;
@@ -77,7 +90,14 @@ std::vector<Target> paperTargets(const std::vector<double>& rules, double spanFr
   for (size_t i = 1; i < rules.size(); i++) out.push_back({'y', "rulemid", (rules[i - 1] + rules[i]) / 2, spanFrom, spanTo});
   if (hasMargin) out.push_back({'x', "margin", margin, 0, pageH});
   out.push_back({'x', "pagecenter", pageW / 2, 0, pageH});
+  out.push_back({'y', "pagemiddle", pageH / 2, 0, pageW});
   return out;
+}
+
+std::vector<Anchor> boxAnchors(const Rect& r) {
+  const double x1 = r.x + r.w, y1 = r.y + r.h;
+  return {{'x', "boxleft", r.x, r.y, y1}, {'x', "center", r.x + r.w / 2, r.y, y1}, {'x', "boxright", x1, r.y, y1},
+          {'y', "boxtop", r.y, r.x, x1},  {'y', "middle", r.y + r.h / 2, r.x, x1}, {'y', "boxbottom", y1, r.x, x1}};
 }
 
 std::vector<Anchor> textAnchors(const El& el) {

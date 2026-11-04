@@ -991,9 +991,24 @@ void EditorCore::buildSnap(const Els& moving) {
   Els texts;
   for (const ElPtr& el : moving)
     if (isPlainText(*el)) texts.push_back(el);
-  if (texts.empty()) return;
   QSet<QString> ids;
   for (const ElPtr& el : moving) ids.insert(el->id);
+  if (texts.empty()) {
+    // Anything else: its box, against the page's centre and middle and the
+    // boxes of the other things on the page (the nearest few hundred).
+    const auto box = selectionBounds();
+    if (!box || moving.empty()) return;
+    std::vector<Target> targets = paperTargets({}, 0, 0, false, 0, pageWidth(), pageHeight());
+    int n = 0;
+    for (const ElPtr& el : elements()) {
+      if (ids.contains(el->id) || ++n > 400) continue;
+      for (const Anchor& a : boxAnchors(bounds(*el))) targets.push_back(a);
+    }
+    m_g.snapping = true;
+    m_g.anchors = boxAnchors(*box);
+    m_g.targets = std::move(targets);
+    return;
+  }
   std::vector<Target> targets;
   for (const ElPtr& el : elements())
     if (!ids.contains(el->id) && isPlainText(*el))
