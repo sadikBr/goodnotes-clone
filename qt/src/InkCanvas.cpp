@@ -1,7 +1,7 @@
 #include "draw/Elements.h"
 #include "InkCanvas.h"
 
-#include "editor/DaftarBridge.h"
+#include "daftar/DaftarEditor.h"
 
 #include <QBuffer>
 #include <QCursor>
@@ -426,14 +426,7 @@ void InkCanvas::reloadPages(bool elementsToo) {
 
 QVariant InkCanvas::daftarQuery(const QString& fn, const QVariantList& args) {
   if (!m_ed) return {};
-  Js& js = Js::instance();
-  // The script sees the editor through a small bridge (until step 7).
-  auto* bridge = new DaftarBridge(m_ed.get());
-  QJSEngine::setObjectOwnership(bridge, QJSEngine::CppOwnership);
-  const std::unique_ptr<DaftarBridge> keep(bridge);
-  QJSValueList list{js.call("daftarQt.editorProxy", {js.engine().newQObject(bridge)})};
-  for (const QVariant& a : args) list << js.engine().toScriptValue(a);
-  return js.awaitCall("daftarQt." + fn, list).toVariant(QJSValue::ConvertJSObjects);
+  return daftar::runInEditor(*m_ed, fn, args);
 }
 
 QVariantMap InkCanvas::daftar(const QString& fn, const QVariantList& args) {

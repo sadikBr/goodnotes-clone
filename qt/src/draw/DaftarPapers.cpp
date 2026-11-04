@@ -370,10 +370,20 @@ const QHash<QString, QString>& profileSlots() {
 
 // --- drawing ------------------------------------------------------------------------
 
+/// Slots by name, remembering the order they were found in.
+struct SlotMap {
+  QHash<QString, Slot> map;
+  QStringList order;
+  Slot& operator[](const QString& k) {
+    if (!map.contains(k)) order << k;
+    return map[k];
+  }
+};
+
 /// Draws a daftar page and returns the slots where its values go.
-QHash<QString, Slot> drawPage(JsCanvas& c, const QString& t, double w, double h) {
+SlotMap drawPage(JsCanvas& c, const QString& t, double w, double h) {
   const QString accent = accentOf(t);
-  QHash<QString, Slot> out;
+  SlotMap out;
   const double mid = w / 2;
   if (t == "daftar-title") {
     c.setStroke(tint(accent, 0.35));
@@ -579,14 +589,70 @@ QHash<QString, Slot> daftarSlots(const QString& tmpl, double w, double h) {
   JsCanvas scratch(1, 1);
   const Fit f = fit(w, h);
   QHash<QString, Slot> out;
-  const QHash<QString, Slot> found = drawPage(scratch, tmpl, A4W, A4H);
-  for (auto it = found.begin(); it != found.end(); ++it) out[it.key()] = {f.ox + it->x * f.k, f.oy + it->y * f.k, it->w * f.k};
+  const SlotMap found = drawPage(scratch, tmpl, A4W, A4H);
+  for (auto it = found.map.begin(); it != found.map.end(); ++it) out[it.key()] = {f.ox + it->x * f.k, f.oy + it->y * f.k, it->w * f.k};
+  return out;
+}
+
+std::vector<std::pair<QString, Slot>> daftarSlotList(const QString& tmpl, double w, double h) {
+  JsCanvas scratch(1, 1);
+  const Fit f = fit(w, h);
+  const SlotMap found = drawPage(scratch, tmpl, A4W, A4H);
+  std::vector<std::pair<QString, Slot>> out;
+  for (const QString& k : found.order) {
+    const Slot& s = found.map[k];
+    out.push_back({k, {f.ox + s.x * f.k, f.oy + s.y * f.k, s.w * f.k}});
+  }
   return out;
 }
 
 TableLayout holidaysLayout(double w, double h) {
   const HolidaysBase Hb = holidaysBase(A4W, A4H);
   return scaleTable({columns(holidayCols(), M, A4W - M), Hb.top + Hb.headH, Hb.rowH, Hb.rows}, w, h);
+}
+
+const LessonLayout::Col& LessonLayout::col(const QString& key) const {
+  for (const Col& c : cols)
+    if (c.key == key) return c;
+  return cols.front();
+}
+
+LessonLayout lessonLayout(double w, double h) {
+  const LessonBase L = lessonBase(A4W, A4H);
+  const Fit f = fit(w, h);
+  LessonLayout out;
+  for (const LessonCol& c : L.cols) out.cols.push_back({c.key, f.ox + c.x0 * f.k, f.ox + c.x1 * f.k});
+  out.x0 = f.ox + L.x0 * f.k;
+  out.x1 = f.ox + L.x1 * f.k;
+  out.bodyTop = f.oy + L.bodyTop * f.k;
+  out.bodyBottom = f.oy + L.bodyBottom * f.k;
+  out.step = L.step * f.k;
+  out.rows = L.rows;
+  return out;
+}
+
+double TimetableLayout::yOf(const QString& hhmm) const {
+  // As the script read it: hours, then minutes (missing ones are 0).
+  const QStringList p = hhmm.split(':');
+  bool ok = true;
+  const double hh = p.value(0).toDouble(&ok);
+  const double mm = p.size() > 1 ? p[1].toDouble() : 0;
+  const double t = std::min(to, std::max(from, (ok ? hh : 0) + mm / 60));
+  return oy + (bodyTop + ((t - from) / (to - from)) * (bottom - bodyTop)) * k;
+}
+
+TimetableLayout timetableLayout(double w, double h) {
+  const TimetableBase T = timetableBase(A4W, A4H);
+  const Fit f = fit(w, h);
+  TimetableLayout out;
+  for (int i = 0; i < int(T.days.size()); ++i) out.days.push_back({i + 1, f.ox + T.days[i].x0 * f.k, f.ox + T.days[i].x1 * f.k});
+  out.k = f.k;
+  out.oy = f.oy;
+  out.bodyTop = T.bodyTop;
+  out.bottom = T.bottom;
+  out.from = T.from;
+  out.to = T.to;
+  return out;
 }
 
 std::vector<TableLayout> studentsLayout(double w, double h) {

@@ -13,7 +13,7 @@ Popup {
     readonly property var meta: canvas.pages[0] || ({})
     readonly property string design: meta.template === "cover" ? "classic" : String(meta.template || "cover").slice(6)
     readonly property string color: meta.paperColor || "#2563eb"
-    readonly property var designs: Js.run("COVER_DESIGNS.slice", [0]) || []
+    readonly property var designs: DaftarApi.coverDesigns()
     readonly property bool landscape: (meta.width || 794) > (meta.height || 1123)
     parent: Overlay.overlay
     padding: 14
@@ -37,7 +37,7 @@ Popup {
         canvas.flush()
         try {
             const nb = InkleafCore.call("notebook", { id: notebookId })
-            Js.run("applyCover", [nb, d, c])
+            DaftarApi.applyCover(nb, d, c)
         } catch (e) {}
         canvas.reloadPages(true)
     }

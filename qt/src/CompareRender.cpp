@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "Js.h"
+#include "PaperImage.h"
 #include "draw/Covers.h"
 #include "draw/DaftarPapers.h"
 #include "draw/Elements.h"
@@ -282,11 +283,56 @@ void addElementCases(std::vector<Case>& out) {
 
 }  // namespace
 
+/// The tool drawer's pen previews.
+void addSampleCases(std::vector<Case>& out) {
+  for (const char* style : {"fountain", "ballpoint", "pencil", "calligraphy", "brush"})
+    for (const char* color : {"#111827", "#ffffff", "#2563eb", "#facc15", "#1a1a1a"})
+      for (bool dark : {false, true})
+        for (double size : {1.0, 3.0, 9.0}) {
+          const QString name = QString("sample-%1-%2-%3-%4").arg(style, QString(color).mid(1)).arg(dark).arg(size);
+          out.push_back({name,
+                         [=] {
+                           auto* c = new JsCanvas(112, 44);
+                           QJSEngine::setObjectOwnership(c, QJSEngine::CppOwnership);
+                           c->setTransform(2, 0, 0, 2, 0, 0);
+                           Js::instance().call("samples.nibSample", {Js::instance().engine().newQObject(c), QString(style), QString(color), size, dark});
+                           QImage img = c->image();
+                           delete c;
+                           return img;
+                         },
+                         [=] {
+                           JsCanvas c(112, 44);
+                           c.setTransform(2, 0, 0, 2, 0, 0);
+                           nibSample(c, style, color, size, dark);
+                           return c.image();
+                         }});
+        }
+  for (double s : {0.0, 0.38, 0.8, 1.0})
+    for (bool dark : {false, true})
+      out.push_back({QString("smoothing-%1-%2").arg(s).arg(dark),
+                     [=] {
+                       auto* c = new JsCanvas(112, 44);
+                       QJSEngine::setObjectOwnership(c, QJSEngine::CppOwnership);
+                       c->setTransform(2, 0, 0, 2, 0, 0);
+                       Js::instance().call("samples.smoothingSample", {Js::instance().engine().newQObject(c), s, QString("#111827"), dark});
+                       QImage img = c->image();
+                       delete c;
+                       return img;
+                     },
+                     [=] {
+                       JsCanvas c(112, 44);
+                       c.setTransform(2, 0, 0, 2, 0, 0);
+                       smoothingSample(c, s, "#111827", dark);
+                       return c.image();
+                     }});
+}
+
 int compareRender(const QString& outDir) {
   QDir().mkpath(outDir);
   int failed = 0, total = 0;
   std::vector<Case> all = qEnvironmentVariableIsSet("INKLEAF_COMPARE_ELEMENTS_ONLY") ? std::vector<Case>{} : cases();
   addElementCases(all);
+  addSampleCases(all);
   for (const Case& c : all) {
     // The scripts' canvases go when the script engine collects them.
     if (++total % 40 == 0) Js::instance().engine().collectGarbage();

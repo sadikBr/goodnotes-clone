@@ -26,7 +26,7 @@ Popup {
 
     readonly property var categories: [{ id: "basic", label: "Basic", short: "Basic" }, { id: "notes", label: "Notes", short: "Notes" }, { id: "science", label: "Maths & science", short: "Maths" }, { id: "writing", label: "Writing & art", short: "Writing" }, { id: "planner", label: "Planner", short: "Planner" }, { id: "teacher", label: "Teacher", short: "Teacher" }]
     property var all: []
-    Component.onCompleted: all = Js.run("TEMPLATES.slice", [0]) || []
+    Component.onCompleted: all = Catalog.templates()
 
     function show(anchor, pageIndex) {
         page = pageIndex

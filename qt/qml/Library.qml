@@ -182,7 +182,7 @@ Rectangle {
                 const pages = run("pages", { notebookId: nb.id })
                 if (pages && pages.length) run("setPageTemplate", { pageId: pages[0].id, template: "cover-" + r.design, paperColor: r.cover })
             }
-            Js.run("setUpCover", [nb])
+            DaftarApi.setUpCover(nb)
             root.openRequested(nb.id, nb.title)
         }, { aside: coverPreview, twoColumns: true })
     }
@@ -204,7 +204,7 @@ Rectangle {
     function renameNotebook(n) {
         dialog.ask("Rename notebook", [{ name: "title", label: "Title", value: n.title }], "Save", r => run("renameNotebook", { id: n.id, title: r.title.trim() }))
     }
-    readonly property var coverDesigns: (Js.run("COVER_DESIGNS.slice", [0]) || []).map(d => ({ value: d.id, label: d.label }))
+    readonly property var coverDesigns: (DaftarApi.coverDesigns()).map(d => ({ value: d.id, label: d.label }))
     function changeCover(n) {
         // The current design (or none, for a notebook without a cover page).
         let current = "none"
@@ -218,7 +218,7 @@ Rectangle {
             { name: "design", label: "Cover design", type: "covers", value: current, options: (n.hasCover ? [] : [{ value: "none", label: "No cover" }]).concat(coverDesigns) }
         ], "Save", r => {
             if (r.design === "none") run("setNotebookCover", { id: n.id, color: r.cover })
-            else Js.run("applyCover", [n, r.design, r.cover])
+            else DaftarApi.applyCover(n, r.design, r.cover)
         }, { aside: coverPreview })
     }
     /// Folders something can move into (not a folder itself or anything inside it).

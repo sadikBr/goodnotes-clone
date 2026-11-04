@@ -81,6 +81,11 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: ./build/qt/inkleaf --compare-editor "$RUNNER_TEMP/compare"
+      - name: C++ daftar and covers match the scripts' (docs/MIGRATION.md)
+        if: success() || failure()
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ./build/qt/inkleaf --compare-daftar
       - name: Differing pictures
         if: failure()
         uses: actions/upload-artifact@v4

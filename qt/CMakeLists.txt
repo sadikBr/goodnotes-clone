@@ -13,7 +13,7 @@ math(EXPR INKLEAF_VERSION_CODE "${PROJECT_VERSION_MAJOR} * 10000 + ${PROJECT_VER
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/src/daftar)
 
 find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Network Quick QuickControls2 Svg)
 # Qt PDF draws imported PDFs; where it isn't shipped (Android) the system's
@@ -93,11 +93,18 @@ qt_add_executable(inkleaf
   src/editor/Instrument.h src/editor/Instrument.cpp
   src/editor/EditorCore.h src/editor/EditorCore.cpp
   src/editor/DaftarBridge.h
+  src/Catalog.h src/Catalog.cpp
+  src/daftar/Store.h src/daftar/Store.cpp
+  src/daftar/Daftar.h src/daftar/Daftar.cpp
+  src/daftar/Cover.h src/daftar/Cover.cpp
+  src/daftar/DaftarApi.h src/daftar/DaftarApi.cpp
+  src/daftar/DaftarEditor.h src/daftar/DaftarEditor.cpp
   src/tests/SelfTest.h src/tests/SelfTest.cpp
   src/tests/GeometryTests.cpp
-  src/tests/TextAndSnapTests.cpp
+  src/tests/TextAndSnapTests.cpp src/tests/DaftarTests.cpp
   src/CompareRender.h src/CompareRender.cpp
   src/CompareEditor.h src/CompareEditor.cpp
+  src/CompareDaftar.h src/CompareDaftar.cpp src/CompareJson.h
   src/PaperImage.h src/PaperImage.cpp
   src/Pdf.h src/Pdf.cpp
   src/LaserTrail.h src/LaserTrail.cpp

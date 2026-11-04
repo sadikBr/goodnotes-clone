@@ -28,3 +28,9 @@ public:
   CoverImage() : QQuickImageProvider(QQuickImageProvider::Image) {}
   QImage requestImage(const QString& id, QSize* size, const QSize& requested) override;
 };
+
+class JsCanvas;
+/// The tool drawer's pen preview: a wave in `style` (in a 56 × 22 box).
+void nibSample(JsCanvas& c, const QString& style, const QString& color, double size, bool dark);
+/// The smoothing preview: a jittery line smoothed by `streamline`.
+void smoothingSample(JsCanvas& c, double streamline, const QString& color, bool dark);

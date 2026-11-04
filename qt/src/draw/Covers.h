@@ -32,6 +32,8 @@ struct CoverText {
   double maxSize = 0, dateSize = 0;
 };
 CoverText coverText(const QString& design, double w, double h);
+/// The cream panel in the middle of the zellige cover (the daftar's details go on it).
+Box zelligePanel(double w, double h);
 
 /// Mixes a #rrggbb colour with black (amount < 0) or white (amount > 0).
 QString shade(const QString& color, double amount);

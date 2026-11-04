@@ -153,12 +153,16 @@ Box kraftLabel(double w, double h) {
   return {band + (w - band - pw) / 2, h * 0.2, pw, ph};
 }
 
+}  // namespace
+
 /// The cream panel in the middle of the zellige cover.
 Box zelligePanel(double w, double h) {
   const double pw = std::min(w * 0.76, 620.0);
   const double ph = std::min(h * 0.64, 760.0);
   return {(w - pw) / 2, (h - ph) / 2, pw, ph};
 }
+
+namespace {
 
 struct Circle {
   double x, y, r;

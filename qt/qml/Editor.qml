@@ -85,7 +85,7 @@ Rectangle {
     // --- daftar annossous --------------------------------------------------------
     /// The daftar's details when this notebook is one (else null).
     property var daftar: null
-    function loadDaftar() { daftar = notebookId ? Js.run("daftarQt.info", [notebookId]) : null }
+    function loadDaftar() { daftar = notebookId ? DaftarApi.info(notebookId) : null }
     onNotebookIdChanged: loadDaftar()
     Component.onCompleted: loadDaftar()
     readonly property string daftarClass: {
@@ -100,7 +100,7 @@ Rectangle {
         } catch (e) { return [] }
     }
     function newLesson() {
-        const holiday = Js.run("daftarQt.holidayToday", [daftar])
+        const holiday = DaftarApi.holidayToday(daftar)
         const go = () => canvas.daftar("newLesson", [root.notebookId, root.daftarClass])
         if (holiday) dialog.ask("Today is a holiday · عطلة", [], "Write the lesson", go, { message: holiday + ". Write a lesson for " + daftarClass + " anyway?" })
         else go()
@@ -108,7 +108,7 @@ Rectangle {
     function insertOutline(lines) { canvas.daftar("insertOutline", [daftar, lines]) }
     function outlineMenu(anchor) {
         const mine = customOutlines()
-        const builtIn = Js.run("daftarQt.OUTLINES.slice", [0]) || []
+        const builtIn = DaftarApi.outlines()
         menu.show(anchor, builtIn.concat(mine).map(o => ({ label: o.name, action: () => root.insertOutline(o.lines) })).concat([
             { label: "Write my own outline…", action: () => daftarUi.askOutline(o => {
                 prefs.store.daftarOutlines = JSON.stringify(root.customOutlines().concat([o]).slice(-12))
@@ -160,14 +160,22 @@ Rectangle {
 
                 // Left: back, pages, title, page chip.
                 RowLayout {
+                    id: leftBar
                     Layout.fillWidth: true
-                    Layout.preferredWidth: 1
+                    // Both sides ask for the same width (the tools stay centred) and
+                    // give way down to their minimums on narrow windows.
+                    Layout.preferredWidth: Math.max(Layout.minimumWidth, rightBar.Layout.minimumWidth)
+                    // Never narrower than its buttons (with the title at its smallest):
+                    // on narrow windows the tools move right instead of covering them.
+                    Layout.minimumWidth: implicitWidth - (titleBtn.visible ? titleBtn.implicitWidth - titleBtn.Layout.minimumWidth : 0)
                     spacing: 2
                     IconButton { iconName: "back"; tip: "Library"; implicitWidth: 36; implicitHeight: 36; onClicked: { canvas.finishEdit(); canvas.flush(); root.back() } }
                     IconButton { iconName: "sidebar"; tip: "Pages sidebar"; implicitWidth: 36; implicitHeight: 36; iconColor: Theme.muted; onClicked: root.toggleSidebar() }
                     AbstractButton {
                         id: titleBtn
-                        // In a daftar the bar beside it needs room: the title gives way (to 5.5em).
+                        // In a daftar the bar beside it needs room: the title gives way (to 5.5em),
+                        // and on narrow windows goes (the cover and the library show it).
+                        visible: !root.daftar || root.width >= 1360
                         Layout.maximumWidth: root.daftar ? Math.min(implicitWidth, 260) : 260
                         Layout.fillWidth: !!root.daftar
                         Layout.minimumWidth: root.daftar ? 82 : 0
@@ -291,8 +299,10 @@ Rectangle {
 
                 // Right: history, page, export, more.
                 RowLayout {
+                    id: rightBar
                     Layout.fillWidth: true
-                    Layout.preferredWidth: 1
+                    Layout.preferredWidth: leftBar.Layout.preferredWidth
+                    Layout.minimumWidth: implicitWidth
                     spacing: 8
                     Item { Layout.fillWidth: true }
                     Pill {

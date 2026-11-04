@@ -33,7 +33,7 @@ Item {
         const dx = p.x - ins.cx, dy = p.y - ins.cy
         return Qt.point(dx * c + dy * s, -dx * s + dy * c)
     }
-    function snap(rad, coarse) { return Js.run("snapAngle", [rad, coarse]) }
+    function snap(rad, coarse) { return Catalog.snapAngle(rad, coarse) }
 
     // The body and markings, drawn as vectors (sharp at any angle and zoom).
     VectorSvg {

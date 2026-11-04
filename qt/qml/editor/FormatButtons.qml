@@ -13,7 +13,7 @@ ToolGroup {
     readonly property bool bold: !!e.bold
     readonly property bool italic: !!e.italic
     readonly property string align: e.align || "left"
-    readonly property string list: canvas.editing.id ? (Js.run("textFormat.currentList", [canvas.editing.text || ""]) || "") : ""
+    readonly property string list: canvas.editing.id ? Catalog.currentList(canvas.editing.text || "") : ""
     readonly property var alignIcon: ({ left: "alignLeft", center: "alignCenter", right: "alignRight" })
 
     SmallTool { grouped: true; label: "B"; bold: true; active: root.bold; tip: "Bold (Ctrl+B)"; onClicked: root.canvas.editFormat({ bold: !root.bold }) }

@@ -11,7 +11,7 @@ Item {
     required property FormDialog dialog
     signal notify(string message, bool error)
 
-    readonly property var days: Js.run("daftarQt.DAYS.slice", [0]) || []
+    readonly property var days: DaftarApi.days()
     readonly property var coverColors: [
         { color: "#5b2a5e", label: "Plum" }, { color: "#1f7a4a", label: "Green" }, { color: "#1f6fd1", label: "Blue" }, { color: "#2d2f72", label: "Navy" },
         { color: "#d1245f", label: "Raspberry" }, { color: "#e0612a", label: "Orange" }, { color: "#0d9488", label: "Teal" }, { color: "#475569", label: "Slate" }
@@ -35,15 +35,15 @@ Item {
         if (isNew) f.push({ name: "cover", label: "Cover colour", type: "swatches", value: "#5b2a5e", colors: coverColors })
         return f
     }
-    function validate(v) { return Js.run("daftarQt.validate", [v]) }
+    function validate(v) { return DaftarApi.validate(v) }
 
     /** "New daftar": resolves `done(notebook)` once it's made. */
     function askNew(folderId, done) {
-        const v = Js.run("daftarQt.formValues", [null, "دفتر النصوص"])
+        const v = DaftarApi.formValues(null, "دفتر النصوص")
         dialog.ask("New daftar annossous · دفتر النصوص", fields(v, true), "Create daftar", r => {
             root.notify("Preparing your daftar…", false)
             Qt.callLater(() => {
-                const nb = Js.run("daftarQt.create", [r, folderId || null])
+                const nb = DaftarApi.create(r, folderId || "")
                 if (nb && nb.id) done(nb)
                 else root.notify("The daftar couldn't be made.", true)
             })
@@ -52,13 +52,13 @@ Item {
 
     /** Daftar settings for an open daftar. */
     function askSettings(nb, meta, done) {
-        const v = Js.run("daftarQt.formValues", [meta, nb.title || ""])
+        const v = DaftarApi.formValues(meta, nb.title || "")
         dialog.ask("Daftar settings · إعدادات الدفتر", fields(v, false), "Save", r => {
             Qt.callLater(() => {
                 const before = meta.classes
-                const removed = before.filter(c => Js.run("daftarQt.parseClasses", [r.classes]).indexOf(c) < 0)
+                const removed = before.filter(c => DaftarApi.parseClasses(r.classes).indexOf(c) < 0)
                 root.notify(removed.length ? "Updating… The pages of " + removed.join(", ") + " are kept." : "Updating your daftar…", false)
-                Js.run("daftarQt.update", [nb.id, r])
+                DaftarApi.update(nb.id, r)
                 done()
             })
         }, { width: 640, twoColumns: true, validate: validate })
@@ -107,7 +107,7 @@ Item {
     function parseList(s) {
         try { const v = JSON.parse(s || "[]"); return Array.isArray(v) ? v : [] } catch (e) { return [] }
     }
-    function classList(s) { return Js.run("daftarQt.parseClasses", [s || ""]) || [] }
+    function classList(s) { return DaftarApi.parseClasses(s || "") }
     function pad2(n) { return (n < 10 ? "0" : "") + n }
     // "8:5" / "0805" → "08:05" (or "" when it isn't a time).
     function cleanTime(s) {
@@ -262,7 +262,7 @@ Item {
                     Label {
                         Layout.preferredWidth: 34
                         horizontalAlignment: Text.AlignHCenter
-                        text: hdRow.item.from && hdRow.item.to >= hdRow.item.from ? Js.run("daftarQt.holidayDays", [hdRow.item]) + " d" : ""
+                        text: hdRow.item.from && hdRow.item.to >= hdRow.item.from ? DaftarApi.holidayDays(hdRow.item) + " d" : ""
                         color: Theme.muted; font.pixelSize: 12
                     }
                     RemoveButton {
@@ -290,7 +290,7 @@ Item {
                     ToolTip.text: "Fixed-date public holidays for the school year (religious holidays and vacations are added by hand)"
                     onClicked: {
                         const have = hd.items.map(x => x.from)
-                        const fresh = (Js.run("daftarQt.nationalHolidaysFor", [hd.form.values.year || ""]) || []).filter(x => have.indexOf(x.from) < 0)
+                        const fresh = DaftarApi.nationalHolidaysFor(hd.form.values.year || "").filter(x => have.indexOf(x.from) < 0)
                         if (!fresh.length) return root.notify("The national holidays are already in the list", false)
                         hd.save(hd.items.concat(fresh), true)
                     }
@@ -345,7 +345,7 @@ Item {
                 wrapMode: Text.Wrap
                 font.pixelSize: 12
                 color: Theme.muted
-                text: pa.text.trim() ? Js.run("daftarQt.studentsSummary", [pa.text]) : "Copy the rows from Massar or Excel (code, surname, first name) and paste them here."
+                text: pa.text.trim() ? DaftarApi.studentsSummary(pa.text) : "Copy the rows from Massar or Excel (code, surname, first name) and paste them here."
             }
         }
     }
@@ -367,7 +367,7 @@ Item {
             { name: "text", label: "", type: "custom", component: pasteField, value: "" }
         ], "Write the list", r => Qt.callLater(() => done(r.cls, r.text)), {
             width: 560,
-            validate: v => (Js.run("daftarQt.parseStudents", [v.text || ""]) || []).length ? null : "Paste at least one student's name."
+            validate: v => DaftarApi.parseStudents(v.text || "").length ? null : "Paste at least one student's name."
         })
     }
 
