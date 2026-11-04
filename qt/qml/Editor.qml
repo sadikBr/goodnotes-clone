@@ -501,6 +501,10 @@ Rectangle {
                     eraserEnd: AppSettings.store.eraserEnd
                     sideButton: AppSettings.store.sideButton
                     palmRejection: AppSettings.store.palmRejection
+                    scratchOut: AppSettings.store.scratchOut
+                    fingerTaps: AppSettings.store.fingerTaps
+                    onScratchedOut: scratchNotice.show(this)
+                    onFingerTapped: redo => root.notify(redo ? "Redone" : "Undone", false)
                     penCursor: AppSettings.store.penCursor
                     property bool penSeen: false
                     onPenUsed: if (!AppSettings.store.penOnly && !penSeen) { penSeen = true; AppSettings.store.penOnly = true }
@@ -654,6 +658,9 @@ Rectangle {
     // Export (PDF, PowerPoint, PNG).
     Exporter { id: exporter; canvas: root.mainCanvas; title: root.title; onNotify: (m, e) => root.notify(m, e) }
     GraphDialog { id: graphDialog; canvas: root.activeCanvas }
+    ScratchNotice { id: scratchNotice }
+    /// The side pane's canvas scratched something out.
+    function scratched(view) { scratchNotice.show(view) }
     TablePicker { id: tablePicker; onPicked: (rows, cols) => root.activeCanvas.insertTable(rows, cols) }
     PiecesPanel { id: piecesPanel; canvas: root.activeCanvas; onNotify: (m, e) => root.notify(m, e); onSaveRequested: root.savePiece() }
     /// The page view last used: the notebook, or the side view. Tools, the

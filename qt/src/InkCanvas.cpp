@@ -152,6 +152,20 @@ InkCanvas::InkCanvas(QQuickItem* parent) : QQuickItem(parent) {
     renderPictures();
     update();
   });
+  // What a scratch-out took fades away (about a third of a second).
+  m_fadeTick.setInterval(16);
+  connect(&m_fadeTick, &QTimer::timeout, this, [this] {
+    if (!m_ed) return m_fadeTick.stop();
+    const double level = 1 - (nowMs() - m_fadeStart) / 320.0;
+    if (level <= 0) {
+      m_fadeTick.stop();
+      m_ed->clearFade();
+    } else {
+      m_ed->setFade(level);
+    }
+    afterCore();
+    update();
+  });
   m_laserTick.setInterval(16);
   connect(&m_laserTick, &QTimer::timeout, this, [this] {
     const double now = nowMs();
@@ -204,6 +218,12 @@ void InkCanvas::afterCore() {
       if (m_pages[i].synced) syncPage(i);
     emit historyChanged();
     if (c.dirty()) m_saveTimer.start();
+  }
+  if (c.scratches != m_scratches) {
+    m_scratches = c.scratches;
+    m_fadeStart = nowMs();
+    m_fadeTick.start();
+    emit scratchedOut();
   }
   if (double(c.overlayRev) != m_overlayRev) {
     m_overlayRev = double(c.overlayRev);
@@ -865,7 +885,7 @@ bool InkCanvas::canUndo() const { return m_ed && m_ed->canUndo(); }
 bool InkCanvas::canRedo() const { return m_ed && m_ed->canRedo(); }
 
 void InkCanvas::undo() {
-  if (m_ed) m_ed->undo();
+  if (m_ed) m_ed->clearFade(), m_ed->undo();
   syncEditing();
   afterCore();
 }
@@ -1559,6 +1579,7 @@ void InkCanvas::press(QPointF s, float pressure, bool stylus, const QString& too
   if (!m_pages[pi].synced) syncPage(pi);
   const QPointF p = toPageOf(pi, s);
   m_g.page = pi;
+  m_ed->scratchOut = m_scratchOut;
   const QString r = m_ed->down(pi, p.x(), p.y(), pressure, nowMs(), tool, bool(mods & Qt::ShiftModifier));
   m_g.kind = Gesture::Core;
   if (r == "draw") {
@@ -1829,6 +1850,7 @@ void InkCanvas::wheelEvent(QWheelEvent* e) {
 
 void InkCanvas::touchEvent(QTouchEvent* e) {
   const auto& pts = e->points();
+  trackFingerTap(e);
   if (pts.size() >= 2) {
     // Two fingers: pinch to zoom and move (a second finger cancels a touch stroke).
     if (m_g.kind == Gesture::Draw || m_g.kind == Gesture::Core) {
@@ -1870,6 +1892,34 @@ void InkCanvas::touchEvent(QTouchEvent* e) {
     release();
   }
   e->accept();
+}
+
+void InkCanvas::trackFingerTap(QTouchEvent* e) {
+  const auto& pts = e->points();
+  const double now = nowMs();
+  if (e->type() == QEvent::TouchBegin) m_tap = FingerTap{now, 0, false, {}};
+  m_tap.fingers = std::max<int>(m_tap.fingers, int(pts.size()));
+  for (const QEventPoint& p : pts) {
+    if (p.state() == QEventPoint::Pressed || !m_tap.at.contains(p.id())) m_tap.at.insert(p.id(), p.position());
+    else if (QLineF(m_tap.at.value(p.id()), p.position()).length() > 14) m_tap.moved = true;
+  }
+  if (e->type() != QEvent::TouchEnd && e->type() != QEvent::TouchCancel) return;
+  // A quick tap of two or three fingers that didn't move: undo or redo. Not
+  // with the pen just used (a palm resting) and not for a longer touch.
+  const bool tap = e->type() == QEvent::TouchEnd && m_fingerTaps && !m_readOnly && !m_tap.moved && now - m_tap.start < 320 &&
+                   (m_tap.fingers == 2 || m_tap.fingers == 3) && now - m_lastPenMs > 1500;
+  const int fingers = m_tap.fingers;
+  m_tap = FingerTap{};
+  if (!tap) return;
+  if (fingers == 2) {
+    if (!canUndo()) return;
+    undo();
+    emit fingerTapped(false);
+  } else {
+    if (!canRedo()) return;
+    redo();
+    emit fingerTapped(true);
+  }
 }
 
 // --- scene graph --------------------------------------------------------------------------

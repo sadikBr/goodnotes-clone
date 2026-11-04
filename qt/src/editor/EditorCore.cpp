@@ -1,6 +1,7 @@
 // The editor for one notebook (was qt/js/editorCore.ts); see EditorCore.h.
 #include "EditorCore.h"
 #include "Table.h"
+#include "Gestures.h"
 
 #include <QJsonDocument>
 #include <QRegularExpression>
@@ -592,6 +593,8 @@ void EditorCore::up() {
         } else {
           addElement(placed);
         }
+      } else if (!g.points.empty() && g.tool == "pen" && !g.ruler && scratchAway(g.points)) {
+        // Scratched out: the ink under it went, and the scribble isn't kept.
       } else if (!g.points.empty()) {
         const QString tl = g.tool == "highlighter" ? "highlighter" : "pen";
         El el;
@@ -1785,10 +1788,47 @@ void EditorCore::finishTextEdit() {
   changed();
 }
 
+// ------------------------------------------------------------ gestures
+
+bool EditorCore::scratchAway(const std::vector<Pt>& points) {
+  if (!scratchOut) return false;
+  const auto scribble = asScribble(points);
+  if (!scribble) return false;
+  std::vector<const El*> list;
+  for (const ElPtr& e : elements())
+    if (!m_hidden.contains(e->id)) list.push_back(e.get());
+  const QSet<QString> gone = scratchedOut(*scribble, list);
+  // Over nothing: a scribble drawn on purpose, kept as ink.
+  if (gone.isEmpty()) return false;
+  snapshot();
+  Els& els = elements();
+  m_faded.clear();
+  for (const ElPtr& e : els)
+    if (gone.contains(e->id)) m_faded.push_back(e);
+  els.erase(std::remove_if(els.begin(), els.end(), [&](const ElPtr& e) { return gone.contains(e->id); }), els.end());
+  m_recentInk.erase(std::remove_if(m_recentInk.begin(), m_recentInk.end(), [&](const Recent& r) { return gone.contains(r.id); }), m_recentInk.end());
+  if (std::any_of(gone.begin(), gone.end(), [&](const QString& id) { return m_selection.contains(id); })) {
+    m_selection.subtract(gone);
+    ++selectionRev;
+  }
+  fadeLevel = 1;
+  ++scratches;
+  touchOverlay();
+  changed();
+  return true;
+}
+
 // ------------------------------------------------------------ drawing
 
 void EditorCore::drawOverlay(Canvas& c, int pi) {
   if (pi != active) return;
+  // Ink just scratched out, fading away.
+  if (fadeLevel > 0 && !m_faded.empty()) {
+    c.save();
+    c.setGlobalAlpha(std::clamp(fadeLevel, 0.0, 1.0) * 0.85);
+    for (const ElPtr& e : m_faded) draw::drawElement(c, e->toJson());
+    c.restore();
+  }
   const Gesture& g = m_g;
   if (g.type == G::Draw) {
     if (g.preview && g.tool == "highlighter" && g.preview->shape.kind == "line") {
@@ -1896,6 +1936,9 @@ std::optional<Rect> EditorCore::overlayBounds() {
   }
   if (g.type == G::Shape && g.preview) parts.push_back(bounds(*g.preview));
   if (g.type == G::Lasso) parts.push_back(rectOf(g.lasso));
+  // Ink just scratched out, while it fades.
+  if (fadeLevel > 0)
+    for (const ElPtr& el : m_faded) parts.push_back(bounds(*el));
   if (g.type == G::Handle) parts.push_back(bounds(*g.preview));
   if (g.type == G::Move && sel) parts.push_back({sel->x + g.dx, sel->y + g.dy, sel->w, sel->h});
   if (g.type == G::Move && !g.guides.empty()) parts.push_back({0, 0, pageWidth(), pageHeight()});

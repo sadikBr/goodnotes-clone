@@ -62,6 +62,10 @@ class InkCanvas : public QQuickItem {
   // What the pen's side button does while held: "eraser" | "lasso" | "none".
   Q_PROPERTY(QString sideButton MEMBER m_sideButton NOTIFY settingsChanged)
   Q_PROPERTY(bool palmRejection MEMBER m_palmRejection NOTIFY settingsChanged)
+  /// Scratching out ink with the pen erases it.
+  Q_PROPERTY(bool scratchOut MEMBER m_scratchOut NOTIFY settingsChanged)
+  /// Two fingers tapped together: undo; three: redo.
+  Q_PROPERTY(bool fingerTaps MEMBER m_fingerTaps NOTIFY settingsChanged)
   /// View only: every gesture scrolls (a second view of the notebook being edited).
   Q_PROPERTY(bool readOnly MEMBER m_readOnly NOTIFY settingsChanged)
   // The cursor for drawing tools: "cross" | "dot" | "none".
@@ -259,6 +263,10 @@ signals:
   void laserChanged();
   /// A press that only closed the drawer (see dismissOnPress).
   void dismissed();
+  /// Ink was scratched out with the pen (Undo brings it back).
+  void scratchedOut();
+  /// Two or three fingers tapped: undone or redone.
+  void fingerTapped(bool redo);
   /// The text tool tapped a table: type in this cell ({ id, row, col }).
   void cellEditRequested(const QVariantMap& cell);
 
@@ -268,6 +276,7 @@ protected:
   void geometryChange(const QRectF& newGeometry, const QRectF& oldGeometry) override;
   void itemChange(ItemChange change, const ItemChangeData& value) override;
   bool eventFilter(QObject* watched, QEvent* event) override;
+  void trackFingerTap(QTouchEvent* e);
   void mousePressEvent(QMouseEvent* e) override;
   void mouseMoveEvent(QMouseEvent* e) override;
   void mouseReleaseEvent(QMouseEvent* e) override;
@@ -375,6 +384,20 @@ private:
   bool m_eraserEndOn = true;
   QString m_sideButton = "eraser";
   bool m_palmRejection = true;
+  bool m_scratchOut = true;
+  bool m_fingerTaps = true;
+  /// Scratch-outs seen, and the fading of what the last one took.
+  int m_scratches = 0;
+  double m_fadeStart = 0;
+  QTimer m_fadeTick;
+  /// A tap with several fingers (undo, redo): when it began, how many
+  /// fingers, where each came down, and whether any moved.
+  struct FingerTap {
+    double start = 0;
+    int fingers = 0;
+    bool moved = false;
+    QHash<int, QPointF> at;
+  } m_tap;
   QString m_penCursor = "cross";
   double m_lastPenMs = -1e9;
   /// A pen press seen by the window, waiting for Qt Quick to say where it

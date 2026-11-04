@@ -97,6 +97,10 @@ Rectangle {
                 eraserEnd: AppSettings.store.eraserEnd
                 sideButton: AppSettings.store.sideButton
                 palmRejection: AppSettings.store.palmRejection
+                scratchOut: AppSettings.store.scratchOut
+                fingerTaps: AppSettings.store.fingerTaps
+                onScratchedOut: root.editor.scratched(this)
+                onFingerTapped: redo => root.notify(redo ? "Redone" : "Undone", false)
                 penCursor: AppSettings.store.penCursor
                 onMessage: (text, error) => root.notify(text, error)
                 onToolChanged: if (tool !== root.prefs.store.tool) root.prefs.store.tool = tool

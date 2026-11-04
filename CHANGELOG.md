@@ -5,6 +5,11 @@ Updates → What's new) and on its GitHub release. Keep them short, one line
 per change, written for the people using Inkleaf. A release needs its
 section here before it can be published (`scripts/check-version.py`).
 
+## 0.13.0
+
+- **Scratch out to erase:** scribble back and forth over ink with the pen and it's gone (Undo brings it back). Writing, circling and shading are never mistaken for it.
+- **Finger taps:** tap with two fingers to undo, three to redo.
+
 ## 0.12.0
 
 - **Tables:** draw a rough grid and choose *Make table* to get a clean one, or *Insert → Table*. Type in the cells, write in them, drag the lines to resize, add rows and columns.

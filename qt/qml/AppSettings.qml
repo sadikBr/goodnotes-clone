@@ -18,6 +18,10 @@ QtObject {
         property string sideButton: "eraser"
         property bool eraserEnd: true
         property bool palmRejection: true
+        /// Scratching out ink with the pen erases it.
+        property bool scratchOut: true
+        /// Two fingers tapped: undo; three: redo.
+        property bool fingerTaps: true
         property bool penOnly: false
         /// "light" | "dark" | "system"
         property string theme: "system"

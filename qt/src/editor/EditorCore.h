@@ -46,6 +46,14 @@ public:
   QString shapeKind = "auto";
   bool shapeFill = false;
   QString eraserMode = "precise";
+  /// Scratching out ink with a pen scribble erases it (Gestures.h).
+  bool scratchOut = true;
+  /// How many scratch-outs so far (the canvas says so and fades the ink).
+  int scratches = 0;
+  /// What the last scratch-out took, drawn fading at this opacity (0: done).
+  double fadeLevel = 0;
+  void clearFade() { m_faded.clear(); fadeLevel = 0; ++overlayRev; }
+  void setFade(double level) { fadeLevel = level; ++overlayRev; }
   QString textFont = "sans";
   struct TextFormat {
     bool bold = false, italic = false;
@@ -251,6 +259,9 @@ private:
   static std::vector<El>& clipboard();
   ElPtr m_editing;
   QVariantMap m_cellRequest;
+  /// The ink the last scratch-out took (on the active page), while it fades.
+  Els m_faded;
+  bool scratchAway(const std::vector<Pt>& points);
   bool m_editingNew = false;
   Els m_editingBefore;
   std::vector<Recent> m_recentInk;

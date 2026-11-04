@@ -17,7 +17,8 @@ Popup {
     readonly property var groups: [
         { title: "Tools", items: [["P", "Pen"], ["H", "Highlighter"], ["E", "Eraser"], ["L", "Lasso select"], ["S", "Shape"], ["T", "Text box"], ["N", "Sticky note"], ["K", "Laser pointer"], ["R", "Ruler"]] },
         { title: "Editing", items: [["Ctrl+Z", "Undo"], ["Ctrl+Shift+Z", "Redo"], ["Ctrl+C / Ctrl+V", "Copy / paste"], ["Ctrl+D", "Duplicate"], ["Ctrl+A", "Select all"], ["Delete", "Delete selection"], ["Esc", "Deselect"]] },
-        { title: "View", items: [["Ctrl+= / Ctrl+−", "Zoom in / out"], ["Ctrl+0", "Fit width"], ["Page Up / Down", "Previous / next page"], ["[", "Show or hide pages"], ["F", "Focus mode"], ["?", "This list"]] }
+        { title: "View", items: [["Ctrl+= / Ctrl+−", "Zoom in / out"], ["Ctrl+0", "Fit width"], ["Page Up / Down", "Previous / next page"], ["[", "Show or hide pages"], ["F", "Focus mode"], ["?", "This list"]] },
+        { title: "Pen and touch", items: [["Scribble over ink", "Erase it"], ["2-finger tap", "Undo"], ["3-finger tap", "Redo"], ["Pinch", "Zoom"]] }
     ]
     background: Item {
         Shadow { anchors.fill: parent; radius: Theme.radiusXl; level: 3 }
@@ -25,7 +26,7 @@ Popup {
     }
     contentItem: ColumnLayout {
         spacing: 14
-        Label { text: "Keyboard shortcuts"; font.pixelSize: 19; font.weight: Font.Bold; color: Theme.text }
+        Label { text: "Shortcuts and gestures"; font.pixelSize: 19; font.weight: Font.Bold; color: Theme.text }
         GridLayout {
             columns: 2
             columnSpacing: 28

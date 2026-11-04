@@ -293,6 +293,14 @@ Popup {
                     UiSwitch { checked: root.s.palmRejection; onClicked: root.s.palmRejection = checked }
                 }
                 SettingRow {
+                    title: "Scratch out to erase"; help: "Scribble back and forth over ink with the pen to erase it. Only what's under the scribble goes; a scribble over nothing stays, and Undo brings anything back."
+                    UiSwitch { checked: root.s.scratchOut; onClicked: root.s.scratchOut = checked }
+                }
+                SettingRow {
+                    title: "Finger taps"; help: "Tap the page with two fingers to undo, three to redo."
+                    UiSwitch { checked: root.s.fingerTaps; onClicked: root.s.fingerTaps = checked }
+                }
+                SettingRow {
                     title: "Pen-only mode"; help: "Only the pen writes; touch and the mouse scroll and zoom. Turns on by itself the first time you use a pen."
                     UiSwitch { checked: root.s.penOnly; onClicked: root.s.penOnly = checked }
                 }
