@@ -14,7 +14,7 @@ pub enum AppError {
 
 pub type AppResult<T> = Result<T, AppError>;
 
-// Tauri commands return errors to the frontend as plain strings.
+// Errors reach the app as plain strings.
 impl Serialize for AppError {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(&self.to_string())

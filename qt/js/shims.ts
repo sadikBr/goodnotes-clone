@@ -30,7 +30,6 @@ function stubElement(): any {
 }
 
 g.window = g;
-g.__TAURI_INTERNALS__ = {};
 g.self = g;
 g.devicePixelRatio = 1;
 g.addEventListener = noop;

@@ -1,5 +1,4 @@
-//! Inkleaf's core, shared by the apps (the Qt desktop app and the Tauri
-//! app): the notebook database, Google Drive sync, backups, PDF/PPTX/PNG
+//! Inkleaf's core, used by the Qt app (through qt/native): the notebook database, Google Drive sync, backups, PDF/PPTX/PNG
 //! export, ink geometry and handwriting recognition.
 
 pub mod backup;

@@ -1,11 +1,8 @@
-# Builds, signs and publishes a release when a version tag is pushed:
+# Builds and publishes a release when a version tag is pushed:
 #   npm run set-version 0.8.1 && git commit -am "v0.8.1" && git tag v0.8.1 && git push origin main v0.8.1
-# Installed apps find it through latest.json and offer to update.
+# The app looks at the latest release (Settings → Updates) and offers its download.
 #
 # Needs (repository Settings → Secrets and variables → Actions):
-#   secret   TAURI_SIGNING_PRIVATE_KEY           the private key file's contents
-#   secret   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  its password
-#   variable TAURI_UPDATER_PUBKEY                the .pub file's contents
 #   (Android) secrets ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
 #   (Drive sync) secrets GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
 name: Release
@@ -24,7 +21,6 @@ jobs:
   create-release:
     runs-on: ubuntu-24.04
     outputs:
-      id: ${{ steps.release.outputs.id }}
       tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v5
@@ -38,7 +34,6 @@ jobs:
         env:
           TAG: ${{ steps.tag.outputs.tag }}
       - name: Create a draft release
-        id: release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.tag.outputs.tag }}
@@ -52,113 +47,31 @@ jobs:
           else
             gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "Inkleaf $TAG" --generate-notes
           fi
-          echo "id=$(gh release view "$TAG" --json databaseId -q .databaseId)" >> "$GITHUB_OUTPUT"
 
-  desktop:
+  # Linux, Windows and Android, built and checked as on every push.
+  build:
     needs: create-release
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: ubuntu-24.04
-            bundles: appimage
-          - platform: windows-latest
-            bundles: nsis
-    runs-on: ${{ matrix.platform }}
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: ". -> target"
-      - name: Linux build dependencies
-        if: startsWith(matrix.platform, 'ubuntu')
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf gstreamer1.0-plugins-base gstreamer1.0-plugins-good libgstreamer-plugins-base1.0-dev
-      - run: npm ci
-      - name: Release config (updater key)
-        run: node scripts/release-config.mjs
-        env:
-          TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY || secrets.TAURI_UPDATER_PUBKEY }}
-      - uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          INKLEAF_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          INKLEAF_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-        with:
-          releaseId: ${{ needs.create-release.outputs.id }}
-          args: --bundles ${{ matrix.bundles }} --config src-tauri/tauri.release.conf.json
-          includeUpdaterJson: true
+    uses: ./.github/workflows/qt.yml
+    with:
+      release: true
+    secrets: inherit
 
-  android:
-    needs: create-release
+  publish:
+    needs: [create-release, build]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/download-artifact@v4
         with:
-          node-version: 22
-          cache: npm
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: 17
-      # The runner already has the Android SDK: only the NDK is added.
-      - name: Android NDK
-        run: |
-          sdkmanager=$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -n 1)
-          yes | "$sdkmanager" --install "ndk;27.2.12479018" > /dev/null
-          test -d "$ANDROID_HOME/ndk/27.2.12479018"
-          # For the later steps: the runner sets ANDROID_HOME, which workflow expressions cannot read.
-          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
-      - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: ". -> target"
-      - run: npm ci
-      - name: Generate the Android project
-        run: |
-          npx tauri android init --ci
-          # The app's own launcher icons (adaptive: leaf on the brand green), not Tauri's defaults.
-          cp -r src-tauri/icons/android/. src-tauri/gen/android/app/src/main/res/
-      - name: Signing
-        run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/inkleaf.jks"
-          node scripts/android-signing.mjs
-        env:
-          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/inkleaf.jks
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-      - name: "Build the APK (arm64 and armv7 tablets)"
-        run: npx tauri android build --apk --target aarch64 armv7
-        env:
-          INKLEAF_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          INKLEAF_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-      - name: Attach the APK to the release
+          path: out
+          merge-multiple: true
+      - name: Attach the downloads and publish (the app then offers the update)
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.create-release.outputs.tag }}
         run: |
-          apk=$(find src-tauri/gen/android/app/build/outputs/apk -name '*release*.apk' | head -n 1)
-          test -n "$apk"
-          cp "$apk" "Inkleaf_${TAG#v}_android.apk"
-          gh release upload "$TAG" "Inkleaf_${TAG#v}_android.apk" --clobber
-
-  publish:
-    needs: [create-release, desktop, android]
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Publish the release (updates go live)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release edit "${{ needs.create-release.outputs.tag }}" --repo "${{ github.repository }}" --draft=false --latest
+          ls -l out
+          for f in out/Inkleaf_*_x86_64.AppImage out/Inkleaf_*_windows_x64.zip out/Inkleaf_*_android_arm64.apk; do
+            test -f "$f" || { echo "::error::missing $f"; exit 1; }
+          done
+          gh release upload "$TAG" out/Inkleaf_* --clobber --repo "${{ github.repository }}"
+          gh release edit "$TAG" --repo "${{ github.repository }}" --draft=false --latest

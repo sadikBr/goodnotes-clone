@@ -1,17 +1,25 @@
-# Builds the native Qt app for Linux (AppImage) and Windows (a folder with
-# everything it needs, zipped) and keeps them as downloadable artifacts of
-# the run (Actions → Qt app). Nothing is published: releases still ship the
-# current app until the Qt app replaces it.
+# Builds Inkleaf for Linux (AppImage), Windows (a folder with everything it
+# needs, zipped) and Android (APK), checks the desktop builds start, and
+# keeps them as downloadable artifacts of the run (Actions → Qt app). The
+# release workflow runs this too and publishes the results.
 #
-# Uses the same Drive sync secrets as the release (GOOGLE_CLIENT_ID,
-# GOOGLE_CLIENT_SECRET); without them the build works but can't sign in.
+# Secrets: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (Drive sync; without
+# them the app works but can't sign in) and the Android signing ones
+# (ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS,
+# ANDROID_KEY_PASSWORD; without them the APK is unsigned, and a release fails).
 name: Qt app
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ["qt/**", "core/**", "src/**", "scripts/qt-*", ".github/workflows/qt.yml"]
+    paths: ["qt/**", "core/**", "src/**", "scripts/qt-*", "package*.json", "Cargo.*", ".github/workflows/qt.yml"]
+  workflow_call:
+    inputs:
+      release:
+        description: "Building a release: the APK must be signed."
+        type: boolean
+        default: false
 
 concurrency:
   group: qt-${{ github.ref }}
@@ -75,7 +83,7 @@ jobs:
           version=$(node -p "require('./package.json').version")
           LINUXDEPLOY_OUTPUT_VERSION=$version ./linuxdeploy --appdir AppDir --plugin qt --output appimage \
             -d AppDir/usr/share/applications/inkleaf.desktop -i AppDir/usr/share/icons/hicolor/256x256/apps/inkleaf.png
-          mv Inkleaf-*.AppImage "Inkleaf_${version}_qt_x86_64.AppImage"
+          mv Inkleaf-*.AppImage "Inkleaf_${version}_x86_64.AppImage"
           # What a Wayland desktop needs is in it (CI can't start it there).
           for f in platforms/libqwayland-egl.so platforms/libqxcb.so wayland-graphics-integration-client/libqt-plugin-wayland-egl.so wayland-shell-integration/libxdg-shell.so; do
             test -e "AppDir/usr/plugins/$f" || { echo "missing from the AppImage: $f"; exit 1; }
@@ -86,11 +94,11 @@ jobs:
           QT_QPA_PLATFORM: offscreen
           APPIMAGE_EXTRACT_AND_RUN: 1
         # Without the Qt installed here, so a module missing from the AppImage fails.
-        run: env -u QML_IMPORT_PATH -u QML2_IMPORT_PATH -u QT_PLUGIN_PATH -u LD_LIBRARY_PATH INKLEAF_DATA_DIR=$RUNNER_TEMP/library ./Inkleaf_*_qt_x86_64.AppImage --smoke
+        run: env -u QML_IMPORT_PATH -u QML2_IMPORT_PATH -u QT_PLUGIN_PATH -u LD_LIBRARY_PATH INKLEAF_DATA_DIR=$RUNNER_TEMP/library ./Inkleaf_*_x86_64.AppImage --smoke
       - uses: actions/upload-artifact@v4
         with:
           name: inkleaf-qt-linux
-          path: Inkleaf_*_qt_x86_64.AppImage
+          path: Inkleaf_*_x86_64.AppImage
 
   windows:
     runs-on: windows-latest
@@ -131,11 +139,11 @@ jobs:
           # installed here, so a module missing from the folder fails.
           env -u QML_IMPORT_PATH -u QML2_IMPORT_PATH -u QT_PLUGIN_PATH INKLEAF_DATA_DIR="$RUNNER_TEMP/library" ./dist/Inkleaf/Inkleaf.exe --smoke
           version=$(node -p "require('./package.json').version")
-          cd dist && 7z a "../Inkleaf_${version}_qt_windows_x64.zip" Inkleaf > /dev/null
+          cd dist && 7z a "../Inkleaf_${version}_windows_x64.zip" Inkleaf > /dev/null
       - uses: actions/upload-artifact@v4
         with:
           name: inkleaf-qt-windows
-          path: Inkleaf_*_qt_windows_x64.zip
+          path: Inkleaf_*_windows_x64.zip
 
   android:
     runs-on: ubuntu-24.04
@@ -178,6 +186,8 @@ jobs:
           if [ -n "$KEYSTORE" ]; then
             echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/inkleaf.jks"
             echo "SIGN=ON" >> "$GITHUB_ENV"
+          elif [ "${{ inputs.release }}" = "true" ]; then
+            echo "::error::A release needs the Android signing secrets (ANDROID_KEYSTORE_BASE64 and the others)"; exit 1
           else
             echo "SIGN=OFF" >> "$GITHUB_ENV"
           fi
@@ -198,8 +208,8 @@ jobs:
           version=$(node -p "require('./package.json').version")
           apk=$(find build/android -name '*.apk' | grep -v unaligned | head -n 1)
           test -n "$apk"
-          cp "$apk" "Inkleaf_${version}_qt_android_arm64.apk"
+          cp "$apk" "Inkleaf_${version}_android_arm64.apk"
       - uses: actions/upload-artifact@v4
         with:
           name: inkleaf-qt-android
-          path: Inkleaf_*_qt_android_arm64.apk
+          path: Inkleaf_*_android_arm64.apk

@@ -1,12 +1,7 @@
 node_modules/
 dist/
-src-tauri/target/
-src-tauri/gen/
 *.log
 .DS_Store
-public/pdfjs/
-
-src-tauri/tauri.release.conf.json
 
 # Signing keys: never commit (see docs/RELEASING.md)
 *.jks

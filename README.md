@@ -1,9 +1,9 @@
 # Inkleaf
 
-A handwritten note-taking desktop app built with **Tauri 2 + Rust** and a
-TypeScript canvas frontend. It organizes notebooks in folders, takes
-pressure-sensitive ink, snaps hand-drawn shapes into clean ones, and stores
-everything locally in SQLite.
+A handwritten note-taking app for Windows, Linux and Android tablets, built
+with **Qt 6** (QML and C++, ink drawn on the GPU) on a **Rust** core. It
+organizes notebooks in folders, takes pressure-sensitive ink, snaps
+hand-drawn shapes into clean ones, and stores everything locally in SQLite.
 
 The repository also contains the reports from studying how the Goodnotes web
 app is built (see [`docs/reverse-engineering/`](docs/reverse-engineering/README.md)).
@@ -20,8 +20,8 @@ no Goodnotes code, assets or branding.
 - **Paper:** 21 paper styles in six groups. *Basic:* blank, ruled, narrow ruled, wide ruled, grid, dotted. *Notes:* Cornell, legal pad, two columns, to-do list. *Maths & science:* millimetre graph paper (1 mm, 5 mm and 1 cm lines), coordinate plane on millimetre paper (axis ticks every 5 mm), isometric dots, hexagon. *Writing & art:* handwriting practice, calligraphy guide (55° slant), storyboard. *Planner:* daily and weekly. *Teacher:* daftar annossous and weekly timetable (bilingual, right to left). Every style adapts to A4, A5, US Letter, US Legal or square, portrait or landscape, and to white, cream, yellow, grey or dark paper; the picker shows them in tabs with previews. Paper style and colour can be changed per page or for all pages
 - **Pen types:** fountain pen (pressure-sensitive), ballpoint, pencil (grain texture), calligraphy (flat 45° nib) and brush pen (tapered); translucent highlighter
 - **Sync through Google Drive** (Settings → Sync): sign in once on each device (in the browser, with your Google account) and notebooks, folders and imported PDFs stay the same on your computer and tablet. Sync runs at start, every five minutes, when you close a notebook and when the tablet app is put away. Files live in Drive's hidden app folder, which only Inkleaf can see. A notebook changed on both devices keeps both versions (one as a copy); a notebook deleted for good on one device goes on the other; the notebook you're writing in is never replaced while open
-- **Updates:** installed apps (Windows, Linux AppImage) check GitHub Releases and offer new versions; nothing installs until you agree, your notes are saved, and the app restarts on the new version. Updates are signed. The Android app says when a new APK is out. Settings → Updates: automatic checks, Check now. See [docs/RELEASING.md](docs/RELEASING.md)
-- **Android tablets:** the same app on Android (Tauri 2), with a touch-first layout: in portrait the tools take their own row and the pages slide over the page
+- **Updates:** the app checks GitHub Releases and, when there's a new version, shows a banner with its notes and a download for your system (AppImage, Windows zip or APK). Settings → Updates: automatic checks, Check now. See [docs/RELEASING.md](docs/RELEASING.md)
+- **Android tablets:** the same app on Android, with a touch-first layout
 - **Backups** (Settings → Backups): pick a folder — a USB key, or a folder Google Drive, Dropbox or OneDrive syncs — and Inkleaf saves the whole library there once a day while it's open, as `Inkleaf backup <date time>.inkleaf`, keeping the newest 7, 14 or 30. Files are written under a temporary name and renamed when complete, so a sync client never uploads half a backup; if the folder is missing (drive unplugged) you're told and it tries again later. *Export everything* saves the library as one `.inkleaf` file anywhere; *Restore* checks a backup, shows what's in it, and replaces the library (the current one is kept as `inkleaf-before-restore.db` in the app's data folder). A backup is a SQLite snapshot, so it holds notebooks, pages, ink, imported PDFs and daftar settings
 - **Settings** (library sidebar → Settings, or ⋯ → Settings in a notebook), applied at once. *Writing:* smoothing Off / Light / Normal / Strong (each stroke keeps the smoothing it was written with; also in the pen's options), pressure Light / Normal / Firm (how hard to press for a full line), and the cursor under the pen — cross, small dot or hidden. *Stylus and touch:* the pen's side button erases or lassos while held (or does nothing), the eraser end erases, palm rejection, pen-only mode. *Appearance:* light, dark or system theme
 - **Eraser:** *Precise* (default) erases only what it touches, cutting strokes and shape outlines; *Whole stroke* removes anything it touches. Text boxes and sticky notes are erased whole
@@ -32,12 +32,12 @@ no Goodnotes code, assets or branding.
 - **Hold to refine:** keep the pen (or mouse) down at the end of a stroke and it snaps to its refined form while you're still holding. Keep moving to rotate and resize it; hold still again to switch to moving it (and back). It's placed only when you lift. With the pens it works like the shape tool: shapes, arcs, braces, maths symbols, and otherwise a smoothed version of the stroke; write and lift without pausing and your ink is kept exactly as written
 - **Maths symbols:** hold at the end of a stroke to get a clean ∫ Σ √ ∞ (one stroke) or = ≡ ≠ ⇒ ⇔ → ↔ ≤ ≥ ± ∀ ∃ — for symbols of several strokes, the strokes you wrote just before (within a couple of seconds, right next to it) are included and replaced, in one undo step. Recognition ($P point clouds plus corner and proportion checks) ignores stroke order and direction and leaves letters and digits alone
 - **Alignment guides:** when moving text, magenta guides appear and the text snaps when its baseline or letter centre lines up with other text, sits on a ruled line or centred between two, or its ink lines up left/right/centre with other text, the margin or the page centre. Guides follow the letters, not the text box. Hold Alt to move freely
-- **PDF import and annotation:** *Import PDF* in the library turns a PDF (lecture slides, papers, worksheets…) into a notebook with one page per PDF page, at the PDF's own page size. The PDF is stored inside Inkleaf and rendered as each page's background, sharp at any zoom, so you can write, highlight, add text and shapes on top. Exports include the PDF content under your notes. Rendering uses the bundled pdf.js, so it works offline
+- **PDF import and annotation:** *Import PDF* in the library turns a PDF (lecture slides, papers, worksheets…) into a notebook with one page per PDF page, at the PDF's own page size. The PDF is stored inside Inkleaf and rendered as each page's background, sharp at any zoom, so you can write, highlight, add text and shapes on top. Exports include the PDF content under your notes. PDFs are rendered on the device (Qt PDF; Android's PDF renderer), so it works offline
 - **Ruler, protractor and set squares (R):** see-through drawing instruments with real-size markings that float over the page; pick one from the ruler button's menu (R shows or hides the last one). Drag to move; rotate by dragging a round grip, scrolling the wheel over it (1° per notch, 15° with Shift) or twisting with two fingers; it snaps to common angles. Pen, highlighter and shape strokes started next to an edge lock to it, with the ink against the edge and a live readout: length in cm along straight edges, swept angle along the protractor's curved edge. The 30 cm *ruler* has mm/cm scales; the *protractor* has 0–180° scales (both directions) and two arms you drag to measure an angle; the *set squares* (45° and 30°/60°) have cm scales on both legs and work along all three edges. Only the instrument's body takes input, so you can draw right next to it. Instruments are never part of the page or exports
 - **Laser pointer (K):** for presenting and explaining. *Trail* draws a glowing tube (bright colour with a white core, fuller when you move slowly and slimmer on fast sweeps) that stays while you keep drawing; shortly after you stop, the colour fades and then the core (drawing again during the fade brings it back). *Dot* is a small pointer that follows the pen or mouse. Red, green, blue, purple or orange (or any colour). It is drawn incrementally on its own layers, so it stays smooth however much you draw. Nothing is ever added to the page, undo history or exports; in pen-only mode the mouse can still use it
 - **Objects:** text boxes, sticky notes, images (insert or paste)
 - **Text formatting:** bold, italic, bulleted and numbered lists (Enter continues the list, wrapped lines indent under the text) and left/centre/right alignment, per text box or sticky note; Ctrl+B / Ctrl+I while typing
-- **Fonts:** eleven presets for typed text. Typed: Clean (Inter) and Book (Lora, a serif), both with real bold and italic. Handwriting: Friendly (Playpen Sans), Natural (Mynerve), School print (Andika), French cursive (Playwrite FR Moderne), Classic cursive (Playwrite FR Trad), Marker (Shantell Sans), Chalkboard (Schoolbell), Quick notes (Gochi Hand) and Neat (Handlee). All cover French accents; characters a font lacks (such as ² or ½) come from Inter, on screen and in PDF exports alike. Text written in the earlier fonts shows in the closest new one. Pick one before or while typing, or lasso-select text boxes and sticky notes and change the font or size (A− / A+) from the selection bar. The fonts are bundled, so they work offline (SIL Open Font License; see `public/third-party-licenses.txt`)
+- **Fonts:** eleven presets for typed text. Typed: Clean (Inter) and Book (Lora, a serif), both with real bold and italic. Handwriting: Friendly (Playpen Sans), Natural (Mynerve), School print (Andika), French cursive (Playwrite FR Moderne), Classic cursive (Playwrite FR Trad), Marker (Shantell Sans), Chalkboard (Schoolbell), Quick notes (Gochi Hand) and Neat (Handlee). All cover French accents; characters a font lacks (such as ² or ½) come from Inter, on screen and in PDF exports alike. Text written in the earlier fonts shows in the closest new one. Pick one before or while typing, or lasso-select text boxes and sticky notes and change the font or size (A− / A+) from the selection bar. The fonts are bundled, so they work offline (SIL Open Font License)
 - **Tool options:** each tool keeps a compact bar of its own **5 favourite colours and 3 favourite sizes**, remembered between sessions. Tap a favourite to use it; tap it again (or the rainbow button) to swap it for a palette colour or any custom colour; the size chip opens a slider with exact values. The pen type and shape kind are one chip with a picture menu, and text lists and alignment sit behind one chip
 - **Colours:** palette colours plus a custom colour picker (saturation/brightness square, hue slider, hex code, recently used colours and, where the system supports it, an eyedropper) for every tool and for recolouring a selection
 - **Sizes:** each tool shows its exact size in px, with one-tap presets, − / + buttons and a box to type a value. Sizes are remembered
@@ -47,7 +47,7 @@ no Goodnotes code, assets or branding.
 - **Apply a font to handwriting:** lasso-select pen writing (e.g. a title) and choose *Apply font*. On Windows the built-in offline handwriting recognizer (Windows Ink) reads the words and suggests alternatives; you can correct the text, preview it in every handwriting font, and it replaces the ink at the same place and size (optionally keeping the ink). Elsewhere you type what you wrote
 - **Pages:** all pages scroll continuously in one column; write on any page directly (it becomes the current page), and the page in view becomes current when scrolling stops. Sidebar thumbnails, add / insert / duplicate / reorder / delete / bookmark; undo history is kept per page
 - **Editing:** undo/redo, zoom (Ctrl+wheel, pinch, fit width; zoomed in far, only the visible part of the page is drawn, so big and HiDPI screens stay fast), pan tool
-- **Export:** PDF (whole notebook or one page), PowerPoint .pptx (one slide per page) or PNG, through a native Save dialog that defaults to `Documents/Inkleaf Exports/`. PDFs are vector: handwriting, shapes and text stay sharp at any zoom and the text can be selected and searched (text is drawn from the bundled fonts' glyph outlines, with an invisible text layer on top; Arabic is joined and laid out right to left from Noto Sans Arabic's outlines, so it's sharp too, though not selectable). Imported PDF pages and pictures are embedded as images (PDF pages at 288 DPI). PowerPoint and PNG exports are high-resolution images
+- **Export:** PDF (whole notebook or one page), PowerPoint .pptx (one slide per page) or PNG, through the system's Save dialog. PDFs are vector: handwriting, shapes and text stay sharp at any zoom. PowerPoint and PNG exports are high-resolution images
 - **Themes:** light and dark mode
 
 ### Keyboard shortcuts
@@ -65,65 +65,44 @@ no Goodnotes code, assets or branding.
 ## Project layout
 
 ```
-src-tauri/            Rust backend (Tauri 2)
-  src/db.rs           SQLite schema, library/page/element persistence, search (+ tests)
-  src/ink.rs          Stroke simplification (+ tests)
-  src/commands.rs     Tauri command layer
-  src/export.rs       PDF and PowerPoint writers (+ tests)
-  src/handwriting.rs  Handwriting recognition via Windows Ink (Windows only)
-  src/lib.rs          App setup and command registration
-src/                  TypeScript frontend (Vite, no framework)
-  api.ts              Typed backend API (Tauri invoke, or an in-browser mock)
-  mockBackend.ts      localStorage backend for browser previews and UI tests
-  library.ts          Library screen
-  editor/             Canvas editor: model, geometry, rendering, tools,
-                      beautify.ts (shape/brace recognition, smoothing), snap.ts (guides)
-docs/reverse-engineering/   Goodnotes web architecture reports
+qt/                   The app (Qt 6: QML screens, C++ canvas and glue); see qt/README.md
+  native/             The C interface to the Rust core
+  js/                 Editor logic and the bridge to the shared drawing code
+core/                 Rust core: SQLite library, ink, export (PDF/PPTX), backups,
+                      Google Drive sync, handwriting recognition (Windows Ink)
+src/                  Shared TypeScript drawing and layout code (papers, covers,
+                      pens, shapes and symbols, text, the daftar), bundled into
+                      qt/js/bridge.js by `npm run qt-bridge`
+docs/                 Release guide, web pages (privacy, terms),
+                      reverse-engineering/ (Goodnotes web architecture reports)
 ```
 
 ## Development
 
-Prerequisites: Node 20+, Rust 1.90+, and the
-[Tauri system dependencies](https://tauri.app/start/prerequisites/) for your OS
-(on Debian/Ubuntu: `libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev`).
+Prerequisites: Qt 6.5+ (Quick, Controls, Svg, PDF), CMake, Rust stable,
+Node 20+. On Arch: `sudo pacman -S --needed qt6-base qt6-declarative qt6-svg qt6-webengine cmake base-devel rustup nodejs npm`.
 
 ```bash
 npm install
-npm run tauri dev         # run the desktop app with hot reload
-npm run tauri build       # build installers / bundles for this OS
-npm run dev               # frontend only in a browser (uses the mock backend)
-
-# Windows installer from Linux (MinGW): needs mingw-w64 and nsis
-rustup target add x86_64-pc-windows-gnu
-npm run tauri build -- --target x86_64-pc-windows-gnu --bundles nsis
+npm run qt-bridge                       # after changing src/ or qt/js
+cmake -S qt -B build/qt -DCMAKE_BUILD_TYPE=Release
+cmake --build build/qt -j
+./build/qt/inkleaf
 ```
-
-### Linux packages
-
-Arch Linux (including Omarchy): `packaging/arch/PKGBUILD` installs a release
-build. Put it next to `inkleaf-<version>-x86_64.tar.gz` (binary, desktop entry,
-icons) and run `makepkg -si`. It uses the system `webkit2gtk-4.1`.
-
-```bash
-npm run tauri build -- --no-bundle         # release binary: src-tauri/target/release/inkleaf
-npm run tauri build -- --bundles deb,rpm   # Debian/Ubuntu and Fedora packages
-```
-
-If the window stays blank on Wayland with an NVIDIA GPU, start it with
-`WEBKIT_DISABLE_DMABUF_RENDERER=1 inkleaf` (a WebKitGTK driver issue).
 
 Tests:
 
 ```bash
-npm run typecheck && npm test          # TypeScript + frontend unit tests (Vitest)
-cd src-tauri && cargo test             # Rust unit tests (database, ink geometry, PDF/PPTX export)
+npm run typecheck && npm test          # TypeScript + unit tests (Vitest)
+cargo test -p inkleaf-core             # Rust core (database, ink, export, sync)
+QT_QPA_PLATFORM=offscreen ./build/qt/inkleaf --smoke   # the app starts and its screens load
 ```
 
 Data lives in the OS app-data directory (e.g. `~/.local/share/app.inkleaf.desktop/inkleaf.db`
-on Linux, `~/Library/Application Support/app.inkleaf.desktop/` on macOS).
+on Linux); `INKLEAF_DATA_DIR=/some/folder` uses another one.
 
 ## Not implemented yet
 
-Cloud sync and collaboration, handwriting recognition outside Windows, and password-protected PDFs.
+Collaboration, handwriting recognition outside Windows, and password-protected PDFs.
 [Report 05](docs/reverse-engineering/05-inkleaf-mapping.md) explains how each
 could be added.

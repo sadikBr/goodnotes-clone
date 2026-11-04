@@ -1,5 +1,5 @@
-// npm run set-version 0.8.1 — sets the version in package.json,
-// src-tauri/tauri.conf.json and src-tauri/Cargo.toml.
+// npm run set-version 0.8.1 — sets the app version in package.json (which
+// the Qt build reads) and in the Rust crates' Cargo.toml files.
 import { readFileSync, writeFileSync } from "node:fs";
 
 const v = (process.argv[2] ?? "").replace(/^v/, "");
@@ -7,13 +7,10 @@ if (!/^\d+\.\d+\.\d+$/.test(v)) {
   console.error("usage: npm run set-version 1.2.3");
   process.exit(1);
 }
-const json = (p, f) => {
-  const d = JSON.parse(readFileSync(p, "utf8"));
-  f(d);
-  writeFileSync(p, JSON.stringify(d, null, 2) + "\n");
-};
-json("package.json", (d) => (d.version = v));
-json("src-tauri/tauri.conf.json", (d) => (d.version = v));
-const cargo = readFileSync("src-tauri/Cargo.toml", "utf8").replace(/^version\s*=\s*"[^"]+"/m, `version = "${v}"`);
-writeFileSync("src-tauri/Cargo.toml", cargo);
-console.log(`version set to ${v} — commit, then: git tag v${v} && git push origin v${v}`);
+const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+pkg.version = v;
+writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
+for (const p of ["core/Cargo.toml", "qt/native/Cargo.toml"]) {
+  writeFileSync(p, readFileSync(p, "utf8").replace(/^version\s*=\s*"[^"]+"/m, `version = "${v}"`));
+}
+console.log(`version set to ${v} — commit, then: git tag v${v} && git push origin main v${v}`);

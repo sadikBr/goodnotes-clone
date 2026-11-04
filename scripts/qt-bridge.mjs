@@ -1,6 +1,6 @@
-// Bundles the web app's drawing and layout code for the native Qt app:
+// Bundles the shared drawing and layout code (src/) for the Qt app:
 // qt/js/bridge.ts → qt/js/bridge.js (a plain script defining `Inkleaf`).
-// Run after changing src/editor/* drawing code: npm run qt-bridge
+// Run after changing src/ or qt/js code: npm run qt-bridge
 import { build } from "esbuild";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -51,10 +51,6 @@ function noUnicodeProps(js) {
 }
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const alias = {
-  "@tauri-apps/api/core": path.join(root, "qt/js/tauri-core.ts"),
-  "@tauri-apps/plugin-dialog": path.join(root, "qt/js/tauri-stub.ts"),
-};
 await build({
   entryPoints: [path.join(root, "qt/js/bridge.ts")],
   outfile: path.join(root, "qt/js/bridge.js"),
@@ -85,13 +81,6 @@ await build({
           const contents = noUnicodeProps(out).replace(/\(this && this\.(__values|__read|__spreadArray)\)/g, "(globalThis.__fast && globalThis.__fast.$1)");
           return { contents, loader: "js" };
         });
-      },
-    },
-    {
-      name: "qt-aliases",
-      setup(b) {
-        b.onResolve({ filter: /^@tauri-apps\// }, (a) => ({ path: alias[a.path] ?? path.join(root, "qt/js/tauri-stub.ts") }));
-        b.onResolve({ filter: /mockBackend$/ }, () => ({ path: path.join(root, "qt/js/tauri-stub.ts") }));
       },
     },
   ],

@@ -30,7 +30,7 @@ pub struct Core {
 }
 
 impl Core {
-    /// Opens (or creates) the library in `dir`: the same files the Tauri app uses.
+    /// Opens (or creates) the library in `dir`: the library's database and files.
     pub fn open(dir: &Path) -> AppResult<Core> {
         std::fs::create_dir_all(dir)?;
         Ok(Core {

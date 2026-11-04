@@ -1,10 +1,7 @@
-// Typed access to the Rust backend. Inside the Tauri shell calls go through
-// `invoke`; in a plain browser (vite dev / UI tests) an in-memory mock with
-// the same contract is used so the UI can be developed without the shell.
+// The library's types, and typed access to the Rust core for the shared
+// scripts (covers, the daftar). The Qt app does the rest natively.
 
-import { invoke } from "@tauri-apps/api/core";
-import { open, save } from "@tauri-apps/plugin-dialog";
-import { MockBackend } from "./mockBackend";
+import { invoke } from "./native";
 
 export type Template =
   | "blank"
@@ -265,30 +262,14 @@ export interface Backend {
   saveElements(pageId: string, elements: StoredElement[]): Promise<void>;
   search(query: string): Promise<SearchHit[]>;
   simplifyStroke(points: [number, number, number][], epsilon: number): Promise<[number, number, number][]>;
-  /** Asks where to save; resolves to null when the user cancels. */
-  chooseExportPath(fileName: string, format: ExportFormat): Promise<string | null>;
-  exportDocument(path: string, format: ExportFormat, pages: ExportPage[]): Promise<string>;
-  /** Writes a finished PDF (vector export) to `path`; returns the final path. */
-  savePdfExport(path: string, bytes: Uint8Array): Promise<string>;
   recognizeHandwriting(strokes: P2[][]): Promise<HandwritingRecognition>;
-  /** Stores PDF bytes; returns an asset id for createPdfNotebook. */
-  storePdfAsset(bytes: Uint8Array): Promise<string>;
   createPdfNotebook(input: NewPdfNotebook): Promise<Notebook>;
-  assetBytes(id: string): Promise<Uint8Array>;
   // Backups (desktop app only).
   backupStatus(): Promise<BackupConfig>;
   setBackupSettings(folder: string | null, daily: boolean, keep: number): Promise<BackupConfig>;
   /** `label`: local date and time for the file name, e.g. "2026-11-03 0915". */
   backupNow(label: string): Promise<BackupConfig>;
   backupIfDue(label: string): Promise<BackupConfig>;
-  /** Asks for a folder; null when cancelled. */
-  chooseBackupFolder(current: string | null): Promise<string | null>;
-  /** Asks where to save "everything" and saves it; null when cancelled. */
-  exportLibrary(label: string): Promise<string | null>;
-  /** Asks for a backup file; null when cancelled. */
-  chooseBackupFile(): Promise<string | null>;
-  inspectBackup(path: string): Promise<BackupSummary>;
-  restoreBackup(path: string): Promise<BackupSummary>;
   // Google Drive sync.
   syncStatus(): Promise<SyncStatus>;
   syncSignInStart(): Promise<DeviceCode>;
@@ -348,13 +329,7 @@ export interface NewPdfNotebook {
   pages: { width: number; height: number }[];
 }
 
-const FORMAT_FILTERS: Record<ExportFormat, { name: string; extensions: string[] }> = {
-  pdf: { name: "PDF document", extensions: ["pdf"] },
-  pptx: { name: "PowerPoint presentation", extensions: ["pptx"] },
-  png: { name: "PNG image", extensions: ["png"] },
-};
-
-class TauriBackend implements Backend {
+class NativeBackend implements Backend {
   library = () => invoke<Library>("library");
   trash = () => invoke<Library>("trash");
   emptyTrash = () => invoke<void>("empty_trash");
@@ -392,67 +367,18 @@ class TauriBackend implements Backend {
   search = (query: string) => invoke<SearchHit[]>("search", { query });
   simplifyStroke = (points: [number, number, number][], epsilon: number) =>
     invoke<[number, number, number][]>("simplify_stroke", { points, epsilon });
-  chooseExportPath = async (fileName: string, format: ExportFormat) => {
-    const ext = FORMAT_FILTERS[format].extensions[0];
-    const defaultPath = isAndroid ? `${fileName}.${ext}` : await invoke<string>("default_export_dir", { fileName, format });
-    return save({ title: "Export", defaultPath, filters: [FORMAT_FILTERS[format]] });
-  };
-  exportDocument = async (path: string, format: ExportFormat, pages: ExportPage[]) =>
-    isAndroid ? writePicked(path, new Uint8Array(await invoke<ArrayBuffer>("build_document", { format, pages }))) : invoke<string>("export_document", { path, format, pages });
-  savePdfExport = (path: string, bytes: Uint8Array) =>
-    isAndroid ? writePicked(path, bytes) : invoke<string>("save_pdf_export", bytes, { headers: { "x-export-path": encodeURIComponent(path) } });
   recognizeHandwriting = (strokes: P2[][]) => invoke<HandwritingRecognition>("recognize_handwriting", { strokes });
-  // Raw bytes go over IPC as a binary body, not JSON.
-  storePdfAsset = (bytes: Uint8Array) => invoke<string>("store_pdf_asset", bytes);
   createPdfNotebook = (input: NewPdfNotebook) => invoke<Notebook>("create_pdf_notebook", { input });
-  assetBytes = async (id: string) => new Uint8Array(await invoke<ArrayBuffer>("asset_bytes", { id }));
   backupStatus = () => invoke<BackupConfig>("backup_status");
   setBackupSettings = (folder: string | null, daily: boolean, keep: number) => invoke<BackupConfig>("set_backup_settings", { folder, daily, keep });
   backupNow = (label: string) => invoke<BackupConfig>("backup_now", { label });
   backupIfDue = (label: string) => invoke<BackupConfig>("backup_if_due", { label });
-  chooseBackupFolder = async (current: string | null) => {
-    const r = await open({ title: "Choose the backup folder", directory: true, multiple: false, defaultPath: current ?? undefined });
-    return typeof r === "string" ? r : null;
-  };
-  exportLibrary = async (label: string) => {
-    const name = `Inkleaf everything ${label}.inkleaf`;
-    const dir = isAndroid ? null : await invoke<string>("default_export_dir", { fileName: "x", format: "pdf" }).catch(() => null);
-    const defaultPath = dir ? dir.replace(/[^\\/]*$/, name) : name;
-    const path = await save({ title: "Export everything", defaultPath, filters: [BACKUP_FILTER] });
-    if (!path) return null;
-    return isAndroid ? writePicked(path, new Uint8Array(await invoke<ArrayBuffer>("library_snapshot"))) : invoke<string>("export_library", { path });
-  };
-  chooseBackupFile = async () => {
-    const r = await open({ title: "Restore from a backup", multiple: false, filters: [BACKUP_FILTER] });
-    return typeof r === "string" ? r : null;
-  };
   syncStatus = () => invoke<SyncStatus>("sync_status");
   syncSignInStart = () => invoke<DeviceCode>("sync_sign_in_start");
   syncSignInWait = (device: string) => invoke<SyncStatus>("sync_sign_in_wait", { device });
   syncSignInCancel = () => invoke<void>("sync_sign_in_cancel");
   syncSignOut = () => invoke<SyncStatus>("sync_sign_out");
   syncNow = (open: string | null) => invoke<SyncReport>("sync_now", { open });
-  inspectBackup = async (path: string) => (isAndroid ? invoke<BackupSummary>("inspect_backup_bytes", await readPicked(path)) : invoke<BackupSummary>("inspect_backup", { path }));
-  restoreBackup = async (path: string) => (isAndroid ? invoke<BackupSummary>("restore_backup_bytes", await readPicked(path)) : invoke<BackupSummary>("restore_backup", { path }));
 }
 
-const BACKUP_FILTER = { name: "Inkleaf backup", extensions: ["inkleaf", "db"] };
-
-/** Android: reads a file picked in the open dialog. */
-async function readPicked(path: string): Promise<Uint8Array> {
-  const { readFile } = await import("@tauri-apps/plugin-fs");
-  return readFile(path);
-}
-
-export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-/** The Android app (files from the dialogs are content:// URIs; no folder backups or in-app updater). */
-export const isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
-
-/** Android: writes bytes to a file picked in the save dialog. */
-async function writePicked(path: string, bytes: Uint8Array): Promise<string> {
-  const { writeFile } = await import("@tauri-apps/plugin-fs");
-  await writeFile(path, bytes);
-  return decodeURIComponent(path.split("/").pop() ?? path);
-}
-
-export const api: Backend = isTauri ? new TauriBackend() : new MockBackend();
+export const api: Backend = new NativeBackend();

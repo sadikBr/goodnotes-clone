@@ -1,9 +1,8 @@
-# Inkleaf — native Qt app
+# Inkleaf — the Qt app
 
-The native rewrite of Inkleaf's interface in Qt Quick (QML + C++), on the
-same Rust core as the current app (`../core`, through `native/`). It opens
-the same library, so your notebooks appear in both while the rewrite is
-under way.
+Inkleaf's app in Qt Quick (QML + C++), on the Rust core (`../core`, through
+`native/`). Its library folder is the one the earlier Tauri app used, so
+notebooks from it open as they were.
 
 Ink is drawn on the GPU: every stroke is a triangle mesh built once, so
 scrolling and zooming never re-draw ink.
@@ -26,16 +25,17 @@ qml6-module-qt-labs-settings qml6-module-qtqml-workerscript cmake`.)
 
 `INKLEAF_DATA_DIR=/some/folder ./build/qt/inkleaf` uses another library folder (for testing).
 
-After changing the web app's drawing code (`src/editor`, `src/daftar.ts`,
-`src/cover.ts`…), run `npm run qt-bridge`: it bundles that code into
-`js/bridge.js`, which the Qt app runs so both apps draw alike.
+After changing the shared drawing code (`src/editor`, `src/daftar.ts`,
+`src/cover.ts`…) or `js/`, run `npm run qt-bridge`: it bundles that code into
+`js/bridge.js`, which the app runs.
 
-CI (`.github/workflows/qt.yml`) builds an AppImage and a Windows folder on
-every push that touches the app; they are kept as run artifacts.
+CI (`.github/workflows/qt.yml`) builds the AppImage, the Windows folder and
+the APK on every push that touches the app (kept as run artifacts); the
+release workflow publishes them.
 
 ## What works
 
-Everything the current app does, with its look:
+Everything:
 
 - Library: notebooks with their covers, folders, favourites, trash, search,
   sorting, the New menu; import PDFs (with progress); dark mode.
@@ -58,8 +58,8 @@ Everything the current app does, with its look:
 | `src/Core.*` | The Rust core for QML (`InkleafCore.call(command, args)`) |
 | `src/InkCanvas.*` | The page canvas: input, layout, scene-graph rendering, saving |
 | `src/Ink.*` | Ink geometry (smoothing, pen widths, stroke meshes) |
-| `src/JsCanvas.*`, `src/Js.*` | A Canvas 2D for the web app's drawing code, and the script engine running it |
+| `src/JsCanvas.*`, `src/Js.*` | A Canvas 2D for the shared drawing code, and the script engine running it |
 | `src/Pdf.*` | PDF import and PDF page pictures |
-| `js/` | The web code the app uses (`bridge.ts` → `bridge.js`) and the editor core |
-| `qml/` | Screens (`Library`, `Editor`), `Theme` (the web app's colours), icons |
+| `js/` | The editor core and the bridge to the shared code in `../src` (`bridge.ts` → `bridge.js`) |
+| `qml/` | Screens (`Library`, `Editor`), `Theme` (colours), icons |
 | `native/` | The C interface to the Rust core |

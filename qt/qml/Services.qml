@@ -189,15 +189,11 @@ QtObject {
     /** The download for this kind of computer in a release (else its page). */
     function assetFor(rel) {
         const os = Qt.platform.os
-        const ends = os === "windows" ? [".exe", ".msi"] : os === "android" ? [".apk"] : os === "osx" ? [".dmg"] : [".AppImage"]
+        const ends = os === "windows" ? ["_windows_x64.zip", ".exe", ".msi"] : os === "android" ? [".apk"] : os === "osx" ? [".dmg"] : [".AppImage"]
         const assets = rel.assets || []
         for (const e of ends) {
-            const qt = assets.find(a => a.name.endsWith(e) && /qt/i.test(a.name))
-            if (qt) return qt.browser_download_url
-        }
-        for (const e of ends) {
-            const any = assets.find(a => a.name.endsWith(e))
-            if (any) return any.browser_download_url
+            const a = assets.find(x => x.name.endsWith(e))
+            if (a) return a.browser_download_url
         }
         return rel.html_url
     }

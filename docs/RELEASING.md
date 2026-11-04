@@ -1,34 +1,15 @@
-# Releasing Inkleaf (updates, Android, Google Drive sync)
+# Releasing Inkleaf (Android signing, Google Drive sync)
 
-Releases are built by GitHub Actions when a version tag is pushed. Installed
-apps on Windows and Linux (AppImage) see the new release and offer to update;
-the Android app tells the user a new APK is out.
+Releases are built by GitHub Actions when a version tag is pushed: the Linux
+AppImage, the Windows zip and the Android APK. Installed apps see the new
+release (Settings → Updates) and offer its download.
 
 Everything below is a one-time setup. All keys go into the repository's
 **Settings → Secrets and variables → Actions**. Keep a copy of every key
-somewhere safe (a password manager): a lost update or Android key means
-installed apps can no longer be updated.
+somewhere safe (a password manager): a lost Android key means installed
+tablets can no longer be updated.
 
-## 1. Update signing key (Windows and Linux auto-update)
-
-On your computer, in the project folder:
-
-```sh
-npx tauri signer generate -w ~/.tauri/inkleaf.key
-```
-
-Choose a password when asked. This makes `inkleaf.key` (private) and
-`inkleaf.key.pub` (public). Then add:
-
-| Where | Name | Value |
-|---|---|---|
-| Secret | `TAURI_SIGNING_PRIVATE_KEY` | contents of `~/.tauri/inkleaf.key` |
-| Secret | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | the password |
-| Variable (or secret) | `TAURI_UPDATER_PUBKEY` | contents of `~/.tauri/inkleaf.key.pub` |
-
-Apps only install updates signed with this key.
-
-## 2. Android signing key
+## 1. Android signing key
 
 ```sh
 keytool -genkey -v -keystore inkleaf.jks -keyalg RSA -keysize 2048 -validity 10000 -alias inkleaf
@@ -44,13 +25,14 @@ base64 -w0 inkleaf.jks > inkleaf.jks.b64      # macOS: base64 -i inkleaf.jks -o 
 
 Android only installs an update signed with the same key as the installed app.
 
-To try an APK without making a release: **Actions → Android test build → Run
-workflow**, then download it from the run's artifacts.
+To try a build without making a release: every push to `main` runs **Actions
+→ Qt app**; download the AppImage, Windows zip or APK from the run's
+artifacts (or run it by hand: Run workflow).
 
 Installing on a tablet: open the APK from the release page (or copy it over),
 and allow "Install unknown apps" for the browser or file manager when asked.
 
-## 3. Google sign-in key (Drive sync)
+## 2. Google sign-in key (Drive sync)
 
 1. Open <https://console.cloud.google.com> and create a project ("Inkleaf").
 2. **APIs & Services → Library**: enable the **Google Drive API**.
@@ -81,13 +63,12 @@ and allow "Install unknown apps" for the browser or file manager when asked.
 Inkleaf asks only for its own hidden app folder in Drive (`drive.appdata`): it
 can't see the user's other files. For a local build with sync, set
 `INKLEAF_GOOGLE_CLIENT_ID` and `INKLEAF_GOOGLE_CLIENT_SECRET` in the
-environment before building (`npm run tauri build`, or the Qt app's CMake
-build, which builds the core).
+environment before building (the CMake build builds the core).
 
-## 4. Making a release
+## 3. Making a release
 
 ```sh
-npm run set-version 0.8.1          # package.json, tauri.conf.json, Cargo.toml
+npm run set-version 0.8.1          # package.json and the Rust crates
 git commit -am "v0.8.1"
 git tag v0.8.1
 git push origin main v0.8.1
@@ -96,8 +77,8 @@ git push origin main v0.8.1
 Or, without a tag: **Actions → Release → Run workflow** releases the version in
 `package.json`.
 
-The **Release** workflow checks the versions match, builds the Windows
-installer, the Linux AppImage and the Android APK, signs them, and publishes
-the release with `latest.json`. Installed apps find it within a few hours (or
-at once with Settings → Updates → Check now). Edit the release notes on GitHub
-if you like; they are shown in the app's update banner.
+The **Release** workflow checks the versions match, builds and checks the
+three downloads (the same build as every push, with the APK signed), attaches
+them to the release and publishes it. Installed apps find it within a few
+hours (or at once with Settings → Updates → Check now). Edit the release notes
+on GitHub if you like; they are shown in the app's update banner.

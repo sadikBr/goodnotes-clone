@@ -2,17 +2,12 @@
   "name": "inkleaf",
   "private": true,
   "version": "0.8.0",
-  "description": "Inkleaf - a handwritten note-taking desktop app built with Tauri and Rust",
+  "description": "Inkleaf - a handwritten note-taking app (Qt and Rust)",
   "type": "module",
   "scripts": {
-    "dev": "node scripts/copy-pdfjs-assets.mjs && vite",
-    "build": "node scripts/copy-pdfjs-assets.mjs && tsc --noEmit && vite build",
-    "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p qt/js",
     "test": "vitest run",
-    "tauri": "tauri",
     "set-version": "node scripts/set-version.mjs",
-    "licenses": "node scripts/third-party-licenses.mjs",
     "qt-icons": "node scripts/qt-icons.mjs",
     "qt-bridge": "node scripts/qt-bridge.mjs"
   },
@@ -29,22 +24,12 @@
     "@fontsource/playwrite-fr-trad": "5.3.0",
     "@fontsource/schoolbell": "5.3.0",
     "@fontsource/shantell-sans": "5.3.0",
-    "@tauri-apps/api": "2.12.4",
-    "@tauri-apps/plugin-dialog": "2.8.3",
-    "@tauri-apps/plugin-fs": "2.7.1",
-    "@tauri-apps/plugin-opener": "2.7.2",
-    "@tauri-apps/plugin-process": "2.4.0",
-    "@tauri-apps/plugin-updater": "2.14.0",
-    "opentype.js": "^1.3.4",
-    "pdfjs-dist": "6.4.299",
     "perfect-freehand": "1.2.3"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "2.12.4",
-    "@types/opentype.js": "^1.3.8",
     "typescript": "5.9.3",
-    "vite": "7.3.7",
-    "vitest": "4.1.12"
+    "vitest": "4.1.12",
+    "esbuild": "0.28.2"
   },
   "allowScripts": {
     "esbuild@0.28.2": true

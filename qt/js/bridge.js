@@ -6,14 +6,6 @@ var Inkleaf = (() => {
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __hasOwnProp = Object.prototype.hasOwnProperty;
-  var __esm = (fn, res, err) => function __init() {
-    if (err) throw err[0];
-    try {
-      return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
-    } catch (e2) {
-      throw err = [e2], e2;
-    }
-  };
   var __export = (target, all) => {
     for (var name in all)
       __defProp(target, name, { get: all[name], enumerable: true });
@@ -27,135 +19,6 @@ var Inkleaf = (() => {
     return to;
   };
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-
-  // qt/js/tauri-stub.ts
-  var tauri_stub_exports = {};
-  __export(tauri_stub_exports, {
-    MockBackend: () => MockBackend,
-    open: () => open,
-    save: () => save
-  });
-  var __awaiter3, __generator4, open, save, MockBackend;
-  var init_tauri_stub = __esm({
-    "qt/js/tauri-stub.ts"() {
-      __awaiter3 = function(thisArg, _arguments, P2, generator) {
-        function adopt(value) {
-          return value instanceof P2 ? value : new P2(function(resolve) {
-            resolve(value);
-          });
-        }
-        return new (P2 || (P2 = Promise))(function(resolve, reject) {
-          function fulfilled(value) {
-            try {
-              step(generator.next(value));
-            } catch (e2) {
-              reject(e2);
-            }
-          }
-          function rejected(value) {
-            try {
-              step(generator["throw"](value));
-            } catch (e2) {
-              reject(e2);
-            }
-          }
-          function step(result) {
-            result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
-          }
-          step((generator = generator.apply(thisArg, _arguments || [])).next());
-        });
-      };
-      __generator4 = function(thisArg, body) {
-        var _2 = { label: 0, sent: function() {
-          if (t2[0] & 1) throw t2[1];
-          return t2[1];
-        }, trys: [], ops: [] }, f3, y2, t2, g3 = Object.create((typeof Iterator === "function" ? Iterator : Object).prototype);
-        return g3.next = verb(0), g3["throw"] = verb(1), g3["return"] = verb(2), typeof Symbol === "function" && (g3[Symbol.iterator] = function() {
-          return this;
-        }), g3;
-        function verb(n2) {
-          return function(v2) {
-            return step([n2, v2]);
-          };
-        }
-        function step(op) {
-          if (f3) throw new TypeError("Generator is already executing.");
-          while (g3 && (g3 = 0, op[0] && (_2 = 0)), _2) try {
-            if (f3 = 1, y2 && (t2 = op[0] & 2 ? y2["return"] : op[0] ? y2["throw"] || ((t2 = y2["return"]) && t2.call(y2), 0) : y2.next) && !(t2 = t2.call(y2, op[1])).done) return t2;
-            if (y2 = 0, t2) op = [op[0] & 2, t2.value];
-            switch (op[0]) {
-              case 0:
-              case 1:
-                t2 = op;
-                break;
-              case 4:
-                _2.label++;
-                return { value: op[1], done: false };
-              case 5:
-                _2.label++;
-                y2 = op[1];
-                op = [0];
-                continue;
-              case 7:
-                op = _2.ops.pop();
-                _2.trys.pop();
-                continue;
-              default:
-                if (!(t2 = _2.trys, t2 = t2.length > 0 && t2[t2.length - 1]) && (op[0] === 6 || op[0] === 2)) {
-                  _2 = 0;
-                  continue;
-                }
-                if (op[0] === 3 && (!t2 || op[1] > t2[0] && op[1] < t2[3])) {
-                  _2.label = op[1];
-                  break;
-                }
-                if (op[0] === 6 && _2.label < t2[1]) {
-                  _2.label = t2[1];
-                  t2 = op;
-                  break;
-                }
-                if (t2 && _2.label < t2[2]) {
-                  _2.label = t2[2];
-                  _2.ops.push(op);
-                  break;
-                }
-                if (t2[2]) _2.ops.pop();
-                _2.trys.pop();
-                continue;
-            }
-            op = body.call(thisArg, _2);
-          } catch (e2) {
-            op = [6, e2];
-            y2 = 0;
-          } finally {
-            f3 = t2 = 0;
-          }
-          if (op[0] & 5) throw op[1];
-          return { value: op[0] ? op[1] : void 0, done: true };
-        }
-      };
-      open = function() {
-        return __awaiter3(void 0, void 0, void 0, function() {
-          return __generator4(this, function(_a) {
-            return [2, null];
-          });
-        });
-      };
-      save = function() {
-        return __awaiter3(void 0, void 0, void 0, function() {
-          return __generator4(this, function(_a) {
-            return [2, null];
-          });
-        });
-      };
-      MockBackend = /** @class */
-      /* @__PURE__ */ (function() {
-        function MockBackend2() {
-        }
-        return MockBackend2;
-      })();
-    }
-  });
 
   // qt/js/bridge.ts
   var bridge_exports = {};
@@ -659,7 +522,6 @@ var Inkleaf = (() => {
     return el;
   }
   g.window = g;
-  g.__TAURI_INTERNALS__ = {};
   g.self = g;
   g.devicePixelRatio = 1;
   g.addEventListener = noop;
@@ -5864,20 +5726,20 @@ var Inkleaf = (() => {
     var knots = new Float64Array(nk);
     for (var i2 = 0; i2 < nk; i2++)
       knots[i2] = Math.min(1, Math.max(0, (i2 - k2) / (m2 - k2)));
-    var N6 = new Float64Array(nk - 1);
+    var N5 = new Float64Array(nk - 1);
     var tt = Math.min(t2, 1 - 1e-9);
     for (var i2 = 0; i2 < nk - 1; i2++)
-      N6[i2] = knots[i2] <= tt && tt < knots[i2 + 1] ? 1 : 0;
+      N5[i2] = knots[i2] <= tt && tt < knots[i2 + 1] ? 1 : 0;
     for (var d2 = 1; d2 <= k2; d2++) {
       var next = new Float64Array(nk - 1 - d2);
       for (var i2 = 0; i2 < next.length; i2++) {
         var a2 = knots[i2 + d2] - knots[i2];
         var b2 = knots[i2 + d2 + 1] - knots[i2 + 1];
-        next[i2] = (a2 > 0 ? (tt - knots[i2]) / a2 * N6[i2] : 0) + (b2 > 0 ? (knots[i2 + d2 + 1] - tt) / b2 * N6[i2 + 1] : 0);
+        next[i2] = (a2 > 0 ? (tt - knots[i2]) / a2 * N5[i2] : 0) + (b2 > 0 ? (knots[i2 + d2 + 1] - tt) / b2 * N5[i2 + 1] : 0);
       }
-      N6 = next;
+      N5 = next;
     }
-    return N6;
+    return N5;
   }
   function solve(A3, b2) {
     var _a;
@@ -6922,7 +6784,7 @@ var Inkleaf = (() => {
     return __assign7({ kind: "path", points, closed: false }, breaks.length ? { breaks } : {});
   }
 
-  // qt/js/tauri-core.ts
+  // src/native.ts
   var __awaiter2 = function(thisArg, _arguments, P2, generator) {
     function adopt(value) {
       return value instanceof P2 ? value : new P2(function(resolve) {
@@ -7019,7 +6881,6 @@ var Inkleaf = (() => {
       return { value: op[0] ? op[1] : void 0, done: true };
     }
   };
-  var N4 = globalThis.__native;
   var camel = function(s2) {
     return s2.replace(/_([a-z])/g, function(_2, c2) {
       return c2.toUpperCase();
@@ -7027,10 +6888,12 @@ var Inkleaf = (() => {
   };
   function invoke(cmd, args) {
     return __awaiter2(this, void 0, Promise, function() {
-      var out, r2;
+      var N5, r2;
       return __generator3(this, function(_a) {
-        out = N4.call(camel(cmd), JSON.stringify(args !== null && args !== void 0 ? args : {}));
-        r2 = JSON.parse(out);
+        N5 = globalThis.__native;
+        if (!N5)
+          throw new Error("no native core (calling ".concat(cmd, ")"));
+        r2 = JSON.parse(N5.call(camel(cmd), JSON.stringify(args !== null && args !== void 0 ? args : {})));
         if (r2.error)
           throw new Error(r2.error);
         return [2, r2.ok];
@@ -7039,104 +6902,6 @@ var Inkleaf = (() => {
   }
 
   // src/api.ts
-  init_tauri_stub();
-  init_tauri_stub();
-  var __awaiter4 = function(thisArg, _arguments, P2, generator) {
-    function adopt(value) {
-      return value instanceof P2 ? value : new P2(function(resolve) {
-        resolve(value);
-      });
-    }
-    return new (P2 || (P2 = Promise))(function(resolve, reject) {
-      function fulfilled(value) {
-        try {
-          step(generator.next(value));
-        } catch (e2) {
-          reject(e2);
-        }
-      }
-      function rejected(value) {
-        try {
-          step(generator["throw"](value));
-        } catch (e2) {
-          reject(e2);
-        }
-      }
-      function step(result) {
-        result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
-      }
-      step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-  };
-  var __generator5 = function(thisArg, body) {
-    var _2 = { label: 0, sent: function() {
-      if (t2[0] & 1) throw t2[1];
-      return t2[1];
-    }, trys: [], ops: [] }, f3, y2, t2, g3 = Object.create((typeof Iterator === "function" ? Iterator : Object).prototype);
-    return g3.next = verb(0), g3["throw"] = verb(1), g3["return"] = verb(2), typeof Symbol === "function" && (g3[Symbol.iterator] = function() {
-      return this;
-    }), g3;
-    function verb(n2) {
-      return function(v2) {
-        return step([n2, v2]);
-      };
-    }
-    function step(op) {
-      if (f3) throw new TypeError("Generator is already executing.");
-      while (g3 && (g3 = 0, op[0] && (_2 = 0)), _2) try {
-        if (f3 = 1, y2 && (t2 = op[0] & 2 ? y2["return"] : op[0] ? y2["throw"] || ((t2 = y2["return"]) && t2.call(y2), 0) : y2.next) && !(t2 = t2.call(y2, op[1])).done) return t2;
-        if (y2 = 0, t2) op = [op[0] & 2, t2.value];
-        switch (op[0]) {
-          case 0:
-          case 1:
-            t2 = op;
-            break;
-          case 4:
-            _2.label++;
-            return { value: op[1], done: false };
-          case 5:
-            _2.label++;
-            y2 = op[1];
-            op = [0];
-            continue;
-          case 7:
-            op = _2.ops.pop();
-            _2.trys.pop();
-            continue;
-          default:
-            if (!(t2 = _2.trys, t2 = t2.length > 0 && t2[t2.length - 1]) && (op[0] === 6 || op[0] === 2)) {
-              _2 = 0;
-              continue;
-            }
-            if (op[0] === 3 && (!t2 || op[1] > t2[0] && op[1] < t2[3])) {
-              _2.label = op[1];
-              break;
-            }
-            if (op[0] === 6 && _2.label < t2[1]) {
-              _2.label = t2[1];
-              t2 = op;
-              break;
-            }
-            if (t2 && _2.label < t2[2]) {
-              _2.label = t2[2];
-              _2.ops.push(op);
-              break;
-            }
-            if (t2[2]) _2.ops.pop();
-            _2.trys.pop();
-            continue;
-        }
-        op = body.call(thisArg, _2);
-      } catch (e2) {
-        op = [6, e2];
-        y2 = 0;
-      } finally {
-        f3 = t2 = 0;
-      }
-      if (op[0] & 5) throw op[1];
-      return { value: op[0] ? op[1] : void 0, done: true };
-    }
-  };
   var TEMPLATE_CATEGORIES = [
     { id: "basic", label: "Basic", short: "Basic" },
     { id: "notes", label: "Notes", short: "Notes" },
@@ -7195,16 +6960,10 @@ var Inkleaf = (() => {
     { color: "#eef1f4", label: "Grey" },
     { color: "#22262d", label: "Dark" }
   ];
-  var FORMAT_FILTERS = {
-    pdf: { name: "PDF document", extensions: ["pdf"] },
-    pptx: { name: "PowerPoint presentation", extensions: ["pptx"] },
-    png: { name: "PNG image", extensions: ["png"] }
-  };
-  var TauriBackend = (
+  var NativeBackend = (
     /** @class */
     /* @__PURE__ */ (function() {
-      function TauriBackend2() {
-        var _this = this;
+      function NativeBackend2() {
         this.library = function() {
           return invoke("library");
         };
@@ -7304,76 +7063,11 @@ var Inkleaf = (() => {
         this.simplifyStroke = function(points, epsilon) {
           return invoke("simplify_stroke", { points, epsilon });
         };
-        this.chooseExportPath = function(fileName, format) {
-          return __awaiter4(_this, void 0, void 0, function() {
-            var ext, defaultPath, _a;
-            return __generator5(this, function(_b) {
-              switch (_b.label) {
-                case 0:
-                  ext = FORMAT_FILTERS[format].extensions[0];
-                  if (!isAndroid) return [3, 1];
-                  _a = "".concat(fileName, ".").concat(ext);
-                  return [3, 3];
-                case 1:
-                  return [4, invoke("default_export_dir", { fileName, format })];
-                case 2:
-                  _a = _b.sent();
-                  _b.label = 3;
-                case 3:
-                  defaultPath = _a;
-                  return [2, save({ title: "Export", defaultPath, filters: [FORMAT_FILTERS[format]] })];
-              }
-            });
-          });
-        };
-        this.exportDocument = function(path, format, pages) {
-          return __awaiter4(_this, void 0, void 0, function() {
-            var _a, _b, _c, _d;
-            return __generator5(this, function(_e) {
-              switch (_e.label) {
-                case 0:
-                  if (!isAndroid) return [3, 2];
-                  _b = writePicked;
-                  _c = [path];
-                  _d = Uint8Array.bind;
-                  return [4, invoke("build_document", { format, pages })];
-                case 1:
-                  _a = _b.apply(void 0, _c.concat([new (_d.apply(Uint8Array, [void 0, _e.sent()]))()]));
-                  return [3, 3];
-                case 2:
-                  _a = invoke("export_document", { path, format, pages });
-                  _e.label = 3;
-                case 3:
-                  return [2, _a];
-              }
-            });
-          });
-        };
-        this.savePdfExport = function(path, bytes) {
-          return isAndroid ? writePicked(path, bytes) : invoke("save_pdf_export", bytes, { headers: { "x-export-path": encodeURIComponent(path) } });
-        };
         this.recognizeHandwriting = function(strokes) {
           return invoke("recognize_handwriting", { strokes });
         };
-        this.storePdfAsset = function(bytes) {
-          return invoke("store_pdf_asset", bytes);
-        };
         this.createPdfNotebook = function(input) {
           return invoke("create_pdf_notebook", { input });
-        };
-        this.assetBytes = function(id) {
-          return __awaiter4(_this, void 0, void 0, function() {
-            var _a;
-            return __generator5(this, function(_b) {
-              switch (_b.label) {
-                case 0:
-                  _a = Uint8Array.bind;
-                  return [4, invoke("asset_bytes", { id })];
-                case 1:
-                  return [2, new (_a.apply(Uint8Array, [void 0, _b.sent()]))()];
-              }
-            });
-          });
         };
         this.backupStatus = function() {
           return invoke("backup_status");
@@ -7386,76 +7080,6 @@ var Inkleaf = (() => {
         };
         this.backupIfDue = function(label2) {
           return invoke("backup_if_due", { label: label2 });
-        };
-        this.chooseBackupFolder = function(current) {
-          return __awaiter4(_this, void 0, void 0, function() {
-            var r2;
-            return __generator5(this, function(_a) {
-              switch (_a.label) {
-                case 0:
-                  return [4, open({ title: "Choose the backup folder", directory: true, multiple: false, defaultPath: current !== null && current !== void 0 ? current : void 0 })];
-                case 1:
-                  r2 = _a.sent();
-                  return [2, typeof r2 === "string" ? r2 : null];
-              }
-            });
-          });
-        };
-        this.exportLibrary = function(label2) {
-          return __awaiter4(_this, void 0, void 0, function() {
-            var name, dir, _a, defaultPath, path, _b, _c, _d, _e;
-            return __generator5(this, function(_f) {
-              switch (_f.label) {
-                case 0:
-                  name = "Inkleaf everything ".concat(label2, ".inkleaf");
-                  if (!isAndroid) return [3, 1];
-                  _a = null;
-                  return [3, 3];
-                case 1:
-                  return [4, invoke("default_export_dir", { fileName: "x", format: "pdf" }).catch(function() {
-                    return null;
-                  })];
-                case 2:
-                  _a = _f.sent();
-                  _f.label = 3;
-                case 3:
-                  dir = _a;
-                  defaultPath = dir ? dir.replace(/[^\\/]*$/, name) : name;
-                  return [4, save({ title: "Export everything", defaultPath, filters: [BACKUP_FILTER] })];
-                case 4:
-                  path = _f.sent();
-                  if (!path)
-                    return [2, null];
-                  if (!isAndroid) return [3, 6];
-                  _c = writePicked;
-                  _d = [path];
-                  _e = Uint8Array.bind;
-                  return [4, invoke("library_snapshot")];
-                case 5:
-                  _b = _c.apply(void 0, _d.concat([new (_e.apply(Uint8Array, [void 0, _f.sent()]))()]));
-                  return [3, 7];
-                case 6:
-                  _b = invoke("export_library", { path });
-                  _f.label = 7;
-                case 7:
-                  return [2, _b];
-              }
-            });
-          });
-        };
-        this.chooseBackupFile = function() {
-          return __awaiter4(_this, void 0, void 0, function() {
-            var r2;
-            return __generator5(this, function(_a) {
-              switch (_a.label) {
-                case 0:
-                  return [4, open({ title: "Restore from a backup", multiple: false, filters: [BACKUP_FILTER] })];
-                case 1:
-                  r2 = _a.sent();
-                  return [2, typeof r2 === "string" ? r2 : null];
-              }
-            });
-          });
         };
         this.syncStatus = function() {
           return invoke("sync_status");
@@ -7472,93 +7096,14 @@ var Inkleaf = (() => {
         this.syncSignOut = function() {
           return invoke("sync_sign_out");
         };
-        this.syncNow = function(open2) {
-          return invoke("sync_now", { open: open2 });
-        };
-        this.inspectBackup = function(path) {
-          return __awaiter4(_this, void 0, void 0, function() {
-            var _a, _b, _c;
-            return __generator5(this, function(_d) {
-              switch (_d.label) {
-                case 0:
-                  if (!isAndroid) return [3, 2];
-                  _b = invoke;
-                  _c = ["inspect_backup_bytes"];
-                  return [4, readPicked(path)];
-                case 1:
-                  _a = _b.apply(void 0, _c.concat([_d.sent()]));
-                  return [3, 3];
-                case 2:
-                  _a = invoke("inspect_backup", { path });
-                  _d.label = 3;
-                case 3:
-                  return [2, _a];
-              }
-            });
-          });
-        };
-        this.restoreBackup = function(path) {
-          return __awaiter4(_this, void 0, void 0, function() {
-            var _a, _b, _c;
-            return __generator5(this, function(_d) {
-              switch (_d.label) {
-                case 0:
-                  if (!isAndroid) return [3, 2];
-                  _b = invoke;
-                  _c = ["restore_backup_bytes"];
-                  return [4, readPicked(path)];
-                case 1:
-                  _a = _b.apply(void 0, _c.concat([_d.sent()]));
-                  return [3, 3];
-                case 2:
-                  _a = invoke("restore_backup", { path });
-                  _d.label = 3;
-                case 3:
-                  return [2, _a];
-              }
-            });
-          });
+        this.syncNow = function(open) {
+          return invoke("sync_now", { open });
         };
       }
-      return TauriBackend2;
+      return NativeBackend2;
     })()
   );
-  var BACKUP_FILTER = { name: "Inkleaf backup", extensions: ["inkleaf", "db"] };
-  function readPicked(path) {
-    return __awaiter4(this, void 0, Promise, function() {
-      var readFile;
-      return __generator5(this, function(_a) {
-        switch (_a.label) {
-          case 0:
-            return [4, Promise.resolve().then(() => (init_tauri_stub(), tauri_stub_exports))];
-          case 1:
-            readFile = _a.sent().readFile;
-            return [2, readFile(path)];
-        }
-      });
-    });
-  }
-  var isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-  var isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
-  function writePicked(path, bytes) {
-    return __awaiter4(this, void 0, Promise, function() {
-      var writeFile;
-      var _a;
-      return __generator5(this, function(_b) {
-        switch (_b.label) {
-          case 0:
-            return [4, Promise.resolve().then(() => (init_tauri_stub(), tauri_stub_exports))];
-          case 1:
-            writeFile = _b.sent().writeFile;
-            return [4, writeFile(path, bytes)];
-          case 2:
-            _b.sent();
-            return [2, decodeURIComponent((_a = path.split("/").pop()) !== null && _a !== void 0 ? _a : path)];
-        }
-      });
-    });
-  }
-  var api = isTauri ? new TauriBackend() : new MockBackend();
+  var api = new NativeBackend();
 
   // src/ui.ts
   var __values12 = globalThis.__fast && globalThis.__fast.__values || function(o2) {
@@ -7676,7 +7221,7 @@ var Inkleaf = (() => {
     };
     return __assign8.apply(this, arguments);
   };
-  var __awaiter5 = function(thisArg, _arguments, P2, generator) {
+  var __awaiter3 = function(thisArg, _arguments, P2, generator) {
     function adopt(value) {
       return value instanceof P2 ? value : new P2(function(resolve) {
         resolve(value);
@@ -7703,7 +7248,7 @@ var Inkleaf = (() => {
       step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
-  var __generator6 = function(thisArg, body) {
+  var __generator4 = function(thisArg, body) {
     var _2 = { label: 0, sent: function() {
       if (t2[0] & 1) throw t2[1];
       return t2[1];
@@ -7825,9 +7370,9 @@ var Inkleaf = (() => {
     ];
   }
   function refreshCoverThumbnail(page) {
-    return __awaiter5(this, void 0, Promise, function() {
+    return __awaiter3(this, void 0, Promise, function() {
       var els, _a, scale, thumb;
-      return __generator6(this, function(_b) {
+      return __generator4(this, function(_b) {
         switch (_b.label) {
           case 0:
             _a = fromStored;
@@ -7854,9 +7399,9 @@ var Inkleaf = (() => {
     return (/* @__PURE__ */ new Date()).toLocaleDateString(void 0, { month: "long", year: "numeric" });
   };
   function setUpCover(nb) {
-    return __awaiter5(this, void 0, Promise, function() {
+    return __awaiter3(this, void 0, Promise, function() {
       var _a, page;
-      return __generator6(this, function(_b) {
+      return __generator4(this, function(_b) {
         switch (_b.label) {
           case 0:
             return [4, api.pages(nb.id)];
@@ -7885,10 +7430,10 @@ var Inkleaf = (() => {
     });
   }
   function applyCover(nb, design, color) {
-    return __awaiter5(this, void 0, Promise, function() {
+    return __awaiter3(this, void 0, Promise, function() {
       var template, pages, page, els, _a, titleEl_1, dateEl_1, l_1, next;
       var _b, _c;
-      return __generator6(this, function(_d) {
+      return __generator4(this, function(_d) {
         switch (_d.label) {
           case 0:
             return [4, api.setNotebookCover(nb.id, color)];
@@ -8158,7 +7703,7 @@ var Inkleaf = (() => {
     };
     return __assign9.apply(this, arguments);
   };
-  var __awaiter6 = function(thisArg, _arguments, P2, generator) {
+  var __awaiter4 = function(thisArg, _arguments, P2, generator) {
     function adopt(value) {
       return value instanceof P2 ? value : new P2(function(resolve) {
         resolve(value);
@@ -8185,7 +7730,7 @@ var Inkleaf = (() => {
       step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
-  var __generator7 = function(thisArg, body) {
+  var __generator5 = function(thisArg, body) {
     var _2 = { label: 0, sent: function() {
       if (t2[0] & 1) throw t2[1];
       return t2[1];
@@ -8680,9 +8225,9 @@ var Inkleaf = (() => {
     });
   }
   function addFilledPage(nb, at, template, meta, cls) {
-    return __awaiter6(this, void 0, Promise, function() {
+    return __awaiter4(this, void 0, Promise, function() {
       var page;
-      return __generator7(this, function(_a) {
+      return __generator5(this, function(_a) {
         switch (_a.label) {
           case 0:
             return [4, api.addPage(nb.id, at, template)];
@@ -8703,9 +8248,9 @@ var Inkleaf = (() => {
     });
   }
   function addLessonPage(nb, meta, cls) {
-    return __awaiter6(this, void 0, Promise, function() {
+    return __awaiter4(this, void 0, Promise, function() {
       var pages, inClass, at;
-      return __generator7(this, function(_a) {
+      return __generator5(this, function(_a) {
         switch (_a.label) {
           case 0:
             return [4, api.pages(nb.id)];
@@ -8722,11 +8267,11 @@ var Inkleaf = (() => {
   }
   var LESSON_PAGES = 3;
   function createDaftar(input) {
-    return __awaiter6(this, void 0, Promise, function() {
+    return __awaiter4(this, void 0, Promise, function() {
       var meta, nb, _a, cover, title, at, add, _b, _c, t2, e_4_1, _d, _e, _f, i2, cls, k2, e_5_1;
       var e_4, _g, e_5, _h;
       var _this = this;
-      return __generator7(this, function(_j) {
+      return __generator5(this, function(_j) {
         switch (_j.label) {
           case 0:
             meta = input.meta;
@@ -8744,8 +8289,8 @@ var Inkleaf = (() => {
             _j.sent();
             at = 2;
             add = function(t3, cls2) {
-              return __awaiter6(_this, void 0, void 0, function() {
-                return __generator7(this, function(_a2) {
+              return __awaiter4(_this, void 0, void 0, function() {
+                return __generator5(this, function(_a2) {
                   switch (_a2.label) {
                     case 0:
                       return [4, addFilledPage(nb, at, t3, meta, cls2)];
@@ -8847,9 +8392,9 @@ var Inkleaf = (() => {
     });
   }
   function finishDaftarCover(nb, meta) {
-    return __awaiter6(this, void 0, void 0, function() {
+    return __awaiter4(this, void 0, void 0, function() {
       var _a, cover, els, _b;
-      return __generator7(this, function(_c) {
+      return __generator5(this, function(_c) {
         switch (_c.label) {
           case 0:
             return [4, api.pages(nb.id)];
@@ -8878,10 +8423,10 @@ var Inkleaf = (() => {
     });
   }
   function updateDaftar(nb, before, meta) {
-    return __awaiter6(this, void 0, Promise, function() {
+    return __awaiter4(this, void 0, Promise, function() {
       var pages, oldNote, _loop_2, _a, _b, _c, i2, p2, e_6_1, added, memos, at, added_1, added_1_1, cls, k2, e_7_1;
       var e_6, _d, e_7, _e;
-      return __generator7(this, function(_f) {
+      return __generator5(this, function(_f) {
         switch (_f.label) {
           case 0:
             return [4, api.pages(nb.id)];
@@ -8892,7 +8437,7 @@ var Inkleaf = (() => {
             }));
             _loop_2 = function(i3, p3) {
               var isCover, els, _g, keep, fresh, z0;
-              return __generator7(this, function(_h) {
+              return __generator5(this, function(_h) {
                 switch (_h.label) {
                   case 0:
                     isCover = i3 === 0 && p3.template.startsWith("cover");
@@ -9019,10 +8564,10 @@ var Inkleaf = (() => {
     });
   }
   function fillStudents(nb, meta, cls, students) {
-    return __awaiter6(this, void 0, Promise, function() {
+    return __awaiter4(this, void 0, Promise, function() {
       var pages, need, all, inClass, at, k2, _a, _b, _c, k2, p2, els, _d, e_8_1;
       var e_8, _e;
-      return __generator7(this, function(_f) {
+      return __generator5(this, function(_f) {
         switch (_f.label) {
           case 0:
             return [4, api.pages(nb.id)];
@@ -9911,11 +9456,11 @@ var Inkleaf = (() => {
     };
     throw new TypeError(s2 ? "Object is not iterable." : "Symbol.iterator is not defined.");
   };
-  var N5 = globalThis.__native;
+  var N4 = globalThis.__native;
   var HOLD_MS = 550;
   var MAX_UNDO = 100;
   function call(cmd, args) {
-    var r2 = JSON.parse(N5.call(cmd, JSON.stringify(args)));
+    var r2 = JSON.parse(N4.call(cmd, JSON.stringify(args)));
     if (r2.error)
       throw new Error(r2.error);
     return r2.ok;
@@ -10237,7 +9782,7 @@ var Inkleaf = (() => {
             saved.push(i2);
           } catch (e2) {
             p2.dirty = true;
-            N5.log("save failed: ".concat(e2));
+            N4.log("save failed: ".concat(e2));
           }
         }
         return saved;
@@ -11834,7 +11379,7 @@ var Inkleaf = (() => {
     };
     return __assign11.apply(this, arguments);
   };
-  var __awaiter7 = function(thisArg, _arguments, P2, generator) {
+  var __awaiter5 = function(thisArg, _arguments, P2, generator) {
     function adopt(value) {
       return value instanceof P2 ? value : new P2(function(resolve) {
         resolve(value);
@@ -11861,7 +11406,7 @@ var Inkleaf = (() => {
       step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
-  var __generator8 = function(thisArg, body) {
+  var __generator6 = function(thisArg, body) {
     var _2 = { label: 0, sent: function() {
       if (t2[0] & 1) throw t2[1];
       return t2[1];
@@ -11965,9 +11510,9 @@ var Inkleaf = (() => {
     return nationalHolidays(year || schoolYear());
   }
   function info(notebookId) {
-    return __awaiter7(this, void 0, Promise, function() {
+    return __awaiter5(this, void 0, Promise, function() {
       var _a;
-      return __generator8(this, function(_b) {
+      return __generator6(this, function(_b) {
         switch (_b.label) {
           case 0:
             _a = parseDaftar;
@@ -12035,9 +11580,9 @@ var Inkleaf = (() => {
     };
   }
   function create(values2, folderId) {
-    return __awaiter7(this, void 0, Promise, function() {
+    return __awaiter5(this, void 0, Promise, function() {
       var meta, nb, _a, cover;
-      return __generator8(this, function(_b) {
+      return __generator6(this, function(_b) {
         switch (_b.label) {
           case 0:
             meta = metaFrom(values2);
@@ -12067,9 +11612,9 @@ var Inkleaf = (() => {
     });
   }
   function update(notebookId, values2) {
-    return __awaiter7(this, void 0, Promise, function() {
+    return __awaiter5(this, void 0, Promise, function() {
       var nb, before, next;
-      return __generator8(this, function(_a) {
+      return __generator6(this, function(_a) {
         switch (_a.label) {
           case 0:
             return [4, api.notebook(notebookId)];
@@ -12139,10 +11684,10 @@ var Inkleaf = (() => {
     return (_b = (_a = holidayOn(meta)) === null || _a === void 0 ? void 0 : _a.name) !== null && _b !== void 0 ? _b : null;
   }
   function newLesson(core, notebookId, cls) {
-    return __awaiter7(this, void 0, void 0, function() {
+    return __awaiter5(this, void 0, void 0, function() {
       var nb, d2, here, target, row, p_1, page, p2, today, logged, entry, c2, z, L2, time;
       var _a;
-      return __generator8(this, function(_b) {
+      return __generator6(this, function(_b) {
         switch (_b.label) {
           case 0:
             return [4, api.notebook(notebookId)];
@@ -12239,10 +11784,10 @@ var Inkleaf = (() => {
     }).length, " with a Massar code. First: ").concat(n2[0].name) : "No names found yet.";
   }
   function pasteStudents(notebookId, cls, text2) {
-    return __awaiter7(this, void 0, void 0, function() {
+    return __awaiter5(this, void 0, void 0, function() {
       var nb, d2, students, pages, first;
       var _a;
-      return __generator8(this, function(_b) {
+      return __generator6(this, function(_b) {
         switch (_b.label) {
           case 0:
             return [4, api.notebook(notebookId)];
@@ -12288,9 +11833,9 @@ var Inkleaf = (() => {
     }), name: "".concat(cls.replace(/[\\/]/g, "-")).concat(period ? " - ".concat(period) : "") };
   }
   function addClassPage(core, notebookId) {
-    return __awaiter7(this, void 0, void 0, function() {
+    return __awaiter5(this, void 0, void 0, function() {
       var nb, d2, s2, page;
-      return __generator8(this, function(_a) {
+      return __generator6(this, function(_a) {
         switch (_a.label) {
           case 0:
             return [4, api.notebook(notebookId)];
