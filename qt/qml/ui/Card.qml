@@ -1,5 +1,7 @@
 // A notebook or folder on the shelf: its picture, title and a line about it,
-// with a ⋯ button that shows on hover.
+// with a ⋯ button that shows on hover. While the shelf is selecting, a tap
+// picks it (a check shows); Ctrl+click and a long press pick it any time,
+// Shift+click picks a range.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -13,8 +15,13 @@ Item {
     property var sheets: []
     property int count: 0
     property bool trash: false
+    /// The shelf is selecting: a tap picks instead of opening.
+    property bool selecting: false
+    property bool picked: false
     signal activated()
     signal moreRequested(Item anchor)
+    /// Picked or unpicked; `range`: Shift was held (pick up to here).
+    signal toggled(bool range)
 
     readonly property real artHeight: width * 4 / 3
     implicitHeight: artHeight + 14 + 20 + 3 + 16
@@ -22,7 +29,13 @@ Item {
     property bool moreMenuOpen: false
 
     HoverHandler { id: hover; cursorShape: root.trash ? Qt.ArrowCursor : Qt.PointingHandCursor }
-    TapHandler { onTapped: root.activated() }
+    TapHandler {
+        acceptedModifiers: Qt.NoModifier
+        onTapped: root.selecting ? root.toggled(false) : root.activated()
+        onLongPressed: root.toggled(false)
+    }
+    TapHandler { acceptedModifiers: Qt.ControlModifier; onTapped: root.toggled(false) }
+    TapHandler { acceptedModifiers: Qt.ShiftModifier; onTapped: root.toggled(true) }
     TapHandler { acceptedButtons: Qt.RightButton; onTapped: root.moreRequested(more) }
 
     Item {
@@ -52,6 +65,27 @@ Item {
             }
         }
     }
+    // Picked: an accent ring around the picture, and a check in its corner.
+    Rectangle {
+        visible: root.picked
+        antialiasing: true
+        anchors.fill: art
+        anchors.margins: -5
+        radius: 10
+        color: Theme.alpha(Theme.accent, 0.10)
+        border.color: Theme.accent
+        border.width: 2.5
+    }
+    Rectangle {
+        visible: root.selecting || root.picked
+        antialiasing: true
+        x: 8; y: 8
+        width: 26; height: 26; radius: 13
+        color: root.picked ? Theme.accent : Theme.alpha("#000000", 0.35)
+        border.color: "#ffffff"
+        border.width: 2
+        Icon { anchors.centerIn: parent; name: "check"; size: 15; color: "#ffffff"; visible: root.picked }
+    }
     Label {
         id: title
         y: root.artHeight + 14
@@ -77,7 +111,8 @@ Item {
         width: 34; height: 34
         iconName: "more"
         tip: "Options"
-        opacity: root.hot ? 1 : 0
+        opacity: root.hot && !root.selecting ? 1 : 0
+        enabled: !root.selecting
         Behavior on opacity { NumberAnimation { duration: 150 } }
         onClicked: root.moreRequested(more)
     }

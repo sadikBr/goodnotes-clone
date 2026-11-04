@@ -39,6 +39,7 @@ Popup {
         validate = opts.validate || null
         error = ""
         onOk = cb
+        submitted = false
         const v = {}
         for (const x of f) v[x.name] = x.value !== undefined ? x.value : (x.type === "swatches" ? (typeof x.colors[0] === "string" ? x.colors[0] : x.colors[0].color) : "")
         values = v
@@ -53,7 +54,10 @@ Popup {
         error = ""
         changed(name, value)
     }
+    /// Submitted already (Enter reaches both the field and the form): once only.
+    property bool submitted: false
     function submit() {
+        if (submitted) return
         for (const f of fields)
             if ((f.type || "text") === "text" && f.required !== false && !root.validate && String(values[f.name]).trim() === "") return
         if (validate) {
@@ -62,6 +66,7 @@ Popup {
         }
         const cb = onOk
         const v = values
+        submitted = true
         close()
         if (cb) Qt.callLater(() => cb(v))
     }

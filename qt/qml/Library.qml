@@ -24,6 +24,87 @@ Rectangle {
     property string query: ""
     property var hits: []
 
+    // ------------------------------------------------------------ selecting several
+    /// Picked shelf items by key ("notebook:<id>", "folder:<id>"), in picking order.
+    property var picked: ({})
+    readonly property int pickedCount: Object.keys(picked).length
+    /// Selecting (the Select button), or something is picked.
+    property bool selectMode: false
+    readonly property bool selecting: selectMode || pickedCount > 0
+    property string lastPicked: ""
+    /// A bulk action is running: the library reloads once at its end.
+    property bool bulk: false
+    function keyOf(e) { return e.type + ":" + e.item.id }
+    function clearPicks() { picked = ({}); selectMode = false; lastPicked = "" }
+    function pick(entry, range) {
+        const key = keyOf(entry)
+        const next = Object.assign({}, picked)
+        const items = shelf.filter(e => e.type !== "new")
+        const from = items.findIndex(e => keyOf(e) === lastPicked)
+        const to = items.findIndex(e => keyOf(e) === key)
+        if (range && from >= 0 && to >= 0) {
+            for (let i = Math.min(from, to); i <= Math.max(from, to); ++i) next[keyOf(items[i])] = items[i]
+        } else if (next[key]) {
+            delete next[key]
+        } else {
+            next[key] = entry
+        }
+        picked = next
+        lastPicked = key
+    }
+    function pickAll() {
+        const next = {}
+        for (const e of shelf) if (e.type !== "new") next[keyOf(e)] = e
+        picked = next
+        selectMode = true
+    }
+    function pickedEntries() { return Object.keys(picked).map(k => picked[k]) }
+    /// Runs one command per picked item, then reloads once and says how it went.
+    function bulkRun(steps, done) {
+        bulk = true
+        let failed = 0
+        for (const s of steps) {
+            try { InkleafCore.call(s[0], s[1]) } catch (e) { failed++ }
+        }
+        bulk = false
+        clearPicks()
+        reload()
+        if (failed) root.notify(failed + " of " + steps.length + " couldn't be done", true)
+        else if (done) root.notify(done, false)
+    }
+    function described(entries) {
+        const f = entries.filter(e => e.type === "folder").length, n = entries.length - f
+        return [n ? plural(n, "notebook", "notebooks") : "", f ? plural(f, "folder", "folders") : ""].filter(x => x).join(" and ")
+    }
+    function bulkFavourite() {
+        const entries = pickedEntries()
+        const on = !entries.every(e => e.item.favourite)
+        bulkRun(entries.map(e => [e.type === "folder" ? "setFolderFavourite" : "setNotebookFavourite", { id: e.item.id, favourite: on }]), on ? "Added to favourites" : "Removed from favourites")
+    }
+    function bulkTrash() {
+        const entries = pickedEntries()
+        bulkRun(entries.map(e => [e.type === "folder" ? "setFolderTrashed" : "setNotebookTrashed", { id: e.item.id, trashed: true }]), described(entries) + " moved to trash")
+    }
+    function bulkRecover() {
+        const entries = pickedEntries()
+        bulkRun(entries.map(e => [e.type === "folder" ? "setFolderTrashed" : "setNotebookTrashed", { id: e.item.id, trashed: false }]), described(entries) + " recovered")
+    }
+    function bulkDeleteForever() {
+        const entries = pickedEntries()
+        dialog.ask("Delete " + described(entries) + " forever?", [], "Delete", () => bulkRun(entries.map(e => [e.type === "folder" ? "deleteFolder" : "deleteNotebook", { id: e.item.id }]), "Deleted"), {
+            danger: true,
+            message: "They will be permanently deleted" + (entries.some(e => e.type === "folder") ? ", with everything inside the folders." : ".")
+        })
+    }
+    function bulkMove() {
+        const entries = pickedEntries()
+        const folders = entries.filter(e => e.type === "folder").map(e => e.item.id)
+        dialog.ask("Move " + described(entries), [{ name: "folder", label: "Destination", type: "select", value: "", options: folderOptions(folders) }], "Move", r => {
+            const to = r.folder || null
+            bulkRun(entries.map(e => e.type === "folder" ? ["moveFolder", { id: e.item.id, parentId: to }] : ["moveNotebook", { id: e.item.id, folderId: to }]), described(entries) + " moved")
+        })
+    }
+
     Prefs {
         id: prefs
         category: "library"
@@ -33,6 +114,7 @@ Rectangle {
 
     function show(v) {
         view = v
+        clearPicks()
         reload()
     }
     function reload() {
@@ -44,11 +126,15 @@ Rectangle {
             root.notify(String(e.message || e), true)
         }
         if (query.trim()) runSearch()
+        // Picked items that are gone (or moved out of view) aren't picked any more.
+        const keep = {}
+        for (const e of shelf) if (e.type !== "new" && picked[keyOf(e)]) keep[keyOf(e)] = e
+        if (Object.keys(keep).length !== pickedCount) picked = keep
     }
     Component.onCompleted: reload()
     Connections {
         target: InkleafCore
-        function onLibraryChanged() { root.reload() }
+        function onLibraryChanged() { if (!root.bulk) root.reload() }
     }
     /// Runs a library command; shows a message when it's done (or failed).
     function run(cmd, args, message) {
@@ -224,8 +310,10 @@ Rectangle {
     /// Folders something can move into (not a folder itself or anything inside it).
     function folderOptions(exclude) {
         const blocked = new Set()
-        if (exclude) {
-            blocked.add(exclude)
+        // One folder or several (they and everything inside can't be destinations).
+        const excluded = !exclude ? [] : Array.isArray(exclude) ? exclude : [exclude]
+        if (excluded.length) {
+            for (const id of excluded) blocked.add(id)
             let grew = true
             while (grew) {
                 grew = false
@@ -388,6 +476,13 @@ Rectangle {
     }
 
     Shortcut { sequence: "/"; onActivated: search.forceActiveFocus() }
+    Shortcut { sequences: [StandardKey.SelectAll]; enabled: !!(root.visible && !search.activeFocus && !dialog.opened && root.shelf.length > 0); onActivated: root.pickAll() }
+    Shortcut { sequence: "Esc"; enabled: !!(root.visible && root.selecting && !dialog.opened); onActivated: root.clearPicks() }
+    Shortcut {
+        sequences: ["Delete"]
+        enabled: !!(root.visible && root.pickedCount > 0 && !search.activeFocus && !dialog.opened)
+        onActivated: root.view.kind === "trash" ? root.bulkDeleteForever() : root.bulkTrash()
+    }
     Shortcut { sequence: "N"; enabled: !!(root.view.kind !== "trash" && !dialog.opened); onActivated: root.newNotebook(root.folderId || null) }
 
     RowLayout {
@@ -582,6 +677,14 @@ Rectangle {
                     }
                 }
                 UiButton {
+                    visible: root.shelf.some(e => e.type !== "new")
+                    Layout.alignment: Qt.AlignBottom
+                    kind: root.selecting ? "primary" : "ghost"
+                    iconName: "check"
+                    text: root.selecting ? "Done" : "Select"
+                    onClicked: root.selecting ? root.clearPicks() : (root.selectMode = true)
+                }
+                UiButton {
                     id: sortBtn
                     visible: root.view.kind !== "trash"
                     Layout.alignment: Qt.AlignBottom
@@ -731,6 +834,9 @@ Rectangle {
                         isFolder: cell.modelData.type === "folder"
                         item: cell.modelData.item || ({})
                         trash: root.view.kind === "trash"
+                        selecting: root.selecting
+                        picked: !!(cell.modelData.item && root.picked[root.keyOf(cell.modelData)])
+                        onToggled: range => root.pick(cell.modelData, range)
                         meta: !cell.modelData.item ? "" : isFolder ? root.folderMeta(cell.modelData.item) : root.plural(cell.modelData.item.pageCount, "page", "pages") + " · " + root.relative(cell.modelData.item.updatedAt)
                         sheets: isFolder ? root.shown.notebooks.filter(n => n.folderId === cell.modelData.item.id).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 2) : []
                         count: isFolder ? root.shown.notebooks.filter(n => n.folderId === cell.modelData.item.id).length : 0
@@ -740,6 +846,42 @@ Rectangle {
                             else root.openRequested(item.id, item.title)
                         }
                         onMoreRequested: anchor => isFolder ? root.folderMenu(item, anchor) : root.notebookMenu(item, anchor)
+                    }
+                }
+            }
+
+            // What to do with the picked items.
+            Item {
+                visible: root.selecting
+                Layout.fillWidth: true
+                Layout.preferredHeight: 72
+                Rectangle {
+                    antialiasing: true
+                    anchors.centerIn: parent
+                    width: barRow.implicitWidth + 28
+                    height: 50
+                    radius: 25
+                    color: Theme.surface
+                    border.color: Theme.border
+                    Shadow { anchors.fill: parent; radius: 25; level: 2; z: -1 }
+                    RowLayout {
+                        id: barRow
+                        anchors.centerIn: parent
+                        spacing: 6
+                        Label {
+                            text: root.pickedCount ? root.pickedCount + " selected" : "Tap items to select them"
+                            font.weight: Font.DemiBold
+                            color: Theme.text
+                            Layout.rightMargin: 8
+                            Layout.leftMargin: 4
+                        }
+                        UiButton { kind: "ghost"; text: "Select all"; onClicked: root.pickAll() }
+                        UiButton { visible: root.view.kind !== "trash"; enabled: root.pickedCount > 0; kind: "ghost"; iconName: "star"; text: root.pickedCount && root.pickedEntries().every(e => e.item.favourite) ? "Unfavourite" : "Favourite"; onClicked: root.bulkFavourite() }
+                        UiButton { visible: root.view.kind !== "trash"; enabled: root.pickedCount > 0; kind: "ghost"; iconName: "folder"; text: "Move to…"; onClicked: root.bulkMove() }
+                        UiButton { visible: root.view.kind !== "trash"; enabled: root.pickedCount > 0; kind: "danger"; iconName: "trash"; text: "Move to trash"; onClicked: root.bulkTrash() }
+                        UiButton { visible: root.view.kind === "trash"; enabled: root.pickedCount > 0; kind: "ghost"; iconName: "undo"; text: "Recover"; onClicked: root.bulkRecover() }
+                        UiButton { visible: root.view.kind === "trash"; enabled: root.pickedCount > 0; kind: "danger"; iconName: "trash"; text: "Delete forever"; onClicked: root.bulkDeleteForever() }
+                        IconButton { iconName: "close"; tip: "Done (Esc)"; implicitWidth: 34; implicitHeight: 34; onClicked: root.clearPicks() }
                     }
                 }
             }
