@@ -26,6 +26,20 @@ Popup {
         field.text = ""
         open()
         field.forceActiveFocus()
+        if (Ai.ready) {
+            // The AI reads it (any language, maths too).
+            status = "Reading your handwriting with AI…"
+            const image = canvas.selectionImage(1400)
+            Ai.transcribe(image, (text, err) => {
+                if (!root.visible) return
+                if (err) { root.status = "The AI couldn't read it (" + err + "). Type what you wrote and pick a font."; return }
+                if (!text) { root.status = "No writing found. Type what you wrote and pick a font."; return }
+                root.status = "Read by AI. Edit the text if needed:"
+                if (!field.text) field.text = text
+                field.selectAll()
+            })
+            return
+        }
         InkleafCore.callAsync("recognizeHandwriting", { strokes: strokes }, (r, err) => {
             if (!root.visible) return
             if (err) { root.status = "Recognition failed (" + err + "). Type what you wrote and pick a font."; return }
@@ -91,7 +105,7 @@ Popup {
             Layout.fillWidth: true
             Layout.bottomMargin: 14
             placeholderText: "Type what you wrote"
-            maximumLength: 500
+            maximumLength: 4000
             font.pixelSize: 16
             onAccepted: root.apply()
         }

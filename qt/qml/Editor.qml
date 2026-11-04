@@ -306,6 +306,9 @@ Rectangle {
                     spacing: 8
                     Item { Layout.fillWidth: true }
                     Pill {
+                        IconButton { iconName: "sparkle"; tip: "Ask AI about this notebook"; implicitWidth: 34; implicitHeight: 34; iconColor: Theme.accent; onClicked: aiPanel.opened ? aiPanel.close() : root.askAboutNotebook() }
+                    }
+                    Pill {
                         IconButton { iconName: "undo"; tip: "Undo (Ctrl+Z)"; implicitWidth: 34; implicitHeight: 34; enabled: canvas.canUndo; onClicked: canvas.undo() }
                         IconButton { iconName: "redo"; tip: "Redo (Ctrl+Shift+Z)"; implicitWidth: 34; implicitHeight: 34; enabled: canvas.canRedo; onClicked: canvas.redo() }
                     }
@@ -513,7 +516,7 @@ Rectangle {
                     }
                 }
 
-                SelectionBar { id: selectionBar; canvas: canvas; z: 6 }
+                SelectionBar { id: selectionBar; canvas: canvas; z: 6; onAskAi: what => root.askAboutSelection(what) }
 
                 // The active tool's options.
                 ToolDrawer {
@@ -585,6 +588,70 @@ Rectangle {
 
     // Export (PDF, PowerPoint, PNG).
     Exporter { id: exporter; canvas: canvas; title: root.title; onNotify: (m, e) => root.notify(m, e) }
+    AiPanel {
+        id: aiPanel
+        onSettingsRequested: root.settingsRequested()
+        onInsertRequested: text => { canvas.insertText(text); root.notify("Added to the page as text", false) }
+    }
+    /// The page being looked at, as a picture for the AI.
+    function pagePicture() {
+        const r = canvas.exportPage(canvas.currentPage, 1400 / Math.max(1, (canvas.pages[canvas.currentPage] || { width: 800 }).width || 800), true)
+        return r && r.dataUrl ? r.dataUrl : ""
+    }
+    /// Ask about this notebook (and the page being looked at).
+    function askAboutNotebook() {
+        const page = canvas.currentPage + 1
+        const daftarHelp = root.daftar ? [
+            { label: "Plan my next lesson", prompt: "From my daftar (lesson log) so far, plan the next lesson: its objectives, the steps with timings, a class activity, and homework." },
+            { label: "Activities for a lesson…", prompt: "Suggest three engaging class activities (with timings and materials) for a lesson on: ", fill: true },
+            { label: "Write up this page's lesson", prompt: "Write a short, well-organised lesson summary for the daftar from what's on this page.", attach: () => root.pagePicture() },
+            { label: "What did I cover so far?", prompt: "List the lessons I've covered so far in my daftar, by class and date, and point out gaps or what comes next." }
+        ] : []
+        aiPanel.start({
+            heading: "Ask about “" + root.title + "”",
+            notebookId: root.notebookId,
+            canInsert: true,
+            extra: "The user has the notebook “" + root.title + "” open, at page " + page + " of " + canvas.pageCount + "." + (root.daftar ? " It is their daftar annossous (lesson log)." : ""),
+            suggestions: daftarHelp.concat([
+                { label: "Summarise this page", prompt: "Summarise this page (page " + page + ").", attach: () => root.pagePicture() },
+                { label: "Summarise the notebook", prompt: "Summarise this notebook: the main topics and key points." },
+                { label: "Quiz me", prompt: "Make a short quiz (5 questions, answers at the end) to revise this notebook." },
+                { label: "Key points and to-dos", prompt: "List the key points and any to-dos or open questions in this notebook." }
+            ])
+        })
+    }
+    /// Ask about the selection (its picture, and its typed text).
+    function askAboutSelection(what) {
+        const image = canvas.selectionImage(1400)
+        const typed = canvas.selectionText()
+        const prompts = {
+            explain: "Explain what's in the picture clearly, as a good teacher would.",
+            solve: "Solve this step by step, explaining each step briefly. Check the answer at the end.",
+            summarise: "Summarise this.",
+            translate: "Translate this into ",
+            ask: ""
+        }
+        aiPanel.start({
+            heading: "Ask about the selection",
+            notebookId: root.notebookId,
+            image: image,
+            useNotes: false,
+            canInsert: true,
+            extra: "The user selected part of a page in their notebook “" + root.title + "”; the picture shows it (handwriting, text, drawings, or part of a PDF)." + (typed ? "\nTyped text in the selection:\n" + typed : ""),
+            suggestions: what === "translate" ? [
+                { label: "English", prompt: "Translate this into English." },
+                { label: "Français", prompt: "Traduis ceci en français." },
+                { label: "العربية", prompt: "ترجم هذا إلى العربية." },
+                { label: "Another language…", prompt: "Translate this into ", fill: true }
+            ] : [
+                { label: "Explain", prompt: prompts.explain },
+                { label: "Solve step by step", prompt: prompts.solve },
+                { label: "Summarise", prompt: prompts.summarise },
+                { label: "Write it as text", prompt: "Write out everything in the picture as text (keep its language), with no comments." }
+            ],
+            prompt: what === "translate" || what === "ask" ? "" : prompts[what]
+        })
+    }
     ShortcutsSheet { id: shortcuts }
 
     // Keyboard shortcuts (src/editor/editor.ts handleKey).

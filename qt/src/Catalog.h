@@ -26,4 +26,7 @@ public:
   Q_INVOKABLE QString currentList(const QString& text) const;
   /// An instrument angle snapped to whole (or, coarse, 15°) degrees.
   Q_INVOKABLE double snapAngle(double rad, bool coarse) const;
+  /// A stored page's writing (its elements on white, no paper) as a PNG data:
+  /// URL about `maxSide` pixels on its long side: for the AI to read.
+  Q_INVOKABLE QString pageWriting(const QString& pageId, double width, double height, int maxSide = 1400) const;
 };

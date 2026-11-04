@@ -1,0 +1,341 @@
+// The AI assistant: a sheet on the right to ask about the library, a
+// notebook or a selection (with its picture), with suggestions to start
+// from. Answers can be copied, or put on the page as text.
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import Inkleaf
+
+Popup {
+    id: root
+    parent: Overlay.overlay
+    x: parent.width - width - 12
+    y: 12
+    width: Math.min(parent.width - 24, 440)
+    height: parent.height - 24
+    padding: 0
+    modal: false
+    focus: true
+    closePolicy: Popup.CloseOnEscape
+
+    /// What it's about ("" notebook: the whole library).
+    property string notebookId: ""
+    property string heading: "Ask AI"
+    /// A picture sent with the first question (a selection), as a data: URL.
+    property string image: ""
+    /// Text that goes with it (typed text in the selection, the page being looked at…).
+    property string extra: ""
+    /// Include the notes (the notebook's, or the library's most related).
+    property bool useNotes: true
+    /// [{ label, prompt, fill? (put in the box to finish), attach? (a picture to send) }] to start from.
+    property var suggestions: []
+    /// In a notebook: answers can go on the page.
+    property bool canInsert: false
+    signal insertRequested(string text)
+    signal settingsRequested()
+
+    /// [{ role: "user" | "assistant" | "error", text }]
+    property var messages: []
+    property bool waiting: false
+    property int asking: 0
+    property string system: ""
+
+    readonly property string basePrompt: "You are the assistant in Inkleaf, a note-taking app for handwritten and typed notes, also used by teachers in Morocco for their lesson log (the daftar annossous). Answer in the language the user writes in (Arabic, French, English…). Be concise and practical. Use Markdown sparingly: short lists, **bold** for key words. For maths and science, show the steps clearly in plain text."
+
+    /// Opens on something new: { heading, notebookId, image, extra, useNotes, suggestions, canInsert, prompt (asked at once) }.
+    function start(o) {
+        asking++
+        heading = o.heading || "Ask AI"
+        notebookId = o.notebookId || ""
+        image = o.image || ""
+        extra = o.extra || ""
+        useNotes = o.useNotes !== false
+        suggestions = o.suggestions || []
+        canInsert = !!o.canInsert
+        messages = []
+        system = ""
+        waiting = false
+        input.text = ""
+        Ai.refresh()
+        open()
+        input.forceActiveFocus()
+        if (o.prompt && Ai.ready) send(o.prompt)
+    }
+
+    /// An answer's Markdown as plain text for the page (bullets kept as •).
+    function plain(md) {
+        return String(md)
+            .replace(/```[a-z]*\n?/g, "")
+            .replace(/^#{1,6}\s+/gm, "")
+            .replace(/^\s*[-*+]\s+/gm, "• ")
+            .replace(/\*\*(.+?)\*\*/g, "$1")
+            .replace(/__(.+?)__/g, "$1")
+            .replace(/(^|[^*])\*(?!\s)(.+?)\*/g, "$1$2")
+            .replace(/`([^`]+)`/g, "$1")
+            .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+            .replace(/\n{3,}/g, "\n\n")
+            .trim()
+    }
+
+    function send(text) {
+        text = String(text || "").trim()
+        if (!text || waiting || !Ai.ready) return
+        messages = messages.concat([{ role: "user", text: text }])
+        input.text = ""
+        waiting = true
+        const ticket = asking
+        const go = () => {
+            // The conversation so far (answers that failed left out); the picture with the first question.
+            const convo = []
+            for (const m of messages)
+                if (m.role === "user" || m.role === "assistant") convo.push({ role: m.role, text: m.text, images: [] })
+            if (image && convo.length) convo[0].images = [image]
+            Ai.ask(system, convo, false, (answer, err) => {
+                if (ticket !== root.asking) return
+                root.waiting = false
+                root.messages = root.messages.concat([err ? { role: "error", text: err } : { role: "assistant", text: answer || "(No answer.)" }])
+                Qt.callLater(() => list.positionViewAtEnd())
+            })
+        }
+        if (system) { go(); return }
+        // First question: the instructions, with the notes it can use.
+        let sys = basePrompt
+        if (extra) sys += "\n\n" + extra
+        if (!useNotes) { system = sys; go(); return }
+        InkleafCore.callAsync("notesForAi", { notebookId: notebookId || null, question: text, budget: Ai.notesBudget }, (notes, err) => {
+            if (ticket !== root.asking) return
+            if (err) {
+                root.waiting = false
+                root.messages = root.messages.concat([{ role: "error", text: String(err).startsWith("locked:") ? "This notebook is locked: unlock it first." : err }])
+                return
+            }
+            sys += notes
+                ? "\n\nThe user's notes follow (" + (root.notebookId ? "this notebook" : "the parts of their library most related to the question") + "; typed text, and handwriting read by AI marked [handwriting]):\n<notes>\n" + notes + "\n</notes>\nWhen the question is about the notes, answer from them and name the notebook and page you used; say so when they don't hold the answer."
+                : "\n\n(There's no readable text in " + (root.notebookId ? "this notebook" : "the library") + " yet. Handwriting becomes readable once “Make handwriting searchable” is on in Settings → AI.)"
+            root.system = sys
+            go()
+        })
+        Qt.callLater(() => list.positionViewAtEnd())
+    }
+
+    Overlay.modeless: null
+    enter: Transition {
+        NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 140 }
+        NumberAnimation { property: "x"; from: root.parent ? root.parent.width : 0; duration: 220; easing.type: Easing.OutCubic }
+    }
+    exit: Transition { NumberAnimation { property: "opacity"; to: 0; duration: 100 } }
+    background: Item {
+        Shadow { anchors.fill: parent; radius: Theme.radiusXl; level: 3 }
+        Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusXl; color: Theme.surface; border.color: Theme.border }
+    }
+
+    contentItem: ColumnLayout {
+        spacing: 0
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.margins: 14
+            Layout.leftMargin: 18
+            spacing: 10
+            Rectangle {
+                antialiasing: true
+                Layout.preferredWidth: 30; Layout.preferredHeight: 30; radius: 9
+                color: Theme.alpha(Theme.accent, 0.14)
+                Icon { anchors.centerIn: parent; name: "sparkle"; size: 17; color: Theme.accent }
+            }
+            Label { text: root.heading; font.pixelSize: 16; font.weight: Font.Bold; color: Theme.text; elide: Text.ElideRight; Layout.fillWidth: true }
+            IconButton { iconName: "plus"; tip: "New conversation"; visible: root.messages.length > 0; onClicked: { root.asking++; root.messages = []; root.system = ""; root.waiting = false } }
+            IconButton { iconName: "close"; tip: "Close (Esc)"; onClicked: root.close() }
+        }
+        Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.border }
+
+        // Not set up yet.
+        ColumnLayout {
+            visible: !Ai.ready
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.margins: 24
+            spacing: 12
+            Item { Layout.fillHeight: true }
+            Icon { name: "sparkle"; size: 40; color: Theme.muted; Layout.alignment: Qt.AlignHCenter }
+            Label {
+                text: "Set up an AI first"
+                font.pixelSize: 16; font.weight: Font.DemiBold; color: Theme.text
+                Layout.alignment: Qt.AlignHCenter
+            }
+            Label {
+                text: "Use a model on your computer (Ollama, LM Studio…) or your own API key for Claude, ChatGPT or Gemini."
+                color: Theme.muted; wrapMode: Text.Wrap; horizontalAlignment: Text.AlignHCenter
+                Layout.fillWidth: true
+            }
+            UiButton { text: "Open Settings → AI"; kind: "primary"; Layout.alignment: Qt.AlignHCenter; onClicked: { root.close(); root.settingsRequested() } }
+            Item { Layout.fillHeight: true }
+        }
+
+        ListView {
+            id: list
+            visible: Ai.ready
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            clip: true
+            spacing: 10
+            topMargin: 14
+            bottomMargin: 14
+            boundsBehavior: Flickable.StopAtBounds
+            ScrollBar.vertical: ScrollBar {}
+            model: root.messages
+            header: ColumnLayout {
+                width: list.width
+                spacing: 10
+                // The picture that goes with the question.
+                Rectangle {
+                    visible: root.image.length > 0
+                    Layout.leftMargin: 18; Layout.rightMargin: 18
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Math.min(180, pic.implicitHeight * Math.min(1, (list.width - 36) / Math.max(1, pic.implicitWidth)) + 16)
+                    radius: Theme.radius
+                    color: Theme.surface2
+                    border.color: Theme.border
+                    Image { id: pic; anchors.fill: parent; anchors.margins: 8; source: root.image; fillMode: Image.PreserveAspectFit; smooth: true; mipmap: true }
+                }
+                Label {
+                    visible: root.messages.length === 0 && root.suggestions.length > 0
+                    text: "Try:"
+                    color: Theme.muted; font.pixelSize: 12
+                    Layout.leftMargin: 18
+                }
+                Flow {
+                    visible: root.messages.length === 0
+                    Layout.leftMargin: 18; Layout.rightMargin: 18
+                    Layout.fillWidth: true
+                    spacing: 6
+                    Repeater {
+                        model: root.suggestions
+                        delegate: AbstractButton {
+                            id: chip
+                            required property var modelData
+                            hoverEnabled: true
+                            implicitHeight: 32
+                            implicitWidth: Math.min(list.width - 36, chipLabel.implicitWidth + 24)
+                            onClicked: {
+                                // A picture to go with it (the page), worked out when asked.
+                                if (modelData.attach) root.image = modelData.attach() || ""
+                                if (modelData.fill) {
+                                    input.text = modelData.prompt
+                                    input.forceActiveFocus()
+                                    input.cursorPosition = input.length
+                                } else {
+                                    root.send(modelData.prompt)
+                                }
+                            }
+                            background: Rectangle { antialiasing: true; radius: 16; color: chip.hovered ? Theme.alpha(Theme.accent, 0.12) : Theme.surface2; border.color: chip.hovered ? Theme.accent : Theme.border }
+                            contentItem: Label { id: chipLabel; text: chip.modelData.label; color: Theme.text; font.pixelSize: 13; elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        }
+                    }
+                }
+                Label {
+                    visible: root.messages.length === 0
+                    text: root.notebookId ? "Answers use this notebook's typed text" + (Ai.readingOn ? " and handwriting." : ". Turn on “Make handwriting searchable” in Settings → AI to include handwriting.")
+                                          : root.useNotes ? "Answers use your library's typed text" + (Ai.readingOn ? " and handwriting (locked notebooks are left out)." : ". Turn on “Make handwriting searchable” in Settings → AI to include handwriting.") : ""
+                    color: Theme.muted; font.pixelSize: 12; wrapMode: Text.Wrap
+                    Layout.leftMargin: 18; Layout.rightMargin: 18
+                    Layout.fillWidth: true
+                }
+            }
+            delegate: Item {
+                id: msg
+                required property var modelData
+                readonly property bool mine: modelData.role === "user"
+                width: list.width
+                height: bubble.height + (actions.visible ? actions.height + 4 : 0)
+                Rectangle {
+                    id: bubble
+                    antialiasing: true
+                    x: msg.mine ? parent.width - width - 18 : 18
+                    width: Math.min(parent.width - (msg.mine ? 72 : 36), body.implicitWidth + 24)
+                    height: body.implicitHeight + 18
+                    radius: 14
+                    color: msg.mine ? Theme.alpha(Theme.accent, 0.14) : msg.modelData.role === "error" ? Theme.alpha(Theme.danger, 0.1) : Theme.surface2
+                    border.color: msg.modelData.role === "error" ? Theme.alpha(Theme.danger, 0.4) : "transparent"
+                    TextEdit {
+                        id: body
+                        x: 12; y: 9
+                        width: Math.min(implicitWidth, msg.width - (msg.mine ? 72 : 36) - 24)
+                        readOnly: true
+                        selectByMouse: true
+                        wrapMode: Text.Wrap
+                        textFormat: msg.modelData.role === "assistant" ? TextEdit.MarkdownText : TextEdit.PlainText
+                        text: msg.modelData.text
+                        color: msg.modelData.role === "error" ? Theme.danger : Theme.text
+                        selectionColor: Theme.alpha(Theme.accent, 0.3)
+                        selectedTextColor: Theme.text
+                        font.pixelSize: 14
+                        font.family: Theme.font
+                    }
+                }
+                RowLayout {
+                    id: actions
+                    visible: msg.modelData.role === "assistant"
+                    anchors.top: bubble.bottom
+                    anchors.topMargin: 4
+                    x: 12
+                    spacing: 2
+                    UiButton {
+                        kind: "ghost"; iconName: "copy"; text: "Copy"; implicitHeight: 30
+                        onClicked: { clip.text = msg.modelData.text; clip.selectAll(); clip.copy(); text = "Copied" }
+                    }
+                    UiButton {
+                        visible: root.canInsert
+                        kind: "ghost"; iconName: "text"; text: "Put on page"; implicitHeight: 30
+                        onClicked: root.insertRequested(root.plain(msg.modelData.text))
+                    }
+                }
+            }
+            footer: Item {
+                width: list.width
+                height: root.waiting ? 40 : 0
+                visible: root.waiting
+                RowLayout {
+                    x: 18
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 8
+                    BusyIndicator { running: root.waiting; Layout.preferredWidth: 22; Layout.preferredHeight: 22 }
+                    Label { text: Ai.local ? "Thinking (local models can take a while)…" : "Thinking…"; color: Theme.muted }
+                }
+            }
+        }
+        // For copying (the clipboard from QML).
+        TextEdit { id: clip; visible: false }
+
+        Rectangle { visible: Ai.ready; Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.border }
+        RowLayout {
+            visible: Ai.ready
+            Layout.fillWidth: true
+            Layout.margins: 12
+            spacing: 8
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(120, Math.max(40, input.implicitHeight))
+                TextArea {
+                    id: input
+                    placeholderText: root.messages.length ? "Ask a follow-up…" : "Ask anything…"
+                    leftPadding: 12; rightPadding: 12; topPadding: 10; bottomPadding: 10
+                    wrapMode: TextEdit.Wrap
+                    color: Theme.text
+                    placeholderTextColor: Theme.muted
+                    font.pixelSize: 14
+                    selectionColor: Theme.alpha(Theme.accent, 0.3)
+                    background: Rectangle { antialiasing: true; radius: Theme.radius; color: Theme.surface2; border.width: input.activeFocus ? 2 : 1; border.color: input.activeFocus ? Theme.accent : Theme.border }
+                    // Enter sends; Shift+Enter starts a new line.
+                    Keys.onReturnPressed: e => { if (e.modifiers & Qt.ShiftModifier) e.accepted = false; else root.send(text) }
+                    Keys.onEnterPressed: e => { if (e.modifiers & Qt.ShiftModifier) e.accepted = false; else root.send(text) }
+                }
+            }
+            IconButton {
+                iconName: "send"
+                tip: "Send (Enter)"
+                enabled: !root.waiting && input.text.trim().length > 0
+                onClicked: root.send(input.text)
+            }
+        }
+    }
+}

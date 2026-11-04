@@ -929,6 +929,58 @@ void InkCanvas::changeShape(const QString& change, qreal value) {
 
 QVariantList InkCanvas::selectedInkStrokes() { return m_ed ? m_ed->selectedInkStrokes() : QVariantList(); }
 
+QString InkCanvas::selectionImage(int maxSide) {
+  if (!m_ed) return {};
+  const auto box = m_ed->selectionBounds();
+  const int index = activePage();
+  if (!box || index < 0 || index >= int(m_pages.size())) return {};
+  const Page& p = m_pages[index];
+  const double pad = 16;
+  const QRectF region = QRectF(box->x - pad, box->y - pad, box->w + 2 * pad, box->h + 2 * pad).intersected(QRectF(0, 0, p.w, p.h));
+  if (region.isEmpty()) return {};
+  const double scale = std::clamp(double(maxSide) / std::max(region.width(), region.height()), 0.5, 4.0);
+  // The whole page at that scale (its paper and PDF too), then the selection's part.
+  QImage bg;
+  const QString asset = p.meta["backgroundAsset"].toString();
+  if (!asset.isEmpty() && !p.meta["backgroundPage"].isNull()) {
+    const QImage img = PdfDocs::instance().render(asset, p.meta["backgroundPage"].toInt(), scale * p.w / std::max(1.0, PdfDocs::instance().pageSize(asset, p.meta["backgroundPage"].toInt()).width()));
+    if (!img.isNull()) bg = img.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+  }
+  const auto c = draw::renderPage(p.tmpl, p.paper, p.w, p.h, sceneJson(index), scale, bg);
+  const QImage part = c->image().copy(QRect(int(region.x() * scale), int(region.y() * scale), int(region.width() * scale), int(region.height() * scale)));
+  QByteArray bytes;
+  QBuffer buf(&bytes);
+  buf.open(QIODevice::WriteOnly);
+  part.save(&buf, "PNG");
+  return "data:image/png;base64," + QString::fromLatin1(bytes.toBase64());
+}
+
+void InkCanvas::insertText(const QString& text) {
+  if (!m_ed || text.trimmed().isEmpty()) return;
+  finishEdit();
+  const auto box = m_ed->selectionBounds();
+  const int pi = box ? activePage() : currentPage();
+  if (pi < 0 || pi >= int(m_pages.size())) return;
+  m_ed->activate(pi);
+  const double pw = m_pages[pi].w, ph = m_pages[pi].h;
+  double x, y, w;
+  if (box) {
+    x = box->x;
+    y = std::min(box->y + box->h + 16, ph - 40);
+    w = std::max(box->w, pw * 0.5);
+  } else {
+    const QPointF c = toPageOf(pi, QPointF(width() / 2, height() / 2));
+    w = pw * 0.7;
+    x = std::max(20.0, c.x() - w / 2);
+    y = std::max(20.0, c.y() - 60);
+  }
+  setTool("lasso");
+  m_ed->insertText(text.trimmed(), x, y, std::min(w, pw - x - 20));
+  afterCore();
+}
+
+QString InkCanvas::selectionText() { return m_ed ? m_ed->selectedText() : QString(); }
+
 bool InkCanvas::applyFontToInk(const QString& text, const QString& font, bool keepInk) {
   const bool done = m_ed && m_ed->inkToText(text, font, keepInk);
   syncSelection();

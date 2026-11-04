@@ -1,7 +1,6 @@
 // The app's settings (the Settings screen), saved and shared by every screen.
 pragma Singleton
 import QtQuick
-import Inkleaf
 
 QtObject {
     id: root

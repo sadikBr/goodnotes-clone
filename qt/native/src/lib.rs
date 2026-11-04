@@ -10,6 +10,7 @@
 use std::ffi::{c_char, CStr};
 use std::path::{Path, PathBuf};
 
+use inkleaf_core::ai::{Ai, AiChange, AskRequest};
 use inkleaf_core::backup::Backups;
 use inkleaf_core::db::{Db, Element, NewNotebook, NewPdfNotebook};
 use inkleaf_core::error::{AppError, AppResult};
@@ -27,6 +28,7 @@ pub struct Core {
     db: Db,
     backups: Backups,
     sync: SyncManager,
+    ai: Ai,
     dir: PathBuf,
 }
 
@@ -38,6 +40,8 @@ impl Core {
             db: Db::open(&dir.join("inkleaf.db"))?,
             backups: Backups::load(dir.join("backup.json")),
             sync: SyncManager::load(dir.join("sync.json")),
+            // Not in the library: an API key stays out of backups and sync.
+            ai: Ai::load(dir.join("ai.json")),
             dir: dir.to_path_buf(),
         })
     }
@@ -84,6 +88,17 @@ impl Core {
             "setPageThumbnail" => to(&db.set_page_thumbnail(&a.s("pageId")?, &a.s("thumbnail")?)?),
             "setPageSection" => to(&db.set_page_section(&a.s("pageId")?, a.opt_s("section").as_deref())?),
             "elements" => to(&db.elements(&a.s("pageId")?)?),
+            "aiStatus" => to(&self.ai.status()),
+            "aiSetup" => to(&self.ai.change(a.de::<AiChange>("change")?)?),
+            "aiTest" => to(&self.ai.test()?),
+            "aiAsk" => to(&self.ai.ask(&a.de::<AskRequest>("request")?)?),
+            "notesForAi" => to(&db.notes_for_ai(a.opt_s("notebookId").as_deref(), &a.opt_s("question").unwrap_or_default(), a.opt_i("budget").unwrap_or(60_000).max(1000) as usize)?),
+            "pagesToRead" => to(&db.pages_to_read(a.opt_i("limit").unwrap_or(5), a.opt_i("settleMs").unwrap_or(60_000))?),
+            "readingProgress" => {
+                let (done, total) = db.reading_progress()?;
+                ok(json!({ "done": done, "total": total }))
+            }
+            "setPageInkText" => to(&db.set_page_ink_text(&a.s("pageId")?, &a.s("text")?)?),
             "saveElements" => to(&db.save_elements(&a.s("pageId")?, &a.de::<Vec<Element>>("elements")?)?),
             // shape and symbol recognition (points: [x, y, …])
             "recognizeShape" => to(&recognize::beautify::recognize_shape(&p2s(&a.de::<Vec<Vec<f64>>>("points")?))),

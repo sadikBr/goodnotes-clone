@@ -155,6 +155,13 @@ public:
   /// Turns the selected handwriting into text in a handwriting font.
   /// The selected pen strokes ([[x, y], …] each), for handwriting recognition.
   Q_INVOKABLE QVariantList selectedInkStrokes();
+  /// The selection's part of the page (paper, PDF and all) as a PNG data: URL
+  /// about `maxSide` pixels on its long side: for the AI. "" with no selection.
+  Q_INVOKABLE QString selectionImage(int maxSide = 1400);
+  /// The selection's text and the plain text of handwriting-free elements ("" if none).
+  Q_INVOKABLE QString selectionText();
+  /// Adds `text` as a text box: under the selection, else in the middle of the view.
+  Q_INVOKABLE void insertText(const QString& text);
   /// Replaces the selected handwriting with `text` in `font` (keeping the ink if asked).
   Q_INVOKABLE bool applyFontToInk(const QString& text, const QString& font, bool keepInk);
   Q_INVOKABLE void insertImage(const QString& fileUrl);

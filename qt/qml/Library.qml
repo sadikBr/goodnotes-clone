@@ -520,6 +520,21 @@ Rectangle {
     }
     PopupMenu { id: menu }
     CreateMenu { id: createMenu }
+    AiPanel {
+        id: aiPanel
+        onSettingsRequested: root.settingsRequested()
+    }
+    function askLibrary() {
+        aiPanel.start({
+            heading: "Ask your library",
+            suggestions: [
+                { label: "What did I write about…", prompt: "What did I write about ", fill: true },
+                { label: "Summarise my recent notes", prompt: "Summarise what I've been working on recently, notebook by notebook." },
+                { label: "My open to-dos", prompt: "List the to-dos, deadlines and open questions in my notes, with where each one is." },
+                { label: "Where are my notes on…", prompt: "Which notebooks and pages have my notes on ", fill: true }
+            ]
+        })
+    }
     FormDialog { id: dialog }
     Daftar { id: daftarUi; dialog: dialog; onNotify: (m, e) => root.notify(m, e) }
     Timer { id: searchDelay; interval: 200; onTriggered: root.runSearch() }
@@ -765,6 +780,16 @@ Rectangle {
                             Label { anchors.centerIn: parent; text: "/"; font.pixelSize: 11; color: Theme.muted }
                         }
                     }
+                }
+                UiButton {
+                    Layout.alignment: Qt.AlignBottom
+                    kind: "ghost"
+                    iconName: "sparkle"
+                    text: "Ask"
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 600
+                    ToolTip.text: "Ask AI about your notes"
+                    onClicked: aiPanel.opened ? aiPanel.close() : root.askLibrary()
                 }
                 IconButton {
                     visible: root.anyUnlocked

@@ -133,7 +133,11 @@ public:
   int pasteClipboard();
   void duplicateSelection();
   void insertImage(const QString& src, double naturalW, double naturalH, double cx, double cy);
+  /// A text box with `value` at (x, y) on the active page (`w` wide), selected.
+  void insertText(const QString& value, double x, double y, double w);
   QVariantList selectedInkStrokes();
+  /// The selected elements' text (typed text and notes), in order.
+  QString selectedText();
   bool inkToText(const QString& text, const QString& font, bool keepInk);
 
   // ------------------------------------------------------------ text editing

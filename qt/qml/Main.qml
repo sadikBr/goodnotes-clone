@@ -17,7 +17,8 @@ ApplicationWindow {
     property string openNotebook: ""
     property string openTitle: ""
 
-    Component.onCompleted: { AppSettings.dark; requestActivate() }  // applies the theme; takes the keyboard
+    // Applies the theme; starts the AI (reading handwriting in the background); takes the keyboard.
+    Component.onCompleted: { AppSettings.dark; Ai.refresh(); requestActivate() }
     SettingsDialog { id: settings; services: services }
     Services {
         id: services

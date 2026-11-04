@@ -1239,11 +1239,39 @@ void EditorCore::insertImage(const QString& src, double naturalW, double natural
   ++selectionRev;
 }
 
+void EditorCore::insertText(const QString& value, double x, double y, double w) {
+  El el;
+  el.id = newId();
+  el.z = nextZ();
+  el.kind = Kind::Text;
+  el.x = std::max(0.0, x);
+  el.y = std::max(0.0, y);
+  el.w = std::max(80.0, std::min(w, pageWidth() - el.x));
+  el.text = value;
+  el.fontSize = 16;
+  el.color = "#1d1f23";
+  el.font = textFont;
+  const QString id = el.id;
+  addElement(makeEl(std::move(el)));
+  m_selection = {id};
+  ++selectionRev;
+}
+
 Els EditorCore::selectedInk() {
   Els out;
   for (const ElPtr& el : elements())
     if (m_selection.contains(el->id) && el->kind == Kind::Stroke && el->tool == "pen") out.push_back(el);
   return out;
+}
+
+QString EditorCore::selectedText() {
+  QStringList out;
+  for (const ElPtr& el : elements())
+    if (m_selection.contains(el->id)) {
+      const QString t = el->toJson()["text"].toString().trimmed();
+      if (!t.isEmpty()) out << t;
+    }
+  return out.join("\n");
 }
 
 QVariantList EditorCore::selectedInkStrokes() {

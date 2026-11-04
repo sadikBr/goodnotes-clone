@@ -20,7 +20,23 @@ Popup {
     required property Services services
     readonly property var sync: services.syncStatus
     readonly property var backup: services.backup
-    onOpened: { services.refreshSync(); services.refreshBackup() }
+    onOpened: { services.refreshSync(); services.refreshBackup(); Ai.refresh(); Ai.refreshProgress(); aiTest = "" }
+    readonly property var ai: Ai.status
+    readonly property string aiProvider: ai ? ai.provider : ""
+    property string aiTest: ""
+    property bool aiTesting: false
+    readonly property var aiProviders: [
+        { value: "", label: "Off" },
+        { value: "anthropic", label: "Claude (Anthropic API key)", group: "With an API key" },
+        { value: "openai", label: "ChatGPT (OpenAI API key)", group: "With an API key" },
+        { value: "gemini", label: "Gemini (Google API key)", group: "With an API key" },
+        { value: "ollama", label: "Ollama (on your computer)", group: "Local or other" },
+        { value: "custom", label: "Other OpenAI-compatible", group: "Local or other" }
+    ]
+    function aiSet(change) {
+        const err = Ai.setup(change)
+        aiTest = err ? "<font color='" + Theme.danger + "'>" + esc(err) + "</font>" : ""
+    }
     function esc(t) { return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") }
     function urlPath(u) { const s = String(u); return s.startsWith("file://") ? decodeURIComponent(s.slice(7)) : s }
 
@@ -154,6 +170,97 @@ Popup {
                     title: "Status"
                     help: !root.sync ? "" : root.sync.lastError ? "<font color='" + Theme.danger + "'>" + root.esc(root.sync.lastError) + "</font>" : (root.sync.lastSyncAt ? "Last synced " + root.services.relativeTime(root.sync.lastSyncAt) : "Not synced yet") + ". Notebooks are kept in Inkleaf's own private space in your Drive, which doesn't show among your files (Drive's Settings → Manage apps lists it)."
                     UiButton { text: root.services.syncing ? "Syncing…" : "Sync now"; enabled: !root.services.syncing; onClicked: root.services.syncNow(true) }
+                }
+
+                SectionHead { iconName: "sparkle"; text: "AI" }
+                SettingRow {
+                    first: true
+                    title: "AI assistant"
+                    help: "Ask about your notes, turn handwriting into text, explain or solve what you select, and get help with your daftar. Use a model on your computer (Ollama, LM Studio…) or your own API key."
+                    UiSelect {
+                        width: 240
+                        options: root.aiProviders
+                        value: root.aiProvider
+                        onPicked: v => root.aiSet({ provider: v })
+                    }
+                }
+                SettingRow {
+                    visible: ["anthropic", "openai", "gemini", "custom"].indexOf(root.aiProvider) >= 0
+                    title: "API key"
+                    help: root.ai && root.ai.hasKey ? "Saved on this device only (not in backups or sync): " + root.esc(root.ai.keyHint || "set") + ". Paste a new one to replace it."
+                          : root.aiProvider === "anthropic" ? "Create one at console.anthropic.com → API keys."
+                          : root.aiProvider === "openai" ? "Create one at platform.openai.com → API keys."
+                          : root.aiProvider === "gemini" ? "Create one at aistudio.google.com → Get API key."
+                          : "If your server needs one (OpenRouter, Mistral, Groq…; LM Studio doesn't)."
+                    RowLayout {
+                        spacing: 6
+                        UiField {
+                            id: keyField
+                            Layout.preferredWidth: 180
+                            echoMode: TextInput.Password
+                            inputMethodHints: Qt.ImhSensitiveData | Qt.ImhNoPredictiveText
+                            placeholderText: root.ai && root.ai.hasKey ? "••••••••" : "Paste your key"
+                            onAccepted: { root.aiSet({ apiKey: text }); text = "" }
+                        }
+                        UiButton { text: "Save"; enabled: keyField.text.length > 0; onClicked: { root.aiSet({ apiKey: keyField.text }); keyField.text = "" } }
+                        UiButton { visible: !!(root.ai && root.ai.hasKey); kind: "ghost"; text: "Remove"; onClicked: root.aiSet({ apiKey: "" }) }
+                    }
+                }
+                SettingRow {
+                    visible: root.aiProvider !== ""
+                    title: "Model"
+                    help: root.aiProvider === "anthropic" ? "Leave empty for " + "claude-opus-5-5" + ". For lower costs, try claude-haiku-5-5."
+                          : root.aiProvider === "ollama" ? "A model you've pulled, e.g. <b>qwen2.5vl</b> or <b>llama3.2-vision</b> (vision models can read handwriting)."
+                          : "The model's name, as your provider writes it. Pick one that can see pictures to read handwriting."
+                    UiField {
+                        width: 240
+                        text: root.ai ? root.ai.model : ""
+                        placeholderText: root.ai && root.ai.effectiveModel ? root.ai.effectiveModel : "model name"
+                        onEditingFinished: if (root.ai && text !== root.ai.model) root.aiSet({ model: text })
+                    }
+                }
+                SettingRow {
+                    visible: root.aiProvider === "ollama" || root.aiProvider === "custom"
+                    title: "Server address"
+                    help: root.aiProvider === "ollama" ? "Leave empty for Ollama on this computer (http://localhost:11434/v1)." : "Its OpenAI-compatible address, e.g. http://localhost:1234/v1 for LM Studio."
+                    UiField {
+                        width: 240
+                        text: root.ai ? root.ai.baseUrl : ""
+                        placeholderText: root.ai && root.ai.effectiveUrl ? root.ai.effectiveUrl : "http://…/v1"
+                        onEditingFinished: if (root.ai && text !== root.ai.baseUrl) root.aiSet({ baseUrl: text })
+                    }
+                }
+                SettingRow {
+                    visible: root.aiProvider !== ""
+                    title: "Status"
+                    help: root.aiTest ? root.aiTest
+                          : !Ai.ready ? "Not ready yet: " + (root.aiProvider === "ollama" || root.aiProvider === "custom" ? "enter a model." : "add your API key.")
+                          : (Ai.local ? "Runs on your computer or network: your notes stay with you." : "What you ask about (and pictures of what you select) is sent to " + (root.aiProvider === "anthropic" ? "Anthropic" : root.aiProvider === "openai" ? "OpenAI" : root.aiProvider === "gemini" ? "Google" : "that service") + ", and uses your API credit.")
+                    UiButton {
+                        text: root.aiTesting ? "Testing…" : "Test"
+                        enabled: Ai.ready && !root.aiTesting
+                        onClicked: {
+                            root.aiTesting = true
+                            root.aiTest = ""
+                            Ai.test((answer, err) => {
+                                root.aiTesting = false
+                                root.aiTest = err ? "<font color='" + Theme.danger + "'>" + root.esc(err) + "</font>" : "Working. The model answered: “" + root.esc(answer.slice(0, 60)) + "”"
+                            })
+                        }
+                    }
+                }
+                SettingRow {
+                    visible: root.aiProvider !== ""
+                    title: "Make handwriting searchable"
+                    help: {
+                        const p = Ai.progress
+                        let t = "Reads your handwritten pages in the background (a few at a time, once you stop writing on them) so search and questions find what you wrote by hand. Locked notebooks are never read."
+                        if (!Ai.local && root.aiProvider) t += " Each page is one request to your provider."
+                        if (Ai.readingOn && p && p.total) t += "<br><b>" + p.done + " of " + p.total + "</b> handwritten pages read" + (Ai.reading ? " (reading…)" : "") + "."
+                        if (Ai.readingOn && Ai.readError) t += "<br><font color='" + Theme.danger + "'>" + root.esc(Ai.readError) + "</font>"
+                        return t
+                    }
+                    UiSwitch { enabled: Ai.ready; checked: !!(root.ai && root.ai.searchHandwriting); onClicked: root.aiSet({ searchHandwriting: checked }) }
                 }
 
                 SectionHead { iconName: "pen"; text: "Writing" }

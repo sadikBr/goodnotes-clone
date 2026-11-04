@@ -36,6 +36,8 @@ Item {
 
     PopupMenu { id: menu }
     InkToText { id: inkToText; canvas: root.canvas }
+    /// Ask the AI about the selection: "explain", "solve", "translate", "summarise", "ask".
+    signal askAi(string what)
     ColorPopover { id: colorPop }
 
     Shadow { anchors.fill: parent; radius: 14; level: 3 }
@@ -46,6 +48,35 @@ Item {
         id: row
         anchors.centerIn: parent
         spacing: 6
+
+        // The AI.
+        AbstractButton {
+            id: aiBtn
+            implicitHeight: 30
+            implicitWidth: aiRow.implicitWidth + 16
+            hoverEnabled: true
+            ToolTip.visible: !!(hovered && !menu.opened) && !tipDismissed
+            property bool tipDismissed: false
+            onPressedChanged: if (pressed) tipDismissed = true
+            onHoveredChanged: if (!hovered) tipDismissed = false
+            ToolTip.text: "Ask AI about the selection"
+            onClicked: menu.show(aiBtn, [
+                { label: "Explain", action: () => root.askAi("explain") },
+                { label: "Solve step by step", action: () => root.askAi("solve") },
+                { label: "Summarise", action: () => root.askAi("summarise") },
+                { label: "Translate…", action: () => root.askAi("translate") }
+            ].concat(root.s.hasInk ? [{ label: "Turn handwriting into text", action: () => inkToText.start() }] : [], [
+                { label: "Ask a question…", action: () => root.askAi("ask") }
+            ]))
+            background: Rectangle { antialiasing: true; radius: 8; color: parent.hovered ? Theme.alpha(Theme.accent, 0.12) : "transparent" }
+            contentItem: RowLayout {
+                id: aiRow
+                spacing: 6
+                Icon { name: "sparkle"; size: 16; color: Theme.accent; Layout.leftMargin: 8 }
+                Label { text: "Ask AI"; font.weight: Font.DemiBold; font.pixelSize: 13; color: Theme.text; Layout.rightMargin: 8 }
+            }
+        }
+        Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 22; color: Theme.border }
 
         // Handwriting → text.
         AbstractButton {

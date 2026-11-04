@@ -16,7 +16,7 @@ use crate::error::{AppError, AppResult};
 use crate::lock::{self, ContentKey, LockInfo};
 use std::collections::HashMap;
 
-const SCHEMA_VERSION: i64 = 5;
+const SCHEMA_VERSION: i64 = 6;
 
 /// Ids of the folders in the trash and every folder inside them, at any
 /// depth: what's in a trashed folder is in the trash with it.
@@ -146,6 +146,16 @@ pub struct SearchHit {
     pub page_id: Option<String>,
     pub page_number: Option<i64>,
     pub snippet: String,
+}
+
+/// A handwritten page for the AI to read.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PageToRead {
+    pub page_id: String,
+    pub notebook_id: String,
+    pub width: f64,
+    pub height: f64,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -558,6 +568,14 @@ impl Db {
                 if !has {
                     conn.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN lock TEXT;"))?;
                 }
+            }
+            conn.pragma_update(None, "user_version", 5)?;
+        }
+        if version < 6 {
+            // v6: handwriting read by the AI (for search and questions), and when.
+            let cols: Vec<String> = conn.prepare("PRAGMA table_info(pages)")?.query_map([], |r| r.get::<_, String>(1))?.collect::<Result<_, _>>()?;
+            if !cols.iter().any(|c| c == "ink_text") {
+                conn.execute_batch("ALTER TABLE pages ADD COLUMN ink_text TEXT; ALTER TABLE pages ADD COLUMN ink_text_at INTEGER;")?;
             }
             conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         }
@@ -1586,7 +1604,154 @@ impl Db {
                 hits.push(row?);
             }
         }
+        {
+            // Handwriting the AI has read.
+            let mut stmt = conn.prepare(
+                &format!("SELECT n.id, n.title, p.id, p.position, p.ink_text
+                 FROM pages p JOIN notebooks n ON n.id = p.notebook_id
+                 WHERE n.trashed_at IS NULL AND n.lock IS NULL AND (n.folder_id IS NULL OR n.folder_id NOT IN {TRASHED_FOLDERS}) AND p.ink_text LIKE ?1 ESCAPE '\\'
+                 ORDER BY n.updated_at DESC, p.position LIMIT 200"),
+            )?;
+            let rows = stmt.query_map([&pattern], |r| {
+                let text: String = r.get(4)?;
+                Ok(SearchHit {
+                    notebook_id: r.get(0)?,
+                    notebook_title: r.get(1)?,
+                    page_id: Some(r.get(2)?),
+                    page_number: Some(r.get::<_, i64>(3)? + 1),
+                    snippet: format!("✍ {}", snippet(&text, q)),
+                })
+            })?;
+            for row in rows {
+                let hit = row?;
+                // Once per page (typed text on it may have matched already).
+                if !hits.iter().any(|h| h.page_id == hit.page_id) {
+                    hits.push(hit);
+                }
+            }
+        }
         Ok(hits)
+    }
+
+    // ------------------------------------------------------------- AI reading
+
+    /// Handwritten pages whose handwriting hasn't been read since they changed
+    /// (not in locked or trashed notebooks), most recently edited first.
+    pub fn pages_to_read(&self, limit: i64, settle_ms: i64) -> AppResult<Vec<PageToRead>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(&format!(
+            "SELECT p.id, p.notebook_id, p.width, p.height FROM pages p JOIN notebooks n ON n.id = p.notebook_id
+             WHERE n.trashed_at IS NULL AND n.lock IS NULL AND (n.folder_id IS NULL OR n.folder_id NOT IN {TRASHED_FOLDERS})
+               AND (p.ink_text_at IS NULL OR p.ink_text_at < p.updated_at)
+               AND p.updated_at < ?2
+               AND EXISTS (SELECT 1 FROM elements e WHERE e.page_id = p.id AND e.kind = 'stroke')
+             ORDER BY p.updated_at DESC LIMIT ?1"
+        ))?;
+        // Not while it's being written on (a minute's quiet first).
+        let rows = stmt.query_map(params![limit, now_ms() - settle_ms], |r| Ok(PageToRead { page_id: r.get(0)?, notebook_id: r.get(1)?, width: r.get(2)?, height: r.get(3)? }))?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    /// How much handwriting has been read: pages read, and handwritten pages in all.
+    pub fn reading_progress(&self) -> AppResult<(i64, i64)> {
+        let conn = self.conn();
+        let base = format!(
+            "FROM pages p JOIN notebooks n ON n.id = p.notebook_id
+             WHERE n.trashed_at IS NULL AND n.lock IS NULL AND (n.folder_id IS NULL OR n.folder_id NOT IN {TRASHED_FOLDERS})
+               AND EXISTS (SELECT 1 FROM elements e WHERE e.page_id = p.id AND e.kind = 'stroke')"
+        );
+        let total: i64 = conn.query_row(&format!("SELECT COUNT(*) {base}"), [], |r| r.get(0))?;
+        let done: i64 = conn.query_row(&format!("SELECT COUNT(*) {base} AND p.ink_text_at >= p.updated_at"), [], |r| r.get(0))?;
+        Ok((done, total))
+    }
+
+    /// What the AI read in a page's handwriting (kept for search; not for locked notebooks).
+    pub fn set_page_ink_text(&self, page_id: &str, text: &str) -> AppResult<()> {
+        let conn = self.conn();
+        let (_, lock) = page_notebook(&conn, page_id)?;
+        if lock.is_some() {
+            return Ok(());
+        }
+        // Read as of now: the page's own time doesn't change (it wasn't edited).
+        conn.execute("UPDATE pages SET ink_text = ?2, ink_text_at = MAX(?3, updated_at) WHERE id = ?1", params![page_id, text.trim(), now_ms()])?;
+        Ok(())
+    }
+
+    /// One page's text: typed text, then the handwriting the AI read.
+    fn page_text(&self, conn: &Connection, page_id: &str, key: &Option<ContentKey>) -> AppResult<String> {
+        let mut parts = Vec::new();
+        let mut stmt = conn.prepare("SELECT data FROM elements WHERE page_id = ?1 ORDER BY z, id")?;
+        let rows: Vec<String> = stmt.query_map([page_id], |r| r.get(0))?.collect::<Result<_, _>>()?;
+        for raw in rows {
+            let raw = match key {
+                Some(k) => lock::decrypt_text(k, &raw)?,
+                None => raw,
+            };
+            if let Some(t) = serde_json::from_str::<serde_json::Value>(&raw).ok().and_then(|v| v.get("text").and_then(|t| t.as_str()).map(str::to_string)) {
+                if !t.trim().is_empty() {
+                    parts.push(t.trim().to_string());
+                }
+            }
+        }
+        let ink: Option<String> = conn.query_row("SELECT ink_text FROM pages WHERE id = ?1", [page_id], |r| r.get(0))?;
+        if let Some(i) = ink.filter(|i| !i.trim().is_empty()) {
+            parts.push(format!("[handwriting] {}", i.trim()));
+        }
+        Ok(parts.join("\n"))
+    }
+
+    /// Notes to answer a question with: one notebook's pages (unlocked, if
+    /// locked), or the library's pages most related to `question` (locked
+    /// notebooks left out), up to about `budget` characters.
+    pub fn notes_for_ai(&self, notebook_id: Option<&str>, question: &str, budget: usize) -> AppResult<String> {
+        let conn = self.conn();
+        // (notebook title, page number, text) for every page considered.
+        let mut pages: Vec<(String, i64, String)> = Vec::new();
+        let notebooks: Vec<(String, String, Option<String>)> = match notebook_id {
+            Some(id) => conn.query_row("SELECT id, title, lock FROM notebooks WHERE id = ?1", [id], |r| Ok(vec![(r.get(0)?, r.get(1)?, r.get(2)?)]))?,
+            None => {
+                let mut stmt = conn.prepare(&format!(
+                    "SELECT id, title, lock FROM notebooks WHERE trashed_at IS NULL AND lock IS NULL AND (folder_id IS NULL OR folder_id NOT IN {TRASHED_FOLDERS}) ORDER BY updated_at DESC"
+                ))?;
+                let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+                rows.collect::<Result<_, _>>()?
+            }
+        };
+        for (id, title, lock) in notebooks {
+            let key = self.need_key(&lock)?;
+            let mut stmt = conn.prepare("SELECT id, position FROM pages WHERE notebook_id = ?1 ORDER BY position")?;
+            let ids: Vec<(String, i64)> = stmt.query_map([&id], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<Result<_, _>>()?;
+            for (pid, pos) in ids {
+                let text = self.page_text(&conn, &pid, &key)?;
+                if !text.is_empty() {
+                    pages.push((title.clone(), pos + 1, text));
+                }
+            }
+        }
+        let total: usize = pages.iter().map(|p| p.2.len()).sum();
+        if notebook_id.is_none() && total > budget {
+            // Most related first: how many of the question's words each page has.
+            let words: Vec<String> = question.to_lowercase().split(|c: char| !c.is_alphanumeric()).filter(|w| w.chars().count() > 2).map(str::to_string).collect();
+            let score = |p: &(String, i64, String)| {
+                let t = format!("{} {}", p.0, p.2).to_lowercase();
+                words.iter().filter(|w| t.contains(w.as_str())).count()
+            };
+            pages.sort_by_key(|p| std::cmp::Reverse(score(p)));
+        }
+        let mut out = String::new();
+        let mut last = String::new();
+        for (title, n, text) in pages {
+            let block = format!("{}--- page {n} ---\n{text}\n", if title != last { format!("\n# Notebook: {title}\n") } else { String::new() });
+            if out.len() + block.len() > budget {
+                if out.is_empty() {
+                    out.push_str(&block.chars().take(budget).collect::<String>());
+                }
+                break;
+            }
+            last = title;
+            out.push_str(&block);
+        }
+        Ok(out)
     }
 }
 
@@ -1739,6 +1904,8 @@ fn encrypt_notebook(conn: &Connection, id: &str, key: &ContentKey) -> AppResult<
             conn.execute("UPDATE elements SET data = ?2, text_content = NULL WHERE id = ?1", params![eid, lock::encrypt_text(key, &data)])?;
         }
     }
+    // Handwriting read by the AI is plain text: gone (it isn't read while locked).
+    conn.execute("UPDATE pages SET ink_text = NULL, ink_text_at = NULL WHERE notebook_id = ?1", [id])?;
     let thumbs: Vec<(String, String)> = {
         let mut stmt = conn.prepare("SELECT id, thumbnail FROM pages WHERE notebook_id = ?1 AND thumbnail IS NOT NULL")?;
         let rows = stmt.query_map([id], |r| Ok((r.get(0)?, r.get(1)?)))?;
@@ -1942,6 +2109,48 @@ mod tests {
             Ok(out)
         })
         .unwrap()
+    }
+
+    #[test]
+    fn handwriting_read_by_the_ai_is_searchable_and_gathered_for_questions() {
+        let db = db();
+        let nb = notebook(&db, "Physics");
+        let page = db.pages(&nb.id).unwrap()[0].id.clone();
+        db.save_elements(&page, &[
+            Element { id: new_id(), kind: "stroke".into(), z: 0, data: json!({ "points": [[0, 0], [5, 5]] }) },
+            Element { id: new_id(), kind: "text".into(), z: 1, data: json!({ "text": "Chapter 2" }) },
+        ]).unwrap();
+        // Waits until the page has been left alone a while.
+        assert!(db.pages_to_read(10, 60_000).unwrap().is_empty());
+        let queue = db.pages_to_read(10, -1_000).unwrap();
+        assert_eq!(queue.len(), 1);
+        assert_eq!(db.reading_progress().unwrap(), (0, 1));
+        db.set_page_ink_text(&page, "Newton's second law: F = ma").unwrap();
+        assert!(db.pages_to_read(10, -1_000).unwrap().is_empty());
+        assert_eq!(db.reading_progress().unwrap(), (1, 1));
+        let hits = db.search("second law").unwrap();
+        assert_eq!(hits.len(), 1);
+        assert!(hits[0].snippet.contains("second law"));
+        let notes = db.notes_for_ai(Some(&nb.id), "", 10_000).unwrap();
+        assert!(notes.contains("Chapter 2") && notes.contains("F = ma") && notes.contains("# Notebook: Physics"), "{notes}");
+        // Across the library: the related pages first, within the budget.
+        let other = notebook(&db, "Recipes");
+        write_text(&db, &other.id, &"flour sugar eggs ".repeat(40));
+        let notes = db.notes_for_ai(None, "What is Newton's law?", 200).unwrap();
+        assert!(notes.contains("Newton") && !notes.contains("flour"), "{notes}");
+        // Edited again: read again.
+        db.save_elements(&page, &[Element { id: new_id(), kind: "stroke".into(), z: 0, data: json!({ "points": [[1, 1]] }) }]).unwrap();
+        assert_eq!(db.pages_to_read(10, -1_000).unwrap().len(), 1);
+        // Locked: what was read is gone, and it isn't read or gathered.
+        db.set_page_ink_text(&page, "Newton again").unwrap();
+        db.lock_notebook(&nb.id, "secret").unwrap();
+        assert!(db.search("Newton").unwrap().is_empty());
+        assert!(db.pages_to_read(10, -1_000).unwrap().is_empty());
+        assert!(!db.notes_for_ai(None, "Newton", 10_000).unwrap().contains("Newton"));
+        // Asked about directly while unlocked, its typed text is there.
+        assert!(db.notes_for_ai(Some(&nb.id), "", 10_000).unwrap().contains("[handwriting]") == false);
+        db.lock_all();
+        assert!(db.notes_for_ai(Some(&nb.id), "", 10_000).is_err());
     }
 
     #[test]

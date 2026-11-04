@@ -1,5 +1,14 @@
 #include "Catalog.h"
 
+#include <QBuffer>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QPainter>
+#include <algorithm>
+
+#include "Core.h"
+#include "draw/Render.h"
+
 #include "editor/Instrument.h"
 #include "editor/TextFormat.h"
 
@@ -57,3 +66,27 @@ QVariantList Catalog::templates() const {
 QString Catalog::currentList(const QString& text) const { return ed::currentList(text); }
 
 double Catalog::snapAngle(double rad, bool coarse) const { return ed::snapAngle(rad, coarse); }
+
+QString Catalog::pageWriting(const QString& pageId, double width, double height, int maxSide) const {
+  QString err;
+  const QJsonValue els = InkleafCore::instance()->callJson("elements", {{"pageId", pageId}}, &err);
+  if (!err.isEmpty() || !els.isArray() || width <= 0 || height <= 0) return {};
+  // The elements as the editor stores them: { id, kind, z, data } → data (with its id and kind).
+  QJsonArray scene;
+  for (const QJsonValue& v : els.toArray()) {
+    QJsonObject d = v.toObject()["data"].toObject();
+    d["id"] = v.toObject()["id"];
+    if (!d.contains("kind")) d["kind"] = v.toObject()["kind"];
+    scene.append(d);
+  }
+  const double scale = std::clamp(maxSide / std::max(width, height), 0.25, 3.0);
+  const QImage ink = draw::elementsImage(scene, scale, QRectF(0, 0, width, height));
+  QImage out(ink.size(), QImage::Format_RGB32);
+  out.fill(Qt::white);
+  QPainter(&out).drawImage(0, 0, ink);
+  QByteArray bytes;
+  QBuffer buf(&bytes);
+  buf.open(QIODevice::WriteOnly);
+  out.save(&buf, "PNG");
+  return "data:image/png;base64," + QString::fromLatin1(bytes.toBase64());
+}
