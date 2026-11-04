@@ -39,13 +39,15 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
           # A draft left by an earlier, failed run is reused.
+          # What's new (CHANGELOG.md): shown on the release page and in the app's update card.
+          python3 scripts/release-notes.py "$TAG" > notes.md
           if gh release view "$TAG" --json isDraft -q .isDraft 2>/dev/null | grep -q true; then
             echo "reusing the draft release $TAG"
-            gh release edit "$TAG" --target "$GITHUB_SHA"
+            gh release edit "$TAG" --target "$GITHUB_SHA" --notes-file notes.md
           elif gh release view "$TAG" > /dev/null 2>&1; then
             echo "::error::$TAG is already published: run scripts/set-version.py with a new version first"; exit 1
           else
-            gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "Inkleaf $TAG" --generate-notes
+            gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "Inkleaf $TAG" --notes-file notes.md
           fi
 
   # Linux, Windows and Android, built and checked as on every push.

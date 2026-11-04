@@ -358,12 +358,16 @@ Popup {
                 SectionHead { iconName: "download"; text: "Updates" }
                 SettingRow {
                     first: true
-                    title: "Check for updates automatically"; help: "You're told when a new version is out, and it downloads in your browser."
+                    title: "Check for updates automatically"; help: "You're told when a new version is out, with what's new in it, and Inkleaf installs it in one tap where it can."
                     UiSwitch { checked: root.services.autoCheck; onClicked: root.services.setAutoCheck(checked) }
                 }
                 SettingRow {
                     title: "Inkleaf"; help: "Version " + root.services.version
-                    UiButton { text: "Check now"; onClicked: root.services.checkForUpdates(true) }
+                    RowLayout {
+                        spacing: 8
+                        UiButton { text: "What's new"; kind: "ghost"; onClicked: { root.services.showWhatsNew(); root.close() } }
+                        UiButton { text: "Check now"; onClicked: root.services.checkForUpdates(true) }
+                    }
                 }
 
                 SectionHead { iconName: "sun"; text: "Appearance" }

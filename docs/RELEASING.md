@@ -74,6 +74,12 @@ environment before building (the CMake build builds the core).
 
 ## 3. Making a release
 
+First say what's new: add a `## 0.9.1` section to `CHANGELOG.md`, one short
+line per change, written for the people using Inkleaf. The release page and
+the app's update card show it (the card lists the first few, with "Show all"),
+and the app shows it once more after it has updated. The release stops if
+the section is missing.
+
 ```sh
 python3 scripts/set-version.py 0.9.1   # VERSION and the Rust crates
 git commit -am "v0.9.1"
@@ -87,5 +93,6 @@ Or, without a tag: **Actions → Release → Run workflow** releases the version
 The **Release** workflow checks the versions match, builds and checks the
 downloads (the same build as every push, with the APK signed), attaches
 them to the release and publishes it. Installed apps find it within a few
-hours (or at once with Settings → Updates → Check now). Edit the release notes
-on GitHub if you like; they are shown in the app's update banner.
+hours (or at once with Settings → Updates → Check now). Edited release notes
+on GitHub show in the update card too; the "Updated to" card after an
+update uses the CHANGELOG.md built into the app.

@@ -51,6 +51,9 @@ public:
   Q_INVOKABLE bool install();
   /// Where the latest release is described (INKLEAF_RELEASES_URL overrides it, for testing).
   Q_INVOKABLE QString releasesUrl(const QString& repo) const;
+  /// What's new in `version` (its section of the CHANGELOG.md built into the
+  /// app, as Markdown), "" if it has none.
+  Q_INVOKABLE QString notesFor(const QString& version) const;
 
 signals:
   void changed();

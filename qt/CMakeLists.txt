@@ -211,6 +211,13 @@ qt_add_resources(inkleaf "inkleaf_style"
   FILES style/qmldir style/ToolTip.qml style/ScrollBar.qml style/ScrollIndicator.qml
 )
 
+# What's new in each version (shown after an update, and in Settings).
+qt_add_resources(inkleaf "inkleaf_changelog"
+  PREFIX /
+  BASE ${CMAKE_CURRENT_SOURCE_DIR}/..
+  FILES ${CMAKE_CURRENT_SOURCE_DIR}/../CHANGELOG.md
+)
+
 target_compile_definitions(inkleaf PRIVATE INKLEAF_VERSION="${PROJECT_VERSION}")
 target_link_libraries(inkleaf PRIVATE Qt6::Core Qt6::Gui Qt6::Network Qt6::Svg Qt6::Quick Qt6::QuickControls2 inkleaf_native)
 if(TARGET Qt6::Pdf)

@@ -1,5 +1,7 @@
 #include "Updater.h"
 
+#include <QRegularExpression>
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
@@ -49,6 +51,20 @@ QString Updater::kind() const {
 QString Updater::releasesUrl(const QString& repo) const {
   const QString over = qEnvironmentVariable("INKLEAF_RELEASES_URL");
   return over.isEmpty() ? "https://api.github.com/repos/" + repo + "/releases/latest" : over;
+}
+
+QString Updater::notesFor(const QString& version) const {
+  QFile f(QStringLiteral(":/CHANGELOG.md"));
+  if (!f.open(QIODevice::ReadOnly)) return {};
+  const QString text = QString::fromUtf8(f.readAll());
+  const QString v = QString(version).remove(QRegularExpression("^v"));
+  const QRegularExpression head("^## +v?" + QRegularExpression::escape(v) + "\\b[^\\n]*\\n",
+                                QRegularExpression::MultilineOption);
+  const auto m = head.match(text);
+  if (!m.hasMatch()) return {};
+  const int start = m.capturedEnd();
+  const int end = text.indexOf(QRegularExpression("^## ", QRegularExpression::MultilineOption), start);
+  return text.mid(start, end < 0 ? -1 : end - start).trimmed();
 }
 
 bool Updater::canInstall() const {

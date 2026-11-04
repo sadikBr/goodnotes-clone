@@ -175,8 +175,31 @@ QtObject {
     readonly property Prefs prefs: Prefs {
         category: "updates"
         property bool autoUpdate: true
+        /// The version that ran last (to say what's new after an update).
+        property string lastVersion: ""
     }
     function setAutoCheck(on) { prefs.autoUpdate = on }
+
+    /// What's new in this version, on the update card: { version, notes, updated }.
+    property var whatsNew: null
+    function showWhatsNew() {
+        const n = Updater.notesFor(version)
+        if (!n) return root.notify("No notes for this version", false)
+        whatsNew = { version: version, notes: n, updated: false }
+    }
+    function closeWhatsNew() { whatsNew = null }
+    /// After an update (a newer version than last time): what's new in it.
+    function greetUpdate() {
+        const last = prefs.lastVersion
+        prefs.lastVersion = version
+        if (last && !newer(version, last)) return
+        // Versions before 0.12 didn't note theirs: an existing library means an update.
+        if (!last) {
+            try { if (InkleafCore.call("library").notebooks.length === 0) return } catch (e) { return }
+        }
+        const n = Updater.notesFor(version)
+        if (n) whatsNew = { version: version, notes: n, updated: true }
+    }
 
     /** "0.10.1" > "0.9.3". */
     function newer(a, b) {
@@ -280,6 +303,7 @@ QtObject {
         Timer { running: true; repeat: true; interval: 5 * 60000; onTriggered: root.syncNow(false) },
         Timer { running: true; interval: 20000; onTriggered: root.checkBackup() },
         Timer { running: true; repeat: true; interval: 30 * 60000; onTriggered: root.checkBackup() },
+        Timer { running: true; interval: 1500; onTriggered: root.greetUpdate() },
         Timer { running: true; interval: 8000; onTriggered: if (root.autoCheck) root.checkForUpdates(false) },
         Timer { running: true; repeat: true; interval: 6 * 3600000; onTriggered: if (root.autoCheck) root.checkForUpdates(false) }
     ]
