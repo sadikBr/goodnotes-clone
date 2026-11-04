@@ -9,6 +9,7 @@
 
 #include "Js.h"
 #include "draw/Covers.h"
+#include "draw/DaftarPapers.h"
 
 namespace {
 
@@ -63,7 +64,7 @@ std::vector<Case> cases() {
   // Covers aren't in the paper catalogue.
   for (const draw::CoverDesign& d : draw::coverDesigns()) ids << d.tmpl;
   for (const QString& id : ids) {
-    const bool special = id.startsWith("daftar");
+    const bool special = false;
     if (id.startsWith("cover")) {
       // Every design in every cover colour; all sizes and orientations in two.
       const char* covers[] = {"#2563eb", "#0d9488", "#16a34a", "#ca8a04", "#ea580c", "#dc2626", "#db2777", "#7c3aed", "#475569", "#111827", "#f5f5f4"};
@@ -116,6 +117,27 @@ int compareRender(const QString& outDir) {
       a.save(outDir + "/" + c.name + "-script.png");
       b.save(outDir + "/" + c.name + "-native.png");
       if (d.pixels > 0) map.save(outDir + "/" + c.name + "-diff.png");
+    }
+  }
+  // Where daftar pages' filled-in values go.
+  const char* pages[] = {"daftar", "daftar-blue", "daftar-title", "daftar-profile", "daftar-profile-2", "daftar-timetable", "daftar-holidays", "daftar-diagnostic", "daftar-students", "daftar-memos", "daftar-absence"};
+  for (const char* t : pages) {
+    for (const auto& [w, h] : {std::pair<double, double>{794, 1123}, {1123, 794}, {559, 794}}) {
+      ++total;
+      const QJSValue js = Js::instance().call("daftarPapers.daftarSlots", {QString(t), w, h});
+      const QHash<QString, draw::Slot> native = draw::daftarSlots(t, w, h);
+      QStringList bad;
+      const QStringList keys = js.toVariant().toMap().keys();
+      if (keys.size() != native.size()) bad << QString("%1 vs %2 slots").arg(keys.size()).arg(native.size());
+      for (const QString& k : keys) {
+        const QJSValue v = js.property(k);
+        const draw::Slot n = native.value(k, {-1, -1, -1});
+        if (std::abs(v.property("x").toNumber() - n.x) > 1e-6 || std::abs(v.property("y").toNumber() - n.y) > 1e-6 || std::abs(v.property("w").toNumber() - n.w) > 1e-6) bad << k;
+      }
+      if (!bad.isEmpty()) {
+        ++failed;
+        qWarning().noquote() << "DIFFERS slots" << t << w << h << bad.join(", ");
+      }
     }
   }
   qInfo().noquote() << QString("compare-render: %1 of %2 cases differ").arg(failed).arg(total);

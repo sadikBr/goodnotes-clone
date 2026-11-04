@@ -25,8 +25,8 @@ struct PaperLayout {
 /// Where the paper's writing lines and margin are (shared with alignment guides).
 PaperLayout paperLayout(const QString& tmpl, double w, double h);
 
-/// Draws the paper colour and the template's lines. False for a template
-/// this doesn't draw (covers, daftar pages): only the paper colour is drawn.
+/// Draws the paper colour and the template's lines (papers, covers, daftar
+/// pages; anything else is blank paper). Always true.
 bool drawPaper(JsCanvas& c, const QString& tmpl, double w, double h, const QString& paper);
 
 }  // namespace draw

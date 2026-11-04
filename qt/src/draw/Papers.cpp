@@ -6,6 +6,7 @@
 
 #include "../JsCanvas.h"
 #include "Covers.h"
+#include "DaftarPapers.h"
 #include "Fonts.h"
 
 namespace draw {
@@ -404,8 +405,8 @@ bool drawPaper(JsCanvas& c, const QString& t, double w, double h, const QString&
     drawWeeklyPlanner(c, w, h, ink);
   } else if (isCoverTemplate(t)) {
     drawCoverDesign(c, t, w, h, paper);
-  } else if (t != "blank") {
-    return false;  // daftar pages
+  } else if (isDaftarTemplate(t)) {
+    drawDaftarPage(c, t, w, h, paper);
   }
   return true;
 }
