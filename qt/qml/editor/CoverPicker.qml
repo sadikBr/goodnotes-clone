@@ -67,7 +67,7 @@ Popup {
                         Item {
                             width: 82; height: 116
                             Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: card.on ? -3 : -1; radius: 6; color: card.on ? Theme.accent : card.hovered ? Theme.borderStrong : Theme.border }
-                            Image {
+                            LiveImage {
                                 anchors.fill: parent
                                 fillMode: Image.PreserveAspectFit
                                 sourceSize: Qt.size(164, 232)

@@ -147,6 +147,7 @@ qt_add_qml_module(inkleaf
     qml/Icon.qml
     qml/IconData.js
     qml/ui/Shadow.qml
+    qml/ui/LiveImage.qml
     qml/ui/UiButton.qml
     qml/ui/Segmented.qml
     qml/ui/UiSwitch.qml

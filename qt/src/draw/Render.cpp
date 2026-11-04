@@ -23,7 +23,7 @@ double clockMs() {
 }
 
 QImage paperImage(const QString& tmpl, const QString& color, double w, double h, double scale, QRectF region) {
-  static std::list<std::pair<QString, QImage>> cache;  // most recent first
+  thread_local std::list<std::pair<QString, QImage>> cache;  // most recent first (per thread)
   if (region.isEmpty()) region = QRectF(0, 0, w, h);
   // The paper depends only on these: pages alike share one picture (drawn once).
   const QString key = tmpl + QLatin1Char('|') + color + QStringLiteral("|%1|%2|%3|%4|%5|%6|%7").arg(w).arg(h).arg(scale).arg(region.x()).arg(region.y()).arg(region.width()).arg(region.height());
@@ -51,7 +51,7 @@ QImage elementsImage(const QJsonArray& els, double scale, QRectF region) {
 }
 
 const QImage* imageFor(const QString& src) {
-  static QHash<QString, QImage> cache;
+  thread_local QHash<QString, QImage> cache;
   if (auto it = cache.constFind(src); it != cache.constEnd()) return &*it;
   QImage img;
   if (src.startsWith("data:")) {

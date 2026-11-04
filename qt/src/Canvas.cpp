@@ -110,7 +110,7 @@ QColor Canvas::parseColor(const QString& input) {
 }
 
 QFont Canvas::parseFont(const QString& css) {
-  static QHash<QString, QFont> cache;
+  thread_local QHash<QString, QFont> cache;  // per thread: previews draw on workers
   if (auto it = cache.constFind(css); it != cache.constEnd()) return *it;
   QFont f;
   f.setHintingPreference(QFont::PreferNoHinting);

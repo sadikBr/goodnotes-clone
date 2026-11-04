@@ -113,19 +113,36 @@ QImage InkSampleImage::requestImage(const QString& id, QSize* size, const QSize&
   return img;
 }
 
-QImage CoverImage::requestImage(const QString& id, QSize* size, const QSize& requested) {
-  if (QThread::currentThread() != qApp->thread()) {
-    QImage out;
-    QMetaObject::invokeMethod(qApp, [&] { out = requestImage(id, size, requested); }, Qt::BlockingQueuedConnection);
-    return out;
+namespace {
+
+/// One cover preview, drawn on the pool.
+class CoverResponse : public QQuickImageResponse, public QRunnable {
+public:
+  CoverResponse(const QString& id, const QSize& requested) : m_id(id), m_requested(requested) { setAutoDelete(false); }
+  void run() override {
+    const QStringList p = m_id.split('/');
+    const QString design = p.value(0, "classic");
+    const QString color = "#" + p.value(1, "2563eb");
+    const bool landscape = p.value(2) == "1";
+    const QString title = QUrl::fromPercentEncoding(p.mid(3).join('/').toUtf8());
+    const int w = m_requested.isValid() && m_requested.width() > 0 ? m_requested.width() : 240;
+    m_image = cover::coverPreview(design, color, title, w, landscape);
+    emit finished();
   }
-  const QStringList p = id.split('/');
-  const QString design = p.value(0, "classic");
-  const QString color = "#" + p.value(1, "2563eb");
-  const bool landscape = p.value(2) == "1";
-  const QString title = QUrl::fromPercentEncoding(p.mid(3).join('/').toUtf8());
-  const int w = requested.isValid() && requested.width() > 0 ? requested.width() : 240;
-  QImage img = cover::coverPreview(design, color, title, w, landscape);
-  if (size) *size = img.size();
-  return img;
+  QQuickTextureFactory* textureFactory() const override { return QQuickTextureFactory::textureFactoryForImage(m_image); }
+
+private:
+  QString m_id;
+  QSize m_requested;
+  QImage m_image;
+};
+
+}  // namespace
+
+CoverImage::CoverImage() : QQuickAsyncImageProvider() { m_pool.setMaxThreadCount(2); }
+
+QQuickImageResponse* CoverImage::requestImageResponse(const QString& id, const QSize& requested) {
+  auto* r = new CoverResponse(id, requested);
+  m_pool.start(r);
+  return r;
 }

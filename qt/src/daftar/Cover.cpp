@@ -2,12 +2,16 @@
 #include "Cover.h"
 
 #include <QLocale>
+#include <QMutex>
+#include <QPainter>
+#include <list>
 #include <QRegularExpression>
 #include <cmath>
 
 #include "../Canvas.h"
 #include "../draw/Covers.h"
 #include "../draw/Elements.h"
+#include "../draw/Papers.h"
 #include "Daftar.h"
 #include "Store.h"
 
@@ -137,11 +141,49 @@ void applyCover(const QJsonObject& nb, const QString& design, const QString& col
   refreshCoverThumbnail(store::pages(id).at(0).toObject());
 }
 
+namespace {
+
+/// A design's picture without its title and date, drawn as renderPage draws
+/// the paper; kept (most recent first) so typing a title doesn't redraw it.
+QImage coverBackground(const QString& tmpl, const QString& color, double w, double h, double scale) {
+  static QMutex mutex;
+  static std::list<std::pair<QString, QImage>> cache;
+  const QString key = QStringLiteral("%1|%2|%3|%4|%5").arg(tmpl, color).arg(w).arg(h).arg(scale, 0, 'g', 12);
+  {
+    QMutexLocker lock(&mutex);
+    for (auto it = cache.begin(); it != cache.end(); ++it)
+      if (it->first == key) {
+        cache.splice(cache.begin(), cache, it);
+        return cache.front().second;
+      }
+  }
+  Canvas c(std::max(1, int(std::floor(w * scale + 0.5))), std::max(1, int(std::floor(h * scale + 0.5))));
+  c.scale(scale, scale);
+  draw::drawPaper(c, tmpl, w, h, color);
+  const QImage img = c.image();
+  QMutexLocker lock(&mutex);
+  cache.push_front({key, img});
+  while (cache.size() > 40) cache.pop_back();
+  return img;
+}
+
+}  // namespace
+
 QImage coverPreview(const QString& design, const QString& color, const QString& title, int pixelWidth, bool landscape) {
   const double w = landscape ? 1123 : 794;
   const double h = landscape ? 794 : 1123;
+  const double scale = pixelWidth / w;
   const std::vector<ed::El> els = coverTextElements(design, title.isEmpty() ? QStringLiteral("Untitled") : title, monthYear(), w, h);
-  return draw::renderPage(draw::coverTemplate(design), color, w, h, json(els), pixelWidth / w)->image();
+  // The title and date over the design's picture, as renderPage would draw them.
+  QImage img = coverBackground(draw::coverTemplate(design), color, w, h, scale);
+  img.detach();
+  {
+    QPainter painter(&img);
+    Canvas c(&painter, img.width(), img.height());
+    c.scale(scale, scale);
+    for (const ed::El& e : els) draw::drawElement(c, e.toJson());
+  }
+  return img;
 }
 
 }  // namespace cover

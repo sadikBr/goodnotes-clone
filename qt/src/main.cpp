@@ -17,6 +17,8 @@
 #include <QSurfaceFormat>
 
 #include "Catalog.h"
+#include "daftar/Cover.h"
+#include <QElapsedTimer>
 #include "draw/Covers.h"
 #include "draw/Render.h"
 #include "tests/Golden.h"
@@ -77,6 +79,17 @@ int main(int argc, char* argv[]) {
   // inkleaf --golden record|check <folder> [<diffs folder>].
   if (const int i = QCoreApplication::arguments().indexOf("--golden"); i > 0 && i + 2 < argc)
     return golden(QCoreApplication::arguments().at(i + 1), QCoreApplication::arguments().at(i + 2), QCoreApplication::arguments().value(i + 3));
+  // Developer check: times the cover previews (inkleaf --time-covers).
+  if (QCoreApplication::arguments().contains("--time-covers")) {
+    for (int w : {128, 240, 500})
+      for (const draw::CoverDesign& d : draw::coverDesigns()) {
+        QElapsedTimer t;
+        t.start();
+        for (int k = 0; k < 3; ++k) cover::coverPreview(d.id, "#2563eb", QString("Notebook %1").arg(k), w, false);
+        qInfo("%4d px %-10s %6.1f ms", w, qPrintable(d.id), t.nsecsElapsed() / 3e6);
+      }
+    return 0;
+  }
   // Developer check: draws every paper and cover, then quits (inkleaf --render-papers <folder>).
   if (const int i = QCoreApplication::arguments().indexOf("--render-papers"); i > 0 && i + 1 < argc) {
     const QString dir = QCoreApplication::arguments().at(i + 1);

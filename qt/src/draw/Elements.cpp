@@ -76,7 +76,7 @@ QStringList wrapLines(Canvas& c, const QString& text, double maxWidth) {
 }
 
 Canvas& measurer() {
-  static Canvas* m = new Canvas(300, 150);
+  thread_local Canvas* m = new Canvas(300, 150);  // per thread: previews draw on workers
   return *m;
 }
 

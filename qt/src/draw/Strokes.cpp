@@ -117,7 +117,7 @@ void outlinePath(Canvas& c, const std::vector<P2>& outline) {
 
 // Pencil grain: a small tile of per-pixel alpha noise, tinted per colour.
 QImage grainTile(const QString& color) {
-  static QHash<QString, QImage> cache;
+  thread_local QHash<QString, QImage> cache;
   if (auto it = cache.constFind(color); it != cache.constEnd()) return *it;
   Canvas t(48, 48);
   t.setFill(color);

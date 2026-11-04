@@ -367,11 +367,10 @@ Rectangle {
                 width: landscape ? 250 : 200
                 height: landscape ? 177 : 283
                 Shadow { anchors.fill: parent; radius: 8; level: 3 }
-                Image {
+                LiveImage {
                     anchors.fill: parent
                     sourceSize: Qt.size(parent.width * 2, parent.height * 2)
                     source: parent.visible ? dialog.coverUrl(dialog.values.design) : ""
-                    asynchronous: false
                 }
                 transform: Rotation { origin.x: 100; origin.y: 141; axis { x: 0; y: 1; z: 0 } angle: -8 }
             }

@@ -258,13 +258,12 @@ Popup {
                                 color: Theme.surface2
                                 Label { anchors.centerIn: parent; text: "Aa"; color: Theme.muted; font.pixelSize: 18 }
                             }
-                            Image {
+                            LiveImage {
                                 visible: cv.modelData.value !== "none"
                                 anchors.fill: parent
                                 sourceSize: Qt.size(128, 180)
                                 fillMode: Image.PreserveAspectFit
                                 source: cv.modelData.value === "none" ? "" : root.coverUrl(cv.modelData.value)
-                                asynchronous: false
                             }
                         }
                         Label {

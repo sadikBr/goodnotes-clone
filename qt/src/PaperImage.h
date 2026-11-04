@@ -5,6 +5,7 @@
 #pragma once
 
 #include <QQuickImageProvider>
+#include <QThreadPool>
 
 class PaperImage : public QQuickImageProvider {
 public:
@@ -23,10 +24,14 @@ public:
 
 /// Cover previews with the title (daftar/Cover coverPreview):
 ///   image://cover/<design>/<colour>/<landscape 0|1>/<title, URL-encoded>
-class CoverImage : public QQuickImageProvider {
+/// Drawn on worker threads: the dialogs stay responsive while they appear.
+class CoverImage : public QQuickAsyncImageProvider {
 public:
-  CoverImage() : QQuickImageProvider(QQuickImageProvider::Image) {}
-  QImage requestImage(const QString& id, QSize* size, const QSize& requested) override;
+  CoverImage();
+  QQuickImageResponse* requestImageResponse(const QString& id, const QSize& requested) override;
+
+private:
+  QThreadPool m_pool;
 };
 
 class Canvas;
