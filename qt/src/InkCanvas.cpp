@@ -18,6 +18,7 @@
 #include <QSGImageNode>
 #include <QSGSimpleRectNode>
 #include <QSGTransformNode>
+#include <QLineF>
 #include <QTabletEvent>
 #include <QUrl>
 #include <QUuid>
@@ -1683,16 +1684,15 @@ bool InkCanvas::eventFilter(QObject* watched, QEvent* event) {
   if (type == QEvent::TabletPress) {
     if (!inside || !isVisible()) return false;
     emit penUsed();
-    if (m_g.touch && m_palmRejection) {
-      if (m_ed) m_ed->cancel();
-      m_g = Gesture();
-    }
-    press(local, curved(te->pressure()), true, override, false, te->modifiers());
-    te->accept();
-    return true;
+    // Not taken here: Qt Quick delivers it to whatever is on top at that
+    // point (an open menu, the tool drawer, a button, the update card) as
+    // a mouse press. Only when that press reaches this item does the
+    // stroke start (mousePressEvent), with this pen's pressure.
+    m_pendingPen = {local, curved(te->pressure()), override, te->modifiers(), nowMs()};
+    return false;
   }
   if (type == QEvent::TabletMove) {
-    if (m_g.kind == Gesture::None) {
+    if (m_g.kind == Gesture::None || !m_g.stylus) {
       setHover(inside ? local : QPointF(-1, -1));
       if (m_tool == "laser") {
         m_laserDot = inside ? local : QPointF(-1, -1);
@@ -1705,14 +1705,30 @@ bool InkCanvas::eventFilter(QObject* watched, QEvent* event) {
     te->accept();
     return true;
   }
-  if (m_g.kind == Gesture::None) return false;
+  m_pendingPen.at = -1e9;
+  if (m_g.kind == Gesture::None || !m_g.stylus) return false;
   release();
-  te->accept();
-  return true;
+  // Not accepted: Qt Quick still gets the matching mouse release, so the
+  // press it gave this item ends (mouseReleaseEvent ignores it).
+  return false;
 }
 
 void InkCanvas::mousePressEvent(QMouseEvent* e) {
-  if (e->device() && e->device()->type() == QInputDevice::DeviceType::Stylus) return e->ignore();
+  // The pen press the window just saw, which nothing on top took: a stroke.
+  // (Matched by time and place: some systems mark the mouse press made from
+  // a pen as the pen, others as the mouse.)
+  const bool fromPen = nowMs() - m_pendingPen.at < 500 && QLineF(m_pendingPen.local, e->position()).length() < 32;
+  if (!fromPen && e->device() && e->device()->type() == QInputDevice::DeviceType::Stylus) return e->ignore();
+  if (fromPen) {
+    const PendingPen pen = m_pendingPen;
+    m_pendingPen.at = -1e9;
+    if (m_g.touch && m_palmRejection) {
+      if (m_ed) m_ed->cancel();
+      m_g = Gesture();
+    }
+    press(pen.local, pen.pressure, true, pen.override, false, pen.mods);
+    return;
+  }
   forceActiveFocus();
   if (e->button() == Qt::MiddleButton || e->button() == Qt::RightButton) {
     m_g = Gesture();
@@ -1725,13 +1741,15 @@ void InkCanvas::mousePressEvent(QMouseEvent* e) {
 }
 
 void InkCanvas::mouseMoveEvent(QMouseEvent* e) {
-  if (e->device() && e->device()->type() == QInputDevice::DeviceType::Stylus) return e->ignore();
+  // A pen's strokes follow its own (tablet) moves, with pressure.
+  if (m_g.stylus || (e->device() && e->device()->type() == QInputDevice::DeviceType::Stylus)) return e->ignore();
   setHover(e->position());
   drag(e->position(), 0.5f, false, e->modifiers());
 }
 
 void InkCanvas::mouseReleaseEvent(QMouseEvent* e) {
-  if (e->device() && e->device()->type() == QInputDevice::DeviceType::Stylus) return e->ignore();
+  // A pen's stroke ended with its tablet release (just before this one).
+  if (m_g.stylus || m_g.kind == Gesture::None || (e->device() && e->device()->type() == QInputDevice::DeviceType::Stylus)) return;
   release();
 }
 

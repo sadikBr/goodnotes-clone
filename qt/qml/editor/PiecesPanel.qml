@@ -53,6 +53,10 @@ Popup {
                      pieces.length ? headerHeight + Math.max(1, Math.ceil(shown.length / columns)) * (cellSide + 38) + 16 : 330)
     padding: 0
     focus: true
+    // A tap outside only closes it (it doesn't also draw on the page), as for menus.
+    modal: true
+    dim: false
+    Overlay.modal: Item {}
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     enter: Transition {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 120 }

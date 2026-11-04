@@ -25,6 +25,10 @@ Popup {
     parent: Overlay.overlay
     padding: 16
     focus: true
+    // A tap outside only closes it (it doesn't also draw on the page), as for menus.
+    modal: true
+    dim: false
+    Overlay.modal: Item {}
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     enter: Transition {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 120 }

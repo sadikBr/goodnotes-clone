@@ -377,6 +377,17 @@ private:
   bool m_palmRejection = true;
   QString m_penCursor = "cross";
   double m_lastPenMs = -1e9;
+  /// A pen press seen by the window, waiting for Qt Quick to say where it
+  /// goes: if it reaches this item (as the mouse press Qt makes from it),
+  /// it starts a stroke with this pressure; if a menu, button or panel on
+  /// top takes it, nothing happens here.
+  struct PendingPen {
+    QPointF local;
+    float pressure = 0.5f;
+    QString override;
+    Qt::KeyboardModifiers mods;
+    double at = -1e9;
+  } m_pendingPen;
   QVariantMap m_instrument;
   double m_instrumentRev = -1;
 
