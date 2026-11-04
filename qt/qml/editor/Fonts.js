@@ -1,6 +1,6 @@
+.pragma library
 // Text presets (as qt/src/draw/Fonts.cpp has them): id, label, the face to show
 // it in, and its Arabic partner (each preset's Arabic has its own character).
-.pragma library
 var presets = [
     { id: "sans", label: "Clean", face: "Inter", arabic: "Noto Sans Arabic" },
     { id: "book", label: "Book", face: "Lora", arabic: "Noto Naskh Arabic" },
