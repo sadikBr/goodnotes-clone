@@ -544,6 +544,7 @@ private:
   bool m_rubbing = false;
   bool m_readOnly = false;
   bool m_hideSelection = false;
+  bool m_hoverQueued = false;
   /// Input from the zoom box: how much larger it shows the page than the canvas does.
   double m_inputMag = 1;
   void setHover(QPointF p);

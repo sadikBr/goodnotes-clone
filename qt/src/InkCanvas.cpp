@@ -2020,7 +2020,12 @@ void InkCanvas::drag(QPointF s, float pressure, bool stylus, Qt::KeyboardModifie
 void InkCanvas::setHover(QPointF p) {
   if (p == m_hover) return;
   m_hover = p;
-  emit pointerChanged();
+  // Told once per turn of the event loop, with the latest place: a pen moves a
+  // few hundred times a second, and the eraser's ring (in QML) following each
+  // move fell behind the pen.
+  if (m_hoverQueued) return;
+  m_hoverQueued = true;
+  QMetaObject::invokeMethod(this, [this] { m_hoverQueued = false; emit pointerChanged(); }, Qt::QueuedConnection);
 }
 
 void InkCanvas::release() {
