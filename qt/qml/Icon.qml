@@ -22,7 +22,7 @@ Image {
     mipmap: false
     source: {
         const body = IconData.paths[name] || ""
-        const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48" fill="' + (filled ? color : "none") + '" stroke="' + color + '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + body + '</svg>'
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48" color="' + color + '" fill="' + (filled ? color : "none") + '" stroke="' + color + '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + body + '</svg>'
         return "data:image/svg+xml;utf8," + encodeURIComponent(svg)
     }
 }

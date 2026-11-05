@@ -8,6 +8,7 @@ section here before it can be published (`scripts/check-version.py`).
 ## 0.16.0
 
 - **Tools on the side:** an option to keep the tools in a rail down the left side, leaving the top bar to the notebook (Settings → Appearance → Tools, or ⋯ → Tools on the side). Select comes first, and the rail and its options have squarer corners.
+- **New tool icons:** clearer select, pen, highlighter, eraser, shapes, text, sticky note, ruler, laser and hand icons, with a soft tint.
 - **Your colours in the rail:** add the colours you use with **+**, for each tool; tap one to write with it, hold or right-click it to remove it.
 
 ## 0.15.0
