@@ -11,6 +11,8 @@ AbstractButton {
     property Component art: null
     property bool open: false
     property string tip
+    /// Corner radius (squarer beside the side rail).
+    property real corner: 11
     hoverEnabled: true
     implicitHeight: 34
     implicitWidth: row.implicitWidth + 19
@@ -21,7 +23,7 @@ AbstractButton {
     onHoveredChanged: if (!hovered) tipDismissed = false
     ToolTip.text: tip
     background: Rectangle { antialiasing: true;
-        radius: 11
+        radius: root.corner
         color: Theme.surface
         border.color: root.hovered || root.open ? Theme.accent : Theme.border
     }

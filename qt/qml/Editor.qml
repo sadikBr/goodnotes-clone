@@ -504,35 +504,38 @@ Rectangle {
                         visible: root.rail && !root.focusMode
                         x: 10
                         anchors.verticalCenter: parent.verticalCenter
-                        width: 56
-                        height: railCol.implicitHeight + 16
-                        radius: 28
+                        width: 54
+                        height: railCol.implicitHeight + 12
+                        radius: 10
                         antialiasing: true
                         color: Theme.surface
                         border.color: Theme.border
-                        Shadow { anchors.fill: parent; radius: 28; level: 2; z: -1 }
+                        Shadow { anchors.fill: parent; radius: 10; level: 2; z: -1 }
                         // Presses on the rail stay off the page.
                         MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons }
                         readonly property var fav: root.toolPrefs.get(canvas.tool)
+                        // Select first; then what writes, what's placed on the page, and presenting / moving around.
+                        readonly property var groups: [["lasso"], ["pen", "highlighter", "eraser"], ["shape", "text", "sticky", "ruler"], ["laser", "hand"]]
                         Column {
                             id: railCol
                             anchors.horizontalCenter: parent.horizontalCenter
-                            y: 8
-                            spacing: 4
+                            y: 6
+                            spacing: 2
                             Repeater {
-                                model: root.rail ? 3 : 0
+                                model: root.rail ? toolRail.groups : []
                                 delegate: Column {
-                                    id: railTray
+                                    id: railGroup
+                                    required property var modelData
                                     required property int index
-                                    spacing: 4
-                                    Rectangle { visible: railTray.index > 0; width: 28; height: 1; color: Theme.border; anchors.horizontalCenter: parent.horizontalCenter }
-                                    Item { visible: railTray.index > 0; width: 1; height: 2 }
+                                    spacing: 2
+                                    Item { visible: railGroup.index > 0; width: 42; height: 9; Rectangle { anchors.centerIn: parent; width: 26; height: 1; color: Theme.border } }
                                     Repeater {
-                                        model: root.tools.filter(t => t.tray === railTray.index)
+                                        model: railGroup.modelData.filter(id => id !== "ruler").map(id => root.tools.find(t => t.id === id))
                                         delegate: ToolBtn {
                                             required property var modelData
                                             objectName: "rail-" + modelData.id
-                                            implicitWidth: 44; implicitHeight: 44
+                                            implicitWidth: 42; implicitHeight: 42
+                                            corner: 8
                                             iconName: modelData.icon
                                             active: canvas.tool === modelData.id
                                             ink: modelData.id === "sticky" || modelData.id === "lasso" || modelData.id === "hand" || modelData.id === "eraser" ? "" : (canvas.colors[modelData.id] || "")
@@ -545,8 +548,9 @@ Rectangle {
                                     }
                                     ToolBtn {
                                         id: railRuler
-                                        visible: railTray.index === 1
-                                        implicitWidth: 44; implicitHeight: 44
+                                        visible: railGroup.modelData.indexOf("ruler") >= 0
+                                        implicitWidth: 42; implicitHeight: 42
+                                        corner: 8
                                         iconName: "ruler"
                                         readonly property bool on: !!canvas.instrument.visible
                                         active: on
@@ -561,7 +565,7 @@ Rectangle {
                                 }
                             }
                             // The tool's favourite colours, a tap away.
-                            Rectangle { visible: railColors.count > 0; width: 28; height: 1; color: Theme.border; anchors.horizontalCenter: parent.horizontalCenter }
+                            Item { visible: railColors.count > 0; width: 42; height: 9; Rectangle { anchors.centerIn: parent; width: 26; height: 1; color: Theme.border } }
                             Repeater {
                                 id: railColors
                                 model: toolRail.fav ? toolRail.fav.colors.slice(0, 4) : []
@@ -570,16 +574,15 @@ Rectangle {
                                     required property string modelData
                                     required property int index
                                     readonly property bool on: toolRail.fav && toolRail.fav.color === index
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    width: 44; height: 30
+                                    width: 42; height: 30
                                     hoverEnabled: true
                                     onClicked: root.toolPrefs.selectColor(canvas.tool, index)
                                     ToolTip.visible: hovered
                                     ToolTip.delay: 600
                                     ToolTip.text: on ? "Tap the tool again to change its colours" : "Use this colour"
                                     contentItem: Item {
-                                        Rectangle { antialiasing: true; anchors.centerIn: parent; width: 26; height: 26; radius: 13; color: "transparent"; border.width: 2; border.color: railSw.modelData; visible: railSw.on }
-                                        Rectangle { antialiasing: true; anchors.centerIn: parent; width: railSw.on ? 18 : 20; height: width; radius: width / 2; color: railSw.modelData; border.width: 1; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4); scale: railSw.hovered ? 1.12 : 1; Behavior on scale { NumberAnimation { duration: 120 } } }
+                                        Rectangle { antialiasing: true; anchors.centerIn: parent; width: 26; height: 26; radius: 7; color: "transparent"; border.width: 2; border.color: railSw.modelData; visible: railSw.on }
+                                        Rectangle { antialiasing: true; anchors.centerIn: parent; width: railSw.on ? 18 : 20; height: width; radius: 5; color: railSw.modelData; border.width: 1; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4); scale: railSw.hovered ? 1.1 : 1; Behavior on scale { NumberAnimation { duration: 120 } } }
                                     }
                                 }
                             }
@@ -693,9 +696,9 @@ Rectangle {
                     Behavior on opacity { NumberAnimation { duration: 180 } }
                     x: 6
                     y: Math.round(Math.max(8, root.toolMiddle - height / 2))
-                    height: 34
-                    width: tagRow.implicitWidth + 24
-                    radius: 17
+                    height: 32
+                    width: tagRow.implicitWidth + 22
+                    radius: 7
                     antialiasing: true
                     color: Theme.dark ? "#f5f5f4" : "#1c1917"
                     function flash() { opacity = 1; tagTimer.restart() }
@@ -708,7 +711,7 @@ Rectangle {
                         id: tagRow
                         anchors.centerIn: parent
                         spacing: 8
-                        Rectangle { visible: !!canvas.colors[railTag.tool] && railTag.tool !== "sticky"; anchors.verticalCenter: parent.verticalCenter; width: 12; height: 12; radius: 6; color: canvas.colors[railTag.tool] || "transparent"; border.width: 1.5; border.color: Theme.dark ? "#1c1917" : "#fafaf9" }
+                        Rectangle { visible: !!canvas.colors[railTag.tool] && railTag.tool !== "sticky"; anchors.verticalCenter: parent.verticalCenter; width: 12; height: 12; radius: 3; color: canvas.colors[railTag.tool] || "transparent"; border.width: 1.5; border.color: Theme.dark ? "#1c1917" : "#fafaf9" }
                         Label { text: railTag.name + (railTag.size && railTag.tool !== "text" && railTag.tool !== "sticky" ? " · " + Number(railTag.size).toFixed(railTag.size < 10 && railTag.size % 1 ? 1 : 0) + " px" : ""); font.pixelSize: 13; font.weight: Font.Medium; color: Theme.dark ? "#1c1917" : "#fafaf9" }
                     }
                 }

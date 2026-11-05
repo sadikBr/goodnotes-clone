@@ -18,6 +18,8 @@ Item {
     /// The drawer sits beside the tool (the side rail): the pointer is on its left, at `pointerY`.
     property bool fromLeft: false
     property real pointerY: height / 2
+    /// Beside the rail everything is squarer (as the rail is).
+    readonly property bool squared: fromLeft
     readonly property string tool: canvas.tool
     readonly property var fav: prefs.get(tool)
     readonly property var spec: prefs.specs[tool]
@@ -70,7 +72,7 @@ Item {
     }
 
     // The panel and its pointer.
-    Shadow { anchors.fill: panel; radius: 18; level: 3 }
+    Shadow { anchors.fill: panel; radius: panel.radius; level: 3 }
     Rectangle {
         id: caret
         width: 12; height: 12; rotation: 45
@@ -83,7 +85,7 @@ Item {
     Rectangle { antialiasing: true;
         id: panel
         anchors.fill: parent
-        radius: 18
+        radius: root.squared ? 10 : 18
         color: Theme.surface
         border.color: Theme.border
         // Hide the pointer's inner half.
@@ -102,6 +104,7 @@ Item {
             visible: root.tool === "pen"
             spacing: 6
             Chip {
+                corner: root.squared ? 7 : 11
                 id: nibChip
                 label: penCase.penFor(root.canvas.penStyle).label
                 tip: "Pen case"
@@ -120,12 +123,14 @@ Item {
             }
             // Construction lines: dashes or dots, and how far apart.
             ModeGroup {
+                corner: root.squared ? 9 : 14
                 visible: root.canvas.penStyle === "construction"
                 options: [{ value: "dash", label: "– – –", tip: "Dashes" }, { value: "dot", label: "• • •", tip: "Dots" }]
                 value: root.canvas.penDash
                 onPicked: v => root.prefs.store.penDash = v
             }
             Chip {
+                corner: root.squared ? 7 : 11
                 id: gapChip
                 visible: root.canvas.penStyle === "construction"
                 readonly property var gaps: [{ v: 0.6, label: "Close" }, { v: 1, label: "Normal" }, { v: 1.8, label: "Wide" }, { v: 3, label: "Very wide" }]
@@ -142,6 +147,7 @@ Item {
                 leftPadding: 4; rightPadding: 4
             }
             Chip {
+                corner: root.squared ? 7 : 11
                 id: smoothChip
                 visible: root.canvas.penStyle !== "tape"
                 label: (root.smoothings.find(s => s.id === AppSettings.store.smoothing) || root.smoothings[2]).label
@@ -154,6 +160,7 @@ Item {
             visible: root.tool === "shape"
             spacing: 6
             Chip {
+                corner: root.squared ? 7 : 11
                 id: shapeChip
                 label: (root.shapeKinds.find(k => k.id === root.canvas.shapeKind) || root.shapeKinds[0]).label
                 tip: "Shape to draw"
@@ -178,7 +185,7 @@ Item {
                 onPressedChanged: if (pressed) tipDismissed = true
                 onHoveredChanged: if (!hovered) tipDismissed = false
                 onClicked: menu.show(fontChip, Fonts.presets.map(f => ({ label: f.label, font: f.face, fontSize: 18, checked: f.id === fontChip.current, action: () => { root.canvas.editFormat({ font: f.id }); root.prefs.store.textFont = f.id } })), 220)
-                background: Rectangle { antialiasing: true; radius: 9; color: Theme.surface; border.color: fontChip.hovered ? Theme.accent : Theme.border }
+                background: Rectangle { antialiasing: true; radius: root.squared ? 7 : 9; color: Theme.surface; border.color: fontChip.hovered ? Theme.accent : Theme.border }
                 contentItem: Item {
                     RowLayout {
                         id: fontRow
@@ -194,12 +201,14 @@ Item {
             FormatButtons { canvas: root.canvas }
         }
         ModeGroup {
+            corner: root.squared ? 9 : 14
             visible: root.tool === "eraser"
             options: [{ value: "precise", label: "Precise", tip: "Erase only the parts the eraser touches" }, { value: "stroke", label: "Whole stroke", tip: "Erase every stroke the eraser touches" }]
             value: root.canvas.eraserMode
             onPicked: v => root.prefs.store.eraserMode = v
         }
         ModeGroup {
+            corner: root.squared ? 9 : 14
             visible: root.tool === "laser"
             options: [{ value: "trail", label: "Trail", tip: "Draw a glowing line that fades away" }, { value: "dot", label: "Dot", tip: "Just point with a glowing dot" }]
             value: root.canvas.laserMode
@@ -236,8 +245,8 @@ Item {
                     ToolTip.text: "Tap again to change this colour"
                     onClicked: on ? colorPop.show(sw, root.prefs.paletteFor(root.tool), modelData, c => root.prefs.setColor(root.tool, index, c)) : root.prefs.selectColor(root.tool, index)
                     background: Item {
-                        Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: -4; radius: width / 2; color: "transparent"; border.width: 2; border.color: Theme.mix(sw.modelData, Theme.text, 0.2); visible: sw.on }
-                        Rectangle { antialiasing: true; anchors.fill: parent; radius: width / 2; color: sw.modelData; border.width: 1; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4) }
+                        Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: -4; radius: root.squared ? 8 : width / 2; color: "transparent"; border.width: 2; border.color: Theme.mix(sw.modelData, Theme.text, 0.2); visible: sw.on }
+                        Rectangle { antialiasing: true; anchors.fill: parent; radius: root.squared ? 5 : width / 2; color: sw.modelData; border.width: 1; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4) }
                     }
                 }
             }
@@ -268,7 +277,7 @@ Item {
             Rectangle { antialiasing: true;
                 implicitWidth: sizesRow.implicitWidth + 6
                 implicitHeight: 36
-                radius: 12
+                radius: root.squared ? 9 : 12
                 color: Theme.surface2
                 Row {
                     id: sizesRow
@@ -285,8 +294,8 @@ Item {
                             hoverEnabled: true
                             onClicked: on ? (sizePop.index = index, sizePop.x = Math.max(8, sz.mapToItem(sizePop.parent, 0, 0).x - 110), sizePop.y = sz.mapToItem(sizePop.parent, 0, 0).y + 40, sizePop.open()) : root.prefs.selectSize(root.tool, index)
                             background: Item {
-                                Shadow { anchors.fill: parent; radius: 9; level: sz.on ? 1 : 0 }
-                                Rectangle { antialiasing: true; anchors.fill: parent; radius: 9; color: sz.on ? Theme.surface : "transparent" }
+                                Shadow { anchors.fill: parent; radius: root.squared ? 6 : 9; level: sz.on ? 1 : 0 }
+                                Rectangle { antialiasing: true; anchors.fill: parent; radius: root.squared ? 6 : 9; color: sz.on ? Theme.surface : "transparent" }
                             }
                             contentItem: Item {
                                 readonly property bool letter: root.tool === "text" || root.tool === "sticky"
@@ -311,6 +320,7 @@ Item {
                 }
             }
             Chip {
+                corner: root.squared ? 7 : 11
                 id: valueChip
                 label: root.fav && root.fav.sizes.length ? Number(root.fav.sizes[root.fav.size]).toFixed(root.spec && root.spec.step < 1 ? 1 : 0) : ""
                 unit: "px"

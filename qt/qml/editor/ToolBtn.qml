@@ -10,6 +10,7 @@ AbstractButton {
     property string ink: ""
     property bool active: false
     property string tip
+    property real corner: 11
     implicitWidth: 40
     implicitHeight: 38
     hoverEnabled: true
@@ -28,10 +29,10 @@ AbstractButton {
     onHoveredChanged: if (!hovered) tipDismissed = false
     ToolTip.text: tip
     background: Item {
-        Shadow { anchors.fill: parent; radius: 11; level: root.active ? 2 : 0; opacity: root.active ? 1 : 0 }
+        Shadow { anchors.fill: parent; radius: root.corner; level: root.active ? 2 : 0; opacity: root.active ? 1 : 0 }
         Rectangle { antialiasing: true;
             anchors.fill: parent
-            radius: 11
+            radius: root.corner
             color: root.active ? root.dip : root.hovered ? Theme.alpha(Theme.surface, 0.55) : "transparent"
             Behavior on color { ColorAnimation { duration: 180 } }
         }

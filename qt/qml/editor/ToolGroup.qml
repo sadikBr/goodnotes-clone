@@ -8,7 +8,8 @@ Rectangle {
     id: root
     default property alias content: row.data
     antialiasing: true
-    radius: 14
+    property real corner: 14
+    radius: corner
     color: Theme.surface2
     implicitWidth: row.implicitWidth + 8
     implicitHeight: row.implicitHeight + 8
