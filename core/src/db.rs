@@ -1457,6 +1457,50 @@ impl Db {
         Ok(self.reveal_page(get_page(&conn, &id)?, &lock))
     }
 
+    /// Copies a page (its paper, a PDF behind it and what's on it) to the end of
+    /// another notebook. The PDF is copied into that notebook once and reused.
+    /// Not to or from a locked notebook (their content is encrypted with their own key).
+    pub fn copy_page_to(&self, page_id: &str, to_notebook: &str) -> AppResult<Page> {
+        let mut conn = self.conn();
+        let page = get_page(&conn, page_id)?;
+        ensure_exists(&conn, "notebooks", to_notebook)?;
+        if notebook_lock(&conn, &page.notebook_id)?.is_some() || notebook_lock(&conn, to_notebook)?.is_some() {
+            return Err(AppError::Invalid("Pages can't be copied to or from a password-protected notebook.".into()));
+        }
+        let now = now_ms();
+        let tx = conn.transaction()?;
+        let asset = match &page.background_asset {
+            Some(a) if page.notebook_id != to_notebook => {
+                let existing: Option<String> = tx
+                    .query_row("SELECT id FROM assets WHERE notebook_id = ?1 AND (id = ?2 OR origin = ?2)", params![to_notebook, a], |r| r.get(0))
+                    .optional()?;
+                Some(match existing {
+                    Some(e) => e,
+                    None => {
+                        let id = new_id();
+                        tx.execute(
+                            "INSERT INTO assets (id, notebook_id, kind, data, created_at, origin) SELECT ?1, ?2, kind, data, ?3, ?4 FROM assets WHERE id = ?4",
+                            params![id, to_notebook, now, a],
+                        )?;
+                        id
+                    }
+                })
+            }
+            other => other.clone(),
+        };
+        let position: i64 = tx.query_row("SELECT COUNT(*) FROM pages WHERE notebook_id = ?1", [to_notebook], |r| r.get(0))?;
+        let id = new_id();
+        tx.execute(
+            "INSERT INTO pages (id, notebook_id, position, template, paper_color, width, height, favourite, thumbnail, created_at, updated_at, background_asset, background_page)
+             SELECT ?1, ?2, ?3, template, paper_color, width, height, 0, thumbnail, ?4, ?4, ?5, background_page FROM pages WHERE id = ?6",
+            params![id, to_notebook, position, now, asset, page_id],
+        )?;
+        copy_elements(&tx, page_id, &id)?;
+        tx.execute("UPDATE notebooks SET updated_at = ?2 WHERE id = ?1", params![to_notebook, now])?;
+        tx.commit()?;
+        Ok(get_page(&conn, &id)?)
+    }
+
     /// Permanently removes a page. A notebook always keeps at least one page.
     pub fn delete_page(&self, page_id: &str) -> AppResult<()> {
         let mut conn = self.conn();
@@ -2924,6 +2968,24 @@ mod tests {
         db.delete_page_template(&t.id).unwrap();
         assert!(db.page_templates().unwrap().is_empty());
         assert_eq!(db.asset_bytes(&asset).unwrap(), pdf);
+    }
+
+    #[test]
+    fn pages_copy_to_another_notebook_with_their_pdf() {
+        let db = Db::open_in_memory().unwrap();
+        let asset = db.store_pdf_asset(b"%PDF-1.4 x").unwrap();
+        let pdf = db.create_pdf_notebook(&NewPdfNotebook { title: "Slides".into(), asset_id: asset.clone(), pages: vec![PdfPageSize { width: 600.0, height: 800.0 }; 2], folder_id: None, cover_color: None }).unwrap();
+        let to = db.create_notebook(&NewNotebook { title: "Mine".into(), ..Default::default() }).unwrap();
+        let src = db.pages(&pdf.id).unwrap();
+        let a = db.copy_page_to(&src[0].id, &to.id).unwrap();
+        let b = db.copy_page_to(&src[1].id, &to.id).unwrap();
+        assert_eq!(a.notebook_id, to.id);
+        assert_eq!((a.width, a.position), (600.0, 1));
+        // The PDF is copied into the notebook once, and both pages show it.
+        assert!(a.background_asset.is_some() && a.background_asset != Some(asset.clone()));
+        assert_eq!(a.background_asset, b.background_asset);
+        assert_eq!(b.background_page, Some(1));
+        assert_eq!(db.asset_bytes(a.background_asset.as_deref().unwrap()).unwrap(), b"%PDF-1.4 x");
     }
 
     #[test]

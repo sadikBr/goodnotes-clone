@@ -29,6 +29,8 @@ public:
     int page = 0;
   };
   virtual std::vector<Entry> outline() { return {}; }
+  /// The page's text (empty where it can't be read).
+  virtual QString text(int) { return {}; }
 };
 
 /// Open PDFs by asset id (copied to the cache folder once, then loaded from there).
@@ -42,6 +44,8 @@ public:
   QSizeF pageSize(const QString& asset, int page);
   /// The PDF's own contents.
   std::vector<PdfFile::Entry> outline(const QString& asset);
+  /// A page's text.
+  QString text(const QString& asset, int page);
 
 private:
   PdfFile* doc(const QString& asset);

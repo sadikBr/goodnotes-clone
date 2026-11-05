@@ -54,6 +54,7 @@ public:
     }
     return img;
   }
+  QString text(int page) override { return page >= 0 && page < doc.pageCount() ? doc.getAllText(page).text() : QString(); }
   std::vector<Entry> outline() override {
     std::vector<Entry> out;
     QPdfBookmarkModel model;
@@ -158,6 +159,11 @@ QSizeF PdfDocs::pageSize(const QString& asset, int page) {
 std::vector<PdfFile::Entry> PdfDocs::outline(const QString& asset) {
   PdfFile* d = doc(asset);
   return d ? d->outline() : std::vector<PdfFile::Entry>{};
+}
+
+QString PdfDocs::text(const QString& asset, int page) {
+  PdfFile* d = doc(asset);
+  return d ? d->text(page) : QString();
 }
 
 QImage PdfDocs::render(const QString& asset, int page, double scale, QRectF region) {

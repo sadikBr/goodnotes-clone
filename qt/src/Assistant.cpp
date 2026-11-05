@@ -10,7 +10,9 @@
 
 #include "Catalog.h"
 #include "Core.h"
-#include "InkCanvas.h"
+#include "Pdf.h"
+#include "ContentsPage.h"
+#include "editor/EditorCore.h"
 #include "daftar/Cover.h"
 #include "daftar/Daftar.h"
 #include "daftar/Store.h"
@@ -366,8 +368,25 @@ QString Assistant::read(const QString& name, const QJsonObject& input) {
       pages.append(o);
     }
     const QJsonObject meta = QJsonDocument::fromJson(n["meta"].toString().toUtf8()).object();
-    const QString text = core("notesForAi", {{"notebookId", n["id"]}, {"question", input["question"].toString()}, {"budget", 50000}}).toString();
-    return compact(QJsonObject{{"title", n["title"]}, {"pages", pages}, {"headings", meta["contents"].toArray()}}) + "\n\nText of its pages:\n" + (text.trimmed().isEmpty() ? "(nothing typed or read yet)" : text);
+    // Its headings, by page number.
+    const QJsonArray rawPages = core("pages", {{"notebookId", n["id"]}}).toArray();
+    QHash<QString, int> number;
+    for (int i = 0; i < rawPages.size(); ++i) number.insert(rawPages[i].toObject()["id"].toString(), i + 1);
+    QJsonArray headings;
+    for (const QJsonValue& v : meta["contents"].toArray())
+      if (number.contains(v.toObject()["page"].toString()))
+        headings.append(QJsonObject{{"page", number.value(v.toObject()["page"].toString())}, {"title", v.toObject()["title"]}, {"level", v.toObject()["level"]}});
+    QString text = core("notesForAi", {{"notebookId", n["id"]}, {"question", input["question"].toString()}, {"budget", 40000}}).toString();
+    // The text printed on its PDF pages.
+    QString pdf;
+    for (int i = 0; i < rawPages.size() && pdf.size() < 40000; ++i) {
+      const QJsonObject p = rawPages[i].toObject();
+      if (p["backgroundAsset"].toString().isEmpty() || p["backgroundPage"].isNull()) continue;
+      const QString t = PdfDocs::instance().text(p["backgroundAsset"].toString(), p["backgroundPage"].toInt()).simplified();
+      if (!t.isEmpty()) pdf += QString("--- page %1 (PDF) ---\n%2\n").arg(i + 1).arg(t.left(6000));
+    }
+    return compact(QJsonObject{{"title", n["title"]}, {"pages", pages}, {"headings", headings}}) + "\n\nText of its pages:\n" +
+           (text.trimmed().isEmpty() && pdf.isEmpty() ? QStringLiteral("(nothing typed or read yet)") : text + (pdf.isEmpty() ? QString() : "\n" + pdf));
   }
   if (name == "get_daftar") {
     const QJsonObject n = notebook(idOf(input, "notebook_id"));
@@ -433,7 +452,30 @@ QString Assistant::plan(const QString& name, const QJsonObject& input) {
     if (p.isEmpty() || p.startsWith("own:")) return;
     if (!paperIds().contains(p)) throw Failure("There's no paper “" + p + "”. Use list_papers.");
   };
-  QJsonObject step{{"tool", name}, {"input", input}};
+  // Page numbers mean the pages as they are now: kept as the pages themselves,
+  // so steps before (a contents page at the front…) don't shift them.
+  QJsonObject in = input;
+  auto pageIds = [&](const QString& nb) {
+    QStringList ids;
+    if (!nb.startsWith("new:"))
+      for (const QJsonValue& v : core("pages", {{"notebookId", nb}}).toArray()) ids << v.toObject()["id"].toString();
+    return ids;
+  };
+  auto pageAt = [&](const QStringList& ids, int n) -> QString {
+    if (ids.isEmpty()) return {};
+    if (n < 1 || n > ids.size()) throw Failure(QString("That notebook has %1 pages.").arg(ids.size()));
+    return ids[n - 1];
+  };
+  if (name == "add_heading" || (name == "write_page" && input["page"].toInt(0) > 0)) {
+    const QString p = pageAt(pageIds(idOf(input, "notebook_id")), input["page"].toInt());
+    if (!p.isEmpty()) in["page_id"] = p;
+  } else if (name == "copy_pages") {
+    const QStringList ids = pageIds(idOf(input, "from_notebook_id"));
+    QJsonArray chosen;
+    for (const QJsonValue& v : input["pages"].toArray()) chosen.append(pageAt(ids, v.toInt()));
+    in["page_ids"] = chosen;
+  }
+  QJsonObject step{{"tool", name}, {"input", in}};
   QString summary, icon, ref;
   if (name == "create_folder") {
     const QString n = input["name"].toString().trimmed();
@@ -700,6 +742,12 @@ void Assistant::execute(const QJsonObject& stepIn) {
         if (v.toObject()["id"] == p["id"]) return v.toObject();
       return p;
     };
+    if (!in["page_id"].toString().isEmpty()) {
+      at = -1;
+      for (int i = 0; i < pages.size(); ++i)
+        if (pages[i].toObject()["id"] == in["page_id"]) at = i;
+      if (at < 0) throw Failure("That page is no longer in the notebook");
+    }
     if (at >= 0) {
       if (at >= pages.size()) throw Failure(QString("The notebook has %1 pages").arg(pages.size()));
       page = pages[at].toObject();
@@ -854,7 +902,10 @@ void Assistant::execute(const QJsonObject& stepIn) {
     const QString id = in["notebook_id"].toString();
     const QJsonObject nb = store::notebook(id);
     const QJsonArray pages = store::pages(id);
-    const int at = in["page"].toInt() - 1;
+    int at = in["page"].toInt() - 1;
+    if (!in["page_id"].toString().isEmpty())
+      for (int i = 0; i < pages.size(); ++i)
+        if (pages[i].toObject()["id"] == in["page_id"]) at = i;
     if (at < 0 || at >= pages.size()) throw Failure(QString("The notebook has %1 pages").arg(pages.size()));
     QJsonObject meta = QJsonDocument::fromJson(nb["meta"].toString().toUtf8()).object();
     journal({{"op", "setMeta"}, {"id", id}, {"meta", nb["meta"]}});
@@ -872,18 +923,43 @@ void Assistant::execute(const QJsonObject& stepIn) {
     QJsonArray beforeRows;
     if (!before.isEmpty())
       for (const ed::El& e : store::elements(before)) beforeRows.append(ed::toStored(e));
-    // The editor's own code, on the notebook, off screen.
-    InkCanvas c;
-    c.setNotebookId(id);
-    c.insertContentsPage();
-    c.flush();
-    const QString after = QJsonDocument::fromJson(store::notebook(id)["meta"].toString().toUtf8()).object()["contentsPage"].toString();
-    if (before.isEmpty()) {
+    QJsonObject meta = QJsonDocument::fromJson(nb["meta"].toString().toUtf8()).object();
+    QJsonArray pages = store::pages(id);
+    QString pageId = before;
+    bool found = false;
+    for (const QJsonValue& v : pages) found = found || v.toObject()["id"].toString() == before;
+    if (before.isEmpty() || !found) {
+      // A new page at the front (after a cover).
+      const int at = !pages.isEmpty() && pages[0].toObject()["template"].toString().startsWith("cover") ? 1 : 0;
+      pageId = core("addPage", {{"notebookId", id}, {"index", at}, {"template", "blank"}}).toObject()["id"].toString();
       journal({{"op", "setMeta"}, {"id", id}, {"meta", nb["meta"]}});
-      if (!after.isEmpty()) journal({{"op", "deletePage"}, {"id", after}});
+      journal({{"op", "deletePage"}, {"id", pageId}});
+      meta["contentsPage"] = pageId;
+      store::setNotebookMeta(id, QString::fromUtf8(QJsonDocument(meta).toJson(QJsonDocument::Compact)));
+      pages = store::pages(id);
     } else {
       journal({{"op", "pageRows"}, {"pageId", before}, {"rows", beforeRows}});
     }
+    QStringList ids;
+    int self = -1;
+    QJsonObject page;
+    for (int i = 0; i < pages.size(); ++i) {
+      ids << pages[i].toObject()["id"].toString();
+      if (ids.last() == pageId) self = i, page = pages[i].toObject();
+    }
+    QVariantList entries;
+    for (const QVariant& v : contentspage::contents(pages, meta["contents"].toArray()))
+      if (v.toMap().value("page").toInt() != self) entries.append(v);
+    std::vector<ed::El> els;
+    for (ed::El& e : store::elements(pageId))
+      if (!e.extra.value("contents").toBool()) els.push_back(std::move(e));
+    double z = 0;
+    for (const ed::El& e : els) z = std::max(z, e.z);
+    for (ed::El& e : contentspage::pageElements(page["width"].toDouble(794), page["height"].toDouble(1123), entries, ids)) {
+      e.z = ++z;
+      els.push_back(std::move(e));
+    }
+    store::saveElements(pageId, els);
     touch(id);
     return;
   }
@@ -899,20 +975,17 @@ void Assistant::execute(const QJsonObject& stepIn) {
   if (tool == "copy_pages") {
     const QString from = in["from_notebook_id"].toString(), to = in["to_notebook_id"].toString();
     const QJsonArray src = store::pages(from);
-    for (const QJsonValue& v : in["pages"].toArray()) {
-      const int at = v.toInt() - 1;
-      if (at < 0 || at >= src.size()) throw Failure(QString("The notebook to copy from has %1 pages").arg(src.size()));
-      const QJsonObject p = src[at].toObject();
-      const bool pdf = !p["backgroundAsset"].isNull() && !p["backgroundAsset"].toString().isEmpty();
-      const QString tmpl = p["template"].toString().startsWith("cover") ? QStringLiteral("blank") : p["template"].toString();
-      const QJsonObject np = core("addPage", {{"notebookId", to}, {"template", tmpl}}).toObject();
+    QStringList ids;
+    for (const QJsonValue& v : in["page_ids"].toArray()) ids << v.toString();
+    if (ids.isEmpty())
+      for (const QJsonValue& v : in["pages"].toArray()) {
+        const int at = v.toInt() - 1;
+        if (at < 0 || at >= src.size()) throw Failure(QString("The notebook to copy from has %1 pages").arg(src.size()));
+        ids << src[at].toObject()["id"].toString();
+      }
+    for (const QString& pid : ids) {
+      const QJsonObject np = core("copyPageTo", {{"pageId", pid}, {"notebookId", to}}).toObject();
       journal({{"op", "deletePage"}, {"id", np["id"]}});
-      store::setPageTemplate(np["id"].toString(), tmpl, p["paperColor"].toString());
-      core("setPageSize", {{"pageId", np["id"]}, {"width", p["width"]}, {"height", p["height"]}});
-      std::vector<ed::El> els = store::elements(p["id"].toString());
-      for (ed::El& e : els) e.id = ed::newId();
-      store::saveElements(np["id"].toString(), els);
-      Q_UNUSED(pdf);  // (a PDF page's own picture stays with its notebook: what's written on it is copied)
     }
     touch(to);
     return;

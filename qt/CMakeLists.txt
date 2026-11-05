@@ -109,6 +109,7 @@ qt_add_executable(inkleaf
   src/ZoomBoxView.h src/ZoomBoxView.cpp
   src/PdfOutline.h src/PdfOutline.cpp
   src/Assistant.h src/Assistant.cpp
+  src/ContentsPage.h src/ContentsPage.cpp
   src/Updater.h src/Updater.cpp
   src/math/MathExpr.h src/math/MathExpr.cpp
   src/math/MathKit.h src/math/MathKit.cpp

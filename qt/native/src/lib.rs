@@ -81,6 +81,7 @@ impl Core {
             "pages" => to(&db.pages(&a.s("notebookId")?)?),
             "addPage" => to(&db.add_page(&a.s("notebookId")?, a.opt_i("index"), a.opt_s("template").as_deref())?),
             "duplicatePage" => to(&db.duplicate_page(&a.s("pageId")?)?),
+            "copyPageTo" => to(&db.copy_page_to(&a.s("pageId")?, &a.s("notebookId")?)?),
             "deletePage" => to(&db.delete_page(&a.s("pageId")?)?),
             "movePage" => to(&db.move_page(&a.s("pageId")?, a.i("newIndex")?)?),
             "setPageTemplate" => to(&db.set_page_template(&a.s("pageId")?, &a.s("template")?, a.opt_s("paperColor").as_deref())?),
