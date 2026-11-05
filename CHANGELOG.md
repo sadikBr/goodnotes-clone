@@ -5,6 +5,10 @@ Updates → What's new) and on its GitHub release. Keep them short, one line
 per change, written for the people using Inkleaf. A release needs its
 section here before it can be published (`scripts/check-version.py`).
 
+## 0.16.2
+
+- **Any pen size:** the size button ("5 px") now shows for pens too. Slide it or type an exact size, like 12; it replaces the chosen size.
+
 ## 0.16.1
 
 - **Fixed:** the tools no longer shift. Your colours stay in the side rail and top bar for every tool (dimmed for tools without colours), and a tool's options always open right beside it.

@@ -64,11 +64,45 @@ Item {
                     to: root.spec ? root.spec.max : 10
                     stepSize: root.spec ? root.spec.step : 1
                     value: root.fav && root.fav.sizes.length ? root.fav.sizes[root.fav.size] : 1
-                    onMoved: root.prefs.setSize(root.tool, sizePop.index, value)
+                    onMoved: { root.prefs.setSize(root.tool, sizePop.index, value); sizeField.show(value) }
                 }
-                Label { text: sizeSlider.value.toFixed(root.spec && root.spec.step < 1 ? 1 : 0) + " px"; color: Theme.text; font.weight: Font.DemiBold; Layout.preferredWidth: 52; horizontalAlignment: Text.AlignRight }
+                // Or type it ("12").
+                UiField {
+                    id: sizeField
+                    Layout.preferredWidth: 58
+                    implicitHeight: 32
+                    horizontalAlignment: Text.AlignRight
+                    rightPadding: 26
+                    inputMethodHints: Qt.ImhFormattedNumbersOnly
+                    validator: DoubleValidator { bottom: 0; top: 999; decimals: 1; notation: DoubleValidator.StandardNotation }
+                    function show(v) { text = Number(v).toFixed(v % 1 ? 1 : 0) }
+                    function apply() {
+                        if (!root.spec) return
+                        const v = parseFloat(String(text).replace(",", "."))
+                        if (isNaN(v)) return
+                        const st = root.spec.step
+                        const c = Math.max(root.spec.min, Math.min(root.spec.max, Math.round(v / st) * st))
+                        root.prefs.setSize(root.tool, sizePop.index, c)
+                        show(c)
+                    }
+                    onAccepted: { apply(); sizePop.close() }
+                    onEditingFinished: apply()
+                    Label { anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: "px"; font.pixelSize: 12; color: Theme.muted }
+                }
+            }
+            Label {
+                text: root.spec ? Number(root.spec.min) + "–" + Number(root.spec.max) + " px" : ""
+                font.pixelSize: 11; color: Theme.muted
             }
         }
+        onOpened: { sizeField.show(sizeSlider.value); sizeField.forceActiveFocus(); sizeField.selectAll() }
+    }
+    function openSize(item, index) {
+        sizePop.index = index
+        const p = item.mapToItem(sizePop.parent, 0, 0)
+        sizePop.x = Math.max(8, Math.min(sizePop.parent.width - sizePop.width - 8, p.x + item.width / 2 - sizePop.width / 2))
+        sizePop.y = p.y + item.height + 8
+        sizePop.open()
     }
 
     // The panel and its pointer.
@@ -318,7 +352,7 @@ Item {
                         ToolTip.visible: hovered
                         ToolTip.delay: 500
                         ToolTip.text: on ? "Tap again for any size" : Number(modelData).toFixed(root.spec && root.spec.step < 1 ? 1 : 0) + " px"
-                        onClicked: on ? (sizePop.index = index, sizePop.x = Math.max(8, sz.mapToItem(sizePop.parent, 0, 0).x - 100), sizePop.y = sz.mapToItem(sizePop.parent, 0, 0).y + 40, sizePop.open()) : root.prefs.selectSize(root.tool, index)
+                        onClicked: on ? root.openSize(sz, index) : root.prefs.selectSize(root.tool, index)
                         background: Item {
                             Shadow { anchors.fill: parent; radius: Theme.radiusSm; level: sz.on ? 1 : 0 }
                             Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusSm; color: sz.on ? Theme.surface : sz.hovered ? Theme.alpha(Theme.surface, 0.55) : "transparent" }
@@ -365,15 +399,15 @@ Item {
                 }
             }
         }
-        // The exact size (not for a pen: its sizes show their numbers).
+        // Any size: the chosen one, to set exactly (by slider or typed).
         Chip {
-            visible: !!(!!root.fav && root.fav.sizes.length > 0 && !!root.spec) && root.tool !== "pen"
+            visible: !!(!!root.fav && root.fav.sizes.length > 0 && !!root.spec)
             corner: Theme.radius
             id: valueChip
-            label: root.fav && root.fav.sizes.length ? Number(root.fav.sizes[root.fav.size]).toFixed(root.spec && root.spec.step < 1 ? 1 : 0) : ""
+            label: root.fav && root.fav.sizes.length ? Number(root.fav.sizes[root.fav.size]).toFixed(root.fav.sizes[root.fav.size] % 1 ? 1 : 0) : ""
             unit: "px"
             tip: root.spec ? root.spec.label : ""
-            onClicked: { sizePop.index = root.fav.size; const p = valueChip.mapToItem(sizePop.parent, 0, 0); sizePop.x = Math.max(8, p.x - 100); sizePop.y = p.y + 42; sizePop.open() }
+            onClicked: root.openSize(valueChip, root.fav.size)
         }
     }
 
