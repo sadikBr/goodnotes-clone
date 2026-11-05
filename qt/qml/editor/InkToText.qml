@@ -94,7 +94,7 @@ Popup {
                     implicitHeight: 30
                     implicitWidth: chipLabel.implicitWidth + 26
                     onClicked: { field.text = modelData; field.forceActiveFocus() }
-                    background: Rectangle { antialiasing: true; radius: height / 2; color: Theme.surface2; border.color: chip.hovered ? Theme.accent : Theme.border }
+                    background: Rectangle { antialiasing: true; radius: Theme.radiusSm; color: Theme.surface2; border.color: chip.hovered ? Theme.accent : Theme.border }
                     contentItem: Label { id: chipLabel; text: chip.modelData; color: Theme.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 }
             }
@@ -131,7 +131,7 @@ Popup {
                     onClicked: root.fontId = modelData.id
                     background: Rectangle {
                         antialiasing: true
-                        radius: 10
+                        radius: Theme.radius
                         color: card.on ? Theme.accentSoft : Theme.surface
                         border.width: 1.5
                         border.color: card.on ? Theme.accent : card.hovered ? Theme.muted : Theme.border

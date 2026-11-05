@@ -35,8 +35,8 @@ Popup {
     }
     exit: Transition { NumberAnimation { property: "opacity"; to: 0; duration: 80 } }
     background: Item {
-        Shadow { anchors.fill: parent; radius: 16; level: 3 }
-        Rectangle { antialiasing: true; anchors.fill: parent; radius: 16; color: Theme.surface; border.color: Theme.border }
+        Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 3 }
+        Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusLg; color: Theme.surface; border.color: Theme.border }
     }
     contentItem: ColumnLayout {
         spacing: 0

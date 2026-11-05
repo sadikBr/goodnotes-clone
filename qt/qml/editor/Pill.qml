@@ -8,7 +8,7 @@ Rectangle { antialiasing: true;
     property int pad: 3
     implicitWidth: row.implicitWidth + pad * 2
     implicitHeight: row.implicitHeight + pad * 2
-    radius: 13
+    radius: Theme.radiusLg
     color: Theme.surface2
     RowLayout {
         id: row

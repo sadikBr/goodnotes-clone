@@ -72,7 +72,7 @@ Popup {
                             Layout.preferredWidth: 88
                             Layout.preferredHeight: 110
                             Layout.alignment: Qt.AlignHCenter
-                            Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: card.on ? -3 : -1; radius: 9; color: card.on ? Theme.accent : card.hovered ? Theme.borderStrong : Theme.border }
+                            Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: card.on ? -3 : -1; radius: Theme.radius; color: card.on ? Theme.accent : card.hovered ? Theme.borderStrong : Theme.border }
                             Image {
                                 anchors.fill: parent
                                 sourceSize: Qt.size(176, 220)

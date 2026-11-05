@@ -66,7 +66,7 @@ Popup {
                         spacing: 4
                         Item {
                             width: 82; height: 116
-                            Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: card.on ? -3 : -1; radius: 6; color: card.on ? Theme.accent : card.hovered ? Theme.borderStrong : Theme.border }
+                            Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: card.on ? -3 : -1; radius: Theme.radiusSm; color: card.on ? Theme.accent : card.hovered ? Theme.borderStrong : Theme.border }
                             LiveImage {
                                 anchors.fill: parent
                                 fillMode: Image.PreserveAspectFit

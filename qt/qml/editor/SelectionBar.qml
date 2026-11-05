@@ -46,8 +46,8 @@ Item {
     signal savePieceRequested()
     ColorPopover { id: colorPop }
 
-    Shadow { anchors.fill: parent; radius: 14; level: 3 }
-    Rectangle { antialiasing: true; anchors.fill: parent; radius: 14; color: Theme.surface; border.color: Theme.border }
+    Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 3 }
+    Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusLg; color: Theme.surface; border.color: Theme.border }
     MouseArea { anchors.fill: parent }
 
     RowLayout {
@@ -74,7 +74,7 @@ Item {
             ].concat(root.s.hasInk ? [{ label: "Turn handwriting into text", action: () => inkToText.start() }] : [], [
                 { label: "Ask a question…", action: () => root.askAi("ask") }
             ]))
-            background: Rectangle { antialiasing: true; radius: 8; color: parent.hovered ? Theme.alpha(Theme.accent, 0.12) : "transparent" }
+            background: Rectangle { antialiasing: true; radius: Theme.radius; color: parent.hovered ? Theme.alpha(Theme.accent, 0.12) : "transparent" }
             contentItem: RowLayout {
                 id: aiRow
                 spacing: 6
@@ -144,7 +144,7 @@ Item {
             onHoveredChanged: if (!hovered) tipDismissed = false
             ToolTip.text: "Turn this handwriting into text in a handwriting font"
             onClicked: inkToText.start()
-            background: Rectangle { antialiasing: true; radius: 8; color: parent.hovered ? Theme.surface2 : "transparent" }
+            background: Rectangle { antialiasing: true; radius: Theme.radius; color: parent.hovered ? Theme.surface2 : "transparent" }
             contentItem: RowLayout {
                 id: afRow
                 spacing: 6
@@ -196,7 +196,7 @@ Item {
                 onHoveredChanged: if (!hovered) tipDismissed = false
                 ToolTip.text: "Handwriting font for the selected text"
                 onClicked: menu.show(fontBtn, Fonts.presets.map(f => ({ label: f.label, font: f.face, fontSize: 16, checked: f.id === root.s.font, action: () => root.canvas.styleSelection({ font: f.id }) })))
-                background: Rectangle { antialiasing: true; radius: 8; color: Theme.surface; border.color: parent.hovered ? Theme.accent : Theme.border }
+                background: Rectangle { antialiasing: true; radius: Theme.radius; color: Theme.surface; border.color: parent.hovered ? Theme.accent : Theme.border }
                 contentItem: RowLayout {
                     id: fbRow
                     spacing: 4
@@ -232,19 +232,19 @@ Item {
             ToolTip.delay: 500
             ToolTip.text: "Colour"
             onClicked: colorPop.show(colorBtn, root.inkColors.concat(["#374151", "#6b7280", "#ffffff", "#7c2d12", "#1e3a8a", "#0891b2", "#0d9488", "#65a30d", "#ca8a04", "#be123c", "#db2777"]), root.s.color || "#111827", c => root.canvas.recolorSelection(c))
-            background: Rectangle { antialiasing: true; radius: 8; color: colorBtn.hovered || colorPop.opened ? Theme.surface2 : "transparent" }
+            background: Rectangle { antialiasing: true; radius: Theme.radius; color: colorBtn.hovered || colorPop.opened ? Theme.surface2 : "transparent" }
             contentItem: RowLayout {
                 id: colorRow
                 spacing: 4
                 Item {
                     Layout.leftMargin: 6
                     Layout.preferredWidth: 20; Layout.preferredHeight: 20
-                    Rectangle { visible: !!root.s.color; anchors.fill: parent; antialiasing: true; radius: 10; color: root.s.color || "transparent"; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.45) }
+                    Rectangle { visible: !!root.s.color; anchors.fill: parent; antialiasing: true; radius: Theme.swatchRadius(20); color: root.s.color || "transparent"; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.45) }
                     Image {
                         visible: !root.s.color
                         anchors.fill: parent
                         sourceSize: Qt.size(40, 40)
-                        source: "data:image/svg+xml;utf8," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 12L12 0A12 12 0 0 1 22.4 6Z' fill='#ef4444'/><path d='M12 12L22.4 6A12 12 0 0 1 22.4 18Z' fill='#eab308'/><path d='M12 12L22.4 18A12 12 0 0 1 12 24Z' fill='#22c55e'/><path d='M12 12L12 24A12 12 0 0 1 1.6 18Z' fill='#06b6d4'/><path d='M12 12L1.6 18A12 12 0 0 1 1.6 6Z' fill='#3b82f6'/><path d='M12 12L1.6 6A12 12 0 0 1 12 0Z' fill='#a855f7'/></svg>")
+                        source: Theme.rainbow(false)
                     }
                 }
                 Icon { name: "down"; size: 12; color: Theme.muted; Layout.rightMargin: 4 }

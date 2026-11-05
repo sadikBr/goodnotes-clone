@@ -245,8 +245,8 @@ Item {
                     ToolTip.text: "Tap again to change this colour"
                     onClicked: on ? colorPop.show(sw, root.prefs.paletteFor(root.tool), modelData, c => root.prefs.setColor(root.tool, index, c)) : root.prefs.selectColor(root.tool, index)
                     background: Item {
-                        Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: -4; radius: width / 2; color: "transparent"; border.width: 2; border.color: Theme.mix(sw.modelData, Theme.text, 0.2); visible: sw.on }
-                        Rectangle { antialiasing: true; anchors.fill: parent; radius: width / 2; color: sw.modelData; border.width: 1; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4) }
+                        Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: -4; radius: Theme.swatchRadius(width); color: "transparent"; border.width: 2; border.color: Theme.mix(sw.modelData, Theme.text, 0.2); visible: sw.on }
+                        Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.swatchRadius(width); color: sw.modelData; border.width: 1; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4) }
                     }
                 }
             }
@@ -254,8 +254,8 @@ Item {
                 id: rainbow
                 implicitWidth: 26; implicitHeight: 26
                 hoverEnabled: true
-                rotation: hovered ? 30 : 0
-                Behavior on rotation { NumberAnimation { duration: 150 } }
+                scale: hovered ? 1.1 : 1
+                Behavior on scale { NumberAnimation { duration: 120 } }
                 ToolTip.visible: !!(hovered) && !tipDismissed
                 // Tooltips go away once clicked (until the pointer leaves), as in the web app.
                 property bool tipDismissed: false
@@ -265,7 +265,7 @@ Item {
                 onClicked: colorPop.show(rainbow, root.prefs.paletteFor(root.tool), root.prefs.color(root.tool), c => root.prefs.setColor(root.tool, root.fav.color, c))
                 background: Image {
                     sourceSize: Qt.size(52, 52)
-                    source: "data:image/svg+xml;utf8," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 12L12 0A12 12 0 0 1 22.4 6Z' fill='#ef4444'/><path d='M12 12L22.4 6A12 12 0 0 1 22.4 18Z' fill='#eab308'/><path d='M12 12L22.4 18A12 12 0 0 1 12 24Z' fill='#22c55e'/><path d='M12 12L12 24A12 12 0 0 1 1.6 18Z' fill='#06b6d4'/><path d='M12 12L1.6 18A12 12 0 0 1 1.6 6Z' fill='#3b82f6'/><path d='M12 12L1.6 6A12 12 0 0 1 12 0Z' fill='#a855f7'/><circle cx='12' cy='12' r='5' fill='white'/></svg>")
+                    source: Theme.rainbow(true)
                 }
             }
         }
@@ -344,7 +344,7 @@ Item {
         onHoveredChanged: if (!hovered) tipDismissed = false
         ToolTip.text: root.prefs.store.drawerPinned ? "Pinned open — unpin to tuck options away while you write" : "Keep options open"
         onClicked: root.prefs.store.drawerPinned = !root.prefs.store.drawerPinned
-        background: Rectangle { antialiasing: true; radius: 8; color: root.prefs.store.drawerPinned ? Theme.accentSoft : parent.hovered ? Theme.surface2 : "transparent" }
+        background: Rectangle { antialiasing: true; radius: Theme.radius; color: root.prefs.store.drawerPinned ? Theme.accentSoft : parent.hovered ? Theme.surface2 : "transparent" }
         contentItem: Item { Icon { anchors.centerIn: parent; name: "pin"; size: 15; color: root.prefs.store.drawerPinned ? Theme.accent : Theme.muted } }
     }
 }

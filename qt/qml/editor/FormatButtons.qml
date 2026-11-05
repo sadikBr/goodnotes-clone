@@ -31,7 +31,7 @@ ToolGroup {
         onPressedChanged: if (pressed) tipDismissed = true
         onHoveredChanged: if (!hovered) tipDismissed = false
         onClicked: pop.opened ? pop.close() : pop.open()
-        background: Rectangle { antialiasing: true; radius: 10; color: Theme.surface; border.color: para.hovered || pop.opened ? Theme.accent : Theme.border }
+        background: Rectangle { antialiasing: true; radius: Theme.radius; color: Theme.surface; border.color: para.hovered || pop.opened ? Theme.accent : Theme.border }
         contentItem: Item {
             RowLayout {
                 id: paraRow
@@ -52,8 +52,8 @@ ToolGroup {
             Overlay.modal: Item {}
             closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
             background: Item {
-                Shadow { anchors.fill: parent; radius: 14; level: 3 }
-                Rectangle { antialiasing: true; anchors.fill: parent; radius: 14; color: Theme.surface; border.color: Theme.border }
+                Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 3 }
+                Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusLg; color: Theme.surface; border.color: Theme.border }
             }
             contentItem: ColumnLayout {
                 spacing: 6

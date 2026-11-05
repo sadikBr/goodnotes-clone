@@ -23,7 +23,7 @@ Rectangle {
     visible: opacity > 0
     width: row.implicitWidth + 20
     height: 44
-    radius: 22
+    radius: Theme.radiusLg
     color: "#22231f"
     antialiasing: true
     Behavior on opacity { NumberAnimation { duration: 180 } }
@@ -47,7 +47,7 @@ Rectangle {
                 if (root.view) root.view.undo()
                 root.shown = false
             }
-            background: Rectangle { antialiasing: true; radius: 16; color: undoBtn.hovered || undoBtn.pressed ? "#3a3b35" : "transparent" }
+            background: Rectangle { antialiasing: true; radius: Theme.radius; color: undoBtn.hovered || undoBtn.pressed ? "#3a3b35" : "transparent" }
             contentItem: Label { id: undoLabel; text: "Undo"; color: "#8fe0b8"; font.weight: Font.DemiBold; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
         }
     }

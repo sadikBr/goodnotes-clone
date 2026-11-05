@@ -35,7 +35,7 @@ Rectangle { antialiasing: true;
     z: 1000
     width: Math.min(row.implicitWidth + 28, parent.width * 0.9)
     height: Math.max(42, row.implicitHeight + 16)
-    radius: height / 2
+    radius: Theme.radiusLg
     color: error ? "#9b2c1f" : "#22231f"
     Behavior on opacity { NumberAnimation { duration: 200 } }
     Behavior on y { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
@@ -47,7 +47,7 @@ Rectangle { antialiasing: true;
         spacing: 9
         Rectangle {
             antialiasing: true
-            Layout.preferredWidth: 24; Layout.preferredHeight: 24; radius: 12
+            Layout.preferredWidth: 24; Layout.preferredHeight: 24; radius: Theme.radiusLg
             color: root.error ? "#c2410c" : "#2f6b4f"
             Icon { anchors.centerIn: parent; name: root.iconName; size: 14; color: "#ffffff" }
         }
@@ -66,7 +66,7 @@ Rectangle { antialiasing: true;
             implicitWidth: actionText.implicitWidth + 20
             hoverEnabled: true
             onClicked: { const a = root.action; root.shown = false; if (a) a() }
-            background: Rectangle { antialiasing: true; radius: 15; color: actionBtn.hovered || actionBtn.pressed ? "#3a3b35" : "transparent" }
+            background: Rectangle { antialiasing: true; radius: Theme.radius; color: actionBtn.hovered || actionBtn.pressed ? "#3a3b35" : "transparent" }
             contentItem: Label { id: actionText; text: root.actionLabel; color: "#8fe0b8"; font.weight: Font.DemiBold; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
         }
     }

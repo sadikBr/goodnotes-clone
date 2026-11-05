@@ -67,7 +67,7 @@ Item {
         spacing: 12
         Rectangle {
             antialiasing: true
-            Layout.preferredWidth: 32; Layout.preferredHeight: 32; radius: 10
+            Layout.preferredWidth: 32; Layout.preferredHeight: 32; radius: Theme.radius
             Layout.alignment: Qt.AlignTop
             color: Theme.alpha(Theme.accent, 0.14)
             Icon { anchors.centerIn: parent; name: root.news ? "sparkle" : root.st === "ready" ? "check" : "download"; size: 18; color: Theme.accent }

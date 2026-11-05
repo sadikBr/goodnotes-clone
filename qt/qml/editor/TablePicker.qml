@@ -45,7 +45,7 @@ Popup {
             spacing: 10
             Rectangle {
                 antialiasing: true
-                Layout.preferredWidth: 32; Layout.preferredHeight: 32; radius: 10
+                Layout.preferredWidth: 32; Layout.preferredHeight: 32; radius: Theme.radius
                 color: Theme.alpha(Theme.accent, 0.14)
                 Icon { anchors.centerIn: parent; name: "table"; size: 18; color: Theme.accent }
             }

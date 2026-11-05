@@ -79,7 +79,7 @@ Item {
         antialiasing: true
         anchors.fill: art
         anchors.margins: -5
-        radius: 10
+        radius: Theme.radius
         color: Theme.alpha(Theme.accent, 0.10)
         border.color: Theme.accent
         border.width: 2.5
@@ -88,7 +88,7 @@ Item {
         visible: root.selecting || root.picked
         antialiasing: true
         x: 8; y: 8
-        width: 26; height: 26; radius: 13
+        width: 26; height: 26; radius: Theme.radiusLg
         color: root.picked ? Theme.accent : Theme.alpha("#000000", 0.35)
         border.color: "#ffffff"
         border.width: 2

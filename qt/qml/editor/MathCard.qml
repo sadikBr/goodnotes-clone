@@ -104,7 +104,7 @@ Popup {
             Layout.bottomMargin: 14
             Rectangle {
                 antialiasing: true
-                Layout.preferredWidth: 30; Layout.preferredHeight: 30; radius: 9
+                Layout.preferredWidth: 30; Layout.preferredHeight: 30; radius: Theme.radius
                 color: Theme.alpha(Theme.accent, 0.14)
                 Icon { anchors.centerIn: parent; name: "math"; size: 17; color: Theme.accent }
             }

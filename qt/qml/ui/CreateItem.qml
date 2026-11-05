@@ -16,10 +16,10 @@ AbstractButton {
     Keys.onReturnPressed: clicked()
     transform: Translate { y: root.card && root.hovered ? -2 : 0; Behavior on y { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } } }
     background: Item {
-        Shadow { anchors.fill: parent; radius: 12; level: root.card && root.hovered ? 2 : 0 }
+        Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: root.card && root.hovered ? 2 : 0 }
         Rectangle { antialiasing: true;
             anchors.fill: parent
-            radius: 12
+            radius: Theme.radiusLg
             color: root.card ? Theme.surface : (root.hovered || root.visualFocus ? Theme.surface2 : "transparent")
             border.width: root.card ? 1 : 0
             border.color: root.hovered ? Theme.accent : Theme.border
@@ -29,7 +29,7 @@ AbstractButton {
         spacing: 12
         Item { Layout.preferredWidth: root.card ? 4 : 0 }
         Rectangle { antialiasing: true;
-            Layout.preferredWidth: 38; Layout.preferredHeight: 38; radius: 11
+            Layout.preferredWidth: 38; Layout.preferredHeight: 38; radius: Theme.radius
             color: root.option.tint ? Theme.alpha(root.tint, 0.14) : Theme.accentSoft
             Icon { anchors.centerIn: parent; name: root.option.icon || "plus"; size: 19; color: root.option.iconColor || root.tint }
         }

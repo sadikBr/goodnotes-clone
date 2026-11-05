@@ -60,7 +60,7 @@ ComboBox {
         enabled: !modelData.heading
         hoverEnabled: true
         highlighted: root.highlightedIndex === index
-        background: Rectangle { antialiasing: true; radius: 8; color: !d.modelData.heading && (d.highlighted || d.hovered) ? Theme.surface2 : "transparent" }
+        background: Rectangle { antialiasing: true; radius: Theme.radius; color: !d.modelData.heading && (d.highlighted || d.hovered) ? Theme.surface2 : "transparent" }
         contentItem: Label {
             text: d.modelData.label
             leftPadding: d.modelData.heading ? 4 : 8

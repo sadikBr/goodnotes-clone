@@ -79,7 +79,7 @@ Popup {
             spacing: 10
             Rectangle {
                 antialiasing: true
-                Layout.preferredWidth: 36; Layout.preferredHeight: 36; radius: 11
+                Layout.preferredWidth: 36; Layout.preferredHeight: 36; radius: Theme.radius
                 color: Theme.alpha(Theme.accent, 0.14)
                 Icon { anchors.centerIn: parent; name: "stack"; size: 19; color: Theme.accent }
             }
@@ -139,7 +139,7 @@ Popup {
                     delegate: Rectangle {
                         required property int index
                         antialiasing: true
-                        width: 52; height: 62; radius: 8
+                        width: 52; height: 62; radius: Theme.radius
                         x: 49 + (index - 1) * 30; y: 15
                         rotation: (index - 1) * 9
                         color: "#fffdf7"
@@ -163,7 +163,7 @@ Popup {
                 component Step: Rectangle {
                     property string label
                     antialiasing: true
-                    implicitWidth: stepLabel.implicitWidth + 20; implicitHeight: 28; radius: 14
+                    implicitWidth: stepLabel.implicitWidth + 20; implicitHeight: 28; radius: Theme.radiusLg
                     color: Theme.surface2; border.color: Theme.border
                     Label { id: stepLabel; anchors.centerIn: parent; text: parent.label; font.pixelSize: 12; color: Theme.text }
                 }
@@ -291,7 +291,7 @@ Popup {
                         tip: "Rename or delete"
                         opacity: tile.lit ? 1 : 0
                         Behavior on opacity { NumberAnimation { duration: 120 } }
-                        Rectangle { antialiasing: true; anchors.fill: parent; z: -1; radius: 9; color: Theme.surface; border.color: Theme.border }
+                        Rectangle { antialiasing: true; anchors.fill: parent; z: -1; radius: Theme.radius; color: Theme.surface; border.color: Theme.border }
                         onClicked: menu.show(more, [
                             { icon: "pen", label: "Rename", action: () => ask.ask("Rename piece", [{ name: "name", label: "Name", value: cell.modelData.name }], "Save", r => {
                                 try { InkleafCore.call("renameSnippet", { id: cell.modelData.id, name: r.name.trim() }); root.reload() } catch (e) { root.notify(String(e.message || e), true) }

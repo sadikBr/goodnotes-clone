@@ -18,11 +18,11 @@ Item {
     Item {
         width: root.width
         height: root.artHeight
-        Shadow { anchors.fill: parent; radius: 12; level: 1 }
+        Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 1 }
         Rectangle {
             anchors.fill: parent
             antialiasing: true
-            radius: 12
+            radius: Theme.radiusLg
             color: Theme.surface
             border.color: Theme.border
         }
@@ -56,7 +56,7 @@ Item {
                     ToolTip.text: modelData.key ? modelData.title + " (" + modelData.key + ")" : ""
                     background: Rectangle {
                         antialiasing: true
-                        radius: 10
+                        radius: Theme.radius
                         color: choice.pressed ? Theme.surface3 : choice.hovered ? Theme.surface2 : "transparent"
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
@@ -64,7 +64,7 @@ Item {
                         spacing: 10
                         Rectangle {
                             antialiasing: true
-                            Layout.preferredWidth: 32; Layout.preferredHeight: 32; Layout.leftMargin: 6; radius: 9
+                            Layout.preferredWidth: 32; Layout.preferredHeight: 32; Layout.leftMargin: 6; radius: Theme.radius
                             color: Theme.alpha(choice.modelData.tint || Theme.accent, choice.hovered ? 0.2 : 0.13)
                             Icon { anchors.centerIn: parent; name: choice.modelData.icon; size: 17; color: choice.modelData.iconColor || choice.modelData.tint || Theme.accent }
                         }
@@ -86,12 +86,12 @@ Item {
                 Layout.maximumHeight: 64
                 hoverEnabled: true
                 onClicked: root.moreRequested(moreKinds, root.options.slice(4))
-                background: Rectangle { antialiasing: true; radius: 10; color: moreKinds.pressed ? Theme.surface3 : moreKinds.hovered ? Theme.surface2 : "transparent" }
+                background: Rectangle { antialiasing: true; radius: Theme.radius; color: moreKinds.pressed ? Theme.surface3 : moreKinds.hovered ? Theme.surface2 : "transparent" }
                 contentItem: RowLayout {
                     spacing: 10
                     Rectangle {
                         antialiasing: true
-                        Layout.preferredWidth: 32; Layout.preferredHeight: 32; Layout.leftMargin: 6; radius: 9
+                        Layout.preferredWidth: 32; Layout.preferredHeight: 32; Layout.leftMargin: 6; radius: Theme.radius
                         color: Theme.surface2
                         border.color: Theme.border
                         Icon { anchors.centerIn: parent; name: "more"; size: 17; color: Theme.muted }

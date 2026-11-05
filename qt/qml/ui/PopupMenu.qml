@@ -85,7 +85,7 @@ Popup {
                     // A line between groups.
                     Rectangle { visible: it.line; anchors.verticalCenter: parent.verticalCenter; x: 8; width: parent.width - 16; height: 1; color: Theme.border }
                     Label { visible: it.heading; text: it.modelData.header || ""; x: 12; anchors.bottom: parent.bottom; anchors.bottomMargin: 4; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 0.6; color: Theme.muted }
-                    Rectangle { visible: !it.line && !it.heading; anchors.fill: parent; antialiasing: true; radius: 8; color: it.pressed ? Theme.surface3 : it.hovered || it.activeFocus ? Theme.surface2 : "transparent" }
+                    Rectangle { visible: !it.line && !it.heading; anchors.fill: parent; antialiasing: true; radius: Theme.radius; color: it.pressed ? Theme.surface3 : it.hovered || it.activeFocus ? Theme.surface2 : "transparent" }
                 }
                 contentItem: RowLayout {
                     visible: !it.line && !it.heading
@@ -95,7 +95,7 @@ Popup {
                     Rectangle {
                         visible: !!it.modelData.icon && !!it.modelData.sub
                         antialiasing: true
-                        Layout.preferredWidth: 32; Layout.preferredHeight: 32; radius: 9
+                        Layout.preferredWidth: 32; Layout.preferredHeight: 32; radius: Theme.radius
                         color: Theme.alpha(Theme.accent, 0.12)
                         Icon { anchors.centerIn: parent; name: it.modelData.icon || ""; size: 18; color: Theme.accent }
                     }
@@ -123,12 +123,12 @@ Popup {
                     Rectangle {
                         visible: it.isToggle
                         antialiasing: true
-                        Layout.preferredWidth: 30; Layout.preferredHeight: 18; radius: 9
+                        Layout.preferredWidth: 30; Layout.preferredHeight: 18; radius: Theme.radiusXs
                         color: it.modelData.toggle ? Theme.accent : Theme.surface3
                         border.color: it.modelData.toggle ? Theme.accent : Theme.border
                         Rectangle {
                             antialiasing: true
-                            width: 14; height: 14; radius: 7
+                            width: 14; height: 14; radius: Theme.radiusSm
                             y: 2
                             x: it.modelData.toggle ? parent.width - width - 2 : 2
                             color: "#ffffff"

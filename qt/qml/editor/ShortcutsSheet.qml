@@ -46,7 +46,7 @@ Popup {
                             Rectangle { antialiasing: true;
                                 Layout.preferredHeight: 22
                                 Layout.preferredWidth: keyLabel.implicitWidth + 12
-                                radius: 6
+                                radius: Theme.radiusSm
                                 color: Theme.surface2
                                 border.color: Theme.border
                                 Label { id: keyLabel; anchors.centerIn: parent; text: modelData[0]; font.pixelSize: 12; font.weight: Font.DemiBold; color: Theme.text }

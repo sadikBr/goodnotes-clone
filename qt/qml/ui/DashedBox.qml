@@ -4,7 +4,7 @@ import QtQuick.Shapes
 
 Shape {
     id: root
-    property real radius: 10
+    property real radius: Theme.radiusLg
     property color color: "#999"
     property color fill: "transparent"
     property real lineWidth: 1.5

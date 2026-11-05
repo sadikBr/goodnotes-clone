@@ -77,7 +77,7 @@ Popup {
         Behavior on scale { NumberAnimation { duration: 90 } }
         background: Rectangle {
             antialiasing: true
-            radius: 12
+            radius: Theme.radiusLg
             color: tile.on ? Theme.accentSoft : tile.hovered ? Theme.surface2 : "transparent"
             border.width: tile.on ? 2 : 0
             border.color: Theme.accent
@@ -90,7 +90,7 @@ Popup {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.topMargin: 4
                 implicitWidth: 56; implicitHeight: 34
-                radius: 8
+                radius: Theme.radius
                 antialiasing: true
                 color: tile.pen.night ? "#111827" : "#ffffff"
                 border.color: Theme.alpha(Theme.text, Theme.dark ? 0.0 : 0.1)
@@ -106,7 +106,7 @@ Popup {
                     visible: tile.on
                     anchors.right: parent.right; anchors.top: parent.top
                     anchors.margins: -5
-                    width: 16; height: 16; radius: 8
+                    width: 16; height: 16; radius: Theme.radius
                     color: Theme.accent
                     border.color: Theme.surface; border.width: 2
                     Icon { anchors.centerIn: parent; name: "check"; size: 10; color: "white" }
@@ -168,7 +168,7 @@ Popup {
             Layout.fillWidth: true
             Layout.topMargin: 2
             implicitHeight: about.implicitHeight + 16
-            radius: 10
+            radius: Theme.radius
             color: Theme.surface2
             Label {
                 id: about

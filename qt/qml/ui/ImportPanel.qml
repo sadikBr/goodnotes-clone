@@ -16,8 +16,8 @@ Item {
     visible: jobs.length > 0
     width: Math.min(380, parent ? parent.width - 32 : 380)
     height: col.implicitHeight + 24
-    Shadow { anchors.fill: parent; radius: 16; level: 3 }
-    Rectangle { antialiasing: true; anchors.fill: parent; radius: 16; color: Theme.surface; border.color: Theme.border }
+    Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 3 }
+    Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusLg; color: Theme.surface; border.color: Theme.border }
     ColumnLayout {
         id: col
         x: 14; y: 12

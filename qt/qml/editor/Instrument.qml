@@ -154,7 +154,7 @@ Item {
         y: root.pivot.y + (lx * s + ly * c) * root.zm - height / 2
         width: pillText.implicitWidth + 16
         height: 18
-        radius: 9
+        radius: Theme.radius
         Label { id: pillText; anchors.centerIn: parent; text: parent.text; color: "#ffffff"; font.pixelSize: 12; font.weight: Font.DemiBold }
     }
     Pill {

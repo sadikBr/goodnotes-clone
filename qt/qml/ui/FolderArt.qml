@@ -105,7 +105,7 @@ Item {
         Rectangle { antialiasing: true;
             visible: root.count > 0
             anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.rightMargin: 10; anchors.bottomMargin: 9
-            height: 22; radius: 11
+            height: 22; radius: Theme.radiusSm
             width: Math.max(22, countLabel.implicitWidth + 14)
             color: Qt.rgba(1, 1, 1, 0.92)
             Label { id: countLabel; anchors.centerIn: parent; text: root.count; font.pixelSize: 12; font.weight: Font.Bold; color: Theme.mix(root.folderColor, "#000000", 0.3) }
@@ -114,7 +114,7 @@ Item {
         Rectangle { antialiasing: true;
             visible: root.locked
             anchors.left: parent.left; anchors.bottom: parent.bottom; anchors.leftMargin: 10; anchors.bottomMargin: 9
-            width: 22; height: 22; radius: 11
+            width: 22; height: 22; radius: Theme.radiusSm
             color: Qt.rgba(1, 1, 1, 0.92)
             Icon { anchors.centerIn: parent; name: root.unlocked ? "unlock" : "lock"; size: 13; color: Theme.mix(root.folderColor, "#000000", 0.3) }
         }

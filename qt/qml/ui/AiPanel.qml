@@ -175,7 +175,7 @@ Popup {
             spacing: 10
             Rectangle {
                 antialiasing: true
-                Layout.preferredWidth: 30; Layout.preferredHeight: 30; radius: 9
+                Layout.preferredWidth: 30; Layout.preferredHeight: 30; radius: Theme.radius
                 color: Theme.alpha(Theme.accent, 0.14)
                 Icon { anchors.centerIn: parent; name: "sparkle"; size: 17; color: Theme.accent }
             }
@@ -246,7 +246,7 @@ Popup {
                         visible: root.image.length === 0
                         antialiasing: true
                         Layout.alignment: Qt.AlignHCenter
-                        Layout.preferredWidth: 64; Layout.preferredHeight: 64; radius: 32
+                        Layout.preferredWidth: 64; Layout.preferredHeight: 64; radius: Theme.radiusXl
                         color: Theme.alpha(Theme.accent, 0.12)
                         Icon { anchors.centerIn: parent; name: "sparkle"; size: 28; color: Theme.accent }
                     }
@@ -272,7 +272,7 @@ Popup {
                         Layout.topMargin: 2
                         Layout.preferredHeight: 24
                         Layout.preferredWidth: Math.min(list.width - 36, aiLabel.implicitWidth + 20)
-                        radius: 12
+                        radius: Theme.radiusLg
                         color: Theme.surface2
                         border.color: Theme.border
                         Label {
@@ -311,7 +311,7 @@ Popup {
                             }
                             background: Rectangle {
                                 antialiasing: true
-                                radius: 12
+                                radius: Theme.radiusLg
                                 color: chip.pressed ? Theme.alpha(Theme.accent, 0.16) : chip.hovered ? Theme.alpha(Theme.accent, 0.08) : Theme.surface2
                                 border.color: chip.hovered ? Theme.accent : Theme.border
                                 Behavior on color { ColorAnimation { duration: 120 } }
@@ -339,7 +339,7 @@ Popup {
                     x: msg.mine ? parent.width - width - 18 : 18
                     width: Math.min(parent.width - (msg.mine ? 72 : 36), body.implicitWidth + 24)
                     height: body.implicitHeight + 18
-                    radius: 14
+                    radius: Theme.radiusLg
                     color: msg.mine ? Theme.alpha(Theme.accent, 0.14) : msg.role === "error" ? Theme.alpha(Theme.danger, 0.1) : Theme.surface2
                     border.color: msg.role === "error" ? Theme.alpha(Theme.danger, 0.4) : "transparent"
                     TextEdit {

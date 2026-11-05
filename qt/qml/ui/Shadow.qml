@@ -7,7 +7,7 @@ Item {
     id: root
     /// 0 none, 1 small (buttons, cards at rest), 2 raised (hover), 3 large (menus, dialogs).
     property int level: 1
-    property real radius: 10
+    property real radius: Theme.radiusLg
     // [y offset, blur, opacity] per layer (the web app's --shadow-sm/--shadow/--shadow-lg).
     readonly property var layers: level === 3 ? [[2, 6, 0.10], [18, 44, 0.20]] : level === 2 ? [[2, 4, 0.12], [14, 26, 0.20]] : level === 1 ? [[1, 2, 0.08], [1, 3, 0.06]] : []
     readonly property real strength: Theme.dark ? 2.2 : 1

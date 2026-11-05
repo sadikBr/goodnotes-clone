@@ -70,7 +70,7 @@ Item {
             onTextChanged: area.edited()
             Component.onCompleted: forceActiveFocus()
             background: Rectangle { antialiasing: true;
-                radius: 10
+                radius: Theme.radius
                 color: Theme.surface
                 border.width: ta.activeFocus ? 2 : 1
                 border.color: ta.activeFocus ? Theme.accent : Theme.border

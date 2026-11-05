@@ -245,7 +245,7 @@ Popup {
                     onClicked: root.set(coversFlow.field.name, modelData.value)
                     background: Rectangle {
                         antialiasing: true
-                        radius: 10
+                        radius: Theme.radius
                         color: cv.on ? Theme.accentSoft : cv.hovered ? Theme.surface2 : "transparent"
                         border.width: 1.5
                         border.color: cv.on ? Theme.accent : "transparent"

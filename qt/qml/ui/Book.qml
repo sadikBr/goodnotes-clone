@@ -19,7 +19,7 @@ Item {
     readonly property bool full: hasCover && thumbnail.length > 0
 
     // Lifted: a soft shadow.
-    Shadow { anchors.fill: parent; radius: 10; level: 2; opacity: root.raised ? 1 : 0; Behavior on opacity { NumberAnimation { duration: 200 } } }
+    Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 2; opacity: root.raised ? 1 : 0; Behavior on opacity { NumberAnimation { duration: 200 } } }
     // At rest: a hairline under the book.
     RoundImage { x: 1; y: 3; width: parent.width - 2; height: parent.height - 2; color: Qt.rgba(40 / 255, 34 / 255, 24 / 255, 0.08); radiusTopLeft: 3; radiusBottomLeft: 3; radiusTopRight: 9; radiusBottomRight: 9 }
     RoundImage { y: 1; width: parent.width; height: parent.height; color: Qt.rgba(0, 0, 0, 0.14); radiusTopLeft: 4; radiusBottomLeft: 4; radiusTopRight: 10; radiusBottomRight: 10 }
@@ -61,13 +61,13 @@ Item {
         spacing: 4
         Rectangle { antialiasing: true;
             visible: root.locked
-            width: 26; height: 26; radius: 13
+            width: 26; height: 26; radius: Theme.radiusLg
             color: Qt.rgba(1, 1, 1, 0.92)
             Icon { anchors.centerIn: parent; name: root.unlocked ? "unlock" : "lock"; size: 14; color: "#1d1f23" }
         }
         Rectangle { antialiasing: true;
             visible: root.favourite
-            width: 26; height: 26; radius: 13
+            width: 26; height: 26; radius: Theme.radiusLg
             color: Qt.rgba(1, 1, 1, 0.92)
             Icon { anchors.centerIn: parent; name: "star"; size: 15; color: "#d99a00"; filled: true }
         }

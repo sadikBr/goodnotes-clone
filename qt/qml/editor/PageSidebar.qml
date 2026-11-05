@@ -36,7 +36,7 @@ Rectangle {
                 antialiasing: true
                 Layout.preferredHeight: 18
                 Layout.preferredWidth: countLabel.implicitWidth + 12
-                radius: 9
+                radius: Theme.radius
                 color: Theme.surface2
                 Label { id: countLabel; anchors.centerIn: parent; text: root.onlyBookmarks ? root.bookmarks : root.canvas.pageCount; font.pixelSize: 11; font.weight: Font.Bold; color: Theme.muted }
             }
@@ -88,7 +88,7 @@ Rectangle {
                     x: 22; y: 2
                     width: parent.width - 44
                     height: 22
-                    radius: 6
+                    radius: Theme.radiusSm
                     color: Theme.accentSoft
                     Label { anchors.centerIn: parent; width: parent.width - 12; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight; text: cell.section; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 0.2; color: Theme.accent }
                 }
@@ -102,8 +102,8 @@ Rectangle {
                     onClicked: root.canvas.goToPage(cell.index)
                     transform: Translate { y: thumb.hovered && !cell.active ? -2 : 0; Behavior on y { NumberAnimation { duration: 200 } } }
                     background: Item {
-                        Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: cell.active ? -2.5 : -1; radius: 8; color: cell.active ? Theme.accent : Theme.border }
-                        Shadow { anchors.fill: parent; radius: 6; level: thumb.hovered ? 2 : 1 }
+                        Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: cell.active ? -2.5 : -1; radius: Theme.radius; color: cell.active ? Theme.accent : Theme.border }
+                        Shadow { anchors.fill: parent; radius: Theme.radiusSm; level: thumb.hovered ? 2 : 1 }
                         RoundImage {
                             anchors.fill: parent
                             color: cell.modelData.paperColor || "#fffdf7"
@@ -123,7 +123,7 @@ Rectangle {
                     tip: "Page " + (cell.index + 1) + " options"
                     opacity: hover.hovered || menu.opened ? 1 : 0
                     Behavior on opacity { NumberAnimation { duration: 150 } }
-                    Rectangle { antialiasing: true; anchors.fill: parent; z: -1; radius: 10; color: Theme.surface }
+                    Rectangle { antialiasing: true; anchors.fill: parent; z: -1; radius: Theme.radius; color: Theme.surface }
                     onClicked: menu.show(more, [
                         { icon: "plus", label: "Add page after", action: () => root.daftar && cell.modelData.section ? root.addDaftarPage() : root.canvas.addPage(cell.index + 1, "") },
                         { icon: "copy", label: "Duplicate page", action: () => root.canvas.duplicatePage(cell.index) },

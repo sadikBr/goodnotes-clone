@@ -496,7 +496,7 @@ Rectangle {
             Rectangle { antialiasing: true;
                 visible: nav.dot.a > 0
                 Layout.rightMargin: 6
-                Layout.preferredWidth: 13; Layout.preferredHeight: 13; radius: 6.5
+                Layout.preferredWidth: 13; Layout.preferredHeight: 13; radius: Theme.radiusSm
                 color: Theme.surface
                 Rectangle { antialiasing: true; anchors.centerIn: parent; width: 9; height: 9; radius: 4.5; color: nav.dot }
             }
@@ -506,7 +506,7 @@ Rectangle {
                 Layout.rightMargin: 6
                 Layout.preferredHeight: 22
                 Layout.preferredWidth: Math.max(26, countText.implicitWidth + 14)
-                radius: 11
+                radius: Theme.radius
                 color: nav.active ? Theme.alpha(Theme.accent, Theme.dark ? 0.22 : 0.16) : "transparent"
                 border.width: nav.active ? 1 : 0
                 border.color: Theme.alpha(Theme.accent, 0.35)
@@ -578,7 +578,7 @@ Rectangle {
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: landscape ? 250 : 200
                 height: landscape ? 177 : 283
-                Shadow { anchors.fill: parent; radius: 8; level: 3 }
+                Shadow { anchors.fill: parent; radius: Theme.radius; level: 3 }
                 LiveImage {
                     anchors.fill: parent
                     sourceSize: Qt.size(parent.width * 2, parent.height * 2)
@@ -653,14 +653,14 @@ Rectangle {
                     ToolTip.delay: 600
                     ToolTip.text: "Create a notebook, daftar, PDF or folder"
                     background: Item {
-                        Shadow { anchors.fill: parent; radius: 14; level: newBtn.hovered || createMenu.opened ? 2 : 1 }
-                        Rectangle { antialiasing: true; anchors.fill: parent; radius: 14; color: Theme.surface; border.color: newBtn.hovered || createMenu.opened ? Theme.mix(Theme.accent, Theme.border, 0.45) : Theme.border }
+                        Shadow { anchors.fill: parent; radius: Theme.radius; level: newBtn.hovered || createMenu.opened ? 2 : 1 }
+                        Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radius; color: Theme.surface; border.color: newBtn.hovered || createMenu.opened ? Theme.mix(Theme.accent, Theme.border, 0.45) : Theme.border }
                     }
                     contentItem: RowLayout {
                         spacing: 12
                         Item { Layout.preferredWidth: 0 }
                         Rectangle { antialiasing: true;
-                            Layout.preferredWidth: 36; Layout.preferredHeight: 36; radius: 10; color: Theme.accent
+                            Layout.preferredWidth: 36; Layout.preferredHeight: 36; radius: Theme.radius; color: Theme.accent
                             Icon { anchors.centerIn: parent; name: "plus"; size: 18; color: Theme.accentContrast }
                         }
                         Label { text: "New"; font.pixelSize: 15; font.weight: Font.DemiBold; color: Theme.text; Layout.fillWidth: true }
@@ -768,9 +768,9 @@ Rectangle {
                     Layout.alignment: Qt.AlignBottom
                     implicitWidth: searchRow.implicitWidth + 22
                     implicitHeight: 38
-                    Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: -3; radius: height / 2; color: Theme.accentSoft; visible: search.activeFocus }
-                    Shadow { anchors.fill: parent; radius: 19; level: 1 }
-                    Rectangle { antialiasing: true; anchors.fill: parent; radius: 19; color: Theme.surface; border.color: search.activeFocus ? Theme.accent : Theme.border }
+                    Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: -3; radius: Theme.radius + 3; color: Theme.accentSoft; visible: search.activeFocus }
+                    Shadow { anchors.fill: parent; radius: Theme.radius; level: 1 }
+                    Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radius; color: Theme.surface; border.color: search.activeFocus ? Theme.accent : Theme.border }
                     RowLayout {
                         id: searchRow
                         anchors.fill: parent
@@ -868,7 +868,7 @@ Rectangle {
                     Rectangle {
                         antialiasing: true
                         Layout.alignment: Qt.AlignHCenter
-                        Layout.preferredWidth: 84; Layout.preferredHeight: 84; radius: 42
+                        Layout.preferredWidth: 84; Layout.preferredHeight: 84; radius: Theme.radiusXl + 4
                         color: Theme.alpha(Theme.accent, 0.10)
                         Icon { anchors.centerIn: parent; name: "search"; size: 36; color: Theme.accent }
                     }
@@ -925,8 +925,8 @@ Rectangle {
                         visible: root.view.kind === "trash" || root.view.kind === "favourites" || root.view.kind === "folder"
                         Layout.alignment: Qt.AlignHCenter
                         Layout.preferredWidth: 120; Layout.preferredHeight: 120
-                        Rectangle { antialiasing: true; anchors.centerIn: parent; width: 108; height: 108; radius: 54; color: Theme.alpha(Theme.accent, 0.10) }
-                        Rectangle { antialiasing: true; anchors.centerIn: parent; width: 76; height: 76; radius: 38; color: Theme.alpha(Theme.accent, 0.12) }
+                        Rectangle { antialiasing: true; anchors.centerIn: parent; width: 108; height: 108; radius: 30; color: Theme.alpha(Theme.accent, 0.10) }
+                        Rectangle { antialiasing: true; anchors.centerIn: parent; width: 76; height: 76; radius: 22; color: Theme.alpha(Theme.accent, 0.12) }
                         Icon {
                             anchors.centerIn: parent
                             name: root.view.kind === "trash" ? "trash" : root.view.kind === "favourites" ? "star" : "folder"
@@ -1034,10 +1034,10 @@ Rectangle {
                     anchors.centerIn: parent
                     width: barRow.implicitWidth + 28
                     height: 50
-                    radius: 25
+                    radius: Theme.radiusLg
                     color: Theme.surface
                     border.color: Theme.border
-                    Shadow { anchors.fill: parent; radius: 25; level: 2; z: -1 }
+                    Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 2; z: -1 }
                     RowLayout {
                         id: barRow
                         anchors.centerIn: parent

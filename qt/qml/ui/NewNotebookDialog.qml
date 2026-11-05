@@ -92,7 +92,7 @@ Popup {
                 anchors.centerIn: parent
                 width: root.landscape ? 250 : 200
                 height: root.landscape ? 177 : 283
-                Shadow { anchors.fill: parent; radius: 8; level: 3 }
+                Shadow { anchors.fill: parent; radius: Theme.radius; level: 3 }
                 LiveImage {
                     visible: root.step === 0
                     anchors.fill: parent
@@ -139,13 +139,13 @@ Popup {
                         implicitHeight: 30
                         implicitWidth: stepRow.implicitWidth + 20
                         onClicked: root.step = index
-                        background: Rectangle { antialiasing: true; radius: 15; color: stepBtn.on ? Theme.alpha(Theme.accent, 0.14) : "transparent"; border.color: stepBtn.on ? "transparent" : Theme.border }
+                        background: Rectangle { antialiasing: true; radius: Theme.radius; color: stepBtn.on ? Theme.alpha(Theme.accent, 0.14) : "transparent"; border.color: stepBtn.on ? "transparent" : Theme.border }
                         contentItem: RowLayout {
                             id: stepRow
                             spacing: 6
                             Rectangle {
                                 antialiasing: true
-                                Layout.preferredWidth: 18; Layout.preferredHeight: 18; radius: 9; Layout.leftMargin: 4
+                                Layout.preferredWidth: 18; Layout.preferredHeight: 18; radius: Theme.radius; Layout.leftMargin: 4
                                 color: stepBtn.on || root.step > stepBtn.index ? Theme.accent : Theme.surface3
                                 Label { anchors.centerIn: parent; text: root.step > stepBtn.index ? "✓" : String(stepBtn.index + 1); font.pixelSize: 11; font.weight: Font.Bold; color: stepBtn.on || root.step > stepBtn.index ? Theme.accentContrast : Theme.muted }
                             }
@@ -197,7 +197,7 @@ Popup {
                                 implicitHeight: 128
                                 hoverEnabled: true
                                 onClicked: root.design = modelData.value
-                                background: Rectangle { antialiasing: true; radius: 10; color: dv.on ? Theme.accentSoft : dv.hovered ? Theme.surface2 : "transparent"; border.width: 1.5; border.color: dv.on ? Theme.accent : "transparent" }
+                                background: Rectangle { antialiasing: true; radius: Theme.radius; color: dv.on ? Theme.accentSoft : dv.hovered ? Theme.surface2 : "transparent"; border.width: 1.5; border.color: dv.on ? Theme.accent : "transparent" }
                                 contentItem: Item {
                                     Item {
                                         id: dpic
@@ -271,7 +271,7 @@ Popup {
                                         implicitHeight: 104
                                         hoverEnabled: true
                                         onClicked: root.template = modelData.value
-                                        background: Rectangle { antialiasing: true; radius: 10; color: pv.on ? Theme.accentSoft : pv.hovered ? Theme.surface2 : "transparent"; border.width: 1.5; border.color: pv.on ? Theme.accent : "transparent" }
+                                        background: Rectangle { antialiasing: true; radius: Theme.radius; color: pv.on ? Theme.accentSoft : pv.hovered ? Theme.surface2 : "transparent"; border.width: 1.5; border.color: pv.on ? Theme.accent : "transparent" }
                                         contentItem: Item {
                                             Rectangle {
                                                 id: ppic

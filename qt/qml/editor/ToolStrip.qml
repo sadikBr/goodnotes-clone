@@ -29,11 +29,11 @@ Rectangle {
 
     implicitWidth: vertical ? btn + 12 : strip.implicitWidth + 12
     implicitHeight: vertical ? strip.implicitHeight + 12 : btn + 10
-    radius: 10
+    radius: Theme.radiusLg
     antialiasing: true
     color: Theme.surface
     border.color: Theme.border
-    Shadow { anchors.fill: parent; radius: 10; level: 2; z: -1 }
+    Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 2; z: -1 }
     // Presses on the strip stay off the page.
     MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons }
 
@@ -127,8 +127,8 @@ Rectangle {
                 ToolTip.delay: 700
                 ToolTip.text: "Tap to use · hold or right-click to remove"
                 contentItem: Item {
-                    Rectangle { antialiasing: true; anchors.centerIn: parent; width: 28; height: 28; radius: 14; color: "transparent"; border.width: 2; border.color: sw.modelData; visible: sw.on }
-                    Rectangle { antialiasing: true; anchors.centerIn: parent; width: sw.on ? 20 : 22; height: width; radius: width / 2; color: sw.modelData; border.width: 1; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4); scale: sw.hovered ? 1.1 : 1; Behavior on scale { NumberAnimation { duration: 120 } } }
+                    Rectangle { antialiasing: true; anchors.centerIn: parent; width: 28; height: 28; radius: Theme.swatchRadius(28); color: "transparent"; border.width: 2; border.color: sw.modelData; visible: sw.on }
+                    Rectangle { antialiasing: true; anchors.centerIn: parent; width: sw.on ? 20 : 22; height: width; radius: Theme.swatchRadius(width); color: sw.modelData; border.width: 1; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4); scale: sw.hovered ? 1.1 : 1; Behavior on scale { NumberAnimation { duration: 120 } } }
                 }
             }
         }
@@ -146,7 +146,7 @@ Rectangle {
                 Rectangle {
                     antialiasing: true
                     anchors.centerIn: parent
-                    width: 24; height: 24; radius: 12
+                    width: 24; height: 24; radius: Theme.swatchRadius(24)
                     color: add.hovered ? Theme.surface2 : "transparent"
                     border.width: 1.5
                     border.color: add.hovered ? Theme.accent : Theme.muted

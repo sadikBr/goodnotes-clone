@@ -170,8 +170,8 @@ Popup {
         NumberAnimation { property: "scale"; from: 0.97; to: 1; duration: 180; easing.type: Easing.OutCubic }
     }
     background: Item {
-        Shadow { anchors.fill: parent; radius: 14; level: 3 }
-        Rectangle { antialiasing: true; anchors.fill: parent; radius: 14; color: Theme.surface; border.color: Theme.border }
+        Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 3 }
+        Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusLg; color: Theme.surface; border.color: Theme.border }
     }
 
     /// A label in Arabic with its French under it.
@@ -197,7 +197,7 @@ Popup {
         Both { ar: fld.ar; fr: fld.fr }
         UiField { Layout.fillWidth: true; text: fld.value; placeholderText: fld.hint; onTextEdited: fld.edited(fld.key, text) }
     }
-    component Square: Rectangle { antialiasing: true; radius: 8 }
+    component Square: Rectangle { antialiasing: true; radius: Theme.radius }
 
     contentItem: ColumnLayout {
         spacing: 0
@@ -232,7 +232,7 @@ Popup {
                         id: sbRow
                         spacing: 7
                         Square {
-                            Layout.preferredWidth: 20; Layout.preferredHeight: 20; Layout.leftMargin: 2; radius: 6
+                            Layout.preferredWidth: 20; Layout.preferredHeight: 20; Layout.leftMargin: 2; radius: Theme.radiusSm
                             color: sb.on || sb.done ? Theme.accent : Theme.surface3
                             Label { anchors.centerIn: parent; text: sb.done ? "✓" : String(sb.index + 1); font.pixelSize: 11; font.weight: Font.Bold; color: sb.on || sb.done ? Theme.accentContrast : Theme.muted }
                         }
@@ -348,7 +348,7 @@ Popup {
                                         ToolTip.delay: 400
                                         ToolTip.text: chip.modelData.orig ? "Remove (its pages stay in the daftar)" : "Remove"
                                         onClicked: root.removeClass(chip.index)
-                                        background: Square { radius: 6; color: parent.hovered ? Theme.surface2 : "transparent" }
+                                        background: Square { radius: Theme.radiusSm; color: parent.hovered ? Theme.surface2 : "transparent" }
                                         contentItem: Item { Icon { anchors.centerIn: parent; name: "close"; size: 14; color: Theme.muted } }
                                     }
                                 }
@@ -450,7 +450,7 @@ Popup {
                         model: root.lessons.filter(l => root.onGrid(l))
                         delegate: Square {
                             required property var modelData
-                            radius: 6
+                            radius: Theme.radiusSm
                             x: week.timeW + (modelData.day - 1) * week.colW + 3
                             y: week.headH + (root.mins(modelData.start) - root.firstMin) / root.slotMins * week.rowH + 2
                             width: week.colW - 6
@@ -539,7 +539,7 @@ Popup {
                                 implicitWidth: 30; implicitHeight: 30
                                 hoverEnabled: true
                                 onClicked: root.holidays = root.holidays.filter((x, k) => k !== hrow.index)
-                                background: Square { radius: 6; color: parent.hovered ? Theme.surface2 : "transparent" }
+                                background: Square { radius: Theme.radiusSm; color: parent.hovered ? Theme.surface2 : "transparent" }
                                 contentItem: Item { Icon { anchors.centerIn: parent; name: "close"; size: 15; color: Theme.muted } }
                             }
                         }
@@ -573,7 +573,7 @@ Popup {
                     Layout.topMargin: 22
                     Layout.alignment: Qt.AlignTop
                     Layout.preferredWidth: 220; Layout.preferredHeight: 311
-                    Shadow { anchors.fill: parent; radius: 6; level: 3 }
+                    Shadow { anchors.fill: parent; radius: Theme.radiusSm; level: 3 }
                     LiveImage { anchors.fill: parent; sourceSize: Qt.size(440, 622); source: root.opened && root.step === 4 ? root.coverUrl(root.design) : "" }
                 }
                 ColumnLayout {

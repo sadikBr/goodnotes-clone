@@ -21,9 +21,13 @@ QtObject {
     readonly property color danger: dark ? "#ef7c66" : "#c2412d"
     readonly property color desk: dark ? "#0e0f0d" : "#e7e4dc"
 
-    readonly property int radius: 10
-    readonly property int radiusLg: 14
-    readonly property int radiusXl: 20
+    // Corners, one scale for the whole app: tiny marks 4, small buttons and
+    // chips 6, buttons and fields 8, panels, menus and popovers 10, dialogs and cards 12.
+    readonly property int radiusXs: 4
+    readonly property int radiusSm: 6
+    readonly property int radius: 8
+    readonly property int radiusLg: 10
+    readonly property int radiusXl: 12
 
     readonly property string font: "Inter"
 
@@ -31,6 +35,39 @@ QtObject {
     function mix(a, b, t) {
         const c1 = Qt.color(a), c2 = Qt.color(b)
         return Qt.rgba(c1.r + (c2.r - c1.r) * t, c1.g + (c2.g - c1.g) * t, c1.b + (c2.b - c1.b) * t, c1.a + (c2.a - c1.a) * t)
+    }
+    /// The corner of a colour swatch `size` wide (rounded squares everywhere colours are picked).
+    function swatchRadius(size) { return Math.max(3, Math.round(size * 0.27)) }
+    /// "More colours" as a rounded square of the rainbow (`hole`: with a white middle), as an SVG data URL.
+    function rainbow(hole) {
+        const r = 6.5, colors = ["#ef4444", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#a855f7"]
+        // The rounded square's outline, as points, then cut into six slices around the middle.
+        const pts = []
+        const corner = (cx, cy, a0) => { for (let k = 0; k <= 8; k++) { const a = a0 + k * Math.PI / 16; pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]) } }
+        corner(24 - r, r, -Math.PI / 2); corner(24 - r, 24 - r, 0); corner(r, 24 - r, Math.PI / 2); corner(r, r, Math.PI)
+        const angleOf = p => (Math.atan2(p[1] - 12, p[0] - 12) + Math.PI * 2.5) % (Math.PI * 2)
+        const at = a => {
+            // Where a ray from the middle leaves the outline (between two outline points).
+            for (let i = 0; i < pts.length; i++) {
+                const p = pts[i], q = pts[(i + 1) % pts.length]
+                let ap = angleOf(p), aq = angleOf(q)
+                if (aq < ap) aq += Math.PI * 2
+                let x = a
+                if (x < ap) x += Math.PI * 2
+                if (x >= ap && x <= aq) { const t = (x - ap) / Math.max(1e-6, aq - ap); return [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t] }
+            }
+            return [12, 0]
+        }
+        let body = ""
+        for (let k = 0; k < 6; k++) {
+            const a0 = k * Math.PI / 3, a1 = (k + 1) * Math.PI / 3
+            let d = "M12 12L" + at(a0).map(v => v.toFixed(2)).join(" ")
+            for (const p of pts) { let a = angleOf(p); if (a > a0 && a < a1) d += "L" + p[0].toFixed(2) + " " + p[1].toFixed(2) }
+            d += "L" + at(a1 % (Math.PI * 2)).map(v => v.toFixed(2)).join(" ") + "Z"
+            body += "<path d='" + d + "' fill='" + colors[k] + "'/>"
+        }
+        if (hole) body += "<rect x='7.5' y='7.5' width='9' height='9' rx='2.5' fill='white'/>"
+        return "data:image/svg+xml;utf8," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'>" + body + "</svg>")
     }
     function alpha(c, a) {
         const k = Qt.color(c)
