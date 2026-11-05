@@ -6,6 +6,7 @@
 
 #include <QQuickImageProvider>
 #include <QThreadPool>
+#include <QHash>
 
 class PaperImage : public QQuickImageProvider {
 public:
@@ -33,6 +34,9 @@ public:
 private:
   QThreadPool m_pool;
 };
+
+/// Pictures shown whole by image://ink/picture/<key>: key → its src.
+QHash<QString, QString>& pictureSources();
 
 class Canvas;
 /// The tool drawer's pen preview: a wave in `style` (in a 56 × 22 box).

@@ -14,7 +14,9 @@ Item {
     readonly property bool shown: (s.count || 0) > 0 && !!s.box
     readonly property var inkColors: ["#111827", "#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c"]
     readonly property var shapeKinds: [{ id: "line", label: "Line", icon: "sLine" }, { id: "arrow", label: "Arrow", icon: "sArrow" }, { id: "rectangle", label: "Rectangle", icon: "sRectangle" }, { id: "ellipse", label: "Ellipse / circle", icon: "sEllipse" }, { id: "triangle", label: "Triangle", icon: "sTriangle" }, { id: "diamond", label: "Diamond", icon: "sDiamond" }, { id: "star", label: "Star", icon: "sStar" }]
-    visible: shown
+    /// Hidden while something else edits the selection (cropping).
+    property bool held: false
+    visible: shown && !held
     implicitWidth: row.implicitWidth + 16
     implicitHeight: row.implicitHeight + 12
 
@@ -44,6 +46,8 @@ Item {
     signal graphEditRequested(var graph)
     /// Save the selection to my pieces.
     signal savePieceRequested()
+    /// Crop the selected picture.
+    signal cropRequested()
     ColorPopover { id: colorPop }
 
     Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 3 }
@@ -98,6 +102,18 @@ Item {
             text: "Edit graph"
             implicitHeight: 30
             onClicked: root.graphEditRequested(root.s.graph)
+        }
+        // A picture: crop it.
+        UiButton {
+            visible: !!root.s.image
+            kind: "ghost"
+            iconName: "crop"
+            text: "Crop"
+            implicitHeight: 30
+            ToolTip.visible: hovered
+            ToolTip.delay: 500
+            ToolTip.text: "Crop the picture, or cut it round"
+            onClicked: root.cropRequested()
         }
         // Tables: a grid drawn by hand becomes one; a table's rows, columns and cells.
         UiButton {
@@ -224,7 +240,7 @@ Item {
         // curve has its own).
         AbstractButton {
             id: colorBtn
-            visible: !root.s.graph
+            visible: !root.s.graph && !root.s.image
             implicitWidth: colorRow.implicitWidth + 12
             implicitHeight: 30
             hoverEnabled: true

@@ -116,6 +116,11 @@ void smoothingSample(Canvas& c, double streamline, const QString& color, bool da
   draw::drawStroke(c, {{"id", "sample"}, {"z", 0}, {"kind", "stroke"}, {"tool", "pen"}, {"style", "ballpoint"}, {"color", sampleInk(color, dark)}, {"width", 1.6}, {"points", pts(points)}, {"smooth", streamline}});
 }
 
+QHash<QString, QString>& pictureSources() {
+  static QHash<QString, QString> sources;
+  return sources;
+}
+
 QImage InkSampleImage::requestImage(const QString& id, QSize* size, const QSize& requested) {
   if (QThread::currentThread() != qApp->thread()) {
     QImage out;
@@ -123,6 +128,15 @@ QImage InkSampleImage::requestImage(const QString& id, QSize* size, const QSize&
     return out;
   }
   const QStringList p = id.split('/');
+  // A picture on a page, whole (for cropping it): image://ink/picture/<key>.
+  if (p.value(0) == "picture") {
+    const QImage* im = draw::imageFor(pictureSources().value(p.value(1)));
+    QImage img = im ? *im : QImage();
+    if (!img.isNull() && requested.isValid() && !requested.isEmpty() && (img.width() > requested.width() || img.height() > requested.height()))
+      img = img.scaled(requested, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    if (size) *size = img.size();
+    return img;
+  }
   const QSize want = requested.isValid() && !requested.isEmpty() ? requested : QSize(112, 44);
   Canvas canvas(want.width(), want.height());
   canvas.setTransform(want.width() / 56.0, 0, 0, want.height() / 22.0, 0, 0);

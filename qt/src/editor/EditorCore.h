@@ -152,6 +152,10 @@ public:
   void insertGraph(const QVariantMap& spec, double x, double y, double w, double h);
   /// Changes the selected graph (one graph selected); false when there's none.
   bool updateSelectedGraph(const QVariantMap& spec);
+  /// The selected picture's new box, the part of it shown ([x, y, w, h], 0..1) and its cut ("rect", "rounded", "circle").
+  /// The selected picture's src (one picture selected; else empty).
+  QString selectedImageSrc();
+  bool cropSelectedImage(double x, double y, double w, double h, const QVariantList& crop, const QString& mask);
 
   // ------------------------------------------------------------ tables
   /// An empty table, `rows` × `cols`, `w` wide, with its top left at (x, y), selected.

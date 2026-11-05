@@ -628,11 +628,14 @@ Rectangle {
 
                 SelectionBar {
                     id: selectionBar; canvas: root.mainCanvas; z: 6
+                    held: cropper.active
                     onAskAi: what => root.askAboutSelection(what)
                     onMathsRequested: mathCard.start()
                     onGraphEditRequested: g => graphDialog.show(g, true)
                     onSavePieceRequested: root.savePiece()
+                    onCropRequested: cropper.start()
                 }
+                CropOverlay { id: cropper; canvas: root.mainCanvas; anchors.fill: parent; z: 20 }
 
                 // What you just picked, beside the rail for a moment ("Fountain pen · 3 px").
                 Rectangle {

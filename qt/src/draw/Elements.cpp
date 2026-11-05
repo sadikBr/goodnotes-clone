@@ -187,7 +187,31 @@ void drawImage(Canvas& c, const QJsonObject& el) {
   QImage img;
   if (const QImage* im = imageFor(el["src"].toString())) img = *im;
   if (!img.isNull() && img.width() > 0) {
-    c.drawImage(img, x, y, w, h);
+    // A crop: the part of the picture shown ([x, y, w, h] as 0..1 of it), so
+    // the whole picture is drawn larger, around the box, and cut to it.
+    double cx = 0, cy = 0, cw = 1, ch = 1;
+    const QJsonArray crop = el["crop"].toArray();
+    if (crop.size() == 4) {
+      cx = std::clamp(crop[0].toDouble(), 0.0, 1.0);
+      cy = std::clamp(crop[1].toDouble(), 0.0, 1.0);
+      cw = std::clamp(crop[2].toDouble(1), 0.01, 1.0 - cx);
+      ch = std::clamp(crop[3].toDouble(1), 0.01, 1.0 - cy);
+    }
+    const QString mask = el["mask"].toString();
+    const bool cut = cx > 0 || cy > 0 || cw < 1 || ch < 1 || mask == "rounded" || mask == "circle";
+    if (cut) {
+      c.save();
+      c.beginPath();
+      if (mask == "circle") c.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, 2 * M_PI);
+      else if (mask == "rounded") c.roundRect(x, y, w, h, QJSValue(std::min(w, h) * 0.14));
+      else c.rect(x, y, w, h);
+      c.clip();
+      const double fw = w / cw, fh = h / ch;
+      c.drawImage(img, x - cx * fw, y - cy * fh, fw, fh);
+      c.restore();
+    } else {
+      c.drawImage(img, x, y, w, h);
+    }
   } else {
     c.save();
     c.setStroke("#9ca3af");

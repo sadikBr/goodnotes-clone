@@ -75,6 +75,8 @@ class InkCanvas : public QQuickItem {
   Q_PROPERTY(QColor deskColor MEMBER m_deskColor NOTIFY settingsChanged)
   /// View only: every gesture scrolls (a second view of the notebook being edited).
   Q_PROPERTY(bool readOnly MEMBER m_readOnly NOTIFY settingsChanged)
+  /// Hides the selection's frame and handles (while something else edits it, like cropping).
+  Q_PROPERTY(bool hideSelection READ hideSelection WRITE setHideSelection NOTIFY settingsChanged)
   // The cursor for drawing tools: "cross" | "dot" | "none".
   Q_PROPERTY(QString penCursor READ penCursor WRITE setPenCursor NOTIFY settingsChanged)
 
@@ -147,6 +149,8 @@ public:
   QVariantMap editing() const { return m_editing; }
   QVariantMap instrument() const { return m_instrument; }
   /// Shows `kind` in the middle of the view ("" hides it; the same kind again hides it).
+  bool hideSelection() const { return m_hideSelection; }
+  void setHideSelection(bool v) { if (v == m_hideSelection) return; m_hideSelection = v; m_overlayDirty = true; refresh(); emit settingsChanged(); }
   Q_INVOKABLE void showInstrument(const QString& kind);
   /// Moves and turns the instrument (page units, radians).
   Q_INVOKABLE void placeInstrument(qreal cx, qreal cy, qreal angle);
@@ -193,6 +197,11 @@ public:
   Q_INVOKABLE void insertGraph(const QVariantMap& spec);
   /// Changes the selected graph.
   Q_INVOKABLE bool updateGraph(const QVariantMap& spec);
+  /// The selected picture, whole, for cropping it (an image:// URL; empty if none).
+  Q_INVOKABLE QString selectedPictureUrl();
+  /// Crops the selected picture: its new box on the page, the part shown
+  /// ([x, y, w, h], 0..1 of the picture) and its cut ("rect", "rounded", "circle").
+  Q_INVOKABLE bool cropPicture(const QVariantMap& box, const QVariantList& crop, const QString& mask);
   /// An empty table (rows × cols, the first a header) in the middle of the view, selected.
   Q_INVOKABLE void insertTable(int rows, int cols);
   /// The selected hand-drawn grid becomes a table; false when there's none.
@@ -484,6 +493,7 @@ private:
   QPointF m_hover{-1, -1};
   bool m_rubbing = false;
   bool m_readOnly = false;
+  bool m_hideSelection = false;
   void setHover(QPointF p);
   qreal m_pinchStartDist = 0, m_pinchStartZoom = 1;
   QPointF m_pinchMid;

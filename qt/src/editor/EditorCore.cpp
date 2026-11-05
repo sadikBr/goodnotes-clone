@@ -2,6 +2,7 @@
 #include "EditorCore.h"
 #include "Table.h"
 #include "Gestures.h"
+#include "../draw/Render.h"
 
 #include <QJsonDocument>
 #include <QRegularExpression>
@@ -1363,6 +1364,17 @@ QVariantMap EditorCore::selectionInfo() {
     out["graph"] = QVariantMap{{"functions", g.text}, {"xmin", g.extra.value("xmin").toDouble(-5)}, {"xmax", g.extra.value("xmax").toDouble(5)},
                                {"ymin", g.extra.value("ymin").toDouble(-5)}, {"ymax", g.extra.value("ymax").toDouble(5)}, {"grid", g.extra.value("grid").toBool(true)}};
   }
+  // One picture: its box, which part of it shows and how it's cut.
+  if (els.size() == 1 && els[0]->kind == Kind::Image) {
+    const El& im = *els[0];
+    QVariantList crop{0.0, 0.0, 1.0, 1.0};
+    const QJsonArray c = im.extra.value("crop").toArray();
+    if (c.size() == 4) crop = c.toVariantList();
+    const QImage* pic = draw::imageFor(im.src);
+    out["image"] = QVariantMap{{"id", im.id}, {"x", im.x}, {"y", im.y}, {"w", im.w}, {"h", im.h}, {"rotation", im.rot()},
+                               {"crop", crop}, {"mask", im.extra.value("mask").toString("rect")},
+                               {"naturalW", pic ? pic->width() : 0}, {"naturalH", pic ? pic->height() : 0}};
+  }
   out["hasText"] = std::any_of(els.begin(), els.end(), [](const ElPtr& e) { return e->kind == Kind::Text && !e->text.trimmed().isEmpty(); });
   // A table (with what's written in it), or a grid drawn by hand that can become one.
   const ElPtr* table = nullptr;
@@ -1600,6 +1612,40 @@ bool EditorCore::updateSelectedGraph(const QVariantMap& spec) {
     if (el->id == sel[0]->id) {
       El next = *el;
       applyGraphSpec(next, spec);
+      el = makeEl(std::move(next));
+    }
+  ++selectionRev;
+  changed();
+  return true;
+}
+
+// ------------------------------------------------------------ pictures
+
+QString EditorCore::selectedImageSrc() {
+  const Els sel = selected().list;
+  return sel.size() == 1 && sel[0]->kind == Kind::Image ? sel[0]->src : QString();
+}
+
+bool EditorCore::cropSelectedImage(double x, double y, double w, double h, const QVariantList& crop, const QString& mask) {
+  const Els sel = selected().list;
+  if (sel.size() != 1 || sel[0]->kind != Kind::Image || crop.size() != 4 || w < 2 || h < 2) return false;
+  snapshot();
+  for (ElPtr& el : elements())
+    if (el->id == sel[0]->id) {
+      El next = *el;
+      next.x = x;
+      next.y = y;
+      next.w = w;
+      next.h = h;
+      const double cx = std::clamp(crop[0].toDouble(), 0.0, 1.0), cy = std::clamp(crop[1].toDouble(), 0.0, 1.0);
+      const double cw = std::clamp(crop[2].toDouble(), 0.01, 1.0 - cx), ch = std::clamp(crop[3].toDouble(), 0.01, 1.0 - cy);
+      // The whole picture, uncut: nothing to keep.
+      if (cx < 1e-4 && cy < 1e-4 && cw > 1 - 1e-4 && ch > 1 - 1e-4) next.extra.remove("crop");
+      else next.extra["crop"] = QJsonArray{cx, cy, cw, ch};
+      if (mask == "rounded" || mask == "circle") next.extra["mask"] = mask;
+      else next.extra.remove("mask");
+      next.cachedBounds.reset();
+      next.cachedFrame.reset();
       el = makeEl(std::move(next));
     }
   ++selectionRev;

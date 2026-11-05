@@ -1,5 +1,6 @@
 #include "draw/Elements.h"
 #include "InkCanvas.h"
+#include "PaperImage.h"
 #include "editor/Geometry.h"
 
 #include "daftar/DaftarEditor.h"
@@ -1010,6 +1011,20 @@ bool InkCanvas::updateGraph(const QVariantMap& spec) {
   return true;
 }
 
+QString InkCanvas::selectedPictureUrl() {
+  const QString src = m_ed ? m_ed->selectedImageSrc() : QString();
+  if (src.isEmpty()) return {};
+  const QString key = QString::number(qHash(src), 16);
+  pictureSources().insert(key, src);
+  return "image://ink/picture/" + key;
+}
+
+bool InkCanvas::cropPicture(const QVariantMap& box, const QVariantList& crop, const QString& mask) {
+  if (!m_ed || !m_ed->cropSelectedImage(box.value("x").toDouble(), box.value("y").toDouble(), box.value("w").toDouble(), box.value("h").toDouble(), crop, mask)) return false;
+  afterCore();
+  return true;
+}
+
 void InkCanvas::insertTable(int rows, int cols) {
   if (!m_ed) return;
   finishEdit();
@@ -1460,7 +1475,8 @@ void InkCanvas::updatePolish() {
     m_overlayPage = -1;
     const int pi = m_ed->active;
     const auto b = m_ed->overlayBounds();
-    if (b && pi >= 0 && pi < int(m_pages.size())) {
+    // (Not while something covers the selection, as cropping a picture does.)
+    if (b && !m_hideSelection && pi >= 0 && pi < int(m_pages.size())) {
       const Page& pg = m_pages[pi];
       // Only what's on screen.
       const QRectF view(toPageOf(pi, QPointF(0, 0)), toPageOf(pi, QPointF(width(), height())));

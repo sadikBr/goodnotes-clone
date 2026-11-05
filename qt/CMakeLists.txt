@@ -200,6 +200,7 @@ qt_add_qml_module(inkleaf
     qml/editor/ColorPopover.qml
     qml/editor/PenCase.qml
     qml/editor/SizePreview.qml
+    qml/editor/CropOverlay.qml
     qml/editor/ToolStrip.qml
     qml/editor/ToolDrawer.qml
     qml/editor/SelectionBar.qml

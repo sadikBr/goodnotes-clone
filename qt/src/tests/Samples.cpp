@@ -169,6 +169,9 @@ std::vector<std::pair<QString, QJsonObject>> sampleElements() {
   const QString png = pngDataUrl();
   out.push_back({"el-image", QJsonObject{{"kind", "image"}, {"id", "img"}, {"x", 60}, {"y", 60}, {"w", 160}, {"h", 120}, {"src", png}}});
   out.push_back({"el-image-rotated", QJsonObject{{"kind", "image"}, {"id", "img2"}, {"x", 60}, {"y", 60}, {"w", 160}, {"h", 120}, {"src", png}, {"rotation", 0.7}}});
+  out.push_back({"el-image-cropped", QJsonObject{{"kind", "image"}, {"id", "img4"}, {"x", 60}, {"y", 60}, {"w", 120}, {"h", 90}, {"src", png}, {"crop", QJsonArray{0.25, 0.1, 0.5, 0.6}}}});
+  out.push_back({"el-image-circle", QJsonObject{{"kind", "image"}, {"id", "img5"}, {"x", 60}, {"y", 60}, {"w", 100}, {"h", 100}, {"src", png}, {"crop", QJsonArray{0.2, 0.0, 0.6, 0.8}}, {"mask", "circle"}}});
+  out.push_back({"el-image-rounded", QJsonObject{{"kind", "image"}, {"id", "img6"}, {"x", 60}, {"y", 60}, {"w", 160}, {"h", 120}, {"src", png}, {"mask", "rounded"}, {"rotation", 0.3}}});
   out.push_back({"el-image-missing", QJsonObject{{"kind", "image"}, {"id", "img3"}, {"x", 60}, {"y", 60}, {"w", 160}, {"h", 120}, {"src", "data:image/png;base64,AAAA"}}});
   return out;
 }
