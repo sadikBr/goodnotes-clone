@@ -1375,6 +1375,17 @@ QVariantMap EditorCore::selectionInfo() {
                                {"crop", crop}, {"mask", im.extra.value("mask").toString("rect")},
                                {"naturalW", pic ? pic->width() : 0}, {"naturalH", pic ? pic->height() : 0}};
   }
+  // A link (the same one on everything selected), or "mixed" when some differ.
+  {
+    QSet<QString> links;
+    for (const ElPtr& e : els) links.insert(QString::fromUtf8(QJsonDocument(e->extra.value("link").toObject()).toJson(QJsonDocument::Compact)));
+    if (links.size() == 1) {
+      const QJsonObject l = els[0]->extra.value("link").toObject();
+      if (!l.isEmpty()) out["link"] = l.toVariantMap();
+    } else {
+      out["link"] = QVariantMap{{"kind", "mixed"}};
+    }
+  }
   out["hasText"] = std::any_of(els.begin(), els.end(), [](const ElPtr& e) { return e->kind == Kind::Text && !e->text.trimmed().isEmpty(); });
   // A table (with what's written in it), or a grid drawn by hand that can become one.
   const ElPtr* table = nullptr;
@@ -1617,6 +1628,53 @@ bool EditorCore::updateSelectedGraph(const QVariantMap& spec) {
   ++selectionRev;
   changed();
   return true;
+}
+
+// ------------------------------------------------------------ links
+
+bool EditorCore::linkSelection(const QJsonObject& link) {
+  const Els sel = selected().list;
+  if (sel.empty()) return false;
+  QSet<QString> ids;
+  for (const ElPtr& e : sel) ids.insert(e->id);
+  snapshot();
+  for (ElPtr& el : elements())
+    if (ids.contains(el->id)) {
+      El next = *el;
+      if (link.isEmpty()) next.extra.remove("link");
+      else next.extra["link"] = link;
+      el = makeEl(std::move(next));
+    }
+  ++selectionRev;
+  changed();
+  return true;
+}
+
+std::vector<std::pair<Rect, QJsonObject>> EditorCore::linksOn(int page) {
+  // Linked things with the same link, near each other, are one link.
+  std::vector<std::pair<Rect, QJsonObject>> out;
+  std::vector<QString> keys;
+  for (const ElPtr& el : load(page)) {
+    const QJsonObject l = el->extra.value("link").toObject();
+    if (l.isEmpty()) continue;
+    const QString key = QString::fromUtf8(QJsonDocument(l).toJson(QJsonDocument::Compact));
+    const Rect b = bounds(*el);
+    bool joined = false;
+    for (size_t i = 0; i < out.size() && !joined; ++i) {
+      if (keys[i] != key) continue;
+      Rect& r = out[i].first;
+      const double gap = 40;
+      if (b.x < r.x + r.w + gap && b.x + b.w > r.x - gap && b.y < r.y + r.h + gap && b.y + b.h > r.y - gap) {
+        r = *unionRects({r, b});
+        joined = true;
+      }
+    }
+    if (!joined) {
+      out.push_back({b, l});
+      keys.push_back(key);
+    }
+  }
+  return out;
 }
 
 // ------------------------------------------------------------ pictures

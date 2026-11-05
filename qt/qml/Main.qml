@@ -39,6 +39,14 @@ ApplicationWindow {
         openTitle = title
         openNotebook = id
     }
+    /// From one notebook to another (a link): this one closes (and saves), then that one opens.
+    property var pendingOpen: null
+    function switchTo(id, title) {
+        pendingOpen = { id: id, title: title }
+        closeNotebook()
+        switchTimer.restart()
+    }
+    Timer { id: switchTimer; interval: 1; onTriggered: { const p = win.pendingOpen; win.pendingOpen = null; if (p) win.open(p.id, p.title) } }
     // Android's back gesture closes the window: from a notebook it goes back to the library.
     onClosing: close => {
         if (Qt.platform.os === "android" && openNotebook) {
@@ -79,6 +87,8 @@ ApplicationWindow {
             onBack: win.closeNotebook()
             onSettingsRequested: settings.open()
             onNotify: (message, error) => toast.show(message, error)
+            // A link to another notebook: this one closes (and saves), that one opens.
+            onOpenOther: (id, title) => win.switchTo(id, title)
         }
     }
 }

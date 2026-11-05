@@ -197,6 +197,13 @@ public:
   Q_INVOKABLE void insertGraph(const QVariantMap& spec);
   /// Changes the selected graph.
   Q_INVOKABLE bool updateGraph(const QVariantMap& spec);
+  /// Links the selection to `link` ({ kind: "page", page } | { kind: "notebook", notebook, title } |
+  /// { kind: "url", url }); an empty one unlinks it.
+  Q_INVOKABLE void linkSelection(const QVariantMap& link);
+  /// The links on the pages on screen, where they are on screen: [{ page, x, y, w, h, link }].
+  Q_INVOKABLE QVariantList visibleLinks();
+  /// The index of the page with this id (-1 if it's gone).
+  Q_INVOKABLE int pageIndexOf(const QString& pageId) const;
   /// The selected picture, whole, for cropping it (an image:// URL; empty if none).
   Q_INVOKABLE QString selectedPictureUrl();
   /// Crops the selected picture: its new box on the page, the part shown

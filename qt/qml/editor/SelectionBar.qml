@@ -48,6 +48,8 @@ Item {
     signal savePieceRequested()
     /// Crop the selected picture.
     signal cropRequested()
+    /// Link the selection (to a page, a notebook or a website).
+    signal linkRequested()
     ColorPopover { id: colorPop }
 
     Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 3 }
@@ -267,6 +269,13 @@ Item {
             }
         }
         Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 22; color: Theme.border }
+        // Its link: add one, or change it.
+        SmallTool {
+            iconName: "link"
+            active: !!root.s.link && root.s.link.kind !== "mixed"
+            tip: active ? "Change or remove the link" : "Link it to a page, a notebook or a website"
+            onClicked: root.linkRequested()
+        }
         SmallTool {
             id: moreBtn
             iconName: "more"

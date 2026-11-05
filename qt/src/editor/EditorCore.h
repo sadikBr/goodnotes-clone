@@ -153,6 +153,10 @@ public:
   /// Changes the selected graph (one graph selected); false when there's none.
   bool updateSelectedGraph(const QVariantMap& spec);
   /// The selected picture's new box, the part of it shown ([x, y, w, h], 0..1) and its cut ("rect", "rounded", "circle").
+  /// Links everything selected to `link` ({ kind: "page"|"notebook"|"url", … }); none: unlinks it.
+  bool linkSelection(const QJsonObject& link);
+  /// Page `page`'s links: where each is (linked things near each other together) and where it goes.
+  std::vector<std::pair<Rect, QJsonObject>> linksOn(int page);
   /// The selected picture's src (one picture selected; else empty).
   QString selectedImageSrc();
   bool cropSelectedImage(double x, double y, double w, double h, const QVariantList& crop, const QString& mask);

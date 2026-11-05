@@ -7,6 +7,7 @@ section here before it can be published (`scripts/check-version.py`).
 
 ## 0.16.2
 
+- **Links:** select anything (ink, text, a picture) and tap the link button to link it to a page of this notebook, another notebook or a website. A small chip shows where it goes; tap it to follow, and *Back to page …* takes you back.
 - **Contents:** the pages panel has a *Contents* view. A PDF's own chapters show there, a daftar's classes too, and you can add headings and sub-headings for any page (*Add heading*, or *Add to contents…* in a page's ⋯ menu). Tap one to go there; the one you're on is marked.
 - **Your own templates:** make a page once (a form, a planner, a worksheet, a PDF page) and keep it: *Paper → Yours → This page*. Use it on any page, on every page, for a new page, or for a new notebook; pages added after it carry on with it. It's part of the paper, so the eraser leaves it alone.
 - **Crop pictures:** select a picture and tap *Crop*. Drag the corners and sides, or drag inside to move what's kept; cut it as a rectangle, with rounded corners or as a circle, and keep it square, 4 : 3, 16 : 9 or as it was. *Reset* brings the whole picture back, any time.

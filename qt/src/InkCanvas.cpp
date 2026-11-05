@@ -1141,6 +1141,34 @@ bool InkCanvas::updateGraph(const QVariantMap& spec) {
   return true;
 }
 
+void InkCanvas::linkSelection(const QVariantMap& link) {
+  if (!m_ed) return;
+  m_ed->linkSelection(QJsonObject::fromVariantMap(link));
+  afterCore();
+}
+
+QVariantList InkCanvas::visibleLinks() {
+  QVariantList out;
+  if (!m_ed) return out;
+  const QRectF view(0, 0, width(), height());
+  for (int i = 0; i < int(m_pages.size()); ++i) {
+    const Page& p = m_pages[i];
+    if (!pageRectToItem(i, QRectF(0, 0, p.w, p.h)).intersects(view)) continue;
+    for (const auto& [r, link] : m_ed->linksOn(i)) {
+      const QRectF ir = pageRectToItem(i, QRectF(r.x, r.y, r.w, r.h));
+      if (!ir.intersects(view.adjusted(-40, -40, 40, 40))) continue;
+      out.append(QVariantMap{{"page", i}, {"x", ir.x()}, {"y", ir.y()}, {"w", ir.width()}, {"h", ir.height()}, {"link", link.toVariantMap()}});
+    }
+  }
+  return out;
+}
+
+int InkCanvas::pageIndexOf(const QString& pageId) const {
+  for (int i = 0; i < int(m_pages.size()); ++i)
+    if (m_pages[i].id == pageId) return i;
+  return -1;
+}
+
 QString InkCanvas::selectedPictureUrl() {
   const QString src = m_ed ? m_ed->selectedImageSrc() : QString();
   if (src.isEmpty()) return {};

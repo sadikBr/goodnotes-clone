@@ -16,6 +16,28 @@ Rectangle {
     signal back()
     signal settingsRequested()
     signal notify(string message, bool error)
+    /// Open another notebook (a link to it was followed).
+    signal openOther(string id, string title)
+    /// A page link was followed from here: Back returns to it (-1: none).
+    property int backPage: -1
+    function followLink(link, from) {
+        if (link.kind === "url") {
+            if (!Qt.openUrlExternally(link.url)) root.notify("Couldn't open " + link.url, true)
+        } else if (link.kind === "page") {
+            const i = canvas.pageIndexOf(link.page)
+            if (i < 0) return root.notify("The linked page was deleted", true)
+            backPage = from
+            backTimer.restart()
+            canvas.goToPage(i)
+        } else if (link.kind === "notebook") {
+            let nb = null
+            try { nb = InkleafCore.call("notebook", { id: link.notebook }) } catch (e) {}
+            if (!nb || nb.trashedAt) return root.notify("The linked notebook isn't in your library any more", true)
+            saveForSync()
+            root.openOther(nb.id, nb.title)
+        }
+    }
+    Timer { id: backTimer; interval: 20000; onTriggered: root.backPage = -1 }
 
     ToolPrefs { id: prefs }
     /// The tool preferences, for children with a `prefs` property of their own
@@ -634,6 +656,43 @@ Rectangle {
                     onGraphEditRequested: g => graphDialog.show(g, true)
                     onSavePieceRequested: root.savePiece()
                     onCropRequested: cropper.start()
+                    onLinkRequested: linkDialog.show()
+                }
+                LinkDialog { id: linkDialog; canvas: root.mainCanvas; notebookId: root.notebookId }
+                LinkLayer {
+                    anchors.fill: parent
+                    z: 5
+                    canvas: root.mainCanvas
+                    visible: !cropper.active
+                    onFollow: (link, page) => root.followLink(link, page)
+                }
+                // Back where a page link was followed from.
+                AbstractButton {
+                    id: backPill
+                    z: 8
+                    visible: opacity > 0
+                    opacity: root.backPage >= 0 ? 1 : 0
+                    Behavior on opacity { NumberAnimation { duration: 180 } }
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 22
+                    height: 36
+                    width: backRow.implicitWidth + 28
+                    hoverEnabled: true
+                    onClicked: { const p = root.backPage; root.backPage = -1; if (p >= 0) root.mainCanvas.goToPage(p) }
+                    background: Item {
+                        Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 3 }
+                        Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusLg; color: backPill.hovered ? Theme.accent : Theme.surface; border.color: backPill.hovered ? Theme.accent : Theme.border }
+                    }
+                    contentItem: Item {
+                        Row {
+                            id: backRow
+                            anchors.centerIn: parent
+                            spacing: 6
+                            Icon { anchors.verticalCenter: parent.verticalCenter; name: "back"; size: 15; color: backPill.hovered ? Theme.accentContrast : Theme.accent }
+                            Label { anchors.verticalCenter: parent.verticalCenter; text: "Back to page " + (root.backPage + 1); font.pixelSize: 13; font.weight: Font.DemiBold; color: backPill.hovered ? Theme.accentContrast : Theme.text }
+                        }
+                    }
                 }
                 CropOverlay { id: cropper; canvas: root.mainCanvas; anchors.fill: parent; z: 20 }
 
