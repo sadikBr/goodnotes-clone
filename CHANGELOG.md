@@ -7,6 +7,7 @@ section here before it can be published (`scripts/check-version.py`).
 
 ## 0.16.2
 
+- **The shelf's first card is yours to choose:** it makes one thing with a tap (a notebook at first). Its ⇄ button, or *Settings → Appearance → Library*, switches it to a daftar, PDFs, a folder, a sketchbook or a whiteboard. *New* in the sidebar still has them all.
 - **Fixed:** the eraser's circle stays under the pen instead of trailing behind it.
 - **Fixed:** with the pen in the library, tapping a document's or folder's ⋯ opens its menu, and tapping a menu or a dialog over the shelf no longer opens what's behind it too.
 - **Spelling for handwriting:** *⋯ → Check spelling on this page* (or *Ask AI → Check spelling* for a selection). The AI reads your words in whatever language you write, and the misspelled ones get a red wavy line; tap it for suggestions. One puts the word there as text in a handwriting font, or choose *Ignore*. Needs the AI (Settings → AI).

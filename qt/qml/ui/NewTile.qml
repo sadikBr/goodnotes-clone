@@ -1,6 +1,6 @@
-// The first card on the shelf: what can be made (a notebook, a daftar,
-// PDFs, a folder), each a tap away, with a line about it. It is the menu
-// itself (the sidebar's New button opens the same choices as a menu).
+// The first card on the shelf: one thing to start, the one you chose (a
+// notebook at first). Tap it to make one; its ⇄ button (or Settings →
+// Appearance) changes what it makes. The sidebar's New button has them all.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -10,100 +10,96 @@ Item {
     id: root
     /// What can be made (Library.createOptions).
     property var options: []
-    /// "More kinds": the rest of the options, as a menu by `anchor`.
-    signal moreRequested(Item anchor, var options)
+    /// The id of the one this card makes.
+    property string choice: "notebook"
+    /// Change it: the choices, as a menu by `anchor`.
+    signal chooseRequested(Item anchor)
+    readonly property var option: options.find(o => o.id === choice) || options[0] || ({ title: "", icon: "plus" })
+    readonly property color tint: option.tint || Theme.accent
     readonly property real artHeight: width * 4 / 3
     implicitHeight: artHeight
 
-    Item {
+    AbstractButton {
+        id: tile
         width: root.width
         height: root.artHeight
-        Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 1 }
-        Rectangle {
-            anchors.fill: parent
-            antialiasing: true
-            radius: Theme.radiusLg
-            color: Theme.surface
-            border.color: Theme.border
+        hoverEnabled: true
+        onClicked: if (root.option.action) root.option.action()
+        scale: pressed ? 0.98 : 1
+        Behavior on scale { NumberAnimation { duration: 90 } }
+        ToolTip.visible: hovered && !!root.option.key && !swap.hovered
+        ToolTip.delay: 700
+        ToolTip.text: root.option.key ? root.option.title + " (" + root.option.key + ")" : ""
+        background: Item {
+            DashedBox {
+                anchors.fill: parent
+                radius: Theme.radiusLg
+                lineWidth: 1.5
+                color: tile.hovered ? root.tint : Theme.borderStrong
+                fill: tile.hovered ? Theme.alpha(root.tint, 0.07) : Theme.alpha(Theme.surface, 0.5)
+                Behavior on color { ColorAnimation { duration: 140 } }
+            }
         }
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 8
-            anchors.topMargin: 12
-            spacing: 2
-            Label {
-                text: "Start something new"
-                font.pixelSize: 12
-                font.weight: Font.DemiBold
-                color: Theme.muted
-                Layout.leftMargin: 8
-                Layout.bottomMargin: 4
-            }
-            Repeater {
-                model: root.options.slice(0, root.options.length > 5 ? 4 : 5)
-                delegate: AbstractButton {
-                    id: choice
-                    required property var modelData
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    Layout.maximumHeight: 64
-                    hoverEnabled: true
-                    onClicked: modelData.action()
-                    scale: pressed ? 0.98 : 1
-                    Behavior on scale { NumberAnimation { duration: 90 } }
-                    ToolTip.visible: hovered && !!modelData.key
-                    ToolTip.delay: 700
-                    ToolTip.text: modelData.key ? modelData.title + " (" + modelData.key + ")" : ""
-                    background: Rectangle {
-                        antialiasing: true
-                        radius: Theme.radius
-                        color: choice.pressed ? Theme.surface3 : choice.hovered ? Theme.surface2 : "transparent"
-                        Behavior on color { ColorAnimation { duration: 120 } }
-                    }
-                    contentItem: RowLayout {
-                        spacing: 10
-                        Rectangle {
-                            antialiasing: true
-                            Layout.preferredWidth: 32; Layout.preferredHeight: 32; Layout.leftMargin: 6; radius: Theme.radius
-                            color: Theme.alpha(choice.modelData.tint || Theme.accent, choice.hovered ? 0.2 : 0.13)
-                            Icon { anchors.centerIn: parent; name: choice.modelData.icon; size: 17; color: choice.modelData.iconColor || choice.modelData.tint || Theme.accent }
-                        }
-                        ColumnLayout {
-                            spacing: 1
-                            Layout.fillWidth: true
-                            Label { text: choice.modelData.title; font.pixelSize: 13; font.weight: Font.DemiBold; color: Theme.text; elide: Text.ElideRight; Layout.fillWidth: true }
-                            Label { text: choice.modelData.sub || ""; font.pixelSize: 11; color: Theme.muted; elide: Text.ElideRight; Layout.fillWidth: true }
-                        }
-                    }
-                }
-            }
-            // The other kinds (a sketchbook, a lesson plan, a test, a register…).
-            AbstractButton {
-                id: moreKinds
-                visible: root.options.length > 5
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.maximumHeight: 64
-                hoverEnabled: true
-                onClicked: root.moreRequested(moreKinds, root.options.slice(4))
-                background: Rectangle { antialiasing: true; radius: Theme.radius; color: moreKinds.pressed ? Theme.surface3 : moreKinds.hovered ? Theme.surface2 : "transparent" }
-                contentItem: RowLayout {
-                    spacing: 10
+        contentItem: Item {
+            ColumnLayout {
+                anchors.centerIn: parent
+                width: parent.width - 32
+                spacing: 12
+                Rectangle {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.preferredWidth: 64; Layout.preferredHeight: 64
+                    radius: Theme.radiusXl
+                    antialiasing: true
+                    color: Theme.alpha(root.tint, tile.hovered ? 0.22 : 0.14)
+                    scale: tile.hovered ? 1.06 : 1
+                    Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                    Icon { anchors.centerIn: parent; name: root.option.icon; size: 30; color: root.option.iconColor || root.tint }
+                    // A little + on its corner: "a new one".
                     Rectangle {
+                        anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: -4
+                        width: 24; height: 24; radius: Theme.radius
                         antialiasing: true
-                        Layout.preferredWidth: 32; Layout.preferredHeight: 32; Layout.leftMargin: 6; radius: Theme.radius
-                        color: Theme.surface2
-                        border.color: Theme.border
-                        Icon { anchors.centerIn: parent; name: "more"; size: 17; color: Theme.muted }
+                        color: root.tint
+                        border.width: 2
+                        border.color: Theme.surface
+                        Icon { anchors.centerIn: parent; name: "plus"; size: 14; color: "#ffffff" }
                     }
-                    ColumnLayout {
-                        spacing: 1
-                        Layout.fillWidth: true
-                        Label { text: "More kinds"; font.pixelSize: 13; font.weight: Font.DemiBold; color: Theme.text; elide: Text.ElideRight; Layout.fillWidth: true }
-                        Label { text: root.options.slice(4).map(o => o.title.split(" · ")[0].toLowerCase()).join(", "); font.pixelSize: 11; color: Theme.muted; elide: Text.ElideRight; Layout.fillWidth: true }
-                    }
+                }
+                Label {
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
+                    text: root.option.id === "pdf" || root.option.id === "folder" ? root.option.title : "New " + root.option.title.toLowerCase()
+                    elide: Text.ElideRight
+                    font.pixelSize: 15
+                    font.weight: Font.DemiBold
+                    color: Theme.text
+                }
+                Label {
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
+                    text: root.option.sub || ""
+                    wrapMode: Text.Wrap
+                    maximumLineCount: 2
+                    elide: Text.ElideRight
+                    font.pixelSize: 12
+                    color: Theme.muted
                 }
             }
         }
+    }
+    // What this card makes.
+    AbstractButton {
+        id: swap
+        anchors.right: tile.right; anchors.top: tile.top; anchors.margins: 8
+        width: 30; height: 30
+        hoverEnabled: true
+        opacity: tile.hovered || hovered || pressed ? 1 : 0.55
+        Behavior on opacity { NumberAnimation { duration: 140 } }
+        ToolTip.visible: hovered
+        ToolTip.delay: 500
+        ToolTip.text: "Choose what this card makes"
+        onClicked: root.chooseRequested(swap)
+        background: Rectangle { antialiasing: true; radius: Theme.radius; color: swap.hovered ? Theme.surface2 : "transparent"; border.color: swap.hovered ? Theme.border : "transparent" }
+        contentItem: Item { Icon { anchors.centerIn: parent; name: "swap"; size: 15; color: swap.hovered ? Theme.text : Theme.muted } }
     }
 }

@@ -1005,7 +1005,8 @@ Rectangle {
                         visible: cell.modelData.type === "new"
                         width: parent.width - 28
                         options: root.createOptions()
-                        onMoreRequested: (anchor, list) => createMenu.show(anchor, list)
+                        choice: AppSettings.store.newCard
+                        onChooseRequested: anchor => menu.show(anchor, [{ header: "This card makes" }].concat(root.createOptions().map(o => ({ icon: o.icon, label: o.title, checked: o.id === AppSettings.store.newCard, action: () => AppSettings.store.newCard = o.id }))))
                     }
                     Card {
                         visible: cell.modelData.type !== "new"

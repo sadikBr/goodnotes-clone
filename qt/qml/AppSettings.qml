@@ -29,6 +29,8 @@ QtObject {
         property string theme: "system"
         /// Where the editor's tools sit: "top" (in the top bar) | "rail" (down the left side).
         property string toolbar: "rail"
+        /// What the shelf's first card makes: "notebook", "daftar", "pdf", "folder", "sketchbook", "whiteboard".
+        property string newCard: "notebook"
     }
     readonly property real streamline: smoothingLevels[store.smoothing] ?? 0.38
 

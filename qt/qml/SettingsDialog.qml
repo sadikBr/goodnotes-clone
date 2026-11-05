@@ -496,6 +496,19 @@ Popup {
                         }
                     }
                     Group {
+                        title: "Library"
+                        SettingRow {
+                            first: true
+                            title: "The first card on the shelf"; help: "What it makes with one tap. The New button has everything."
+                            UiSelect {
+                                Layout.preferredWidth: 200
+                                options: [{ value: "notebook", label: "Notebook" }, { value: "daftar", label: "Daftar annossous" }, { value: "pdf", label: "Import PDFs" }, { value: "folder", label: "Folder" }, { value: "sketchbook", label: "Sketchbook" }, { value: "whiteboard", label: "Whiteboard" }]
+                                value: root.s.newCard
+                                onPicked: v => root.s.newCard = v
+                            }
+                        }
+                    }
+                    Group {
                         title: "Tools"
                         SettingRow {
                             first: true
