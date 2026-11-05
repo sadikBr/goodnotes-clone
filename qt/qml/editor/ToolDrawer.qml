@@ -34,6 +34,8 @@ Item {
     readonly property var shapeKinds: [{ id: "auto", label: "Auto shape", icon: "sAuto" }, { id: "line", label: "Line", icon: "sLine" }, { id: "arrow", label: "Arrow", icon: "sArrow" }, { id: "rectangle", label: "Rectangle", icon: "sRectangle" }, { id: "ellipse", label: "Ellipse / circle", icon: "sEllipse" }, { id: "triangle", label: "Triangle", icon: "sTriangle" }, { id: "diamond", label: "Diamond", icon: "sDiamond" }, { id: "star", label: "Star", icon: "sStar" }]
     readonly property string hex: (canvas.colors.pen || "#111827").replace("#", "")
     readonly property string dark: Theme.dark ? "1" : "0"
+    /// This tool's colour, for its size previews.
+    readonly property string toolHex: (canvas.colors[tool] || canvas.colors.pen || "#111827").replace("#", "")
 
     PopupMenu { id: menu }
     PenCase { id: penCase; onPicked: id => { root.prefs.store.penStyle = id; root.penPicked() } }
@@ -42,7 +44,7 @@ Item {
         id: sizePop
         parent: Overlay.overlay
         padding: 14
-        width: 260
+        width: 300
         modal: true
         dim: false
         Overlay.modal: Item {}
@@ -54,9 +56,39 @@ Item {
         }
         contentItem: ColumnLayout {
             spacing: 10
-            Label { text: root.spec ? "Your " + root.spec.label.toLowerCase() : ""; font.pixelSize: 12; font.weight: Font.DemiBold; color: Theme.muted }
             RowLayout {
-                spacing: 10
+                Label { text: root.spec ? "Your " + root.spec.label.toLowerCase() : ""; font.pixelSize: 12; font.weight: Font.DemiBold; color: Theme.text; Layout.fillWidth: true }
+                Label { text: root.spec ? Number(root.spec.min) + "–" + Number(root.spec.max) + " px" : ""; font.pixelSize: 11; color: Theme.muted }
+            }
+            // How it looks, live.
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 64
+                radius: Theme.radius
+                antialiasing: true
+                color: Theme.surface2
+                SizePreview {
+                    anchors.centerIn: parent
+                    big: true
+                    active: true
+                    tool: root.tool; penStyle: root.canvas.penStyle; hex: root.toolHex; dark: root.dark
+                    dash: root.canvas.penDash; gap: root.canvas.penGap
+                    value: sizeSlider.value
+                    relative: root.spec ? (sizeSlider.value - root.spec.min) / (root.spec.max - root.spec.min) : 0.5
+                }
+            }
+            RowLayout {
+                spacing: 6
+                component Step: AbstractButton {
+                    id: stp
+                    property string glyph: ""
+                    implicitWidth: 28; implicitHeight: 28
+                    hoverEnabled: true
+                    autoRepeat: true
+                    background: Rectangle { antialiasing: true; radius: Theme.radiusSm; color: stp.pressed ? Theme.border : stp.hovered ? Theme.surface2 : "transparent"; border.color: Theme.border }
+                    contentItem: Label { text: stp.glyph; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.pixelSize: 15; font.weight: Font.DemiBold; color: Theme.text }
+                }
+                Step { glyph: "−"; onClicked: sizeField.nudge(-1) }
                 UiSlider {
                     id: sizeSlider
                     Layout.fillWidth: true
@@ -66,33 +98,33 @@ Item {
                     value: root.fav && root.fav.sizes.length ? root.fav.sizes[root.fav.size] : 1
                     onMoved: { root.prefs.setSize(root.tool, sizePop.index, value); sizeField.show(value) }
                 }
+                Step { glyph: "+"; onClicked: sizeField.nudge(1) }
                 // Or type it ("12").
                 UiField {
                     id: sizeField
                     Layout.preferredWidth: 58
-                    implicitHeight: 32
+                    implicitHeight: 30
                     horizontalAlignment: Text.AlignRight
                     rightPadding: 26
                     inputMethodHints: Qt.ImhFormattedNumbersOnly
                     validator: DoubleValidator { bottom: 0; top: 999; decimals: 1; notation: DoubleValidator.StandardNotation }
                     function show(v) { text = Number(v).toFixed(v % 1 ? 1 : 0) }
-                    function apply() {
+                    function put(v) {
                         if (!root.spec) return
-                        const v = parseFloat(String(text).replace(",", "."))
-                        if (isNaN(v)) return
                         const st = root.spec.step
                         const c = Math.max(root.spec.min, Math.min(root.spec.max, Math.round(v / st) * st))
                         root.prefs.setSize(root.tool, sizePop.index, c)
                         show(c)
                     }
+                    function nudge(d) { put(sizeSlider.value + d * (root.spec ? root.spec.step : 1)) }
+                    function apply() {
+                        const v = parseFloat(String(text).replace(",", "."))
+                        if (!isNaN(v)) put(v)
+                    }
                     onAccepted: { apply(); sizePop.close() }
                     onEditingFinished: apply()
                     Label { anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: "px"; font.pixelSize: 12; color: Theme.muted }
                 }
-            }
-            Label {
-                text: root.spec ? Number(root.spec.min) + "–" + Number(root.spec.max) + " px" : ""
-                font.pixelSize: 11; color: Theme.muted
             }
         }
         onOpened: { sizeField.show(sizeSlider.value); sizeField.forceActiveFocus(); sizeField.selectAll() }
@@ -326,19 +358,18 @@ Item {
             }
         }
 
-        // --- this tool's sizes: for a pen, its own stroke at each size ---
+        // --- this tool's sizes, each drawn as it looks; the last is yours to set ---
         Rectangle {
             visible: !!(!!root.fav && root.fav.sizes.length > 0 && !!root.spec)
             antialiasing: true
-            implicitWidth: sizesRow.implicitWidth + 12
+            implicitWidth: sizesRow.implicitWidth + 8
             implicitHeight: 40
             radius: Theme.radiusLg
             color: Theme.surface2
-            readonly property bool strokes: root.tool === "pen"
             Row {
                 id: sizesRow
                 anchors.centerIn: parent
-                spacing: 4
+                spacing: 2
                 Repeater {
                     model: root.fav ? root.fav.sizes : []
                     delegate: AbstractButton {
@@ -346,70 +377,48 @@ Item {
                         required property real modelData
                         required property int index
                         readonly property bool on: root.fav && root.fav.size === index
-                        readonly property bool strokes: root.tool === "pen"
                         /// Your own size (the last): tap again to set it.
                         readonly property bool mine: index === root.prefs.customSize
                         readonly property string num: Number(modelData).toFixed(modelData % 1 ? 1 : 0)
-                        width: strokes ? 62 : mine ? 40 : 34; height: 30
+                        width: preview.implicitWidth + label.implicitWidth + (mine ? 26 : 16)
+                        height: 32
                         hoverEnabled: true
                         ToolTip.visible: hovered
                         ToolTip.delay: 500
                         ToolTip.text: mine ? (on ? "Your size · tap to change it" : "Your size (" + num + " px) · tap again to change it") : num + " px"
                         onClicked: on && mine ? root.openSize(sz, index) : root.prefs.selectSize(root.tool, index)
-                        // A line before your own size.
-                        Rectangle { visible: sz.mine; x: -3; z: 2; anchors.verticalCenter: parent.verticalCenter; width: 1; height: 18; color: Theme.alpha(Theme.muted, 0.5) }
                         background: Item {
                             Shadow { anchors.fill: parent; radius: Theme.radiusSm; level: sz.on ? 1 : 0 }
                             Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusSm; color: sz.on ? Theme.surface : sz.hovered ? Theme.alpha(Theme.surface, 0.55) : "transparent" }
-                            DashedBox { visible: sz.mine && !sz.on; anchors.fill: parent; anchors.margins: 1; radius: Theme.radiusSm; lineWidth: 1; color: Theme.muted }
+                            DashedBox { visible: sz.mine && !sz.on; anchors.fill: parent; anchors.margins: 1; radius: Theme.radiusSm; lineWidth: 1; color: sz.hovered ? Theme.text : Theme.muted }
                         }
                         contentItem: Item {
-                            readonly property bool letter: root.tool === "text" || root.tool === "sticky"
-                            // The pen's own line at this size, with the size beside it.
                             Row {
-                                visible: sz.strokes
                                 anchors.centerIn: parent
-                                spacing: 3
-                                Image {
+                                spacing: 4
+                                SizePreview {
+                                    id: preview
                                     anchors.verticalCenter: parent.verticalCenter
-                                    width: 34; height: 16
-                                    sourceSize: Qt.size(68, 32)
-                                    cache: false
-                                    source: sz.strokes ? "image://ink/nib/" + root.canvas.penStyle + "/" + root.hex + "/" + sz.modelData + "/" + root.dark + "/" + root.canvas.penDash + "/" + root.canvas.penGap + "/" + Math.min(1, sz.modelData / root.fav.sizes[2]) : ""
+                                    tool: root.tool; penStyle: root.canvas.penStyle; hex: root.toolHex; dark: root.dark
+                                    dash: root.canvas.penDash; gap: root.canvas.penGap
+                                    value: sz.modelData
+                                    relative: sz.modelData / root.fav.sizes[2]
+                                    active: sz.on
                                 }
                                 Label {
+                                    id: label
                                     anchors.verticalCenter: parent.verticalCenter
                                     text: sz.num
                                     font.pixelSize: 11
                                     font.weight: sz.on ? Font.DemiBold : Font.Normal
                                     color: sz.on ? Theme.text : Theme.muted
                                 }
-                            }
-                            Rectangle { antialiasing: true;
-                                visible: !parent.letter && !sz.strokes && !sz.mine
-                                anchors.centerIn: parent
-                                readonly property real d: Math.max(4, Math.min(16, sz.index === 0 ? 5 : sz.index === 1 ? 9 : 14))
-                                width: d; height: d; radius: d / 2
-                                color: sz.on ? Theme.accent : sz.hovered ? Theme.text : Theme.muted
-                            }
-                            // Your own size, as its number.
-                            Label {
-                                visible: sz.mine && !sz.strokes
-                                anchors.centerIn: parent
-                                text: sz.num
-                                font.pixelSize: 12
-                                font.weight: Font.DemiBold
-                                color: sz.on ? Theme.accent : sz.hovered ? Theme.text : Theme.muted
-                            }
-                            Label {
-                                visible: parent.letter && !sz.mine
-                                anchors.centerIn: parent
-                                text: "A"
-                                font.pixelSize: sz.index === 0 ? 11 : sz.index === 1 ? 14 : 18
-                                font.weight: Font.DemiBold
-                                color: sz.on ? Theme.accent : sz.hovered ? Theme.text : Theme.muted
+                                // Yours opens to set it.
+                                Icon { visible: sz.mine; anchors.verticalCenter: parent.verticalCenter; name: "down"; size: 10; color: sz.on ? Theme.text : Theme.muted }
                             }
                         }
+                        // A line before your own size.
+                        Rectangle { visible: sz.mine; x: -2; z: 2; anchors.verticalCenter: parent.verticalCenter; width: 1; height: 18; color: Theme.alpha(Theme.muted, 0.5) }
                     }
                 }
             }
