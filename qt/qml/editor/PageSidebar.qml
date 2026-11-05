@@ -264,7 +264,7 @@ Rectangle {
                 // Deeper levels sit on a guide line.
                 Repeater {
                     model: entry.level
-                    Rectangle { property int index: row.index; x: 14 + index * 12; y: 0; width: 1; height: entry.height; color: entry.here ? Theme.alpha(Theme.accent, 0.4) : Theme.border }
+                    Rectangle { required property int index; x: 14 + index * 12; y: 0; width: 1; height: entry.height; color: entry.here ? Theme.alpha(Theme.accent, 0.4) : Theme.border }
                 }
                 // Room on both sides, so nothing touches the entry's edge.
                 leftPadding: 10 + entry.level * 12
