@@ -15,6 +15,9 @@ Item {
     property Item anchorItem: null
     /// Where the pointer aims, in the drawer's coordinates (set by the editor).
     property real pointerX: width / 2
+    /// The drawer sits beside the tool (the side rail): the pointer is on its left, at `pointerY`.
+    property bool fromLeft: false
+    property real pointerY: height / 2
     readonly property string tool: canvas.tool
     readonly property var fav: prefs.get(tool)
     readonly property var spec: prefs.specs[tool]
@@ -71,8 +74,8 @@ Item {
     Rectangle {
         id: caret
         width: 12; height: 12; rotation: 45
-        y: -6
-        x: Math.round(Math.max(16, Math.min(root.width - 28, root.pointerX - 6)))
+        y: root.fromLeft ? Math.round(Math.max(12, Math.min(root.height - 24, root.pointerY - 6))) : -6
+        x: root.fromLeft ? -6 : Math.round(Math.max(16, Math.min(root.width - 28, root.pointerX - 6)))
         antialiasing: true
         color: Theme.surface
         border.color: Theme.border
@@ -84,7 +87,7 @@ Item {
         color: Theme.surface
         border.color: Theme.border
         // Hide the pointer's inner half.
-        Rectangle { x: caret.x - 2; y: 0.5; width: 16; height: 8; color: Theme.surface }
+        Rectangle { x: root.fromLeft ? 0.5 : caret.x - 2; y: root.fromLeft ? caret.y - 2 : 0.5; width: root.fromLeft ? 8 : 16; height: root.fromLeft ? 16 : 8; color: Theme.surface }
     }
     MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons }
 

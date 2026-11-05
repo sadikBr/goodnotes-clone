@@ -128,7 +128,7 @@ Item {
                 id: changeList
                 visible: root.changes.length > 0 && root.st !== "downloading"
                 Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(root.allShown || root.news ? 260 : 9999, list.implicitHeight)
+                Layout.preferredHeight: Math.min(root.allShown || root.news ? 360 : 9999, list.implicitHeight)
                 contentWidth: availableWidth
                 ColumnLayout {
                     id: list

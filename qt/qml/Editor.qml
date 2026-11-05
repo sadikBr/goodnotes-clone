@@ -40,6 +40,8 @@ Rectangle {
     property bool sidebarShown: prefs.store.sidebar
     property bool focusMode: false
     property bool tipShown: false
+    /// The tools sit in a rail down the left side (Settings → Appearance), not in the top bar.
+    readonly property bool rail: AppSettings.store.toolbar === "rail"
 
     function pick(tool) {
         if (canvas.tool === tool) {
@@ -48,6 +50,7 @@ Rectangle {
         }
         canvas.tool = tool
         prefs.store.tool = tool
+        if (rail) railTag.flash()
         if (!prefs.store.drawerPinned) drawerOpen = false
         if (!tipShown && !prefs.store.drawerPinned && tool !== "hand") {
             tipShown = true
@@ -75,10 +78,16 @@ Rectangle {
     readonly property real toolCenter: {
         const a = drawer.anchorItem
         if (!a) return area.width / 2
-        void (a.x + a.width + trays.x + trays.width + header.width + area.x + area.width)
+        void (a.x + a.width + trays.x + trays.width + header.width + area.x + area.width + toolRail.y + toolRail.height + a.y)
         void (a.parent ? a.parent.x : 0)
         void (a.parent && a.parent.parent ? a.parent.parent.x : 0)
         return a.mapToItem(area, a.width / 2, 0).x
+    }
+    /// The same button's middle, down the page area (the rail's drawer points at it).
+    readonly property real toolMiddle: {
+        void root.toolCenter
+        const a = drawer.anchorItem
+        return a ? a.mapToItem(area, 0, a.height / 2).y : area.height / 2
     }
 
     /** Saves everything (before a sync or a backup); returns this notebook's id. */
@@ -273,9 +282,10 @@ Rectangle {
                 // Middle: the tool trays.
                 RowLayout {
                     id: trays
+                    visible: !root.rail
                     spacing: 10
                     Repeater {
-                        model: 3
+                        model: root.rail ? 0 : 3
                         delegate: Rectangle { antialiasing: true;
                             id: tray
                             required property int index
@@ -452,6 +462,7 @@ Rectangle {
                             onClicked: menu.show(moreBtn, [
                                 { icon: "stylus", label: "Pen-only mode", toggle: AppSettings.store.penOnly, action: () => AppSettings.store.penOnly = !AppSettings.store.penOnly },
                                 { icon: "focus", label: "Focus mode", key: "F", toggle: root.focusMode, action: () => root.focusMode = !root.focusMode },
+                                { icon: "sidebar", label: "Tools on the side", toggle: root.rail, action: () => AppSettings.store.toolbar = root.rail ? "top" : "rail" },
                                 { separator: true },
                                 { icon: "sidebar", label: root.sidebarShown ? "Hide pages" : "Show pages", key: "[", action: () => root.toggleSidebar() },
                                 { icon: Theme.dark ? "sun" : "moon", label: Theme.dark ? "Light mode" : "Dark mode", action: () => AppSettings.store.theme = Theme.dark ? "light" : "dark" },
@@ -479,6 +490,101 @@ Rectangle {
                 Layout.preferredWidth: root.sidebarShown && !root.focusMode ? 168 : 0
                 visible: Layout.preferredWidth > 0
                 Behavior on Layout.preferredWidth { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
+            }
+            // The side rail's own column, between the pages and the page area.
+            Item {
+                id: railSlot
+                Layout.fillHeight: true
+                Layout.preferredWidth: root.rail && !root.focusMode ? 74 : 0
+                visible: Layout.preferredWidth > 0
+                z: 6
+                    // The tools down the left side (Settings → Appearance → Tools: Side rail).
+                    Rectangle {
+                        id: toolRail
+                        visible: root.rail && !root.focusMode
+                        x: 10
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 56
+                        height: railCol.implicitHeight + 16
+                        radius: 28
+                        antialiasing: true
+                        color: Theme.surface
+                        border.color: Theme.border
+                        Shadow { anchors.fill: parent; radius: 28; level: 2; z: -1 }
+                        // Presses on the rail stay off the page.
+                        MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons }
+                        readonly property var fav: root.toolPrefs.get(canvas.tool)
+                        Column {
+                            id: railCol
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            y: 8
+                            spacing: 4
+                            Repeater {
+                                model: root.rail ? 3 : 0
+                                delegate: Column {
+                                    id: railTray
+                                    required property int index
+                                    spacing: 4
+                                    Rectangle { visible: railTray.index > 0; width: 28; height: 1; color: Theme.border; anchors.horizontalCenter: parent.horizontalCenter }
+                                    Item { visible: railTray.index > 0; width: 1; height: 2 }
+                                    Repeater {
+                                        model: root.tools.filter(t => t.tray === railTray.index)
+                                        delegate: ToolBtn {
+                                            required property var modelData
+                                            objectName: "rail-" + modelData.id
+                                            implicitWidth: 44; implicitHeight: 44
+                                            iconName: modelData.icon
+                                            active: canvas.tool === modelData.id
+                                            ink: modelData.id === "sticky" || modelData.id === "lasso" || modelData.id === "hand" || modelData.id === "eraser" ? "" : (canvas.colors[modelData.id] || "")
+                                            tip: active ? modelData.label + " — tap again to " + (root.drawerOpen ? "hide" : "show") + " its options" : modelData.label + (modelData.key ? " (" + modelData.key + ")" : "")
+                                            ToolTip.delay: 600
+                                            onClicked: root.pick(modelData.id)
+                                            onActiveChanged: if (active) drawer.anchorItem = this
+                                            Component.onCompleted: if (active) drawer.anchorItem = this
+                                        }
+                                    }
+                                    ToolBtn {
+                                        id: railRuler
+                                        visible: railTray.index === 1
+                                        implicitWidth: 44; implicitHeight: 44
+                                        iconName: "ruler"
+                                        readonly property bool on: !!canvas.instrument.visible
+                                        active: on
+                                        tip: "Ruler, protractor, set squares (R)"
+                                        onClicked: menu.show(railRuler, [
+                                            { label: "Ruler", checked: on && canvas.instrument.kind === "ruler", action: () => canvas.showInstrument("ruler") },
+                                            { label: "Protractor", checked: on && canvas.instrument.kind === "protractor", action: () => canvas.showInstrument("protractor") },
+                                            { label: "Set square 45°", checked: on && canvas.instrument.kind === "square45", action: () => canvas.showInstrument("square45") },
+                                            { label: "Set square 30°/60°", checked: on && canvas.instrument.kind === "square60", action: () => canvas.showInstrument("square60") }
+                                        ].concat(on ? [{ label: "Hide", action: () => canvas.showInstrument("") }] : []))
+                                    }
+                                }
+                            }
+                            // The tool's favourite colours, a tap away.
+                            Rectangle { visible: railColors.count > 0; width: 28; height: 1; color: Theme.border; anchors.horizontalCenter: parent.horizontalCenter }
+                            Repeater {
+                                id: railColors
+                                model: toolRail.fav ? toolRail.fav.colors.slice(0, 4) : []
+                                delegate: AbstractButton {
+                                    id: railSw
+                                    required property string modelData
+                                    required property int index
+                                    readonly property bool on: toolRail.fav && toolRail.fav.color === index
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    width: 44; height: 30
+                                    hoverEnabled: true
+                                    onClicked: root.toolPrefs.selectColor(canvas.tool, index)
+                                    ToolTip.visible: hovered
+                                    ToolTip.delay: 600
+                                    ToolTip.text: on ? "Tap the tool again to change its colours" : "Use this colour"
+                                    contentItem: Item {
+                                        Rectangle { antialiasing: true; anchors.centerIn: parent; width: 26; height: 26; radius: 13; color: "transparent"; border.width: 2; border.color: railSw.modelData; visible: railSw.on }
+                                        Rectangle { antialiasing: true; anchors.centerIn: parent; width: railSw.on ? 18 : 20; height: width; radius: width / 2; color: railSw.modelData; border.width: 1; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4); scale: railSw.hovered ? 1.12 : 1; Behavior on scale { NumberAnimation { duration: 120 } } }
+                                    }
+                                }
+                            }
+                        }
+                    }
             }
             Item {
                 id: area
@@ -578,6 +684,35 @@ Rectangle {
                     onSavePieceRequested: root.savePiece()
                 }
 
+                // What you just picked, beside the rail for a moment ("Fountain pen · 3 px").
+                Rectangle {
+                    id: railTag
+                    z: 8
+                    visible: opacity > 0 && toolRail.visible && !drawer.visible
+                    opacity: 0
+                    Behavior on opacity { NumberAnimation { duration: 180 } }
+                    x: 6
+                    y: Math.round(Math.max(8, root.toolMiddle - height / 2))
+                    height: 34
+                    width: tagRow.implicitWidth + 24
+                    radius: 17
+                    antialiasing: true
+                    color: Theme.dark ? "#f5f5f4" : "#1c1917"
+                    function flash() { opacity = 1; tagTimer.restart() }
+                    Timer { id: tagTimer; interval: 1400; onTriggered: railTag.opacity = 0 }
+                    readonly property string tool: canvas.tool
+                    readonly property var nibs: ({ fountain: "Fountain pen", ballpoint: "Ballpoint", pencil: "Pencil", calligraphy: "Calligraphy", brush: "Brush pen", marker: "Marker", watercolor: "Watercolour", neon: "Neon", construction: "Dashed", tape: "Tape" })
+                    readonly property string name: tool === "pen" ? (nibs[canvas.penStyle] || "Pen") : ((root.tools.find(t => t.id === tool) || {}).label || "")
+                    readonly property var size: canvas.widths[tool]
+                    Row {
+                        id: tagRow
+                        anchors.centerIn: parent
+                        spacing: 8
+                        Rectangle { visible: !!canvas.colors[railTag.tool] && railTag.tool !== "sticky"; anchors.verticalCenter: parent.verticalCenter; width: 12; height: 12; radius: 6; color: canvas.colors[railTag.tool] || "transparent"; border.width: 1.5; border.color: Theme.dark ? "#1c1917" : "#fafaf9" }
+                        Label { text: railTag.name + (railTag.size && railTag.tool !== "text" && railTag.tool !== "sticky" ? " · " + Number(railTag.size).toFixed(railTag.size < 10 && railTag.size % 1 ? 1 : 0) + " px" : ""); font.pixelSize: 13; font.weight: Font.Medium; color: Theme.dark ? "#1c1917" : "#fafaf9" }
+                    }
+                }
+
                 // The active tool's options.
                 ToolDrawer {
                     id: drawer
@@ -585,11 +720,15 @@ Rectangle {
                     prefs: root.toolPrefs
                     visible: !!(root.drawerOpen && !root.focusMode)
                     z: 9
-                    y: 14
-                    x: Math.round(Math.max(12, Math.min(root.toolCenter - width / 2, area.width - width - 12)))
+                    // Under the top bar's tool, or beside the rail's.
+                    fromLeft: root.rail
+                    y: root.rail ? Math.round(Math.max(12, Math.min(root.toolMiddle - height / 2, area.height - height - 12))) : 14
+                    x: root.rail ? 6 : Math.round(Math.max(12, Math.min(root.toolCenter - width / 2, area.width - width - 12)))
                     // The pointer stays on the tool while the drawer slides.
                     pointerX: root.toolCenter - x
-                    Behavior on x { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+                    pointerY: root.toolMiddle - y
+                    Behavior on x { enabled: !root.rail; NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+                    Behavior on y { enabled: root.rail; NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
                     // A pen picked from the pen case: out of the way, so the next stroke writes.
                     onPenPicked: if (!root.toolPrefs.store.drawerPinned) root.drawerOpen = false
                 }

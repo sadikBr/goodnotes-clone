@@ -495,6 +495,14 @@ Popup {
                             Segmented { options: [{ value: "light", label: "Light" }, { value: "dark", label: "Dark" }, { value: "system", label: "System" }]; value: root.s.theme; onPicked: v => root.s.theme = v }
                         }
                     }
+                    Group {
+                        title: "Tools"
+                        SettingRow {
+                            first: true
+                            title: "Where the tools sit"; help: "The top bar, or a rail down the left side that leaves the top bar to the notebook."
+                            Segmented { options: [{ value: "top", label: "Top bar" }, { value: "rail", label: "Side rail" }]; value: root.s.toolbar; onPicked: v => root.s.toolbar = v }
+                        }
+                    }
                 }
                 Page {
                     anchors.fill: parent

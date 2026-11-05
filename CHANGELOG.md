@@ -5,6 +5,10 @@ Updates → What's new) and on its GitHub release. Keep them short, one line
 per change, written for the people using Inkleaf. A release needs its
 section here before it can be published (`scripts/check-version.py`).
 
+## 0.16.0
+
+- **Tools on the side:** an option to keep the tools in a rail down the left side, with the tool's colours under them, leaving the top bar to the notebook (Settings → Appearance → Tools, or ⋯ → Tools on the side).
+
 ## 0.15.0
 
 - **Sketchbook:** blank landscape pages for drawing.
