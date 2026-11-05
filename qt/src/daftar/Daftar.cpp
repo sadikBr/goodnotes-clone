@@ -85,9 +85,17 @@ QJsonObject Meta::toJson() const {
   QJsonArray tt, hs;
   for (const Lesson& l : timetable) tt.append(QJsonObject{{"day", l.day}, {"start", l.start}, {"end", l.end}, {"cls", l.cls}});
   for (const Holiday& h : holidays) hs.append(h.toJson());
-  return {{"kind", "daftar"},       {"year", year},       {"region", region},   {"directorate", directorate}, {"school", school},
-          {"teacher", teacher},     {"payroll", payroll}, {"subject", subject}, {"classes", QJsonArray::fromStringList(classes)},
-          {"timetable", tt},        {"holidays", hs}};
+  QJsonObject o{{"kind", "daftar"},       {"year", year},       {"region", region},   {"directorate", directorate}, {"school", school},
+                {"teacher", teacher},     {"payroll", payroll}, {"subject", subject}, {"classes", QJsonArray::fromStringList(classes)},
+                {"timetable", tt},        {"holidays", hs}};
+  if (!classColors.isEmpty()) o["classColors"] = classColors;
+  return o;
+}
+
+QString Meta::colorOf(const QString& cls) const {
+  const QString c = classColors[cls].toString();
+  if (!c.isEmpty()) return c;
+  return CLASS_COLORS[std::max(0, int(classes.indexOf(cls))) % 8];
 }
 
 Meta Meta::fromJson(const QJsonObject& o) {
@@ -105,6 +113,7 @@ Meta Meta::fromJson(const QJsonObject& o) {
     m.timetable.push_back({l["day"].toInt(), l["start"].toString(), l["end"].toString(), l["cls"].toString()});
   }
   for (const QJsonValue& v : o["holidays"].toArray()) m.holidays.push_back(Holiday::fromJson(v.toObject()));
+  m.classColors = o["classColors"].toObject();
   return m;
 }
 
@@ -169,7 +178,7 @@ std::vector<ed::El> timetableElements(const Meta& meta, double w, double h) {
     e.w = col->x1 - col->x0 - 8;
     e.h = y1 - y0 - 6;
     e.text = l.cls + "\n" + l.start + QStringLiteral("–") + l.end;
-    e.color = CLASS_COLORS[std::max(0, int(meta.classes.indexOf(l.cls))) % 8];
+    e.color = meta.colorOf(l.cls);
     e.fontSize = 12;
     e.bold = true;
     e.align = "center";

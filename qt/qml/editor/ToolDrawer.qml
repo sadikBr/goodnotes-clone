@@ -110,7 +110,7 @@ Item {
                 tip: "Pen case"
                 art: Component { Image { source: "image://ink/nib/" + root.canvas.penStyle + "/" + root.hex + "/" + (root.canvas.widths.pen || 3) + "/" + root.dark + "/" + root.canvas.penDash; sourceSize: Qt.size(72, 36); width: 36; height: 18; cache: false } }
                 open: penCase.opened
-                onClicked: { penCase.current = root.canvas.penStyle; penCase.hex = root.hex; penCase.penWidth = root.canvas.widths.pen || 3; penCase.dash = root.canvas.penDash; penCase.show(nibChip); root.prefs.store.penCaseSeen = true }
+                onClicked: { penCase.current = root.canvas.penStyle; penCase.hex = root.hex; penCase.penWidth = root.canvas.widths.pen || 3; penCase.dash = root.canvas.penDash; penCase.inks = root.prefs.penInks(); penCase.show(nibChip); root.prefs.store.penCaseSeen = true }
                 // A dot until the pen case has been opened once (there are new pens in it).
                 Rectangle {
                     visible: !root.prefs.store.penCaseSeen
@@ -222,111 +222,158 @@ Item {
             leftPadding: 8; rightPadding: 8
         }
 
-        // --- favourite colours ---
-        RowLayout {
+        // --- this tool's colours (each pen type has its own), in a well ---
+        Rectangle {
             visible: !!(!!root.fav && root.fav.colors.length > 0)
-            spacing: 6
-            Repeater {
-                model: root.fav ? root.fav.colors : []
-                delegate: AbstractButton {
-                    id: sw
-                    required property string modelData
-                    required property int index
-                    readonly property bool on: root.fav && root.fav.color === index
-                    implicitWidth: 26; implicitHeight: 26
+            antialiasing: true
+            implicitWidth: colorsRow.implicitWidth + 12
+            implicitHeight: 40
+            radius: Theme.radiusLg
+            color: Theme.surface2
+            Row {
+                id: colorsRow
+                anchors.centerIn: parent
+                spacing: 4
+                Repeater {
+                    model: root.fav ? root.fav.colors : []
+                    delegate: AbstractButton {
+                        id: sw
+                        required property string modelData
+                        required property int index
+                        readonly property bool on: root.fav && root.fav.color === index
+                        width: 30; height: 30
+                        hoverEnabled: true
+                        ToolTip.visible: !!(hovered && on) && !tipDismissed
+                        // Tooltips go away once clicked (until the pointer leaves), as in the web app.
+                        property bool tipDismissed: false
+                        onPressedChanged: if (pressed) tipDismissed = true
+                        onHoveredChanged: if (!hovered) tipDismissed = false
+                        ToolTip.text: "Tap again to change this colour"
+                        onClicked: on ? colorPop.show(sw, root.prefs.paletteFor(root.tool), modelData, c => root.prefs.setColor(root.tool, index, c)) : root.prefs.selectColor(root.tool, index)
+                        background: Rectangle {
+                            antialiasing: true
+                            radius: Theme.radiusSm
+                            color: sw.on ? Theme.surface : "transparent"
+                            border.width: sw.on ? 1 : 0
+                            border.color: Theme.border
+                        }
+                        contentItem: Item {
+                            Rectangle {
+                                antialiasing: true
+                                anchors.centerIn: parent
+                                width: sw.on ? 20 : 18; height: width
+                                radius: Theme.swatchRadius(width)
+                                color: sw.modelData
+                                border.width: 1
+                                border.color: Theme.dark ? Qt.rgba(1, 1, 1, 0.16) : Qt.rgba(0, 0, 0, 0.14)
+                                scale: sw.hovered && !sw.on ? 1.1 : 1
+                                Behavior on scale { NumberAnimation { duration: 120 } }
+                            }
+                        }
+                    }
+                }
+                Rectangle { width: 1; height: 20; anchors.verticalCenter: parent.verticalCenter; color: Theme.border }
+                AbstractButton {
+                    id: rainbow
+                    width: 30; height: 30
                     hoverEnabled: true
-                    scale: hovered ? 1.1 : 1
-                    Behavior on scale { NumberAnimation { duration: 120 } }
-                    ToolTip.visible: !!(hovered && on) && !tipDismissed
+                    ToolTip.visible: !!(hovered) && !tipDismissed
                     // Tooltips go away once clicked (until the pointer leaves), as in the web app.
                     property bool tipDismissed: false
                     onPressedChanged: if (pressed) tipDismissed = true
                     onHoveredChanged: if (!hovered) tipDismissed = false
-                    ToolTip.text: "Tap again to change this colour"
-                    onClicked: on ? colorPop.show(sw, root.prefs.paletteFor(root.tool), modelData, c => root.prefs.setColor(root.tool, index, c)) : root.prefs.selectColor(root.tool, index)
-                    background: Item {
-                        Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: -4; radius: Theme.swatchRadius(width); color: "transparent"; border.width: 2; border.color: Theme.mix(sw.modelData, Theme.text, 0.2); visible: sw.on }
-                        Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.swatchRadius(width); color: sw.modelData; border.width: 1; border.color: Theme.dark ? Qt.rgba(1, 1, 1, 0.16) : Qt.rgba(0, 0, 0, 0.14) }
+                    ToolTip.text: "More colours"
+                    onClicked: colorPop.show(rainbow, root.prefs.paletteFor(root.tool), root.prefs.color(root.tool), c => root.prefs.setColor(root.tool, root.fav.color, c))
+                    background: Rectangle { antialiasing: true; radius: Theme.radiusSm; color: rainbow.hovered ? Theme.surface : "transparent" }
+                    contentItem: Item {
+                        Image { anchors.centerIn: parent; width: 20; height: 20; sourceSize: Qt.size(40, 40); source: Theme.rainbow(true) }
                     }
-                }
-            }
-            AbstractButton {
-                id: rainbow
-                implicitWidth: 26; implicitHeight: 26
-                hoverEnabled: true
-                scale: hovered ? 1.1 : 1
-                Behavior on scale { NumberAnimation { duration: 120 } }
-                ToolTip.visible: !!(hovered) && !tipDismissed
-                // Tooltips go away once clicked (until the pointer leaves), as in the web app.
-                property bool tipDismissed: false
-                onPressedChanged: if (pressed) tipDismissed = true
-                onHoveredChanged: if (!hovered) tipDismissed = false
-                ToolTip.text: "More colours"
-                onClicked: colorPop.show(rainbow, root.prefs.paletteFor(root.tool), root.prefs.color(root.tool), c => root.prefs.setColor(root.tool, root.fav.color, c))
-                background: Image {
-                    sourceSize: Qt.size(52, 52)
-                    source: Theme.rainbow(true)
                 }
             }
         }
 
-        // --- favourite sizes ---
-        RowLayout {
+        // --- this tool's sizes: for a pen, its own stroke at each size ---
+        Rectangle {
             visible: !!(!!root.fav && root.fav.sizes.length > 0 && !!root.spec)
-            spacing: 6
-            Rectangle { antialiasing: true;
-                implicitWidth: sizesRow.implicitWidth + 6
-                implicitHeight: 36
-                radius: Theme.radiusLg
-                color: Theme.surface2
-                Row {
-                    id: sizesRow
-                    anchors.centerIn: parent
-                    spacing: 2
-                    Repeater {
-                        model: root.fav ? root.fav.sizes : []
-                        delegate: AbstractButton {
-                            id: sz
-                            required property real modelData
-                            required property int index
-                            readonly property bool on: root.fav && root.fav.size === index
-                            width: 32; height: 30
-                            hoverEnabled: true
-                            onClicked: on ? (sizePop.index = index, sizePop.x = Math.max(8, sz.mapToItem(sizePop.parent, 0, 0).x - 110), sizePop.y = sz.mapToItem(sizePop.parent, 0, 0).y + 40, sizePop.open()) : root.prefs.selectSize(root.tool, index)
-                            background: Item {
-                                Shadow { anchors.fill: parent; radius: Theme.radiusSm; level: sz.on ? 1 : 0 }
-                                Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusSm; color: sz.on ? Theme.surface : "transparent" }
-                            }
-                            contentItem: Item {
-                                readonly property bool letter: root.tool === "text" || root.tool === "sticky"
-                                Rectangle { antialiasing: true;
-                                    visible: !parent.letter
-                                    anchors.centerIn: parent
-                                    readonly property real d: Math.max(4, Math.min(16, sz.index === 0 ? 5 : sz.index === 1 ? 9 : 14))
-                                    width: d; height: d; radius: d / 2
-                                    color: sz.on ? Theme.accent : sz.hovered ? Theme.text : Theme.muted
+            antialiasing: true
+            implicitWidth: sizesRow.implicitWidth + 12
+            implicitHeight: 40
+            radius: Theme.radiusLg
+            color: Theme.surface2
+            readonly property bool strokes: root.tool === "pen"
+            Row {
+                id: sizesRow
+                anchors.centerIn: parent
+                spacing: 4
+                Repeater {
+                    model: root.fav ? root.fav.sizes : []
+                    delegate: AbstractButton {
+                        id: sz
+                        required property real modelData
+                        required property int index
+                        readonly property bool on: root.fav && root.fav.size === index
+                        readonly property bool strokes: root.tool === "pen"
+                        width: strokes ? 62 : 34; height: 30
+                        hoverEnabled: true
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 500
+                        ToolTip.text: on ? "Tap again for any size" : Number(modelData).toFixed(root.spec && root.spec.step < 1 ? 1 : 0) + " px"
+                        onClicked: on ? (sizePop.index = index, sizePop.x = Math.max(8, sz.mapToItem(sizePop.parent, 0, 0).x - 100), sizePop.y = sz.mapToItem(sizePop.parent, 0, 0).y + 40, sizePop.open()) : root.prefs.selectSize(root.tool, index)
+                        background: Item {
+                            Shadow { anchors.fill: parent; radius: Theme.radiusSm; level: sz.on ? 1 : 0 }
+                            Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusSm; color: sz.on ? Theme.surface : sz.hovered ? Theme.alpha(Theme.surface, 0.55) : "transparent" }
+                        }
+                        contentItem: Item {
+                            readonly property bool letter: root.tool === "text" || root.tool === "sticky"
+                            // The pen's own line at this size, with the size beside it.
+                            Row {
+                                visible: sz.strokes
+                                anchors.centerIn: parent
+                                spacing: 3
+                                Image {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 34; height: 16
+                                    sourceSize: Qt.size(68, 32)
+                                    cache: false
+                                    source: sz.strokes ? "image://ink/nib/" + root.canvas.penStyle + "/" + root.hex + "/" + sz.modelData + "/" + root.dark + "/" + root.canvas.penDash + "/" + root.canvas.penGap + "/" + (sz.modelData / Math.max.apply(null, root.fav.sizes)) : ""
                                 }
                                 Label {
-                                    visible: parent.letter
-                                    anchors.centerIn: parent
-                                    text: "A"
-                                    font.pixelSize: sz.index === 0 ? 11 : sz.index === 1 ? 14 : 18
-                                    font.weight: Font.DemiBold
-                                    color: sz.on ? Theme.accent : sz.hovered ? Theme.text : Theme.muted
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: Number(sz.modelData).toFixed(sz.modelData % 1 ? 1 : 0)
+                                    font.pixelSize: 11
+                                    font.weight: sz.on ? Font.DemiBold : Font.Normal
+                                    color: sz.on ? Theme.text : Theme.muted
                                 }
+                            }
+                            Rectangle { antialiasing: true;
+                                visible: !parent.letter && !sz.strokes
+                                anchors.centerIn: parent
+                                readonly property real d: Math.max(4, Math.min(16, sz.index === 0 ? 5 : sz.index === 1 ? 9 : 14))
+                                width: d; height: d; radius: d / 2
+                                color: sz.on ? Theme.accent : sz.hovered ? Theme.text : Theme.muted
+                            }
+                            Label {
+                                visible: parent.letter
+                                anchors.centerIn: parent
+                                text: "A"
+                                font.pixelSize: sz.index === 0 ? 11 : sz.index === 1 ? 14 : 18
+                                font.weight: Font.DemiBold
+                                color: sz.on ? Theme.accent : sz.hovered ? Theme.text : Theme.muted
                             }
                         }
                     }
                 }
             }
-            Chip {
-                corner: Theme.radius
-                id: valueChip
-                label: root.fav && root.fav.sizes.length ? Number(root.fav.sizes[root.fav.size]).toFixed(root.spec && root.spec.step < 1 ? 1 : 0) : ""
-                unit: "px"
-                tip: root.spec ? root.spec.label : ""
-                onClicked: { sizePop.index = root.fav.size; const p = valueChip.mapToItem(sizePop.parent, 0, 0); sizePop.x = Math.max(8, p.x - 100); sizePop.y = p.y + 42; sizePop.open() }
-            }
+        }
+        // The exact size (not for a pen: its sizes show their numbers).
+        Chip {
+            visible: !!(!!root.fav && root.fav.sizes.length > 0 && !!root.spec) && root.tool !== "pen"
+            corner: Theme.radius
+            id: valueChip
+            label: root.fav && root.fav.sizes.length ? Number(root.fav.sizes[root.fav.size]).toFixed(root.spec && root.spec.step < 1 ? 1 : 0) : ""
+            unit: "px"
+            tip: root.spec ? root.spec.label : ""
+            onClicked: { sizePop.index = root.fav.size; const p = valueChip.mapToItem(sizePop.parent, 0, 0); sizePop.x = Math.max(8, p.x - 100); sizePop.y = p.y + 42; sizePop.open() }
         }
     }
 

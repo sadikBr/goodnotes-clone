@@ -543,6 +543,7 @@ Rectangle {
                     palmRejection: AppSettings.store.palmRejection
                     scratchOut: AppSettings.store.scratchOut
                     growable: root.docKind === "whiteboard"
+                    deskColor: Theme.desk
                     fingerTaps: AppSettings.store.fingerTaps
                     onScratchedOut: scratchNotice.show(this)
                     onFingerTapped: redo => Notice.post(redo ? "Redone" : "Undone", false, { icon: redo ? "redo" : "undo" })

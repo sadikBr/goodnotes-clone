@@ -51,6 +51,10 @@ daftar::Meta metaFrom(const DaftarApi& api, const QVariantMap& r) {
     const daftar::Holiday h = daftar::Holiday::fromJson(v.toObject());
     m.holidays.push_back({h.name.trimmed(), h.from, h.to >= h.from ? h.to : h.from});
   }
+  static const QRegularExpression hex(QStringLiteral("^#[0-9a-fA-F]{6}$"));
+  const QJsonObject colors = QJsonDocument::fromJson(r.value("classColors").toString().toUtf8()).object();
+  for (auto it = colors.begin(); it != colors.end(); ++it)
+    if (m.classes.contains(it.key()) && hex.match(it.value().toString()).hasMatch()) m.classColors[it.key()] = it.value().toString().toLower();
   return m;
 }
 
@@ -105,7 +109,8 @@ QVariantMap DaftarApi::formValues(const QVariant& meta, const QString& title) co
           {"title", title},
           {"classes", m ? m->classes.join(", ") : QString()},
           {"timetable", compact(tt)},
-          {"holidays", compact(hs)}};
+          {"holidays", compact(hs)},
+          {"classColors", m ? QString::fromUtf8(QJsonDocument(m->classColors).toJson(QJsonDocument::Compact)) : QStringLiteral("{}")}};
 }
 
 QVariant DaftarApi::validate(const QVariantMap& v) const {

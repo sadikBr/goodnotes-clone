@@ -13,8 +13,22 @@ QtObject {
         text: { colors: ["#111827", "#2563eb", "#dc2626", "#16a34a", "#6b7280"], color: 0, sizes: [16, 24, 36], size: 1 },
         sticky: { colors: ["#fef08a", "#bbf7d0", "#bfdbfe", "#fbcfe8", "#fed7aa"], color: 0, sizes: [14, 18, 24], size: 1 },
         laser: { colors: ["#ff1f1f", "#12c95a", "#1f7bff", "#b44dff", "#ff8a00"], color: 0, sizes: [], size: 0 },
-        eraser: { colors: [], color: 0, sizes: [8, 16, 32], size: 1 }
+        eraser: { colors: [], color: 0, sizes: [8, 16, 32], size: 1 },
+        // Each pen type remembers its own colours and sizes.
+        "pen:fountain": { colors: ["#111827", "#2563eb", "#dc2626", "#16a34a", "#9333ea"], color: 0, sizes: [1.5, 3, 6], size: 1 },
+        "pen:ballpoint": { colors: ["#111827", "#2563eb", "#dc2626", "#16a34a", "#9333ea"], color: 0, sizes: [1.5, 3, 6], size: 1 },
+        "pen:pencil": { colors: ["#374151", "#111827", "#2563eb", "#dc2626", "#16a34a"], color: 0, sizes: [1.5, 3, 6], size: 1 },
+        "pen:calligraphy": { colors: ["#111827", "#1e3a8a", "#7c2d12", "#dc2626", "#16a34a"], color: 0, sizes: [3, 5, 8], size: 1 },
+        "pen:brush": { colors: ["#111827", "#2563eb", "#dc2626", "#16a34a", "#9333ea"], color: 0, sizes: [3, 5, 8], size: 1 },
+        "pen:marker": { colors: ["#f59e0b", "#ec4899", "#22c55e", "#3b82f6", "#8b5cf6"], color: 0, sizes: [3, 5, 8], size: 1 },
+        "pen:watercolor": { colors: ["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6"], color: 0, sizes: [3, 5, 8], size: 1 },
+        "pen:neon": { colors: ["#22d3ee", "#f472b6", "#a3e635", "#facc15", "#c084fc"], color: 0, sizes: [2, 3, 5], size: 1 },
+        "pen:construction": { colors: ["#111827", "#2563eb", "#dc2626", "#16a34a", "#6b7280"], color: 0, sizes: [1, 2, 3], size: 1 },
+        "pen:tape": { colors: ["#f9a8d4", "#93c5fd", "#fde68a", "#a7f3d0", "#d1d5db"], color: 0, sizes: [3, 4, 6], size: 1 }
     })
+    readonly property var writingPens: ["fountain", "ballpoint", "pencil", "brush", "construction"]
+    /// Where a tool's colours and sizes are kept: the pen's under its type ("pen:marker").
+    function key(tool) { return tool === "pen" ? "pen:" + (store.penStyle || "fountain") : tool }
     // Size ranges (src/editor/editor.ts SIZE_SPECS).
     readonly property var specs: ({
         pen: { label: "Pen size", min: 0.5, max: 20, step: 0.5 },
@@ -31,7 +45,12 @@ QtObject {
         sticky: ["#fef08a", "#fde68a", "#bbf7d0", "#a7f3d0", "#bfdbfe", "#c7d2fe", "#fbcfe8", "#fecaca", "#fed7aa", "#e5e7eb", "#ddd6fe", "#99f6e4"],
         laser: ["#ff1f1f", "#ff8a00", "#ffd400", "#12c95a", "#00c2d1", "#1f7bff", "#b44dff", "#ff3fa4", "#ffffff"]
     })
-    function paletteFor(tool) { return tool === "highlighter" ? palettes.highlighter : tool === "sticky" ? palettes.sticky : tool === "laser" ? palettes.laser : palettes.ink }
+    function paletteFor(tool) {
+        const k = key(tool)
+        if (k === "pen:marker" || k === "pen:neon") return palettes.highlighter
+        if (k === "pen:tape") return palettes.sticky
+        return tool === "highlighter" ? palettes.highlighter : tool === "sticky" ? palettes.sticky : tool === "laser" ? palettes.laser : palettes.ink
+    }
 
     property Prefs store: Prefs {
         category: "editor"
@@ -57,7 +76,8 @@ QtObject {
         try {
             const saved = JSON.parse(store.favs)
             for (const t in out) {
-                const s = saved[t]
+                // Pen colours saved before each pen type had its own: the writing pens start from them.
+                const s = saved[t] || (t.startsWith("pen:") && writingPens.indexOf(t.slice(4)) >= 0 ? saved.pen : null)
                 if (!s) continue
                 if (Array.isArray(s.colors) && s.colors.length === out[t].colors.length) out[t].colors = s.colors
                 if (Array.isArray(s.sizes) && s.sizes.length === out[t].sizes.length) out[t].sizes = s.sizes
@@ -71,13 +91,20 @@ QtObject {
         data = next
         store.favs = JSON.stringify(next)
     }
-    function get(tool) { return data[tool] || null }
-    function color(tool) { const f = data[tool]; return f && f.colors.length ? f.colors[f.color] : "" }
-    function size(tool) { const f = data[tool]; return f && f.sizes.length ? f.sizes[f.size] : 0 }
-    function selectColor(tool, i) { const d = JSON.parse(JSON.stringify(data)); d[tool].color = i; save(d) }
-    function setColor(tool, i, c) { const d = JSON.parse(JSON.stringify(data)); d[tool].colors[i] = c; d[tool].color = i; save(d) }
-    function selectSize(tool, i) { const d = JSON.parse(JSON.stringify(data)); d[tool].size = i; save(d) }
-    function setSize(tool, i, v) { const d = JSON.parse(JSON.stringify(data)); d[tool].sizes[i] = v; d[tool].size = i; save(d) }
+    /// Every pen type's current ink and size: { fountain: { hex, width }, … } (for the pen case).
+    function penInks() {
+        const out = {}
+        for (const k in data) if (k.startsWith("pen:")) { const f = data[k]; out[k.slice(4)] = { hex: (f.colors[f.color] || "#111827").replace("#", ""), width: f.sizes[f.size] || 3 } }
+        return out
+    }
+    function get(tool) { return data[key(tool)] || data[tool] || null }
+    function color(tool) { const f = get(tool); return f && f.colors.length ? f.colors[f.color] : "" }
+    function size(tool) { const f = get(tool); return f && f.sizes.length ? f.sizes[f.size] : 0 }
+    function edit(tool, change) { const d = JSON.parse(JSON.stringify(data)); const k = d[key(tool)] ? key(tool) : tool; change(d[k]); save(d) }
+    function selectColor(tool, i) { edit(tool, f => f.color = i) }
+    function setColor(tool, i, c) { edit(tool, f => { f.colors[i] = c; f.color = i }) }
+    function selectSize(tool, i) { edit(tool, f => f.size = i) }
+    function setSize(tool, i, v) { edit(tool, f => { f.sizes[i] = v; f.size = i }) }
 
     // --- your colours (in the tool strip; one list for every tool) ---
     readonly property int maxRailColors: 8
@@ -105,7 +132,7 @@ QtObject {
     function removeRailColor(c) { saveRail(railList.filter(x => x !== c)) }
     /// Writes with `c`: picks it if it's one of the tool's favourites, else puts it in the current one.
     function useColor(tool, c) {
-        const f = data[tool]
+        const f = get(tool)
         if (!f) return
         const i = f.colors.findIndex(x => x.toLowerCase() === c.toLowerCase())
         if (i >= 0) selectColor(tool, i)

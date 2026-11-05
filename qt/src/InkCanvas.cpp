@@ -99,6 +99,8 @@ InkCanvas::InkCanvas(QQuickItem* parent) : QQuickItem(parent) {
   m_colors = {{"pen", "#111827"}, {"highlighter", "#facc15"}, {"shape", "#111827"}, {"text", "#111827"}, {"sticky", "#fef08a"}, {"laser", "#ff1f1f"}};
   m_widths = {{"pen", 3}, {"highlighter", 18}, {"eraser", 14}, {"shape", 3}, {"text", 20}, {"sticky", 18}};
   updateCursor();
+  // A new desk colour (dark mode) repaints the strips around the pages.
+  connect(this, &InkCanvas::settingsChanged, this, [this] { update(); });
   m_saveTimer.setSingleShot(true);
   m_saveTimer.setInterval(600);
   connect(&m_saveTimer, &QTimer::timeout, this, &InkCanvas::flush);
@@ -1567,11 +1569,11 @@ void InkCanvas::press(QPointF s, float pressure, bool stylus, const QString& too
   if (!m_ed) return;
   m_scrollGlide.stop();
   m_g = Gesture();
-  if (m_dismissOnPress) {
-    // Closes the drawer and does nothing else (the rest of this press is ignored).
-    emit dismissed();
-    return;
-  }
+  // A press on the page while the options drawer is open closes it. A stroke
+  // started that way still writes; only a plain tap is taken as "close".
+  m_dismissing = m_dismissOnPress;
+  m_dismissFrom = s;
+  if (m_dismissOnPress) emit dismissed();
   // A view-only page (the same notebook beside itself) only scrolls.
   const QString tool = m_readOnly ? QStringLiteral("hand") : toolOverride.isEmpty() ? m_tool : toolOverride;
   if (!hasActiveFocus()) forceActiveFocus();
@@ -1640,6 +1642,8 @@ void InkCanvas::press(QPointF s, float pressure, bool stylus, const QString& too
 }
 
 void InkCanvas::drag(QPointF s, float pressure, bool stylus, Qt::KeyboardModifiers mods) {
+  // Moved: not the tap that closes the drawer, a stroke.
+  if (m_dismissing && QLineF(m_dismissFrom, s).length() >= 6) m_dismissing = false;
   switch (m_g.kind) {
     case Gesture::None:
       return;
@@ -1718,7 +1722,12 @@ void InkCanvas::release() {
     emit laserChanged();
     return;
   }
-  if ((k == Gesture::Core || k == Gesture::Draw) && m_ed) m_ed->up();
+  if ((k == Gesture::Core || k == Gesture::Draw) && m_ed) {
+    // The tap that closed the drawer: not a dot, not a new text box.
+    if (m_dismissing) m_ed->cancel();
+    else m_ed->up();
+  }
+  m_dismissing = false;
   m_g = Gesture();
   m_liveChanged = true;
   afterCore();
@@ -2095,7 +2104,11 @@ QSGNode* InkCanvas::updatePaintNode(QSGNode* old, UpdatePaintNodeData*) {
       t->appendChildNode(detail);
       auto* items = new QSGNode;
       t->appendChildNode(items);
-      m_nodes[i] = {0, t, paper, detail, nullptr, nullptr, items};
+      // What's on the page shows only on the paper: anything past its edge
+      // (a shape, text, ink from older versions) is covered by the desk.
+      auto* mask = new QSGNode;
+      t->appendChildNode(mask);
+      m_nodes[i] = {0, t, paper, detail, nullptr, nullptr, items, mask};
       pg.paperDirty = !pg.paperImg.isNull();
       pg.detailDirty = true;
       // Until the picture is ready: the paper colour.
@@ -2112,6 +2125,22 @@ QSGNode* InkCanvas::updatePaintNode(QSGNode* old, UpdatePaintNodeData*) {
     Page& pg = m_pages[i];
     PageNodes& n = m_nodes[i];
     auto* paper = static_cast<QSGImageNode*>(n.paper);
+    {
+      // The desk around the page (the shadow's edge left showing); the first
+      // and last pages' strips reach far above and below.
+      const double far = 100000, gap = kPageGap / 2 + 1;
+      const double top = i == 0 ? far : gap, bottom = i + 1 == m_pages.size() ? far : gap;
+      const QRectF rects[] = {{-far, -top, pg.w + 2 * far, top}, {-far, pg.h + 2.5, pg.w + 2 * far, bottom}, {-far, -top, far, pg.h + top + bottom}, {pg.w + 1.5, -top, far, pg.h + top + bottom}};
+      QSGNode* mask = n.mask;
+      if (!mask->firstChild())
+        for (const QRectF& r : rects) mask->appendChildNode(new QSGSimpleRectNode(r, m_deskColor));
+      int k = 0;
+      for (QSGNode* c = mask->firstChild(); c; c = c->nextSibling(), ++k) {
+        auto* rn = static_cast<QSGSimpleRectNode*>(c);
+        if (rn->rect() != rects[k]) rn->setRect(rects[k]);
+        if (rn->color() != m_deskColor) rn->setColor(m_deskColor);
+      }
+    }
     QSGNode* detail = n.detail;
     if (pg.paperDirty && !pg.paperImg.isNull()) {
       paper->setTexture(win->createTextureFromImage(pg.paperImg));

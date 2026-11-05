@@ -75,7 +75,7 @@ QJsonArray pts(const std::vector<std::array<double, 3>>& p) {
 
 }  // namespace
 
-void nibSample(Canvas& c, const QString& style, const QString& color, double size, bool dark, const QString& dash, double gap) {
+void nibSample(Canvas& c, const QString& style, const QString& color, double size, bool dark, const QString& dash, double gap, double relative) {
   const double w = 56, hgt = 22;
   std::vector<std::array<double, 3>> points;
   if (style == "tape") {
@@ -90,10 +90,13 @@ void nibSample(Canvas& c, const QString& style, const QString& color, double siz
     }
   }
   double width = std::min(6.5, std::max(1.4, size * 0.9));
+  const double cap = style == "tape" ? 11 : style == "marker" ? 2.6 : style == "watercolor" ? 2.0 : style == "neon" ? 3.0 : 6.5;
   if (style == "tape") width = 11;
   else if (style == "marker") width = std::min(2.6, width);
   else if (style == "watercolor") width = std::min(2.0, width);
   else if (style == "neon") width = std::min(3.0, std::max(1.8, width));
+  // A size among a pen's sizes (0..1 of the largest): thicker for the larger ones.
+  if (relative > 0) width = cap * 1.25 * (0.15 + 0.85 * std::min(1.0, relative));
   QJsonObject el{{"id", "sample"}, {"z", 0}, {"kind", "stroke"}, {"tool", "pen"}, {"style", style}, {"color", sampleInk(color, dark)}, {"width", width}, {"points", pts(points)}};
   if (style == "construction") {
     el["dash"] = dash == "dot" ? "dot" : "dash";
@@ -123,7 +126,7 @@ QImage InkSampleImage::requestImage(const QString& id, QSize* size, const QSize&
   const QSize want = requested.isValid() && !requested.isEmpty() ? requested : QSize(112, 44);
   Canvas canvas(want.width(), want.height());
   canvas.setTransform(want.width() / 56.0, 0, 0, want.height() / 22.0, 0, 0);
-  if (p.value(0) == "nib") nibSample(canvas, p.value(1), "#" + p.value(2), p.value(3).toDouble(), p.value(4) == "1", p.value(5), p.value(6).toDouble());
+  if (p.value(0) == "nib") nibSample(canvas, p.value(1), "#" + p.value(2), p.value(3).toDouble(), p.value(4) == "1", p.value(5), p.value(6).toDouble(), p.value(7).toDouble());
   else smoothingSample(canvas, p.value(1).toDouble(), "#" + p.value(2), p.value(3) == "1");
   QImage img = canvas.image();
   if (size) *size = img.size();

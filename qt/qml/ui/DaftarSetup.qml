@@ -30,14 +30,19 @@ Popup {
     property string error: ""
 
     readonly property var days: DaftarApi.days()
-    readonly property var classColors: ["#ead7f0", "#bfdbfe", "#bbf7d0", "#fbcfe8", "#c7d2fe", "#fed7aa", "#a5f3fc", "#e5e7eb"]
+    /// The class colours: the first eight are given in turn, the rest can be chosen.
+    readonly property var classPalette: ["#ead7f0", "#bfdbfe", "#bbf7d0", "#fbcfe8", "#c7d2fe", "#fed7aa", "#a5f3fc", "#e5e7eb", "#fde68a", "#fecaca", "#d9f99d", "#99f6e4", "#ddd6fe", "#fbd5b5", "#cbd5e1", "#f5d0fe"]
+    /// Colours chosen for classes: { name: "#hex" }.
+    property var chosen: ({})
     readonly property var coverColors: ["#5b2a5e", "#1f7a4a", "#1f6fd1", "#2d2f72", "#d1245f", "#e0612a", "#0d9488", "#475569"]
     readonly property var steps: {
         const s = [{ ar: "المؤسسة", fr: "School" }, { ar: "الأقسام", fr: "Classes" }, { ar: "استعمال الزمن", fr: "Timetable" }, { ar: "العطل", fr: "Holidays" }]
         return isNew ? s.concat([{ ar: "الغلاف", fr: "Cover" }]) : s
     }
     readonly property var names: classes.map(c => c.name)
-    function colorOf(cls) { const i = names.indexOf(cls); return classColors[(i < 0 ? 7 : i) % classColors.length] }
+    function colorOf(cls) { if (chosen[cls]) return chosen[cls]; const i = names.indexOf(cls); return classPalette[(i < 0 ? 7 : i) % 8] }
+    function setColor(cls, c) { const n = Object.assign({}, chosen); n[cls] = c; chosen = n }
+    function parseMap(s) { try { const x = JSON.parse(s || "{}"); return x && typeof x === "object" && !Array.isArray(x) ? x : {} } catch (e) { return {} } }
 
     function parse(s) { try { const x = JSON.parse(s || "[]"); return Array.isArray(x) ? x : [] } catch (e) { return [] } }
     /// Opens it, filled from DaftarApi.formValues.
@@ -47,6 +52,7 @@ Popup {
         classes = DaftarApi.parseClasses(values.classes || "").map(n => ({ name: n, orig: fresh ? "" : n }))
         lessons = parse(values.timetable)
         holidays = parse(values.holidays)
+        chosen = parseMap(values.classColors)
         cover = "#5b2a5e"
         design = "zellige"
         error = ""
@@ -75,12 +81,14 @@ Popup {
         list[i] = Object.assign({}, list[i], { name: to })
         classes = list
         lessons = lessons.map(l => l.cls === from ? Object.assign({}, l, { cls: to }) : l)
+        if (chosen[from]) { const n = Object.assign({}, chosen); n[to] = n[from]; delete n[from]; chosen = n }
         if (brush === from) brush = to
     }
     function removeClass(i) {
         const gone = classes[i].name
         classes = classes.filter((c, k) => k !== i)
         lessons = lessons.filter(l => l.cls !== gone)
+        if (chosen[gone]) { const n = Object.assign({}, chosen); delete n[gone]; chosen = n }
         if (brush === gone) brush = classes.length ? classes[0].name : ""
     }
 
@@ -139,7 +147,7 @@ Popup {
     function values() {
         const renames = {}
         for (const c of classes) if (c.orig && c.orig !== c.name) renames[c.orig] = c.name
-        return Object.assign({}, v, { classes: names.join(", "), timetable: JSON.stringify(lessons), holidays: JSON.stringify(holidays.filter(h => h.name || h.from)), cover: cover, design: design, renames: JSON.stringify(renames) })
+        return Object.assign({}, v, { classes: names.join(", "), timetable: JSON.stringify(lessons), holidays: JSON.stringify(holidays.filter(h => h.name || h.from)), cover: cover, design: design, renames: JSON.stringify(renames), classColors: JSON.stringify(chosen) })
     }
     function next() {
         error = ""
@@ -198,6 +206,42 @@ Popup {
         UiField { Layout.fillWidth: true; text: fld.value; placeholderText: fld.hint; onTextEdited: fld.edited(fld.key, text) }
     }
     component Square: Rectangle { antialiasing: true; radius: Theme.radius }
+
+    // A class's colour, picked from the class palette.
+    Popup {
+        id: classColorPop
+        property string cls: ""
+        function pick(anchor, name) {
+            cls = name
+            const p = anchor.mapToItem(parent, 0, 0)
+            x = Math.max(8, Math.min(parent.width - width - 8, p.x - 12))
+            y = p.y + anchor.height + 8
+            open()
+        }
+        parent: Overlay.overlay
+        padding: 12
+        width: 8 * 30 + 7 * 6 + 24
+        modal: true
+        dim: false
+        Overlay.modal: Item {}
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        background: Item {
+            Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 3 }
+            Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusLg; color: Theme.surface; border.color: Theme.border }
+        }
+        contentItem: ColumnLayout {
+            spacing: 8
+            Label { text: "لون القسم · Colour of " + classColorPop.cls; font.pixelSize: 12; font.weight: Font.DemiBold; color: Theme.muted }
+            Swatches {
+                Layout.fillWidth: true
+                colors: root.classPalette
+                value: root.colorOf(classColorPop.cls)
+                size: 30
+                spacing: 6
+                onPicked: c => { root.setColor(classColorPop.cls, c); classColorPop.close() }
+            }
+        }
+    }
 
     contentItem: ColumnLayout {
         spacing: 0
@@ -318,7 +362,27 @@ Popup {
                                     anchors.verticalCenter: parent.verticalCenter
                                     x: 10
                                     spacing: 8
-                                    Square { Layout.preferredWidth: 14; Layout.preferredHeight: 14; radius: 4; color: root.colorOf(chip.modelData.name); border.color: Qt.rgba(0, 0, 0, 0.12) }
+                                    // Its colour: tap to choose another.
+                                    AbstractButton {
+                                        id: colorBtn
+                                        implicitWidth: 22; implicitHeight: 22
+                                        hoverEnabled: true
+                                        ToolTip.visible: hovered
+                                        ToolTip.delay: 400
+                                        ToolTip.text: "Colour of " + chip.modelData.name
+                                        onClicked: classColorPop.pick(colorBtn, chip.modelData.name)
+                                        contentItem: Item {
+                                            Rectangle {
+                                                antialiasing: true
+                                                anchors.centerIn: parent
+                                                width: colorBtn.hovered ? 20 : 16; height: width
+                                                radius: Theme.swatchRadius(width)
+                                                color: root.colorOf(chip.modelData.name)
+                                                border.color: Theme.dark ? Qt.rgba(1, 1, 1, 0.2) : Qt.rgba(0, 0, 0, 0.15)
+                                                Behavior on width { NumberAnimation { duration: 100 } }
+                                            }
+                                        }
+                                    }
                                     Label {
                                         visible: !chip.editing
                                         text: chip.modelData.name
@@ -362,7 +426,7 @@ Popup {
                     }
                     Label {
                         visible: root.classes.length > 0
-                        text: "Tap a name to rename it" + (root.isNew ? "." : ": its pages and lessons follow the new name.")
+                        text: "Tap a name to rename it" + (root.isNew ? "" : " (its pages and lessons follow the new name)") + ", or its colour to choose another."
                         color: Theme.muted; font.pixelSize: 12; wrapMode: Text.Wrap; Layout.fillWidth: true
                     }
                 }
@@ -370,115 +434,187 @@ Popup {
 
             // 3. The timetable, painted on a grid.
             ColumnLayout {
-                spacing: 10
+                spacing: 12
+                // The brushes: each class in its colour with its hours a week, and Clear.
                 RowLayout {
                     Layout.fillWidth: true
                     Layout.leftMargin: 24; Layout.rightMargin: 24; Layout.topMargin: 16
-                    spacing: 10
-                    Both { Layout.fillWidth: true; ar: "اختر قسما ثم اضغط على الحصص"; fr: "Pick a class, then tap or drag over its hours. Tap again to clear." }
-                    Segmented { options: [{ value: false, label: "1 h" }, { value: true, label: "30 min" }]; value: root.halfHours; onPicked: x => root.halfHours = x }
-                }
-                // The brushes: a class each, and Clear.
-                Flow {
-                    Layout.fillWidth: true
-                    Layout.leftMargin: 24; Layout.rightMargin: 24
-                    spacing: 6
-                    Repeater {
-                        model: root.names.concat([""])
-                        delegate: AbstractButton {
-                            id: br
-                            required property string modelData
-                            readonly property bool on: root.brush === modelData
-                            height: 34
-                            width: brRow.implicitWidth + 18
-                            hoverEnabled: true
-                            onClicked: root.brush = modelData
-                            background: Square { color: br.on ? (br.modelData ? root.colorOf(br.modelData) : Theme.surface3) : br.hovered ? Theme.surface2 : Theme.surface; border.width: br.on ? 2 : 1; border.color: br.on ? Theme.text : Theme.border }
-                            contentItem: Item {
-                                RowLayout {
-                                    id: brRow
-                                    anchors.centerIn: parent
-                                    spacing: 6
-                                    Square { visible: !!br.modelData; Layout.preferredWidth: 12; Layout.preferredHeight: 12; radius: 3; color: root.colorOf(br.modelData); border.color: Qt.rgba(0, 0, 0, 0.15) }
-                                    Icon { visible: !br.modelData; name: "eraser"; size: 15; color: br.on ? "#1c1917" : Theme.muted }
-                                    Label { text: br.modelData || "مسح · Clear"; font.pixelSize: 13; font.weight: Font.DemiBold; color: br.on ? "#1c1917" : Theme.text }
-                                    Label { visible: !!br.modelData && root.weeklyHours(br.modelData) > 0; text: root.weeklyHours(br.modelData) + " h"; font.pixelSize: 11; color: br.on ? "#44403c" : Theme.muted }
+                    spacing: 12
+                    Flow {
+                        Layout.fillWidth: true
+                        spacing: 6
+                        Repeater {
+                            model: root.names.concat([""])
+                            delegate: AbstractButton {
+                                id: br
+                                required property string modelData
+                                readonly property bool on: root.brush === modelData
+                                readonly property real hours: modelData ? root.weeklyHours(modelData) : 0
+                                height: 36
+                                width: brRow.implicitWidth + 20
+                                hoverEnabled: true
+                                onClicked: root.brush = modelData
+                                background: Rectangle {
+                                    antialiasing: true
+                                    radius: Theme.radius
+                                    color: br.on ? (br.modelData ? root.colorOf(br.modelData) : Theme.surface3) : br.hovered ? Theme.surface2 : Theme.surface
+                                    border.width: br.on ? 2 : 1
+                                    border.color: br.on ? (br.modelData ? Theme.mix(root.colorOf(br.modelData), "#000000", 0.35) : Theme.borderStrong) : Theme.border
+                                }
+                                contentItem: Item {
+                                    RowLayout {
+                                        id: brRow
+                                        anchors.centerIn: parent
+                                        spacing: 7
+                                        Rectangle { visible: !!br.modelData && !br.on; Layout.preferredWidth: 12; Layout.preferredHeight: 12; radius: Theme.swatchRadius(12); color: root.colorOf(br.modelData); border.color: Qt.rgba(0, 0, 0, 0.15) }
+                                        Icon { visible: !br.modelData; name: "eraser"; size: 15; color: br.on ? Theme.text : Theme.muted }
+                                        Label { text: br.modelData || "مسح · Clear"; font.pixelSize: 13; font.weight: Font.DemiBold; color: br.on && br.modelData ? "#1c1917" : Theme.text }
+                                        Label {
+                                            visible: !!br.modelData
+                                            text: br.hours ? br.hours + " h" : "—"
+                                            font.pixelSize: 11
+                                            color: br.on ? "#44403c" : Theme.muted
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
+                    ColumnLayout {
+                        spacing: 4
+                        Layout.alignment: Qt.AlignTop
+                        Segmented { Layout.alignment: Qt.AlignRight; options: [{ value: false, label: "1 h" }, { value: true, label: "30 min" }]; value: root.halfHours; onPicked: x => root.halfHours = x }
+                        Label {
+                            Layout.alignment: Qt.AlignRight
+                            text: root.lessons.reduce((t, l) => t + (root.mins(l.end) - root.mins(l.start)) / 60, 0) + " h / week · ساعة في الأسبوع"
+                            font.pixelSize: 11; color: Theme.muted
+                        }
+                    }
                 }
-                // The week.
-                Item {
-                    id: week
+                // The week, in a card.
+                Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     Layout.leftMargin: 24; Layout.rightMargin: 24; Layout.bottomMargin: 8
-                    readonly property real timeW: 52
-                    readonly property real headH: 36
-                    readonly property real colW: (width - timeW) / 6
-                    readonly property real rowH: Math.max(14, (height - headH - 10) / root.slotCount)
-                    clip: true
-                    // Day names.
-                    Repeater {
-                        model: 6
-                        delegate: Column {
-                            required property int index
-                            x: week.timeW + index * week.colW
-                            width: week.colW
-                            Label { width: parent.width; horizontalAlignment: Text.AlignHCenter; text: root.days[index + 1].ar; font.pixelSize: 13; font.weight: Font.DemiBold; color: Theme.text }
-                            Label { width: parent.width; horizontalAlignment: Text.AlignHCenter; text: root.days[index + 1].fr; font.pixelSize: 11; color: Theme.muted }
-                        }
-                    }
-                    // Hours.
-                    Repeater {
-                        model: root.slotCount + 1
-                        delegate: Item {
-                            required property int index
-                            readonly property int m: root.firstMin + index * root.slotMins
-                            y: week.headH + index * week.rowH
-                            Rectangle { x: week.timeW; width: week.width - week.timeW; height: 1; color: m % 60 === 0 ? Theme.border : Theme.alpha(Theme.border, 0.45) }
-                            Label { visible: m % 60 === 0; x: 0; width: week.timeW - 8; y: -7; horizontalAlignment: Text.AlignRight; text: root.hhmm(m); font.pixelSize: 11; color: Theme.muted }
-                        }
-                    }
-                    Repeater {
-                        model: 7
-                        delegate: Rectangle { required property int index; x: week.timeW + index * week.colW; y: week.headH; width: 1; height: root.slotCount * week.rowH; color: Theme.border }
-                    }
-                    // The lessons, as blocks.
-                    Repeater {
-                        model: root.lessons.filter(l => root.onGrid(l))
-                        delegate: Square {
-                            required property var modelData
-                            radius: Theme.radiusSm
-                            x: week.timeW + (modelData.day - 1) * week.colW + 3
-                            y: week.headH + (root.mins(modelData.start) - root.firstMin) / root.slotMins * week.rowH + 2
-                            width: week.colW - 6
-                            height: (root.mins(modelData.end) - root.mins(modelData.start)) / root.slotMins * week.rowH - 4
-                            color: root.colorOf(modelData.cls)
-                            border.color: Qt.rgba(0, 0, 0, 0.12)
-                            Column {
-                                anchors.centerIn: parent
-                                Label { anchors.horizontalCenter: parent.horizontalCenter; text: modelData.cls; font.pixelSize: 13; font.weight: Font.Bold; color: "#1c1917" }
-                                Label { visible: parent.parent.height > 40; anchors.horizontalCenter: parent.horizontalCenter; text: modelData.start + "–" + modelData.end; font.pixelSize: 11; color: "#44403c" }
+                    radius: Theme.radiusLg
+                    color: Theme.surface
+                    border.color: Theme.border
+                    Item {
+                        id: week
+                        anchors.fill: parent
+                        anchors.margins: 1
+                        readonly property real timeW: 54
+                        readonly property real headH: 40
+                        readonly property real colW: (width - timeW) / 6
+                        readonly property real rowH: Math.max(14, (height - headH - 6) / root.slotCount)
+                        readonly property int today: (new Date().getDay() + 6) % 7 + 1  // 1 = Monday … 7 = Sunday
+                        clip: true
+                        // Day names (today stands out).
+                        Repeater {
+                            model: 6
+                            delegate: Rectangle {
+                                required property int index
+                                readonly property bool isToday: index + 1 === week.today
+                                x: week.timeW + index * week.colW; y: 0
+                                width: week.colW; height: week.headH
+                                color: isToday ? Theme.accentSoft : Theme.surface2
+                                Column {
+                                    anchors.centerIn: parent
+                                    Label { anchors.horizontalCenter: parent.horizontalCenter; text: root.days[index + 1].ar; font.pixelSize: 13; font.weight: Font.DemiBold; color: parent.parent.isToday ? Theme.accent : Theme.text }
+                                    Label { anchors.horizontalCenter: parent.horizontalCenter; text: root.days[index + 1].fr; font.pixelSize: 11; color: Theme.muted }
+                                }
                             }
                         }
-                    }
-                    // Tap or drag to paint.
-                    MouseArea {
-                        x: week.timeW; y: week.headH
-                        width: week.width - week.timeW
-                        height: root.slotCount * week.rowH
-                        cursorShape: Qt.PointingHandCursor
-                        property string paintWith: ""
-                        function cell(mx, my) { return { day: Math.min(5, Math.max(0, Math.floor(mx / week.colW))) + 1, slot: Math.min(root.slotCount - 1, Math.max(0, Math.floor(my / week.rowH))) } }
-                        onPressed: m => {
-                            const c = cell(m.x, m.y)
-                            // Tapping a class's own hour clears it.
-                            paintWith = root.brush && root.classAt(c.day, c.slot) === root.brush ? "" : root.brush
-                            root.paint(c.day, c.slot, paintWith)
+                        Rectangle { x: 0; y: 0; width: week.timeW; height: week.headH; color: Theme.surface2 }
+                        Rectangle { x: 0; y: week.headH; width: week.width; height: 1; color: Theme.border }
+                        // Hour rows, every other one shaded; the half hours as fainter lines.
+                        Repeater {
+                            model: root.slotCount
+                            delegate: Item {
+                                required property int index
+                                readonly property int m: root.firstMin + index * root.slotMins
+                                x: 0; y: week.headH + index * week.rowH
+                                width: week.width; height: week.rowH
+                                Rectangle { x: week.timeW; width: parent.width - week.timeW; height: parent.height; color: Math.floor((parent.m - root.firstMin) / 60) % 2 ? Theme.alpha(Theme.text, Theme.dark ? 0.03 : 0.02) : "transparent" }
+                                Rectangle { x: week.timeW; width: parent.width - week.timeW; height: 1; color: parent.m % 60 === 0 ? Theme.border : Theme.alpha(Theme.border, 0.5) }
+                                Label { visible: parent.m % 60 === 0; x: 0; width: week.timeW - 10; y: 3; horizontalAlignment: Text.AlignRight; text: root.hhmm(parent.m); font.pixelSize: 11; color: Theme.muted }
+                            }
                         }
-                        onPositionChanged: m => { if (pressed) { const c = cell(m.x, m.y); root.paint(c.day, c.slot, paintWith) } }
+                        Repeater {
+                            model: 6
+                            delegate: Rectangle { required property int index; x: week.timeW + index * week.colW; y: 0; width: 1; height: week.height; color: Theme.border }
+                        }
+                        // The lessons, as blocks in their class's colour.
+                        Repeater {
+                            model: root.lessons.filter(l => root.onGrid(l))
+                            delegate: Rectangle {
+                                id: block
+                                required property var modelData
+                                antialiasing: true
+                                radius: Theme.radiusSm
+                                x: week.timeW + (modelData.day - 1) * week.colW + 4
+                                y: week.headH + (root.mins(modelData.start) - root.firstMin) / root.slotMins * week.rowH + 2
+                                width: week.colW - 8
+                                height: (root.mins(modelData.end) - root.mins(modelData.start)) / root.slotMins * week.rowH - 4
+                                color: root.colorOf(modelData.cls)
+                                Rectangle { width: 4; height: parent.height - 8; y: 4; x: 4; radius: 2; color: Theme.mix(root.colorOf(block.modelData.cls), "#000000", 0.35) }
+                                Column {
+                                    x: 14; anchors.verticalCenter: parent.verticalCenter
+                                    width: parent.width - 18
+                                    Label { width: parent.width; text: block.modelData.cls; font.pixelSize: 13; font.weight: Font.Bold; color: "#1c1917"; elide: Text.ElideRight }
+                                    Label { visible: block.height > 38; width: parent.width; text: block.modelData.start + " – " + block.modelData.end; font.pixelSize: 11; color: "#44403c"; elide: Text.ElideRight }
+                                }
+                            }
+                        }
+                        // Where the brush would go, under the pointer.
+                        Rectangle {
+                            id: ghost
+                            visible: painter.containsMouse && !painter.pressed && root.brush.length > 0 && root.classAt(painter.cellDay, painter.cellSlot) === ""
+                            antialiasing: true
+                            radius: Theme.radiusSm
+                            x: week.timeW + (painter.cellDay - 1) * week.colW + 4
+                            y: week.headH + painter.cellSlot * week.rowH + 2
+                            width: week.colW - 8; height: week.rowH - 4
+                            color: Theme.alpha(root.colorOf(root.brush), 0.55)
+                            border.color: Theme.mix(root.colorOf(root.brush), "#000000", 0.3)
+                            border.width: 1
+                            Label { anchors.centerIn: parent; text: "+ " + root.brush; font.pixelSize: 12; font.weight: Font.DemiBold; color: "#1c1917"; visible: week.rowH > 20 }
+                        }
+                        // Nothing yet: what to do.
+                        Label {
+                            visible: root.lessons.length === 0
+                            anchors.centerIn: parent
+                            anchors.verticalCenterOffset: week.headH / 2
+                            horizontalAlignment: Text.AlignHCenter
+                            text: "اختر قسما ثم اضغط على حصصه أو اسحب عليها\nPick a class above, then tap or drag over its hours"
+                            font.pixelSize: 13
+                            color: Theme.muted
+                            lineHeight: 1.3
+                        }
+                        // Tap or drag to paint.
+                        MouseArea {
+                            id: painter
+                            x: week.timeW; y: week.headH
+                            width: week.width - week.timeW
+                            height: root.slotCount * week.rowH
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            property string paintWith: ""
+                            property int cellDay: 1
+                            property int cellSlot: 0
+                            function cell(mx, my) { return { day: Math.min(5, Math.max(0, Math.floor(mx / week.colW))) + 1, slot: Math.min(root.slotCount - 1, Math.max(0, Math.floor(my / week.rowH))) } }
+                            onPositionChanged: m => {
+                                const c = cell(m.x, m.y)
+                                cellDay = c.day; cellSlot = c.slot
+                                if (pressed) root.paint(c.day, c.slot, paintWith)
+                            }
+                            onPressed: m => {
+                                const c = cell(m.x, m.y)
+                                // Tapping a class's own hour clears it.
+                                paintWith = root.brush && root.classAt(c.day, c.slot) === root.brush ? "" : root.brush
+                                root.paint(c.day, c.slot, paintWith)
+                            }
+                        }
                     }
                 }
                 // Lessons at other times (kept as they are).
@@ -490,8 +626,10 @@ Popup {
                     Label { text: "Other times:"; font.pixelSize: 12; color: Theme.muted; height: 28; verticalAlignment: Text.AlignVCenter }
                     Repeater {
                         model: root.offGrid
-                        delegate: Square {
+                        delegate: Rectangle {
                             required property var modelData
+                            antialiasing: true
+                            radius: Theme.radiusSm
                             height: 28; width: ogRow.implicitWidth + 12
                             color: root.colorOf(modelData.cls)
                             RowLayout {

@@ -85,6 +85,7 @@ Rectangle {
                 readOnly: root.same
                 tool: root.prefs.store.tool
                 penStyle: root.prefs.store.penStyle
+                deskColor: Theme.desk
                 penDash: root.prefs.store.penDash
                 penGap: root.prefs.store.penGap
                 colors: root.prefs.colors

@@ -71,6 +71,8 @@ class InkCanvas : public QQuickItem {
   Q_PROPERTY(bool fingerTaps MEMBER m_fingerTaps NOTIFY settingsChanged)
   /// A whiteboard: the page grows to the right and down as writing nears its edges.
   Q_PROPERTY(bool growable MEMBER m_growable NOTIFY settingsChanged)
+  /// The desk's colour around the pages (it covers what's past a page's edge).
+  Q_PROPERTY(QColor deskColor MEMBER m_deskColor NOTIFY settingsChanged)
   /// View only: every gesture scrolls (a second view of the notebook being edited).
   Q_PROPERTY(bool readOnly MEMBER m_readOnly NOTIFY settingsChanged)
   // The cursor for drawing tools: "cross" | "dot" | "none".
@@ -471,7 +473,10 @@ private:
   double m_glideLast = 0;
   QPointF m_glideTarget;
   double m_lastWheel = -1e9, m_wheelBoost = 1, m_wheelNotches = 0;
-  bool m_dismissOnPress = false;  // missing PDF page thumbnails
+  bool m_dismissOnPress = false;
+  QColor m_deskColor = QColor("#e7e4dc");
+  bool m_dismissing = false;  // this press closed the options drawer
+  QPointF m_dismissFrom;
   QTimer m_laserTick;
 
   Gesture m_g;
@@ -508,6 +513,7 @@ private:
     QSGTexture* paperTex = nullptr;
     QSGTexture* detailTex = nullptr;
     QSGNode* items = nullptr;  // container of item nodes
+    QSGNode* mask = nullptr;   // the desk around the page, over its items
   };
   std::vector<PageNodes> m_nodes;
   bool m_rebuildAll = true;

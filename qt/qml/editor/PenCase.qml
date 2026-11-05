@@ -14,6 +14,8 @@ Popup {
     property string hex: "111827"
     property real penWidth: 3
     property string dash: "dash"
+    /// Each pen's own ink and size (id → { hex, width }); else hex and penWidth for all.
+    property var inks: ({})
     signal picked(string id)
 
     readonly property var trays: [
@@ -99,7 +101,7 @@ Popup {
                     width: 54; height: 21
                     sourceSize: Qt.size(108, 42)
                     cache: false
-                    source: "image://ink/nib/" + tile.pen.id + "/" + root.hex + "/" + root.penWidth + "/" + (tile.pen.night ? "1" : "0") + "/" + root.dash
+                    source: "image://ink/nib/" + tile.pen.id + "/" + ((root.inks[tile.pen.id] || {}).hex || root.hex) + "/" + ((root.inks[tile.pen.id] || {}).width || root.penWidth) + "/" + (tile.pen.night ? "1" : "0") + "/" + root.dash
                 }
                 // The chosen one.
                 Rectangle {

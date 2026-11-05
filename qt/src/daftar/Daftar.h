@@ -36,6 +36,9 @@ struct Meta {
   QStringList classes;
   std::vector<Lesson> timetable;
   std::vector<Holiday> holidays;
+  /// Colours chosen for classes ({ class: "#rrggbb" }); the others take the palette's.
+  QJsonObject classColors;
+  QString colorOf(const QString& cls) const;
   QJsonObject toJson() const;
   static Meta fromJson(const QJsonObject& o);
 };

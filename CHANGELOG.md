@@ -7,6 +7,11 @@ section here before it can be published (`scripts/check-version.py`).
 
 ## 0.16.1
 
+- **Each pen type has its own colours and sizes:** the marker, tape, neon and the rest remember theirs (bright markers, pastel tape…), and the options show each size as a line drawn with that pen.
+- **Class colours:** in the daftar setup, tap a class's colour to choose another; the timetable uses it.
+- **Timetable step** redesigned: the week in a card with today marked, lesson blocks in their class colour, hours per class and per week, and a preview of where a tap will place the class.
+- **Shapes stay on the paper too:** anything past a page's edge is hidden.
+- **Fixed:** a stroke that closes the tool's options now writes; only a plain tap just closes them.
 - **Fixed:** ink stays on the paper: a stroke that runs off the edge is cut there, while you write and once it's saved. The eraser and the lasso work when you start them just off the paper, so ink already outside can be cleaned up.
 - **One look for corners:** buttons, fields, menus, panels, dialogs, badges, switches (in menus too), sliders, colour swatches and the handles on a selection, the ruler and the protractor share one set of squarer corners across the app. *More colours* is a rainbow square.
 - **Colour picker:** the swatches fill the width, the knobs have a dark edge so they show on white and yellow, the hue bar is easier to grab, dark swatches have a visible edge in dark mode, and hex codes work with or without #.
