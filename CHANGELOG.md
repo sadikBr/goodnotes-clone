@@ -7,7 +7,8 @@ section here before it can be published (`scripts/check-version.py`).
 
 ## 0.16.2
 
-- **Any pen size:** the size button ("5 px") now shows for pens too. Slide it or type an exact size, like 12; it replaces the chosen size.
+- **Your own size:** next to each tool's three sizes there's now a fourth that's yours. Tap it to use it, and tap it again to set it to any size (slide or type, like 12).
+- **Fixed:** a tool's options could open away from it right after a notebook opened.
 
 ## 0.16.1
 

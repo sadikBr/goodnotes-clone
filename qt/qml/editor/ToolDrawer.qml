@@ -54,7 +54,7 @@ Item {
         }
         contentItem: ColumnLayout {
             spacing: 10
-            Label { text: root.spec ? root.spec.label : ""; font.pixelSize: 12; font.weight: Font.DemiBold; color: Theme.muted }
+            Label { text: root.spec ? "Your " + root.spec.label.toLowerCase() : ""; font.pixelSize: 12; font.weight: Font.DemiBold; color: Theme.muted }
             RowLayout {
                 spacing: 10
                 UiSlider {
@@ -347,15 +347,21 @@ Item {
                         required property int index
                         readonly property bool on: root.fav && root.fav.size === index
                         readonly property bool strokes: root.tool === "pen"
-                        width: strokes ? 62 : 34; height: 30
+                        /// Your own size (the last): tap again to set it.
+                        readonly property bool mine: index === root.prefs.customSize
+                        readonly property string num: Number(modelData).toFixed(modelData % 1 ? 1 : 0)
+                        width: strokes ? 62 : mine ? 40 : 34; height: 30
                         hoverEnabled: true
                         ToolTip.visible: hovered
                         ToolTip.delay: 500
-                        ToolTip.text: on ? "Tap again for any size" : Number(modelData).toFixed(root.spec && root.spec.step < 1 ? 1 : 0) + " px"
-                        onClicked: on ? root.openSize(sz, index) : root.prefs.selectSize(root.tool, index)
+                        ToolTip.text: mine ? (on ? "Your size · tap to change it" : "Your size (" + num + " px) · tap again to change it") : num + " px"
+                        onClicked: on && mine ? root.openSize(sz, index) : root.prefs.selectSize(root.tool, index)
+                        // A line before your own size.
+                        Rectangle { visible: sz.mine; x: -3; z: 2; anchors.verticalCenter: parent.verticalCenter; width: 1; height: 18; color: Theme.alpha(Theme.muted, 0.5) }
                         background: Item {
                             Shadow { anchors.fill: parent; radius: Theme.radiusSm; level: sz.on ? 1 : 0 }
                             Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusSm; color: sz.on ? Theme.surface : sz.hovered ? Theme.alpha(Theme.surface, 0.55) : "transparent" }
+                            DashedBox { visible: sz.mine && !sz.on; anchors.fill: parent; anchors.margins: 1; radius: Theme.radiusSm; lineWidth: 1; color: Theme.muted }
                         }
                         contentItem: Item {
                             readonly property bool letter: root.tool === "text" || root.tool === "sticky"
@@ -369,25 +375,34 @@ Item {
                                     width: 34; height: 16
                                     sourceSize: Qt.size(68, 32)
                                     cache: false
-                                    source: sz.strokes ? "image://ink/nib/" + root.canvas.penStyle + "/" + root.hex + "/" + sz.modelData + "/" + root.dark + "/" + root.canvas.penDash + "/" + root.canvas.penGap + "/" + (sz.modelData / Math.max.apply(null, root.fav.sizes)) : ""
+                                    source: sz.strokes ? "image://ink/nib/" + root.canvas.penStyle + "/" + root.hex + "/" + sz.modelData + "/" + root.dark + "/" + root.canvas.penDash + "/" + root.canvas.penGap + "/" + Math.min(1, sz.modelData / root.fav.sizes[2]) : ""
                                 }
                                 Label {
                                     anchors.verticalCenter: parent.verticalCenter
-                                    text: Number(sz.modelData).toFixed(sz.modelData % 1 ? 1 : 0)
+                                    text: sz.num
                                     font.pixelSize: 11
                                     font.weight: sz.on ? Font.DemiBold : Font.Normal
                                     color: sz.on ? Theme.text : Theme.muted
                                 }
                             }
                             Rectangle { antialiasing: true;
-                                visible: !parent.letter && !sz.strokes
+                                visible: !parent.letter && !sz.strokes && !sz.mine
                                 anchors.centerIn: parent
                                 readonly property real d: Math.max(4, Math.min(16, sz.index === 0 ? 5 : sz.index === 1 ? 9 : 14))
                                 width: d; height: d; radius: d / 2
                                 color: sz.on ? Theme.accent : sz.hovered ? Theme.text : Theme.muted
                             }
+                            // Your own size, as its number.
                             Label {
-                                visible: parent.letter
+                                visible: sz.mine && !sz.strokes
+                                anchors.centerIn: parent
+                                text: sz.num
+                                font.pixelSize: 12
+                                font.weight: Font.DemiBold
+                                color: sz.on ? Theme.accent : sz.hovered ? Theme.text : Theme.muted
+                            }
+                            Label {
+                                visible: parent.letter && !sz.mine
                                 anchors.centerIn: parent
                                 text: "A"
                                 font.pixelSize: sz.index === 0 ? 11 : sz.index === 1 ? 14 : 18
@@ -398,16 +413,6 @@ Item {
                     }
                 }
             }
-        }
-        // Any size: the chosen one, to set exactly (by slider or typed).
-        Chip {
-            visible: !!(!!root.fav && root.fav.sizes.length > 0 && !!root.spec)
-            corner: Theme.radius
-            id: valueChip
-            label: root.fav && root.fav.sizes.length ? Number(root.fav.sizes[root.fav.size]).toFixed(root.fav.sizes[root.fav.size] % 1 ? 1 : 0) : ""
-            unit: "px"
-            tip: root.spec ? root.spec.label : ""
-            onClicked: root.openSize(valueChip, root.fav.size)
         }
     }
 

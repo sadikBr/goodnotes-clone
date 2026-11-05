@@ -142,7 +142,9 @@ Rectangle {
         bumpAnchor()
     }
     function bumpAnchor() { anchorMoved++ }
-    Connections { target: drawer; function onAnchorItemChanged() { root.watchAnchor() } }
+    // (Again whenever it opens: a button picked while the notebook was still being
+    // laid out may not have had its final place, or all its parents, yet.)
+    Connections { target: drawer; function onAnchorItemChanged() { root.watchAnchor() } function onVisibleChanged() { if (drawer.visible) root.watchAnchor() } }
     Connections { target: area; function onWidthChanged() { root.bumpAnchor() } function onHeightChanged() { root.bumpAnchor() } }
 
     /** Saves everything (before a sync or a backup); returns this notebook's id. */

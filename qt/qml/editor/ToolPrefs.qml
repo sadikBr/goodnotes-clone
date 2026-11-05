@@ -73,6 +73,7 @@ QtObject {
 
     property var data: {
         const out = JSON.parse(JSON.stringify(defaults))
+        for (const t in out) out[t].sizes = withCustom(t)
         try {
             const saved = JSON.parse(store.favs)
             for (const t in out) {
@@ -80,12 +81,26 @@ QtObject {
                 const s = saved[t] || (t.startsWith("pen:") && writingPens.indexOf(t.slice(4)) >= 0 ? saved.pen : null)
                 if (!s) continue
                 if (Array.isArray(s.colors) && s.colors.length === out[t].colors.length) out[t].colors = s.colors
-                if (Array.isArray(s.sizes) && s.sizes.length === out[t].sizes.length) out[t].sizes = s.sizes
                 if (typeof s.color === "number" && s.color < out[t].colors.length) out[t].color = s.color
-                if (typeof s.size === "number" && s.size < out[t].sizes.length) out[t].size = s.size
+                if (!out[t].sizes.length || !Array.isArray(s.sizes)) continue
+                // Your own size (the fourth); from before it existed, a preset you'd changed.
+                const presets = out[t].sizes.slice(0, 3)
+                const mine = s.sizes.length > 3 ? s.sizes[3] : s.sizes.find((v, i) => typeof v === "number" && v !== presets[i])
+                if (typeof mine === "number" && mine > 0) out[t].sizes[3] = mine
+                if (typeof s.size === "number" && s.size < out[t].sizes.length)
+                    out[t].size = s.sizes.length <= 3 && s.sizes[s.size] === mine ? 3 : s.size
             }
         } catch (e) {}
         return out
+    }
+    /// The preset sizes are fixed; the fourth is yours to set. A tool starts
+    /// with its largest preset doubled (within its range) there.
+    function withCustom(t) {
+        const f = defaults[t]
+        if (!f.sizes.length) return f.sizes
+        const sp = specs[t.startsWith("pen:") ? "pen" : t]
+        const v = Math.min(sp ? sp.max : 99, f.sizes[2] * 2)
+        return f.sizes.concat([v])
     }
     function save(next) {
         data = next
@@ -104,7 +119,9 @@ QtObject {
     function selectColor(tool, i) { edit(tool, f => f.color = i) }
     function setColor(tool, i, c) { edit(tool, f => { f.colors[i] = c; f.color = i }) }
     function selectSize(tool, i) { edit(tool, f => f.size = i) }
-    function setSize(tool, i, v) { edit(tool, f => { f.sizes[i] = v; f.size = i }) }
+    /// Only your own size (the fourth) changes; the presets stay as they are.
+    readonly property int customSize: 3
+    function setSize(tool, i, v) { if (i !== customSize) return; edit(tool, f => { f.sizes[i] = v; f.size = i }) }
 
     // --- your colours (in the tool strip; one list for every tool) ---
     readonly property int maxRailColors: 8
