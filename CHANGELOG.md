@@ -15,6 +15,8 @@ section here before it can be published (`scripts/check-version.py`).
 - **You stay in charge:** before it changes anything, it shows the plan step by step: *Do it* or *Cancel*. One *Undo all of it* takes the whole job back. It never deletes anything, and password-protected notebooks are never read or changed.
 - It needs an AI that can use tools (Settings → AI): Claude, GPT or Gemini, or a local model with tool support.
 - **Fixed:** with a pen on Windows, the eraser (its circle and what it rubs out) fell well behind the pen and caught up in jumps. It keeps up now.
+- **Scrolling speed:** *Settings → Pen & touch → Scrolling* sets how far the mouse wheel and a touchpad scroll, from a quarter to double, in notebooks and the library. Each computer keeps its own.
+- **Fixed:** the drop-down for the shelf's first card cut its choices off.
 
 ## 0.17.0
 

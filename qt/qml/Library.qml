@@ -1000,6 +1000,28 @@ Rectangle {
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollBar {}
                 cacheBuffer: 600
+                // The wheel and the touchpad at the speeds chosen in Settings (Pen & touch → Scrolling).
+                function scrollTo(y) { return Math.max(originY - topMargin, Math.min(y, originY + contentHeight + bottomMargin - height)) }
+                NumberAnimation { id: glide; target: grid; property: "contentY"; duration: 180; easing.type: Easing.OutCubic }
+                MouseArea {
+                    parent: grid
+                    anchors.fill: parent
+                    z: 100
+                    acceptedButtons: Qt.NoButton
+                    onWheel: w => {
+                        if (w.modifiers & Qt.ControlModifier) return w.accepted = false
+                        const touchpad = w.pixelDelta.y !== 0
+                        if (touchpad) {
+                            glide.stop()
+                            grid.contentY = grid.scrollTo(grid.contentY - w.pixelDelta.y * AppSettings.store.touchpadSpeed)
+                        } else {
+                            const from = glide.running ? glide.to : grid.contentY
+                            glide.stop()
+                            glide.to = grid.scrollTo(from - w.angleDelta.y / 120 * 140 * AppSettings.store.wheelSpeed)
+                            glide.start()
+                        }
+                    }
+                }
                 delegate: Item {
                     id: cell
                     required property var modelData

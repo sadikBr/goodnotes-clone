@@ -31,6 +31,9 @@ QtObject {
         property string toolbar: "rail"
         /// What the shelf's first card makes: "notebook", "daftar", "pdf", "folder", "sketchbook", "whiteboard".
         property string newCard: "notebook"
+        /// How far a notch of the mouse wheel scrolls, and a touchpad's swipe (1 = as made). Kept per device.
+        property real wheelSpeed: 1
+        property real touchpadSpeed: 1
     }
     readonly property real streamline: smoothingLevels[store.smoothing] ?? 0.38
 

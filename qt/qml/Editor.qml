@@ -593,6 +593,8 @@ Rectangle {
                     laserMode: prefs.store.laserMode
                     textFont: prefs.store.textFont
                     smoothing: AppSettings.streamline
+                    wheelSpeed: AppSettings.store.wheelSpeed
+                    touchpadSpeed: AppSettings.store.touchpadSpeed
                     penOnly: AppSettings.store.penOnly
                     dismissOnPress: drawer.visible && drawer.hasOptions && !prefs.store.drawerPinned
                     onDismissed: root.drawerOpen = false

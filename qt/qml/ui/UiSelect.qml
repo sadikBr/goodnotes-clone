@@ -28,6 +28,16 @@ ComboBox {
     implicitHeight: 40
     font.pixelSize: 14
     leftPadding: 12
+    // Room for the arrow: the text stops short of it.
+    rightPadding: 36
+    // As wide as its longest choice, so none is cut off.
+    FontMetrics { id: metrics; font: root.font }
+    readonly property real longest: {
+        let w = 0
+        for (const o of rows) w = Math.max(w, metrics.advanceWidth(o.label || ""))
+        return Math.ceil(w)
+    }
+    implicitWidth: Math.max(140, longest + leftPadding + rightPadding)
     // The label gets the full height and centres itself (Arabic text is tall).
     topPadding: 0
     bottomPadding: 0
@@ -74,7 +84,7 @@ ComboBox {
     }
     popup: Popup {
         y: root.height + 4
-        width: root.width
+        width: Math.max(root.width, root.longest + 44)
         implicitHeight: Math.min(contentItem.implicitHeight + 12, 360)
         padding: 6
         contentItem: ListView {

@@ -116,6 +116,36 @@ Popup {
             }
         }
     }
+    /// A scroll speed: slower ↔ faster, its percentage, and back to normal.
+    component SpeedSlider: RowLayout {
+        id: sp
+        property real value: 1
+        signal moved(real value)
+        spacing: 10
+        Label { text: "Slower"; font.pixelSize: 12; color: Theme.muted }
+        UiSlider {
+            id: sl
+            Layout.preferredWidth: 160
+            from: 0.25; to: 2; stepSize: 0.05
+            value: sp.value
+            onMoved: sp.moved(Math.round(value * 100) / 100)
+        }
+        Label { text: "Faster"; font.pixelSize: 12; color: Theme.muted }
+        Label {
+            Layout.preferredWidth: 42
+            horizontalAlignment: Text.AlignRight
+            text: Math.round(sl.value * 100) + "%"
+            font.pixelSize: 13; font.weight: Font.DemiBold
+            color: Math.abs(sl.value - 1) < 0.001 ? Theme.muted : Theme.text
+        }
+        IconButton {
+            iconName: "reset"; tip: "Back to 100%"
+            implicitWidth: 28; implicitHeight: 28; iconSize: 14
+            opacity: Math.abs(sp.value - 1) < 0.001 ? 0 : 1
+            enabled: opacity > 0
+            onClicked: sp.moved(1)
+        }
+    }
     component SettingRow: Item {
         id: row
         property string title
@@ -285,6 +315,18 @@ Popup {
                         SettingRow {
                             title: "Finger taps"; help: "Two fingers undo, three redo."
                             UiSwitch { checked: root.s.fingerTaps; onClicked: root.s.fingerTaps = checked }
+                        }
+                    }
+                    Group {
+                        title: "Scrolling"
+                        SettingRow {
+                            first: true
+                            title: "Mouse wheel"; help: "How far a turn of the wheel scrolls. Each computer keeps its own."
+                            SpeedSlider { value: root.s.wheelSpeed; onMoved: root.s.wheelSpeed = value }
+                        }
+                        SettingRow {
+                            title: "Touchpad"; help: "How far a two-finger swipe scrolls."
+                            SpeedSlider { value: root.s.touchpadSpeed; onMoved: root.s.touchpadSpeed = value }
                         }
                     }
                 }
@@ -501,7 +543,7 @@ Popup {
                             first: true
                             title: "The first card on the shelf"; help: "What it makes with one tap. The New button has everything."
                             UiSelect {
-                                Layout.preferredWidth: 200
+                                width: 210
                                 options: [{ value: "notebook", label: "Notebook" }, { value: "daftar", label: "Daftar annossous" }, { value: "pdf", label: "Import PDFs" }, { value: "folder", label: "Folder" }, { value: "sketchbook", label: "Sketchbook" }, { value: "whiteboard", label: "Whiteboard" }]
                                 value: root.s.newCard
                                 onPicked: v => root.s.newCard = v

@@ -2513,7 +2513,7 @@ void InkCanvas::wheelEvent(QWheelEvent* e) {
     m_wheelBoost = std::min(3.5, std::pow(1.25, std::max(0.0, m_wheelNotches - 1)));
     m_lastWheel = now;
   }
-  const QPointF d = touchpad ? QPointF(px) : QPointF(e->angleDelta()) / 120.0 * 200.0 * m_wheelBoost;
+  const QPointF d = touchpad ? QPointF(px) * std::clamp(m_touchpadSpeed, 0.1, 4.0) : QPointF(e->angleDelta()) / 120.0 * 200.0 * m_wheelBoost * std::clamp(m_wheelSpeed, 0.1, 4.0);
   const QPointF step = (e->modifiers() & Qt::ShiftModifier) ? QPointF(d.y(), 0) : d;
   static const bool trace = qEnvironmentVariableIsSet("INKLEAF_TRACE");
   if (trace) qInfo("wheel angle %d px %d phase %d touchpad %d boost %.2f step %.0f", e->angleDelta().y(), px.y(), int(e->phase()), int(touchpad), m_wheelBoost, step.y());

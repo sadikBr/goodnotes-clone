@@ -56,6 +56,9 @@ class InkCanvas : public QQuickItem {
   Q_PROPERTY(QColor laserColor READ laserColor NOTIFY laserChanged)
   Q_PROPERTY(bool laserTrail READ laserTrail NOTIFY laserChanged)
   Q_PROPERTY(qreal smoothing READ smoothing WRITE setSmoothing NOTIFY toolStateChanged)
+  /// How far the mouse wheel and a touchpad scroll (1 = as made; Settings → Pen & touch).
+  Q_PROPERTY(qreal wheelSpeed MEMBER m_wheelSpeed NOTIFY scrollSpeedChanged)
+  Q_PROPERTY(qreal touchpadSpeed MEMBER m_touchpadSpeed NOTIFY scrollSpeedChanged)
   Q_PROPERTY(bool penOnly READ penOnly WRITE setPenOnly NOTIFY penOnlyChanged)
   /// While the (unpinned) tool drawer is open a press on the page only closes it.
   Q_PROPERTY(bool dismissOnPress MEMBER m_dismissOnPress NOTIFY dismissOnPressChanged)
@@ -347,6 +350,7 @@ signals:
   void pagesChanged();
   /// The stroke being written changed (the zoom box shows it too).
   void liveInkChanged();
+  void scrollSpeedChanged();
   /// The notebook's settings changed (its headings, cards…).
   void notebookSettingsChanged();
   void historyChanged();
@@ -482,6 +486,8 @@ private:
   QString m_textFont = "sans";
   QString m_laserMode = "trail";
   qreal m_smoothing = ink::kSmoothNormal;
+  qreal m_wheelSpeed = 1;
+  qreal m_touchpadSpeed = 1;
   bool m_penOnly = false;
   QString m_pressureCurve = "normal";
   bool m_eraserEndOn = true;

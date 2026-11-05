@@ -95,6 +95,8 @@ Rectangle {
                 laserMode: root.prefs.store.laserMode
                 textFont: root.prefs.store.textFont
                 smoothing: AppSettings.streamline
+                wheelSpeed: AppSettings.store.wheelSpeed
+                touchpadSpeed: AppSettings.store.touchpadSpeed
                 penOnly: AppSettings.store.penOnly
                 pressureCurve: AppSettings.store.pressure
                 eraserEnd: AppSettings.store.eraserEnd
