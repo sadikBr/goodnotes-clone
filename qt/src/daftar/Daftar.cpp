@@ -54,7 +54,7 @@ QHash<QString, QString> values(const Meta& meta, const QString& cls) {
 }
 
 /// Pastel note colours for the timetable, one per class.
-const char* const CLASS_COLORS[] = {"#ead7f0", "#bfdbfe", "#bbf7d0", "#fbcfe8", "#c7d2fe", "#fed7aa", "#a5f3fc", "#e5e7eb"};
+const char* const CLASS_COLORS[] = {"#fca5a5", "#fde047", "#86efac", "#7dd3fc", "#d8b4fe", "#fdba74", "#5eead4", "#f9a8d4"};
 
 int mins(const QString& s) {
   const QStringList p = s.split(':');
