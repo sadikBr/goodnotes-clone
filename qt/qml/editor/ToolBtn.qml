@@ -10,7 +10,7 @@ AbstractButton {
     property string ink: ""
     property bool active: false
     property string tip
-    property real corner: 11
+    property real corner: Theme.radius
     implicitWidth: 40
     implicitHeight: 38
     hoverEnabled: true
@@ -44,8 +44,8 @@ AbstractButton {
             anchors.bottomMargin: 2
             width: 6; height: 6
             opacity: 0.9
-            Rectangle { antialiasing: true; anchors.centerIn: parent; width: 7; height: 7; radius: 3.5; color: Qt.rgba(0.5, 0.5, 0.5, 0.45) }
-            Rectangle { antialiasing: true; anchors.fill: parent; radius: 3; color: root.ink }
+            Rectangle { antialiasing: true; anchors.centerIn: parent; width: 7; height: 7; radius: 2.5; color: Qt.rgba(0.5, 0.5, 0.5, 0.45) }
+            Rectangle { antialiasing: true; anchors.fill: parent; radius: 2; color: root.ink }
         }
     }
     contentItem: Item {

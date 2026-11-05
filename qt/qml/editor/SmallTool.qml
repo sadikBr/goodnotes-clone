@@ -23,11 +23,11 @@ AbstractButton {
     onHoveredChanged: if (!hovered) tipDismissed = false
     ToolTip.text: tip
     background: Item {
-        Rectangle { visible: root.grouped && root.active; antialiasing: true; y: 1; width: parent.width; height: parent.height; radius: Theme.radius; color: Qt.rgba(0, 0, 0, Theme.dark ? 0.3 : 0.08) }
+        Rectangle { visible: root.grouped && root.active; antialiasing: true; y: 1; width: parent.width; height: parent.height; radius: Theme.radiusSm; color: Qt.rgba(0, 0, 0, Theme.dark ? 0.3 : 0.08) }
         Rectangle {
             antialiasing: true
             anchors.fill: parent
-            radius: root.grouped ? 10 : 8
+            radius: root.grouped ? Theme.radiusSm : Theme.radius
             color: root.grouped ? (root.active ? Theme.surface : root.hovered ? Theme.alpha(Theme.surface, 0.55) : "transparent")
                                 : (root.active ? Theme.accentSoft : root.hovered ? Theme.surface2 : "transparent")
         }

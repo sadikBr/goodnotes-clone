@@ -29,8 +29,8 @@ ToolGroup {
             onHoveredChanged: if (!hovered) tipDismissed = false
             background: Item {
                 // .tool-btn.active: the surface colour, a light shadow.
-                Rectangle { visible: b.on; antialiasing: true; y: 1; width: parent.width; height: parent.height; radius: root.corner - 4; color: Qt.rgba(0, 0, 0, Theme.dark ? 0.3 : 0.08) }
-                Rectangle { antialiasing: true; anchors.fill: parent; radius: root.corner - 4; color: b.on ? Theme.surface : b.hovered ? Theme.alpha(Theme.surface, 0.55) : "transparent" }
+                Rectangle { visible: b.on; antialiasing: true; y: 1; width: parent.width; height: parent.height; radius: Theme.radiusSm; color: Qt.rgba(0, 0, 0, Theme.dark ? 0.3 : 0.08) }
+                Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusSm; color: b.on ? Theme.surface : b.hovered ? Theme.alpha(Theme.surface, 0.55) : "transparent" }
             }
             contentItem: Label {
                 id: lbl

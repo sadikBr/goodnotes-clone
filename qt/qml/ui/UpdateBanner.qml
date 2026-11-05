@@ -142,7 +142,7 @@ Item {
                             spacing: 8
                             Rectangle {
                                 visible: !modelData.head
-                                Layout.preferredWidth: 5; Layout.preferredHeight: 5; radius: 2.5
+                                Layout.preferredWidth: 5; Layout.preferredHeight: 5; radius: 1.5
                                 Layout.alignment: Qt.AlignTop
                                 Layout.topMargin: 6
                                 color: Theme.accent

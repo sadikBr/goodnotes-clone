@@ -19,7 +19,7 @@ Slider {
     handle: Rectangle { antialiasing: true;
         x: root.leftPadding + root.visualPosition * (root.availableWidth - width)
         y: root.topPadding + root.availableHeight / 2 - height / 2
-        width: 18; height: 18; radius: 9
+        width: 18; height: 18; radius: Theme.radiusXs + 1
         color: "#ffffff"
         border.color: root.pressed ? Theme.accent : Theme.borderStrong
         border.width: root.pressed ? 2 : 1

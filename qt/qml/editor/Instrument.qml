@@ -62,11 +62,11 @@ Item {
                 readonly property var modelData: (root.ins.grips || [])[index] || [0, 0]
                 x: modelData[0] * root.zm - 11
                 y: modelData[1] * root.zm - 11
-                width: 22; height: 22; radius: 11
+                width: 22; height: 22; radius: Theme.radiusSm
                 color: Qt.rgba(1, 1, 1, 0.9)
                 border.width: 1.5
                 border.color: Qt.rgba(15 / 255, 23 / 255, 42 / 255, 0.45)
-                Rectangle { antialiasing: true; anchors.centerIn: parent; width: 10; height: 10; radius: 5; color: "transparent"; border.width: 2; border.color: Qt.rgba(15 / 255, 23 / 255, 42 / 255, 0.18) }
+                Rectangle { antialiasing: true; anchors.centerIn: parent; width: 10; height: 10; radius: 3; color: "transparent"; border.width: 2; border.color: Qt.rgba(15 / 255, 23 / 255, 42 / 255, 0.18) }
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.CrossCursor
@@ -90,7 +90,7 @@ Item {
                 readonly property var modelData: (root.ins.knobs || [])[index] || [0, 0]
                 x: modelData[0] * root.zm - 9
                 y: modelData[1] * root.zm - 9
-                width: 18; height: 18; radius: 9
+                width: 18; height: 18; radius: Theme.radiusXs + 1
                 color: "#db2777"
                 border.width: 2
                 border.color: "#ffffff"

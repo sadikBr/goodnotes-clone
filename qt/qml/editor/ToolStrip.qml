@@ -69,7 +69,7 @@ Rectangle {
                         required property var modelData
                         objectName: "tool-" + modelData.id
                         implicitWidth: root.btn; implicitHeight: root.btn
-                        corner: 8
+                        corner: Theme.radius
                         iconName: modelData.icon
                         active: root.canvas.tool === modelData.id
                         ink: modelData.id === "sticky" || modelData.id === "lasso" || modelData.id === "hand" || modelData.id === "eraser" ? "" : (root.canvas.colors[modelData.id] || "")
@@ -85,7 +85,7 @@ Rectangle {
                     id: ruler
                     visible: group.modelData.indexOf("ruler") >= 0
                     implicitWidth: root.btn; implicitHeight: root.btn
-                    corner: 8
+                    corner: Theme.radius
                     iconName: "ruler"
                     readonly property bool on: !!root.canvas.instrument.visible
                     active: on

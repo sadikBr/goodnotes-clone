@@ -496,9 +496,9 @@ Rectangle {
             Rectangle { antialiasing: true;
                 visible: nav.dot.a > 0
                 Layout.rightMargin: 6
-                Layout.preferredWidth: 13; Layout.preferredHeight: 13; radius: Theme.radiusSm
+                Layout.preferredWidth: 13; Layout.preferredHeight: 13; radius: Theme.radiusXs
                 color: Theme.surface
-                Rectangle { antialiasing: true; anchors.centerIn: parent; width: 9; height: 9; radius: 4.5; color: nav.dot }
+                Rectangle { antialiasing: true; anchors.centerIn: parent; width: 9; height: 9; radius: 2.5; color: nav.dot }
             }
             // How many: a soft pill in the accent when selected, quiet grey text otherwise.
             Rectangle { antialiasing: true;

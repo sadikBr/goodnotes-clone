@@ -106,7 +106,7 @@ Popup {
                     visible: tile.on
                     anchors.right: parent.right; anchors.top: parent.top
                     anchors.margins: -5
-                    width: 16; height: 16; radius: Theme.radius
+                    width: 16; height: 16; radius: Theme.radiusXs
                     color: Theme.accent
                     border.color: Theme.surface; border.width: 2
                     Icon { anchors.centerIn: parent; name: "check"; size: 10; color: "white" }

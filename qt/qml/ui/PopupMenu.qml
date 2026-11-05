@@ -114,7 +114,7 @@ Popup {
                         antialiasing: true
                         Layout.preferredHeight: 20
                         Layout.preferredWidth: Math.max(20, keyLabel.implicitWidth + 10)
-                        radius: 5
+                        radius: Theme.radiusXs
                         color: Theme.surface2
                         border.color: Theme.border
                         Label { id: keyLabel; anchors.centerIn: parent; text: it.modelData.key || ""; color: Theme.muted; font.pixelSize: 11; font.weight: Font.DemiBold }
@@ -123,12 +123,12 @@ Popup {
                     Rectangle {
                         visible: it.isToggle
                         antialiasing: true
-                        Layout.preferredWidth: 30; Layout.preferredHeight: 18; radius: Theme.radiusXs
+                        Layout.preferredWidth: 30; Layout.preferredHeight: 18; radius: Theme.radiusSm
                         color: it.modelData.toggle ? Theme.accent : Theme.surface3
                         border.color: it.modelData.toggle ? Theme.accent : Theme.border
                         Rectangle {
                             antialiasing: true
-                            width: 14; height: 14; radius: Theme.radiusSm
+                            width: 14; height: 14; radius: Theme.radiusXs
                             y: 2
                             x: it.modelData.toggle ? parent.width - width - 2 : 2
                             color: "#ffffff"

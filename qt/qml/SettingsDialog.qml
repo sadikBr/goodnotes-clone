@@ -177,7 +177,7 @@ Popup {
         onClicked: root.page = modelData.id
         background: Rectangle {
             antialiasing: true
-            radius: root.narrow ? 17 : 10
+            radius: Theme.radius
             color: nav.current ? Theme.alpha(Theme.accent, 0.14) : nav.hovered ? Theme.surface2 : "transparent"
         }
         contentItem: RowLayout {

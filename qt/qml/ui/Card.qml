@@ -88,7 +88,7 @@ Item {
         visible: root.selecting || root.picked
         antialiasing: true
         x: 8; y: 8
-        width: 26; height: 26; radius: Theme.radiusLg
+        width: 26; height: 26; radius: Theme.radiusSm
         color: root.picked ? Theme.accent : Theme.alpha("#000000", 0.35)
         border.color: "#ffffff"
         border.width: 2

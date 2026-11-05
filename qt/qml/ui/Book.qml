@@ -61,13 +61,13 @@ Item {
         spacing: 4
         Rectangle { antialiasing: true;
             visible: root.locked
-            width: 26; height: 26; radius: Theme.radiusLg
+            width: 26; height: 26; radius: Theme.radiusSm
             color: Qt.rgba(1, 1, 1, 0.92)
             Icon { anchors.centerIn: parent; name: root.unlocked ? "unlock" : "lock"; size: 14; color: "#1d1f23" }
         }
         Rectangle { antialiasing: true;
             visible: root.favourite
-            width: 26; height: 26; radius: Theme.radiusLg
+            width: 26; height: 26; radius: Theme.radiusSm
             color: Qt.rgba(1, 1, 1, 0.92)
             Icon { anchors.centerIn: parent; name: "star"; size: 15; color: "#d99a00"; filled: true }
         }

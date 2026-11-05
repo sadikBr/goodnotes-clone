@@ -2123,7 +2123,7 @@ void EditorCore::drawHeldHint(Canvas& c, const El& el, const QString& mode) cons
   const double y = std::max(4 / z, r.y - hgt - 10 / z);
   c.setFill(QStringLiteral("rgba(17, 24, 39, 0.85)"));
   c.beginPath();
-  c.roundRect(x, y, w, hgt, QJSValue(hgt / 2));
+  c.roundRect(x, y, w, hgt, QJSValue(6 / z));
   c.fill();
   c.setFill(QStringLiteral("#fff"));
   c.setTextBaseline("middle");
@@ -2176,8 +2176,9 @@ void drawGroupHandles(Canvas& c, const Rect& box, double zoom) {
   c.stroke();
   for (const Handle& h : hs) {
     c.beginPath();
-    if (h.id == "rot") c.arc(h.x, h.y, size * 0.7, 0, M_PI * 2);
-    else c.rect(h.x - size / 2, h.y - size / 2, size, size);
+    // Handles with the app's small corners (the rotation knob a little larger).
+    if (h.id == "rot") c.roundRect(h.x - size * 0.7, h.y - size * 0.7, size * 1.4, size * 1.4, QJSValue(size * 0.35));
+    else c.roundRect(h.x - size / 2, h.y - size / 2, size, size, QJSValue(size * 0.25));
     c.fill();
     c.stroke();
   }
@@ -2211,8 +2212,8 @@ void drawHandles(Canvas& c, const El& el, double zoom) {
   c.setFill(QStringLiteral("#ffffff"));
   for (const Handle& h : handlesFor(el)) {
     c.beginPath();
-    if (h.id == "p0" || h.id == "p1") c.arc(h.x, h.y, size * 0.6, 0, M_PI * 2);
-    else c.rect(h.x - size / 2, h.y - size / 2, size, size);
+    if (h.id == "p0" || h.id == "p1") c.roundRect(h.x - size * 0.6, h.y - size * 0.6, size * 1.2, size * 1.2, QJSValue(size * 0.3));
+    else c.roundRect(h.x - size / 2, h.y - size / 2, size, size, QJSValue(size * 0.25));
     c.fill();
     c.stroke();
   }

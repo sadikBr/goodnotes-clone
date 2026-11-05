@@ -145,7 +145,7 @@ Popup {
                             spacing: 6
                             Rectangle {
                                 antialiasing: true
-                                Layout.preferredWidth: 18; Layout.preferredHeight: 18; radius: Theme.radius; Layout.leftMargin: 4
+                                Layout.preferredWidth: 18; Layout.preferredHeight: 18; radius: Theme.radiusXs; Layout.leftMargin: 4
                                 color: stepBtn.on || root.step > stepBtn.index ? Theme.accent : Theme.surface3
                                 Label { anchors.centerIn: parent; text: root.step > stepBtn.index ? "✓" : String(stepBtn.index + 1); font.pixelSize: 11; font.weight: Font.Bold; color: stepBtn.on || root.step > stepBtn.index ? Theme.accentContrast : Theme.muted }
                             }

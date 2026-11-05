@@ -78,7 +78,7 @@ Popup {
             }
             Rectangle { antialiasing: true;
                 x: root.sat * sv.width - 8; y: (1 - root.val) * sv.height - 8
-                width: 16; height: 16; radius: Theme.radius
+                width: 16; height: 16; radius: Theme.radiusXs
                 color: "transparent"; border.color: "#ffffff"; border.width: 2
             }
             MouseArea {
@@ -108,7 +108,7 @@ Popup {
                 GradientStop { position: 0.83; color: "#ff00ff" }
                 GradientStop { position: 1.0; color: "#ff0000" }
             }
-            Rectangle { antialiasing: true; x: root.hue * hueBar.width - 8; y: -2; width: 16; height: 18; radius: Theme.radius; color: "transparent"; border.color: "#ffffff"; border.width: 2 }
+            Rectangle { antialiasing: true; x: root.hue * hueBar.width - 8; y: -2; width: 16; height: 18; radius: Theme.radiusXs; color: "transparent"; border.color: "#ffffff"; border.width: 2 }
             MouseArea {
                 anchors.fill: parent
                 function at(m) { root.hue = Math.max(0, Math.min(0.999, m.x / width)); root.fromHsv() }

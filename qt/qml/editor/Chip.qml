@@ -12,7 +12,7 @@ AbstractButton {
     property bool open: false
     property string tip
     /// Corner radius (squarer beside the side rail).
-    property real corner: 11
+    property real corner: Theme.radius
     hoverEnabled: true
     implicitHeight: 34
     implicitWidth: row.implicitWidth + 19

@@ -47,7 +47,7 @@ Rectangle { antialiasing: true;
         spacing: 9
         Rectangle {
             antialiasing: true
-            Layout.preferredWidth: 24; Layout.preferredHeight: 24; radius: Theme.radiusLg
+            Layout.preferredWidth: 24; Layout.preferredHeight: 24; radius: Theme.radiusSm
             color: root.error ? "#c2410c" : "#2f6b4f"
             Icon { anchors.centerIn: parent; name: root.iconName; size: 14; color: "#ffffff" }
         }
