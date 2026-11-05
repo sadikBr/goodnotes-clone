@@ -31,6 +31,41 @@ bool isTap(const std::vector<Pt>& pts, double within) {
 }
 /// Scribbling with these is shading or painting, never a scratch-out.
 bool scratchable(const QString& style) { return style != "marker" && style != "watercolor" && style != "neon" && style != "tape"; }
+/// Pens whose look a held shape keeps (it is drawn with the pen, not as a plain shape).
+bool keepsPen(const QString& style) { return style == "marker" || style == "watercolor" || style == "neon" || style == "construction"; }
+/// Points every `step` along a polyline (its corners kept).
+std::vector<P2> densify(const std::vector<P2>& pts, double step) {
+  std::vector<P2> out;
+  for (size_t i = 0; i + 1 < pts.size(); ++i) {
+    const P2 a = pts[i], b = pts[i + 1];
+    const int n = std::max(1, int(std::ceil(std::hypot(b[0] - a[0], b[1] - a[1]) / step)));
+    for (int k = 0; k < n; ++k) out.push_back({a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n});
+  }
+  if (!pts.empty()) out.push_back(pts.back());
+  return out;
+}
+/// A shape as the lines a pen would draw it with (an arrow: its shaft and its head).
+std::vector<std::vector<P2>> shapeLines(const Shape& s, double width) {
+  std::vector<std::vector<P2>> out;
+  if (s.kind == "ellipse") {
+    std::vector<P2> ring;
+    for (int i = 0; i <= 72; ++i) ring.push_back({s.cx + s.rx * std::cos(i * M_PI / 36), s.cy + s.ry * std::sin(i * M_PI / 36)});
+    out.push_back(ring);
+  } else if (s.kind == "arrow" && s.points.size() >= 2) {
+    const P2 a = s.points.front(), b = s.points.back();
+    out.push_back({a, b});
+    const double ang = std::atan2(b[1] - a[1], b[0] - a[0]), len = std::max(14.0, width * 4.5);
+    out.push_back({{b[0] - len * std::cos(ang - 0.45), b[1] - len * std::sin(ang - 0.45)}, b, {b[0] - len * std::cos(ang + 0.45), b[1] - len * std::sin(ang + 0.45)}});
+  } else {
+    for (std::vector<P2> part : shapeParts(s)) {
+      if (part.size() < 2) continue;
+      if (isClosedShape(s) && s.breaks.empty()) part.push_back(part.front());
+      out.push_back(part);
+    }
+  }
+  for (auto& line : out) line = densify(line, std::max(2.0, width * 0.8));
+  return out;
+}
 std::vector<Pt> straightTape(const std::vector<Pt>& pts, double width) {
   const Pt a = pts.front(), b = pts.back();
   const double len = std::hypot(b[0] - a[0], b[1] - a[1]);
@@ -601,6 +636,35 @@ void EditorCore::up() {
         hl.id = newId();
         hl.z = nextZ();
         addElement(makeEl(std::move(hl)));
+      } else if (shape && g.tool == "pen" && keepsPen(penStyle)) {
+        // A held shape drawn with the pen (dashed, marker, watercolour, neon): pen strokes, not a plain shape.
+        if (!g.absorb.empty()) {
+          QSet<QString> gone(g.absorb.begin(), g.absorb.end());
+          for (const QString& id : gone) m_hidden.remove(id);
+          m_recentInk.erase(std::remove_if(m_recentInk.begin(), m_recentInk.end(), [&](const Recent& r) { return gone.contains(r.id); }), m_recentInk.end());
+          snapshot();
+          Els& els = elements();
+          els.erase(std::remove_if(els.begin(), els.end(), [&](const ElPtr& e) { return gone.contains(e->id); }), els.end());
+          for (El& el : penStrokes(*shape)) {
+            el.z = nextZ();
+            els.push_back(makeEl(std::move(el)));
+          }
+          changed();
+        } else {
+          std::vector<El> strokes = penStrokes(*shape);
+          if (strokes.size() == 1) {
+            strokes[0].z = nextZ();
+            addElement(makeEl(std::move(strokes[0])));
+          } else if (!strokes.empty()) {
+            snapshot();
+            Els& els = elements();
+            for (El& el : strokes) {
+              el.z = nextZ();
+              els.push_back(makeEl(std::move(el)));
+            }
+            changed();
+          }
+        }
       } else if (shape) {
         El s = *shape;
         s.z = nextZ();
@@ -786,9 +850,32 @@ void EditorCore::armHold() {
   m_holdTimer.start();
 }
 
+std::vector<El> EditorCore::penStrokes(const El& shape) const {
+  std::vector<El> out;
+  for (const std::vector<P2>& line : shapeLines(shape.shape, widths.value("pen"))) {
+    El el;
+    el.id = newId();
+    el.kind = Kind::Stroke;
+    el.tool = "pen";
+    el.style = penStyle;
+    el.color = colors.value("pen");
+    el.width = widths.value("pen");
+    el.smooth = 0;
+    for (const P2& p : line) el.points.push_back({p[0], p[1], 0.5});
+    if (penStyle == "construction") {
+      el.extra.insert("dash", penDash == "dot" ? "dot" : "dash");
+      if (penGap != 1) el.extra.insert("gap", penGap);
+    }
+    out.push_back(std::move(el));
+  }
+  return out;
+}
+
 void EditorCore::holdFired() {
   Gesture& g = m_g;
   if (g.type != G::Draw || g.preview || g.points.size() < 4) return;
+  // Tape is straight already: holding it still changes nothing.
+  if (g.tool == "pen" && penStyle == "tape") return;
   const double now = draw::clockMs();
   std::vector<double> times = g.times;
   times.back() = std::max(now, g.times.back());
@@ -1904,7 +1991,9 @@ void EditorCore::drawOverlay(Canvas& c, int pi) {
     if (g.preview && g.tool == "highlighter" && g.preview->shape.kind == "line") {
       draw::drawStroke(c, straightHighlight(g.preview->shape.points).toJson());
     } else if (g.preview) {
-      draw::drawElement(c, g.preview->toJson());
+      if (g.tool == "pen" && keepsPen(penStyle))
+        for (const El& el : penStrokes(*g.preview)) draw::drawStroke(c, el.toJson());
+      else draw::drawElement(c, g.preview->toJson());
       if (g.held) drawHeldHint(c, *g.preview, g.held->mode);
     } else if (g.ruler) {
       El live;

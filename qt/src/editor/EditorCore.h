@@ -267,6 +267,8 @@ private:
   bool scratchAway(const std::vector<Pt>& points);
   /// A tap on masking tape: shows what's under it, or covers it again.
   bool toggleTapeAt(double x, double y);
+  /// A held shape as strokes of the current pen (for the pens whose look it keeps).
+  std::vector<El> penStrokes(const El& shape) const;
   bool m_editingNew = false;
   Els m_editingBefore;
   std::vector<Recent> m_recentInk;

@@ -5,6 +5,10 @@ Updates → What's new) and on its GitHub release. Keep them short, one line
 per change, written for the people using Inkleaf. A release needs its
 section here before it can be published (`scripts/check-version.py`).
 
+## 0.16.1
+
+- **Fixed:** holding the pen still at the end of a stroke no longer turns tape into a thin line. Dashed, dotted, marker, watercolour and neon strokes keep their look when they're straightened into a line or shape.
+
 ## 0.16.0
 
 - **Daftar setup, step by step:** school, classes, timetable, holidays and cover, one at a time, in Arabic first. Classes are added as chips; the timetable is painted on a weekly grid (pick a class, tap or drag over its hours). The same steps open from Daftar settings.
