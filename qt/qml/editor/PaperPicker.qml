@@ -27,6 +27,11 @@ Popup {
 
     readonly property var categories: [{ id: "basic", label: "Basic", short: "Basic" }, { id: "notes", label: "Notes", short: "Notes" }, { id: "science", label: "Maths & science", short: "Maths" }, { id: "writing", label: "Writing & art", short: "Writing" }, { id: "planner", label: "Planner", short: "Planner" }, { id: "teacher", label: "Teacher", short: "Teacher" }, { id: "mine", label: "Your templates", short: "Yours" }]
     property var all: []
+    /// Papers that come in colours: one card, with its colours as dots under it.
+    readonly property var colourways: ({
+        "daftar": [{ id: "daftar", color: "#5b2a5e", name: "Plum" }, { id: "daftar-blue", color: "#1f6fd1", name: "Blue" }, { id: "daftar-green", color: "#1f7a4a", name: "Green" },
+                   { id: "daftar-pink", color: "#d1245f", name: "Pink" }, { id: "daftar-navy", color: "#2d2f72", name: "Navy" }, { id: "daftar-orange", color: "#e0612a", name: "Orange" }]
+    })
     /// Your templates (pages you kept).
     property var mine: []
     function reloadMine() { try { mine = InkleafCore.call("pageTemplates") } catch (e) { mine = [] } }
@@ -183,11 +188,16 @@ Popup {
                 delegate: AbstractButton {
                     id: card
                     required property var modelData
-                    readonly property bool on: modelData.id === root.current
+                    /// Its colours, if it has some (the lesson log).
+                    readonly property var ways: root.colourways[modelData.id] || null
+                    readonly property bool on: ways ? ways.some(w => w.id === root.current) : modelData.id === root.current
+                    /// The one shown and used: the page's colour of it, or the first.
+                    readonly property string shown: ways && on ? root.current : modelData.id
                     implicitWidth: 96
-                    implicitHeight: 136
+                    implicitHeight: ways ? 158 : 136
                     hoverEnabled: true
-                    onClicked: { root.close(); if (!on) root.canvas.setPaper(root.page, modelData.id, "", false) }
+                    function use(id) { root.close(); if (id !== root.current) root.canvas.setPaper(root.page, id, "", false) }
+                    onClicked: use(shown)
                     background: Item {}
                     contentItem: ColumnLayout {
                         spacing: 6
@@ -199,12 +209,36 @@ Popup {
                             Image {
                                 anchors.fill: parent
                                 sourceSize: Qt.size(176, 220)
-                                source: "image://paper/" + card.modelData.id + "/" + root.paper.replace("#", "") + "/" + (card.modelData.preview === "page" ? "whole" : "corner")
+                                source: "image://paper/" + card.shown + "/" + root.paper.replace("#", "") + "/" + (card.modelData.preview === "page" ? "whole" : "corner")
                                 asynchronous: false
                                 cache: true
                             }
                         }
                         Label { text: card.modelData.label; font.pixelSize: 12; color: card.on ? Theme.accent : Theme.text; font.weight: card.on ? Font.DemiBold : Font.Normal; Layout.alignment: Qt.AlignHCenter; elide: Text.ElideRight; Layout.maximumWidth: 92 }
+                        // Its colours: tap one to use it.
+                        Row {
+                            visible: !!card.ways
+                            Layout.alignment: Qt.AlignHCenter
+                            spacing: 3
+                            Repeater {
+                                model: card.ways || []
+                                delegate: AbstractButton {
+                                    id: dot
+                                    required property var modelData
+                                    readonly property bool picked: card.shown === modelData.id
+                                    width: 14; height: 14
+                                    hoverEnabled: true
+                                    ToolTip.visible: hovered
+                                    ToolTip.delay: 400
+                                    ToolTip.text: modelData.name
+                                    onClicked: card.use(modelData.id)
+                                    background: Item {
+                                        Rectangle { visible: dot.picked; anchors.centerIn: parent; width: 16; height: 16; radius: Theme.swatchRadius(16); antialiasing: true; color: "transparent"; border.width: 1.5; border.color: dot.modelData.color }
+                                        Rectangle { anchors.centerIn: parent; width: dot.picked ? 10 : dot.hovered ? 13 : 12; height: width; radius: Theme.swatchRadius(width); antialiasing: true; color: dot.modelData.color }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
