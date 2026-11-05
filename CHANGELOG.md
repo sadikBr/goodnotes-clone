@@ -7,6 +7,8 @@ section here before it can be published (`scripts/check-version.py`).
 
 ## 0.16.2
 
+- **Contents page:** *Insert → Contents page* puts a page at the front listing your headings and a PDF's chapters with their page numbers; tap an entry's arrow to go there. It keeps itself up to date as you add headings or pages.
+- **Chapters in exported PDFs:** a PDF you export opens with its contents (your headings, a PDF's own chapters, a daftar's classes) in the reader's sidebar.
 - **The shelf's first card is yours to choose:** it makes one thing with a tap (a notebook at first). Its ⇄ button, or *Settings → Appearance → Library*, switches it to a daftar, PDFs, a folder, a sketchbook or a whiteboard. *New* in the sidebar still has them all.
 - **Fixed:** the eraser's circle stays under the pen instead of trailing behind it.
 - **Fixed:** with the pen in the library, tapping a document's or folder's ⋯ opens its menu, and tapping a menu or a dialog over the shelf no longer opens what's behind it too.

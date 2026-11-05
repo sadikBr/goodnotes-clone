@@ -596,6 +596,7 @@ void InkCanvas::addPage(int index, const QString& tmpl) {
   InkleafCore::instance()->callJson("addPage", args, &err);
   if (!err.isEmpty()) return emit message(err, true);
   reloadPages();
+  refreshContentsPage();
   goToPage(index < 0 ? int(m_pages.size()) - 1 : index);
 }
 
@@ -606,6 +607,7 @@ void InkCanvas::duplicatePage(int index) {
   InkleafCore::instance()->callJson("duplicatePage", {{"pageId", m_pages[index].id}}, &err);
   if (!err.isEmpty()) return emit message(err, true);
   reloadPages();
+  refreshContentsPage();
   goToPage(index + 1);
 }
 
@@ -616,6 +618,7 @@ void InkCanvas::deletePage(int index) {
   InkleafCore::instance()->callJson("deletePage", {{"pageId", m_pages[index].id}}, &err);
   if (!err.isEmpty()) return emit message(err, true);
   reloadPages();
+  refreshContentsPage();
 }
 
 void InkCanvas::movePage(int index, int to) {
@@ -625,6 +628,7 @@ void InkCanvas::movePage(int index, int to) {
   InkleafCore::instance()->callJson("movePage", {{"pageId", m_pages[index].id}, {"newIndex", to}}, &err);
   if (!err.isEmpty()) return emit message(err, true);
   reloadPages();
+  refreshContentsPage();
 }
 
 void InkCanvas::togglePageFavourite(int index) {
@@ -721,11 +725,89 @@ QVariantList InkCanvas::contents() {
   return out;
 }
 
+int InkCanvas::contentsPageIndex() {
+  const QString id = notebookSetting("contentsPage").toString();
+  return id.isEmpty() ? -1 : pageIndexOf(id);
+}
+
+int InkCanvas::insertContentsPage() {
+  if (m_notebookId.isEmpty()) return -1;
+  int at = contentsPageIndex();
+  if (at < 0) {
+    finishEdit();
+    flush();
+    // At the front, after a cover.
+    const int index = !m_pages.empty() && m_pages[0].tmpl.startsWith("cover") ? 1 : 0;
+    QString err;
+    const QJsonObject page = InkleafCore::instance()->callJson("addPage", {{"notebookId", m_notebookId}, {"index", index}, {"template", "blank"}}, &err).toObject();
+    if (!err.isEmpty()) return emit message(err, true), -1;
+    setNotebookSetting("contentsPage", page["id"].toString());
+    reloadPages();
+    at = contentsPageIndex();
+  }
+  refreshContentsPage();
+  goToPage(at);
+  return at;
+}
+
+void InkCanvas::refreshContentsPage() {
+  const int at = contentsPageIndex();
+  if (at < 0 || !m_ed) return;
+  const Page& p = m_pages[at];
+  QVariantList entries;
+  for (const QVariant& v : contents())
+    if (v.toMap().value("page").toInt() != at) entries.append(v);
+  const double margin = std::max(48.0, p.w * 0.09), width = p.w - 2 * margin;
+  const double top = margin + 78;
+  const int n = std::max(1, int(entries.size()));
+  const double lineH = std::clamp((p.h - top - margin) / n, 22.0, 36.0);
+  const int fits = int((p.h - top - margin) / lineH);
+  const double fs = std::clamp(lineH * 0.48, 11.0, 16.0);
+  std::vector<ed::El> add;
+  auto text = [&](double x, double y, double w, const QString& t, double size, const QString& color, bool bold, const QString& align, const QJsonObject& link) {
+    ed::El el;
+    el.id = ed::newId();
+    el.kind = ed::Kind::Text;
+    el.x = x;
+    el.y = y;
+    el.w = w;
+    el.text = t;
+    el.fontSize = size;
+    el.color = color;
+    el.font = QStringLiteral("sans");
+    if (bold) el.bold = true;
+    if (align != "left") el.align = align;
+    el.extra["contents"] = true;
+    if (!link.isEmpty()) el.extra["link"] = link;
+    add.push_back(std::move(el));
+  };
+  text(margin, margin, width, QStringLiteral("Contents"), 30, "#1d1f23", true, "left", {});
+  if (entries.isEmpty())
+    text(margin, top, width, QStringLiteral("Add headings in the pages panel (Contents), and they're listed here."), 14, "#6b7280", false, "left", {});
+  for (int k = 0; k < std::min(int(entries.size()), fits); ++k) {
+    const QVariantMap e = entries[k].toMap();
+    const int level = std::clamp(e.value("level").toInt(), 0, 3);
+    const int page = e.value("page").toInt();
+    const double y = top + k * lineH, indent = level * 22;
+    // A quiet link (a small arrow, not a chip with its name): the list says where it goes.
+    const QJsonObject link{{"kind", "page"}, {"page", m_pages[page].id}, {"compact", true}};
+    text(margin + indent, y, width - indent - 64, e.value("title").toString(), level ? fs - 1 : fs, level ? "#374151" : "#1d1f23", level == 0, "left", link);
+    text(margin + width - 56, y, 56, QString::number(page + 1), fs, "#6b7280", false, "right", link);
+  }
+  if (int(entries.size()) > fits)
+    text(margin, top + fits * lineH, width, QStringLiteral("…and %1 more").arg(int(entries.size()) - fits), fs - 1, "#6b7280", false, "left", {});
+  // What's on it besides the list (your own writing) stays.
+  m_ed->replaceOnPage(at, [](const ed::El& e) { return e.extra.value("contents").toBool(); }, std::move(add));
+  afterCore();
+  m_saveTimer.start();
+}
+
 void InkCanvas::addHeading(int index, const QString& title, int level) {
   if (index < 0 || index >= int(m_pages.size()) || title.trimmed().isEmpty()) return;
   QVariantList list = notebookSetting("contents").toList();
   list.append(QVariantMap{{"id", QUuid::createUuid().toString(QUuid::WithoutBraces)}, {"page", m_pages[index].id}, {"title", title.trimmed().left(200)}, {"level", std::clamp(level, 0, 3)}});
   setNotebookSetting("contents", list);
+  refreshContentsPage();
 }
 
 void InkCanvas::changeHeading(const QString& id, const QVariantMap& change) {
@@ -738,12 +820,14 @@ void InkCanvas::changeHeading(const QString& id, const QVariantMap& change) {
     h = m;
   }
   setNotebookSetting("contents", list);
+  refreshContentsPage();
 }
 
 void InkCanvas::removeHeading(const QString& id) {
   QVariantList list = notebookSetting("contents").toList();
   list.erase(std::remove_if(list.begin(), list.end(), [&](const QVariant& h) { return h.toMap().value("id").toString() == id; }), list.end());
   setNotebookSetting("contents", list);
+  refreshContentsPage();
 }
 
 QString InkCanvas::savePageAsTemplate(int index, const QString& name) {

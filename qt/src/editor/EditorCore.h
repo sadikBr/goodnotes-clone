@@ -157,6 +157,9 @@ public:
   bool linkSelection(const QJsonObject& link);
   /// Page `page`'s links: where each is (linked things near each other together) and where it goes.
   std::vector<std::pair<Rect, QJsonObject>> linksOn(int page);
+  /// Page `pi`'s elements that `drop` picks give way to `add` (not undoable: for
+  /// pages the app writes itself, like the contents page).
+  void replaceOnPage(int pi, const std::function<bool(const El&)>& drop, std::vector<El> add);
   /// Selects these elements on page `pi`.
   void selectIds(int pi, const QStringList& ids);
   /// The words written on page `pi` (pen strokes grouped into lines and words; only the

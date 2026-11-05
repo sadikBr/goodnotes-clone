@@ -444,7 +444,10 @@ Rectangle {
                                 { icon: "table", label: "Table", sub: "Rows and columns to type or write in", action: () => tablePicker.show(insertBtn) },
                             { icon: "graph", label: "Graph", sub: "Plot functions, as you'd write them", action: () => graphDialog.show(null, false) },
                                 { icon: "stack", label: "My pieces", sub: "Something you saved to use again", action: () => piecesPanel.show(insertBtn) },
-                                { icon: "page", label: "Page", sub: "A new page after this one", action: () => root.activeCanvas.addPage(root.activeCanvas.currentPage + 1, "") }
+                                { icon: "page", label: "Page", sub: "A new page after this one", action: () => root.activeCanvas.addPage(root.activeCanvas.currentPage + 1, "") },
+                                root.activeCanvas.contentsPageIndex() >= 0
+                                    ? { icon: "contents", label: "Update the contents page", sub: "Its headings and page numbers, as they are now", action: () => { root.activeCanvas.insertContentsPage(); root.notify("Contents page updated", false) } }
+                                    : { icon: "contents", label: "Contents page", sub: "Your headings and chapters, each a link", action: () => root.activeCanvas.insertContentsPage() }
                             ])
                             background: Rectangle {
                                 antialiasing: true

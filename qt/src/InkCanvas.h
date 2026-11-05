@@ -277,6 +277,14 @@ public:
   /// The contents, in page order: the PDF's own (kind "pdf") and your headings
   /// (kind "heading", with an id): [{ kind, title, level, page, id }].
   Q_INVOKABLE QVariantList contents();
+  /// The contents page: a page listing the contents with their page numbers,
+  /// each a link there. Insert puts one at the front (after a cover) and returns
+  /// its index; if there is one already it's brought up to date and its index returned.
+  Q_INVOKABLE int insertContentsPage();
+  /// The contents page's index (-1: none).
+  Q_INVOKABLE int contentsPageIndex();
+  /// Writes the contents page again (the headings or the pages changed).
+  Q_INVOKABLE void refreshContentsPage();
   /// Your headings: one for page `index`; a change ({ title, level }); gone.
   Q_INVOKABLE void addHeading(int index, const QString& title, int level = 0);
   Q_INVOKABLE void changeHeading(const QString& id, const QVariantMap& change);

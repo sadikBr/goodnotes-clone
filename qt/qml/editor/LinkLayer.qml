@@ -49,10 +49,12 @@ Item {
             }
             AbstractButton {
                 id: chip
-                x: Math.round(lk.modelData.x + lk.modelData.w - width + 8)
-                y: Math.round(lk.modelData.y - height / 2 - 2)
-                height: 24
-                width: chipRow.implicitWidth + 14
+                // A quiet link (the contents page's rows): a small arrow beside it.
+                readonly property bool compact: !!lk.link.compact
+                x: compact ? Math.round(lk.modelData.x + lk.modelData.w + 6) : Math.round(lk.modelData.x + lk.modelData.w - width + 8)
+                y: compact ? Math.round(lk.modelData.y + lk.modelData.h / 2 - height / 2) : Math.round(lk.modelData.y - height / 2 - 2)
+                height: compact ? 22 : 24
+                width: compact ? 22 : chipRow.implicitWidth + 14
                 hoverEnabled: true
                 scale: pressed ? 0.94 : hovered ? 1.04 : 1
                 Behavior on scale { NumberAnimation { duration: 120 } }
@@ -61,16 +63,17 @@ Item {
                 ToolTip.text: lk.link.kind === "url" ? "Open " + lk.link.url : lk.link.kind === "notebook" ? "Open “" + (lk.link.title || "the notebook") + "”" : "Go to " + root.labelOf(lk.link).toLowerCase()
                 onClicked: root.follow(lk.link, lk.modelData.page)
                 background: Item {
-                    Shadow { anchors.fill: parent; radius: Theme.radius; level: 2 }
-                    Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radius; color: chip.hovered ? Theme.accent : Theme.surface; border.color: chip.hovered ? Theme.accent : Theme.border }
+                    Shadow { anchors.fill: parent; radius: chip.compact ? width / 2 : Theme.radius; level: chip.compact ? 1 : 2 }
+                    Rectangle { antialiasing: true; anchors.fill: parent; radius: chip.compact ? width / 2 : Theme.radius; color: chip.hovered ? Theme.accent : Theme.surface; border.color: chip.hovered ? Theme.accent : Theme.border }
                 }
                 contentItem: Item {
                     Row {
                         id: chipRow
                         anchors.centerIn: parent
                         spacing: 4
-                        Icon { anchors.verticalCenter: parent.verticalCenter; name: root.iconOf(lk.link); size: 13; color: chip.hovered ? Theme.accentContrast : Theme.accent }
+                        Icon { anchors.verticalCenter: parent.verticalCenter; name: chip.compact ? "next" : root.iconOf(lk.link); size: chip.compact ? 12 : 13; color: chip.hovered ? Theme.accentContrast : Theme.accent }
                         Label {
+                            visible: !chip.compact
                             anchors.verticalCenter: parent.verticalCenter
                             text: root.labelOf(lk.link)
                             width: Math.min(implicitWidth, 140)

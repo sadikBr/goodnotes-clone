@@ -1632,6 +1632,23 @@ bool EditorCore::updateSelectedGraph(const QVariantMap& spec) {
 
 // ------------------------------------------------------------ words (spelling)
 
+void EditorCore::replaceOnPage(int pi, const std::function<bool(const El&)>& drop, std::vector<El> add) {
+  if (pi < 0 || pi >= int(pages.size())) return;
+  if (pi == active) finishTextEdit();
+  Els& els = load(pi);
+  els.erase(std::remove_if(els.begin(), els.end(), [&](const ElPtr& e) { if (drop(*e)) { m_selection.remove(e->id); return true; } return false; }), els.end());
+  double z = 0;
+  for (const ElPtr& e : els) z = std::max(z, e->z);
+  for (El& e : add) {
+    e.z = ++z;
+    els.push_back(makeEl(std::move(e)));
+  }
+  pages[size_t(pi)].dirty = true;
+  ++rev;
+  touchOverlay();
+  ++selectionRev;
+}
+
 void EditorCore::selectIds(int pi, const QStringList& ids) {
   activate(pi);
   m_selection.clear();
