@@ -18,8 +18,8 @@ Item {
     /// The drawer sits beside the tool (the side rail): the pointer is on its left, at `pointerY`.
     property bool fromLeft: false
     property real pointerY: height / 2
-    /// Beside the rail everything is squarer (as the rail is).
-    readonly property bool squared: fromLeft
+    /// Squarer corners, as the tool strip has.
+    readonly property bool squared: true
     readonly property string tool: canvas.tool
     readonly property var fav: prefs.get(tool)
     readonly property var spec: prefs.specs[tool]
@@ -245,8 +245,8 @@ Item {
                     ToolTip.text: "Tap again to change this colour"
                     onClicked: on ? colorPop.show(sw, root.prefs.paletteFor(root.tool), modelData, c => root.prefs.setColor(root.tool, index, c)) : root.prefs.selectColor(root.tool, index)
                     background: Item {
-                        Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: -4; radius: root.squared ? 8 : width / 2; color: "transparent"; border.width: 2; border.color: Theme.mix(sw.modelData, Theme.text, 0.2); visible: sw.on }
-                        Rectangle { antialiasing: true; anchors.fill: parent; radius: root.squared ? 5 : width / 2; color: sw.modelData; border.width: 1; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4) }
+                        Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: -4; radius: width / 2; color: "transparent"; border.width: 2; border.color: Theme.mix(sw.modelData, Theme.text, 0.2); visible: sw.on }
+                        Rectangle { antialiasing: true; anchors.fill: parent; radius: width / 2; color: sw.modelData; border.width: 1; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4) }
                     }
                 }
             }

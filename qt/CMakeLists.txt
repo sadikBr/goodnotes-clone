@@ -199,6 +199,7 @@ qt_add_qml_module(inkleaf
     qml/editor/Fonts.js
     qml/editor/ColorPopover.qml
     qml/editor/PenCase.qml
+    qml/editor/ToolStrip.qml
     qml/editor/ToolDrawer.qml
     qml/editor/SelectionBar.qml
     qml/editor/PageSidebar.qml

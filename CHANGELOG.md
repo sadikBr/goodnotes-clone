@@ -7,6 +7,8 @@ section here before it can be published (`scripts/check-version.py`).
 
 ## 0.16.1
 
+- **Tools in the top bar** look and work like the side rail: one strip, Select first, the same groups, and your colours with **+** at the end.
+- **Your colours are shared:** a colour you add shows for every tool, in the top bar and the side rail. Colours added per tool in 0.16.0 are kept.
 - **Fixed:** holding the pen still at the end of a stroke no longer turns tape into a thin line. Dashed, dotted, marker, watercolour and neon strokes keep their look when they're straightened into a line or shape.
 
 ## 0.16.0

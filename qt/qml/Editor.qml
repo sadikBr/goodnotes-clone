@@ -68,22 +68,37 @@ Rectangle {
         onAccepted: root.activeCanvas.insertImage(selectedFile.toString())
     }
     PopupMenu { id: menu }
+    readonly property PopupMenu mainMenu: menu
     // Picks a colour to add to the side rail (added once it closes).
     ColorPopover {
         id: railColorPop
         property string tool: ""
         property string picked: ""
-        onClosed: if (picked) root.toolPrefs.addRailColor(tool, picked)
-        /// Beside this button (the rail's +), once its size is known.
+        onClosed: if (picked) root.toolPrefs.addRailColor(picked)
+        /// By the strip's + (beside the rail, under the top bar), once its size is known.
         property Item beside: null
         function place() {
             if (!beside) return
             const p = beside.mapToItem(parent, 0, 0)
-            x = p.x + beside.width + 14
-            y = Math.max(8, Math.min(parent.height - height - 8, p.y + beside.height / 2 - height / 2))
+            if (root.rail) {
+                x = p.x + beside.width + 14
+                y = Math.max(8, Math.min(parent.height - height - 8, p.y + beside.height / 2 - height / 2))
+            } else {
+                x = Math.max(8, Math.min(parent.width - width - 8, p.x + beside.width / 2 - width / 2))
+                y = p.y + beside.height + 10
+            }
         }
         onHeightChanged: place()
         onOpened: place()
+    }
+    /// + in the tool strip: pick a colour; it's used now and added for every tool when the picker closes.
+    function addRailColor(anchor) {
+        const t = canvas.tool
+        railColorPop.tool = t
+        railColorPop.picked = ""
+        railColorPop.show(anchor, toolPrefs.paletteFor(t), toolPrefs.color(t), c => { railColorPop.picked = c; toolPrefs.useColor(railColorPop.tool, c) })
+        railColorPop.beside = anchor
+        railColorPop.place()
     }
     PaperPicker { id: paperPicker; canvas: root.mainCanvas }
     CoverPicker { id: coverPicker; canvas: root.mainCanvas; notebookId: root.notebookId; title: root.title }
@@ -296,56 +311,19 @@ Rectangle {
                     Item { Layout.fillWidth: true }
                 }
 
-                // Middle: the tool trays.
-                RowLayout {
+                // Middle: the tools (or nothing, with them in the side rail).
+                ToolStrip {
                     id: trays
                     visible: !root.rail
-                    spacing: 10
-                    Repeater {
-                        model: root.rail ? 0 : 3
-                        delegate: Rectangle { antialiasing: true;
-                            id: tray
-                            required property int index
-                            implicitWidth: trayRow.implicitWidth + 8
-                            implicitHeight: 46
-                            radius: 14
-                            color: Theme.surface2
-                            RowLayout {
-                                id: trayRow
-                                anchors.centerIn: parent
-                                spacing: 2
-                                Repeater {
-                                    model: root.tools.filter(t => t.tray === tray.index)
-                                    delegate: ToolBtn {
-                                        required property var modelData
-                                        objectName: "tool-" + modelData.id
-                                        iconName: modelData.icon
-                                        active: canvas.tool === modelData.id
-                                        ink: modelData.id === "sticky" || modelData.id === "lasso" || modelData.id === "hand" || modelData.id === "eraser" ? "" : (canvas.colors[modelData.id] || "")
-                                        tip: active ? modelData.label + " — tap again to " + (root.drawerOpen ? "hide" : "show") + " its options" : modelData.label + (modelData.key ? " (" + modelData.key + ")" : "")
-                                        onClicked: root.pick(modelData.id)
-                                        onActiveChanged: if (active) drawer.anchorItem = this
-                                        Component.onCompleted: if (active) drawer.anchorItem = this
-                                    }
-                                }
-                                // The instruments, with the tools you draw with.
-                                ToolBtn {
-                                    id: rulerBtn
-                                    visible: tray.index === 1
-                                    iconName: "ruler"
-                                    readonly property bool on: !!canvas.instrument.visible
-                                    active: on
-                                    tip: "Ruler, protractor, set squares (R)"
-                                    onClicked: menu.show(rulerBtn, [
-                                        { label: "Ruler", checked: on && canvas.instrument.kind === "ruler", action: () => canvas.showInstrument("ruler") },
-                                        { label: "Protractor", checked: on && canvas.instrument.kind === "protractor", action: () => canvas.showInstrument("protractor") },
-                                        { label: "Set square 45°", checked: on && canvas.instrument.kind === "square45", action: () => canvas.showInstrument("square45") },
-                                        { label: "Set square 30°/60°", checked: on && canvas.instrument.kind === "square60", action: () => canvas.showInstrument("square60") }
-                                    ].concat(on ? [{ label: "Hide", action: () => canvas.showInstrument("") }] : []))
-                                }
-                            }
-                        }
-                    }
+                    vertical: false
+                    canvas: root.mainCanvas
+                    prefs: root.toolPrefs
+                    tools: root.tools
+                    menu: root.mainMenu
+                    drawerOpen: root.drawerOpen
+                    onPicked: id => root.pick(id)
+                    onActiveButton: item => { if (!root.rail) drawer.anchorItem = item }
+                    onAddColor: anchor => root.addRailColor(anchor)
                 }
 
                 // Right: history, page, export, more.
@@ -516,123 +494,20 @@ Rectangle {
                 visible: Layout.preferredWidth > 0
                 z: 6
                     // The tools down the left side (Settings → Appearance → Tools: Side rail).
-                    Rectangle {
+                    ToolStrip {
                         id: toolRail
                         visible: root.rail && !root.focusMode
                         x: 10
                         anchors.verticalCenter: parent.verticalCenter
-                        width: 54
-                        height: railCol.implicitHeight + 12
-                        radius: 10
-                        antialiasing: true
-                        color: Theme.surface
-                        border.color: Theme.border
-                        Shadow { anchors.fill: parent; radius: 10; level: 2; z: -1 }
-                        // Presses on the rail stay off the page.
-                        MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons }
-                        readonly property var fav: root.toolPrefs.get(canvas.tool)
-                        readonly property bool hasColor: !!fav && fav.colors.length > 0
-                        // Select first; then what writes, what's placed on the page, and presenting / moving around.
-                        readonly property var groups: [["lasso"], ["pen", "highlighter", "eraser"], ["shape", "text", "sticky", "ruler"], ["laser", "hand"]]
-                        Column {
-                            id: railCol
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            y: 6
-                            spacing: 2
-                            Repeater {
-                                model: root.rail ? toolRail.groups : []
-                                delegate: Column {
-                                    id: railGroup
-                                    required property var modelData
-                                    required property int index
-                                    spacing: 2
-                                    Item { visible: railGroup.index > 0; width: 42; height: 9; Rectangle { anchors.centerIn: parent; width: 26; height: 1; color: Theme.border } }
-                                    Repeater {
-                                        model: railGroup.modelData.filter(id => id !== "ruler").map(id => root.tools.find(t => t.id === id))
-                                        delegate: ToolBtn {
-                                            required property var modelData
-                                            objectName: "rail-" + modelData.id
-                                            implicitWidth: 42; implicitHeight: 42
-                                            corner: 8
-                                            iconName: modelData.icon
-                                            active: canvas.tool === modelData.id
-                                            ink: modelData.id === "sticky" || modelData.id === "lasso" || modelData.id === "hand" || modelData.id === "eraser" ? "" : (canvas.colors[modelData.id] || "")
-                                            tip: active ? modelData.label + " — tap again to " + (root.drawerOpen ? "hide" : "show") + " its options" : modelData.label + (modelData.key ? " (" + modelData.key + ")" : "")
-                                            ToolTip.delay: 600
-                                            onClicked: root.pick(modelData.id)
-                                            onActiveChanged: if (active) drawer.anchorItem = this
-                                            Component.onCompleted: if (active) drawer.anchorItem = this
-                                        }
-                                    }
-                                    ToolBtn {
-                                        id: railRuler
-                                        visible: railGroup.modelData.indexOf("ruler") >= 0
-                                        implicitWidth: 42; implicitHeight: 42
-                                        corner: 8
-                                        iconName: "ruler"
-                                        readonly property bool on: !!canvas.instrument.visible
-                                        active: on
-                                        tip: "Ruler, protractor, set squares (R)"
-                                        onClicked: menu.showBeside(railRuler, [
-                                            { label: "Ruler", checked: on && canvas.instrument.kind === "ruler", action: () => canvas.showInstrument("ruler") },
-                                            { label: "Protractor", checked: on && canvas.instrument.kind === "protractor", action: () => canvas.showInstrument("protractor") },
-                                            { label: "Set square 45°", checked: on && canvas.instrument.kind === "square45", action: () => canvas.showInstrument("square45") },
-                                            { label: "Set square 30°/60°", checked: on && canvas.instrument.kind === "square60", action: () => canvas.showInstrument("square60") }
-                                        ].concat(on ? [{ label: "Hide", action: () => canvas.showInstrument("") }] : []))
-                                    }
-                                }
-                            }
-                            // Your colours for this tool (none until you add some), and + to add one.
-                            Item { visible: toolRail.hasColor; width: 42; height: 9; Rectangle { anchors.centerIn: parent; width: 26; height: 1; color: Theme.border } }
-                            Repeater {
-                                model: toolRail.hasColor ? root.toolPrefs.railColors(canvas.tool) : []
-                                delegate: AbstractButton {
-                                    id: railSw
-                                    required property string modelData
-                                    readonly property bool on: String(canvas.colors[canvas.tool] || "").toLowerCase() === modelData.toLowerCase()
-                                    width: 42; height: 32
-                                    hoverEnabled: true
-                                    onClicked: root.toolPrefs.useColor(canvas.tool, modelData)
-                                    onPressAndHold: railSw.askRemove()
-                                    function askRemove() { menu.showBeside(railSw, [{ icon: "trash", label: "Remove this colour", danger: true, action: () => root.toolPrefs.removeRailColor(canvas.tool, railSw.modelData) }]) }
-                                    TapHandler { acceptedButtons: Qt.RightButton; onTapped: railSw.askRemove() }
-                                    ToolTip.visible: hovered
-                                    ToolTip.delay: 700
-                                    ToolTip.text: "Tap to use · hold or right-click to remove"
-                                    contentItem: Item {
-                                        Rectangle { antialiasing: true; anchors.centerIn: parent; width: 28; height: 28; radius: 14; color: "transparent"; border.width: 2; border.color: railSw.modelData; visible: railSw.on }
-                                        Rectangle { antialiasing: true; anchors.centerIn: parent; width: railSw.on ? 20 : 22; height: width; radius: width / 2; color: railSw.modelData; border.width: 1; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4); scale: railSw.hovered ? 1.1 : 1; Behavior on scale { NumberAnimation { duration: 120 } } }
-                                    }
-                                }
-                            }
-                            AbstractButton {
-                                id: railAdd
-                                visible: toolRail.hasColor && root.toolPrefs.railColors(canvas.tool).length < root.toolPrefs.maxRailColors
-                                width: 42; height: 34
-                                hoverEnabled: true
-                                ToolTip.visible: hovered
-                                ToolTip.delay: 500
-                                ToolTip.text: "Add a colour here"
-                                onClicked: {
-                                    railColorPop.tool = canvas.tool
-                                    railColorPop.picked = ""
-                                    railColorPop.show(railAdd, root.toolPrefs.paletteFor(canvas.tool), root.toolPrefs.color(canvas.tool), c => { railColorPop.picked = c; root.toolPrefs.useColor(railColorPop.tool, c) })
-                                    railColorPop.beside = railAdd
-                                    railColorPop.place()
-                                }
-                                contentItem: Item {
-                                    Rectangle {
-                                        antialiasing: true
-                                        anchors.centerIn: parent
-                                        width: 24; height: 24; radius: 12
-                                        color: railAdd.hovered ? Theme.surface2 : "transparent"
-                                        border.width: 1.5
-                                        border.color: railAdd.hovered ? Theme.accent : Theme.muted
-                                        Icon { anchors.centerIn: parent; name: "plus"; size: 14; color: railAdd.hovered ? Theme.accent : Theme.muted }
-                                    }
-                                }
-                            }
-                        }
+                        vertical: true
+                        canvas: root.mainCanvas
+                        prefs: root.toolPrefs
+                        tools: root.tools
+                        menu: root.mainMenu
+                        drawerOpen: root.drawerOpen
+                        onPicked: id => root.pick(id)
+                        onActiveButton: item => { if (root.rail) drawer.anchorItem = item }
+                        onAddColor: anchor => root.addRailColor(anchor)
                     }
             }
             Item {

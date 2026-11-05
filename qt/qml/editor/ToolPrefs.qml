@@ -36,8 +36,8 @@ QtObject {
     property Prefs store: Prefs {
         category: "editor"
         property string favs: "{}"
-        /// The side rail's colours, chosen by you: { tool: ["#hex", …] } (none at first).
-        property string railColors: "{}"
+        /// Your colours in the tool strip, for every tool: ["#hex", …] (none at first).
+        property string railColors: "[]"
         property string daftarOutlines: "[]"
         property string tool: "pen"
         property string penStyle: "fountain"
@@ -79,22 +79,30 @@ QtObject {
     function selectSize(tool, i) { const d = JSON.parse(JSON.stringify(data)); d[tool].size = i; save(d) }
     function setSize(tool, i, v) { const d = JSON.parse(JSON.stringify(data)); d[tool].sizes[i] = v; d[tool].size = i; save(d) }
 
-    // --- the side rail's colours ---
+    // --- your colours (in the tool strip; one list for every tool) ---
     readonly property int maxRailColors: 8
-    property var railData: { try { const v = JSON.parse(store.railColors); return v && typeof v === "object" ? v : {} } catch (e) { return {} } }
-    function railColors(tool) { return Array.isArray(railData[tool]) ? railData[tool] : [] }
-    function saveRail(tool, list) {
-        const d = JSON.parse(JSON.stringify(railData))
-        d[tool] = list
-        railData = d
-        store.railColors = JSON.stringify(d)
+    /// Saved as a list; colours saved per tool (0.16.0) are joined into it.
+    property var railList: {
+        try {
+            const v = JSON.parse(store.railColors)
+            if (Array.isArray(v)) return v.filter(c => typeof c === "string")
+            const out = []
+            if (v && typeof v === "object")
+                for (const k in v) if (Array.isArray(v[k])) for (const c of v[k]) if (typeof c === "string" && !out.some(x => x.toLowerCase() === c.toLowerCase())) out.push(c)
+            return out.slice(-maxRailColors)
+        } catch (e) { return [] }
     }
-    function addRailColor(tool, c) {
-        const list = railColors(tool).filter(x => x.toLowerCase() !== c.toLowerCase())
+    function railColors() { return railList }
+    function saveRail(list) {
+        railList = list
+        store.railColors = JSON.stringify(list)
+    }
+    function addRailColor(c) {
+        const list = railList.filter(x => x.toLowerCase() !== c.toLowerCase())
         if (list.length >= maxRailColors) list.shift()
-        saveRail(tool, list.concat([c]))
+        saveRail(list.concat([c]))
     }
-    function removeRailColor(tool, c) { saveRail(tool, railColors(tool).filter(x => x !== c)) }
+    function removeRailColor(c) { saveRail(railList.filter(x => x !== c)) }
     /// Writes with `c`: picks it if it's one of the tool's favourites, else puts it in the current one.
     function useColor(tool, c) {
         const f = data[tool]
