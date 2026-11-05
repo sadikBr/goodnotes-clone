@@ -37,6 +37,22 @@ Rectangle {
             if (r.title.trim()) { root.canvas.addHeading(index, r.title.trim(), r.level); root.mode = "contents" }
         }, { validate: v => v.title.trim() ? null : "Give it a name" })
     }
+    /// Deletes a page (to the notebook's trash), with Undo in the message.
+    function deletePage(i) {
+        const id = (root.canvas.pages[i] || {}).id
+        if (!id) return
+        root.canvas.deletePage(i)
+        Notice.post("Page " + (i + 1) + " deleted", false, { icon: "trash", actionLabel: "Undo", action: () => root.canvas.restorePage(id) })
+    }
+    /// The notebook's deleted pages.
+    property var trashed: []
+    function reloadTrash() { trashed = root.canvas.notebookId ? root.canvas.trashedPages() : [] }
+    Connections {
+        target: root.canvas
+        function onPagesChanged() { root.reloadTrash() }
+        function onNotebookIdChanged() { root.reloadTrash() }
+    }
+    Component.onCompleted: reloadTrash()
     readonly property int bookmarks: root.canvas.pages.filter(p => !!p.favourite).length
 
     ColumnLayout {
@@ -184,7 +200,7 @@ Rectangle {
                         { icon: "bookmark", label: cell.modelData.favourite ? "Remove bookmark" : "Bookmark page", action: () => root.canvas.togglePageFavourite(cell.index) },
                         { icon: "contents", label: "Add to contents…", action: () => root.askHeading(cell.index) },
                         { separator: true },
-                        { icon: "trash", label: "Delete page", danger: true, action: () => root.canvas.deletePage(cell.index) }
+                        { icon: "trash", label: "Delete page", danger: true, action: () => root.deletePage(cell.index) }
                     ])
                 }
                 Label {
@@ -375,6 +391,33 @@ Rectangle {
                 }
             }
         }
+        // Recently deleted pages (only when there are some).
+        AbstractButton {
+            id: trashBtn
+            visible: !root.showContents && root.trashed.length > 0
+            Layout.fillWidth: true
+            Layout.leftMargin: 10
+            Layout.rightMargin: 10
+            Layout.topMargin: 4
+            implicitHeight: 32
+            hoverEnabled: true
+            onClicked: trashPop.open()
+            background: Rectangle { antialiasing: true; radius: Theme.radius; color: trashBtn.hovered ? Theme.surface2 : "transparent" }
+            contentItem: RowLayout {
+                spacing: 8
+                Icon { Layout.leftMargin: 8; name: "trash"; size: 15; color: Theme.muted }
+                Label { Layout.fillWidth: true; text: "Recently deleted"; font.pixelSize: 13; color: Theme.text }
+                Rectangle {
+                    Layout.rightMargin: 8
+                    Layout.preferredHeight: 18
+                    Layout.preferredWidth: trashCount.implicitWidth + 12
+                    radius: Theme.radiusSm
+                    antialiasing: true
+                    color: Theme.surface2
+                    Label { id: trashCount; anchors.centerIn: parent; text: root.trashed.length; font.pixelSize: 11; font.weight: Font.DemiBold; color: Theme.muted }
+                }
+            }
+        }
         AbstractButton {
             id: add
             visible: !root.showContents
@@ -397,6 +440,130 @@ Rectangle {
                     Label { text: "Add page"; font.weight: Font.DemiBold; color: add.hovered ? Theme.accent : Theme.muted }
                 }
             }
+        }
+    }
+
+    // The notebook's deleted pages: put one back, or let it go.
+    Popup {
+        id: trashPop
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(parent.width - 32, 560)
+        height: Math.min(parent.height - 64, 520)
+        padding: 0
+        modal: true
+        focus: true
+        Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, Theme.dark ? 0.5 : 0.28) }
+        onAboutToShow: root.reloadTrash()
+        background: Item {
+            Shadow { anchors.fill: parent; radius: Theme.radiusXl; level: 4 }
+            Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusXl; color: Theme.surface; border.color: Theme.border }
+        }
+        contentItem: ColumnLayout {
+            spacing: 0
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.margins: 18
+                spacing: 10
+                Rectangle {
+                    Layout.preferredWidth: 34; Layout.preferredHeight: 34; radius: Theme.radius; antialiasing: true
+                    color: Theme.surface2
+                    Icon { anchors.centerIn: parent; name: "trash"; size: 17; color: Theme.muted }
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 1
+                    Label { text: "Recently deleted"; font.pixelSize: 16; font.weight: Font.DemiBold; color: Theme.text }
+                    Label { text: "Deleted pages stay here for 30 days."; font.pixelSize: 12; color: Theme.muted }
+                }
+                IconButton { iconName: "close"; tip: "Close"; onClicked: trashPop.close() }
+            }
+            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.border }
+            Flickable {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                contentHeight: tgrid.height + 32
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: ScrollBar {}
+                Label {
+                    visible: root.trashed.length === 0
+                    anchors.centerIn: parent
+                    text: "Nothing here."
+                    font.pixelSize: 13; color: Theme.muted
+                }
+                Flow {
+                    id: tgrid
+                    x: 18; y: 16
+                    width: parent.width - 36
+                    spacing: 14
+                    readonly property real cell: Math.floor((width - 3 * 14) / 4)
+                    Repeater {
+                        model: trashPop.opened ? root.trashed : []
+                        delegate: ColumnLayout {
+                            id: tp
+                            required property var modelData
+                            width: tgrid.cell
+                            spacing: 6
+                            readonly property real days: Math.max(0, 30 - Math.floor((Date.now() - modelData.trashedAt) / 86400000))
+                            Item {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: width * (tp.modelData.height || 1123) / (tp.modelData.width || 794)
+                                HoverHandler { id: th }
+                                Rectangle { anchors.fill: parent; anchors.margins: -1; radius: Theme.radiusSm; antialiasing: true; color: Theme.border }
+                                RoundImage {
+                                    anchors.fill: parent
+                                    color: tp.modelData.paperColor || "#fffdf7"
+                                    source: tp.modelData.thumbnail || ""
+                                    radiusTopLeft: 4; radiusTopRight: 4; radiusBottomLeft: 4; radiusBottomRight: 4
+                                }
+                                // On hover: put it back, or delete it for good.
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: Theme.radiusSm
+                                    color: Qt.rgba(0, 0, 0, 0.45)
+                                    visible: th.hovered
+                                    ColumnLayout {
+                                        anchors.centerIn: parent
+                                        spacing: 6
+                                        UiButton { kind: "primary"; text: "Restore"; implicitHeight: 30; Layout.alignment: Qt.AlignHCenter; onClicked: { const id = tp.modelData.id; trashPop.close(); root.canvas.restorePage(id) } }
+                                        UiButton { kind: "danger"; text: "Delete"; implicitHeight: 28; Layout.alignment: Qt.AlignHCenter; onClicked: root.canvas.forgetTrashedPage(tp.modelData.id) }
+                                    }
+                                }
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                horizontalAlignment: Text.AlignHCenter
+                                text: "Was page " + (tp.modelData.position + 1)
+                                font.pixelSize: 12; font.weight: Font.DemiBold; color: Theme.text
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                horizontalAlignment: Text.AlignHCenter
+                                text: tp.days <= 1 ? "Gone tomorrow" : tp.days + " days left"
+                                font.pixelSize: 11; color: Theme.muted
+                            }
+                        }
+                    }
+                }
+            }
+            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.border }
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.margins: 14
+                Layout.leftMargin: 18
+                spacing: 8
+                UiButton { kind: "danger"; text: "Empty"; iconName: "trash"; enabled: root.trashed.length > 0; onClicked: confirmEmpty.open() }
+                Item { Layout.fillWidth: true }
+                UiButton { text: "Done"; kind: "primary"; onClicked: trashPop.close() }
+            }
+        }
+    }
+    FormDialog { id: confirmAsk }
+    QtObject {
+        id: confirmEmpty
+        function open() {
+            confirmAsk.ask("Delete these pages for good?", [], "Delete", () => root.canvas.emptyPageTrash(), { danger: true, message: "The " + root.trashed.length + " page" + (root.trashed.length === 1 ? "" : "s") + " in Recently deleted can't be brought back after this." })
         }
     }
 }

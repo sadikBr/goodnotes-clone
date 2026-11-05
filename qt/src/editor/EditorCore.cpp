@@ -307,6 +307,23 @@ void EditorCore::forgetAll() {
 }
 
 void EditorCore::setPages(const QJsonArray& list) {
+  // The history names pages by place: it follows them by id (a step on a page
+  // that's gone is dropped).
+  std::vector<QString> oldIds;
+  for (const PageState& p : pages) oldIds.push_back(p.meta["id"].toString());
+  QHash<QString, int> newIndex;
+  for (int k = 0; k < list.size(); ++k) newIndex.insert(list[k].toObject()["id"].toString(), k);
+  for (auto* steps : {&m_undo, &m_redo}) {
+    std::vector<Step> kept;
+    for (Step& st : *steps) {
+      if (st.page < 0 || st.page >= int(oldIds.size())) continue;
+      const auto it = newIndex.constFind(oldIds[size_t(st.page)]);
+      if (it == newIndex.constEnd()) continue;
+      st.page = *it;
+      kept.push_back(std::move(st));
+    }
+    *steps = std::move(kept);
+  }
   std::unordered_map<QString, PageState> old;
   for (PageState& p : pages) old.emplace(p.meta["id"].toString(), std::move(p));
   const QString activeId = active >= 0 && active < int(old.size() + pages.size()) && !pages.empty() ? pages[size_t(std::min(active, int(pages.size()) - 1))].meta["id"].toString() : QString();
@@ -333,6 +350,7 @@ void EditorCore::setPages(const QJsonArray& list) {
 // ------------------------------------------------------------ history and saving
 
 void EditorCore::snapshot() {
+  ++newChanges;
   m_undo.push_back({active, elements()});
   if (m_undo.size() > MAX_UNDO) m_undo.erase(m_undo.begin());
   m_redo.clear();

@@ -16,7 +16,7 @@ use crate::error::{AppError, AppResult};
 use crate::lock::{self, ContentKey, LockInfo};
 use std::collections::HashMap;
 
-const SCHEMA_VERSION: i64 = 8;
+const SCHEMA_VERSION: i64 = 9;
 
 /// Ids of the folders in the trash and every folder inside them, at any
 /// depth: what's in a trashed folder is in the trash with it.
@@ -161,6 +161,25 @@ pub struct Snippet {
     pub height: f64,
     pub created_at: i64,
     pub used_at: Option<i64>,
+}
+
+/// A page's columns, to copy it to the trash and back.
+const PAGE_COLUMNS: &str = "id, notebook_id, position, template, paper_color, width, height, favourite, thumbnail, created_at, updated_at, background_asset, background_page, section, ink_text, ink_text_at";
+/// The same, with the position given (?2) when it comes back.
+const PAGE_COLUMNS_AT: &str = "id, notebook_id, ?2, template, paper_color, width, height, favourite, thumbnail, created_at, updated_at, background_asset, background_page, section, ink_text, ink_text_at";
+
+/// A deleted page, in its notebook's trash.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashedPage {
+    pub id: String,
+    pub position: i64,
+    pub template: String,
+    pub paper_color: String,
+    pub width: f64,
+    pub height: f64,
+    pub thumbnail: Option<String>,
+    pub trashed_at: i64,
 }
 
 /// One of your page templates (its PDF is fetched on its own).
@@ -648,8 +667,44 @@ impl Db {
             if !cols.iter().any(|c| c == "origin") {
                 conn.execute_batch("ALTER TABLE assets ADD COLUMN origin TEXT;")?;
             }
+            conn.pragma_update(None, "user_version", 8)?;
+        }
+        if version < 9 {
+            // v9: a notebook's deleted pages, kept for 30 days (with what was on them).
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS trashed_pages (
+                    id TEXT PRIMARY KEY,
+                    notebook_id TEXT NOT NULL REFERENCES notebooks(id) ON DELETE CASCADE,
+                    position INTEGER NOT NULL,
+                    template TEXT NOT NULL,
+                    paper_color TEXT NOT NULL,
+                    width REAL NOT NULL,
+                    height REAL NOT NULL,
+                    favourite INTEGER NOT NULL DEFAULT 0,
+                    thumbnail TEXT,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    background_asset TEXT,
+                    background_page INTEGER,
+                    section TEXT,
+                    ink_text TEXT,
+                    ink_text_at INTEGER,
+                    trashed_at INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS trashed_pages_by_notebook ON trashed_pages(notebook_id);
+                CREATE TABLE IF NOT EXISTS trashed_elements (
+                    id TEXT PRIMARY KEY,
+                    page_id TEXT NOT NULL REFERENCES trashed_pages(id) ON DELETE CASCADE,
+                    kind TEXT NOT NULL,
+                    z INTEGER NOT NULL,
+                    data TEXT NOT NULL,
+                    text_content TEXT
+                );",
+            )?;
             conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         }
+        // Deleted pages are kept 30 days.
+        conn.execute("DELETE FROM trashed_pages WHERE trashed_at < ?1", [now_ms() - 30 * 86_400_000])?;
         // PDFs stored for an import that never finished.
         conn.execute(
             "DELETE FROM assets WHERE notebook_id IS NULL AND created_at < ?1",
@@ -1501,8 +1556,86 @@ impl Db {
         Ok(get_page(&conn, &id)?)
     }
 
-    /// Permanently removes a page. A notebook always keeps at least one page.
+    /// Moves a page to its notebook's trash (with what's on it), for 30 days.
+    /// A notebook always keeps at least one page.
     pub fn delete_page(&self, page_id: &str) -> AppResult<()> {
+        self.remove_page(page_id, true)
+    }
+
+    /// Removes a page for good (not to the trash): a page that was only just
+    /// added, taken back by undo.
+    pub fn purge_page(&self, page_id: &str) -> AppResult<()> {
+        self.remove_page(page_id, false)
+    }
+
+    /// A notebook's deleted pages, the latest first.
+    pub fn trashed_pages(&self, notebook_id: &str) -> AppResult<Vec<TrashedPage>> {
+        let conn = self.conn();
+        let lock = notebook_lock(&conn, notebook_id)?;
+        let key = self.need_key(&lock)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, position, template, paper_color, width, height, thumbnail, trashed_at FROM trashed_pages WHERE notebook_id = ?1 ORDER BY trashed_at DESC",
+        )?;
+        let rows = stmt.query_map([notebook_id], |r| {
+            Ok(TrashedPage {
+                id: r.get(0)?,
+                position: r.get(1)?,
+                template: r.get(2)?,
+                paper_color: r.get(3)?,
+                width: r.get(4)?,
+                height: r.get(5)?,
+                thumbnail: r.get(6)?,
+                trashed_at: r.get(7)?,
+            })
+        })?;
+        let mut out: Vec<TrashedPage> = rows.collect::<Result<_, _>>()?;
+        for p in &mut out {
+            p.thumbnail = match (&key, p.thumbnail.take()) {
+                (Some(k), Some(t)) => lock::decrypt_text(k, &t).ok(),
+                (_, t) => t,
+            };
+        }
+        Ok(out)
+    }
+
+    /// Puts a deleted page back where it was (or at the end, if the notebook is shorter now).
+    pub fn restore_page(&self, page_id: &str) -> AppResult<Page> {
+        let mut conn = self.conn();
+        let (notebook_id, position): (String, i64) = conn
+            .query_row("SELECT notebook_id, position FROM trashed_pages WHERE id = ?1", [page_id], |r| Ok((r.get(0)?, r.get(1)?)))
+            .optional()?
+            .ok_or_else(|| AppError::NotFound(page_id.to_string()))?;
+        let lock = notebook_lock(&conn, &notebook_id)?;
+        self.need_key(&lock)?;
+        let tx = conn.transaction()?;
+        let count: i64 = tx.query_row("SELECT COUNT(*) FROM pages WHERE notebook_id = ?1", [&notebook_id], |r| r.get(0))?;
+        let at = position.clamp(0, count);
+        tx.execute("UPDATE pages SET position = position + 1 WHERE notebook_id = ?1 AND position >= ?2", params![notebook_id, at])?;
+        tx.execute(
+            &format!("INSERT INTO pages ({PAGE_COLUMNS}) SELECT {PAGE_COLUMNS_AT} FROM trashed_pages WHERE id = ?1"),
+            params![page_id, at],
+        )?;
+        tx.execute(
+            "INSERT INTO elements (id, page_id, kind, z, data, text_content) SELECT id, page_id, kind, z, data, text_content FROM trashed_elements WHERE page_id = ?1",
+            [page_id],
+        )?;
+        tx.execute("DELETE FROM trashed_pages WHERE id = ?1", [page_id])?;
+        tx.execute("UPDATE notebooks SET updated_at = ?2 WHERE id = ?1", params![notebook_id, now_ms()])?;
+        tx.commit()?;
+        Ok(self.reveal_page(get_page(&conn, page_id)?, &lock))
+    }
+
+    /// Removes deleted pages for good: one, or all of a notebook's.
+    pub fn empty_page_trash(&self, notebook_id: &str, page_id: Option<&str>) -> AppResult<()> {
+        let conn = self.conn();
+        match page_id {
+            Some(p) => conn.execute("DELETE FROM trashed_pages WHERE id = ?1 AND notebook_id = ?2", params![p, notebook_id])?,
+            None => conn.execute("DELETE FROM trashed_pages WHERE notebook_id = ?1", [notebook_id])?,
+        };
+        Ok(())
+    }
+
+    fn remove_page(&self, page_id: &str, to_trash: bool) -> AppResult<()> {
         let mut conn = self.conn();
         let page = get_page(&conn, page_id)?;
         let count: i64 = conn.query_row(
@@ -1516,6 +1649,17 @@ impl Db {
             ));
         }
         let tx = conn.transaction()?;
+        if to_trash {
+            tx.execute("DELETE FROM trashed_pages WHERE id = ?1", [page_id])?;
+            tx.execute(
+                &format!("INSERT INTO trashed_pages ({PAGE_COLUMNS}, trashed_at) SELECT {PAGE_COLUMNS}, ?2 FROM pages WHERE id = ?1"),
+                params![page_id, now_ms()],
+            )?;
+            tx.execute(
+                "INSERT OR REPLACE INTO trashed_elements (id, page_id, kind, z, data, text_content) SELECT id, page_id, kind, z, data, text_content FROM elements WHERE page_id = ?1",
+                [page_id],
+            )?;
+        }
         tx.execute("DELETE FROM pages WHERE id = ?1", [page_id])?;
         tx.execute(
             "UPDATE pages SET position = position - 1 WHERE notebook_id = ?1 AND position > ?2",
@@ -2219,6 +2363,8 @@ fn apply_lock_to_tree(conn: &Connection, folder: &str, lock: &str, key: &Content
 /// Encrypts a notebook's content (what isn't already): ink and text, page
 /// pictures, settings and imported PDFs. Typed text leaves the search index.
 fn encrypt_notebook(conn: &Connection, id: &str, key: &ContentKey) -> AppResult<()> {
+    // Deleted pages aren't re-encrypted along with it: they go.
+    conn.execute("DELETE FROM trashed_pages WHERE notebook_id = ?1", [id])?;
     let rows: Vec<(String, String)> = {
         let mut stmt = conn.prepare("SELECT e.id, e.data FROM elements e JOIN pages p ON p.id = e.page_id WHERE p.notebook_id = ?1")?;
         let rows = stmt.query_map([id], |r| Ok((r.get(0)?, r.get(1)?)))?;
@@ -2261,6 +2407,8 @@ fn encrypt_notebook(conn: &Connection, id: &str, key: &ContentKey) -> AppResult<
 
 /// Decrypts a notebook's content again (and puts its text back in search).
 fn decrypt_notebook(conn: &Connection, id: &str, key: &ContentKey) -> AppResult<()> {
+    // Deleted pages aren't re-encrypted along with it: they go.
+    conn.execute("DELETE FROM trashed_pages WHERE notebook_id = ?1", [id])?;
     let rows: Vec<(String, String)> = {
         let mut stmt = conn.prepare("SELECT e.id, e.data FROM elements e JOIN pages p ON p.id = e.page_id WHERE p.notebook_id = ?1")?;
         let rows = stmt.query_map([id], |r| Ok((r.get(0)?, r.get(1)?)))?;
@@ -2992,6 +3140,33 @@ mod tests {
         assert_eq!(a.background_asset, b.background_asset);
         assert_eq!(b.background_page, Some(1));
         assert_eq!(db.asset_bytes(a.background_asset.as_deref().unwrap()).unwrap(), b"%PDF-1.4 x");
+    }
+
+    #[test]
+    fn deleted_pages_go_to_the_trash_and_come_back() {
+        let db = Db::open_in_memory().unwrap();
+        let nb = db.create_notebook(&NewNotebook { title: "Notes".into(), ..Default::default() }).unwrap();
+        let first = db.pages(&nb.id).unwrap()[0].clone();
+        let second = db.add_page(&nb.id, None, Some("grid")).unwrap();
+        let third = db.add_page(&nb.id, None, None).unwrap();
+        db.save_elements(&second.id, &[Element { id: "e1".into(), kind: "text".into(), z: 0, data: json!({ "kind": "text", "text": "keep me" }) }]).unwrap();
+        db.delete_page(&second.id).unwrap();
+        assert_eq!(db.pages(&nb.id).unwrap().len(), 2);
+        let trash = db.trashed_pages(&nb.id).unwrap();
+        assert_eq!((trash.len(), trash[0].id.as_str(), trash[0].template.as_str()), (1, second.id.as_str(), "grid"));
+        // Back where it was, with what was on it.
+        let back = db.restore_page(&second.id).unwrap();
+        assert_eq!(back.position, 1);
+        assert_eq!(db.pages(&nb.id).unwrap().iter().map(|p| p.id.clone()).collect::<Vec<_>>(), [first.id.clone(), second.id.clone(), third.id.clone()]);
+        assert_eq!(db.elements(&second.id).unwrap()[0].data["text"], "keep me");
+        assert!(db.trashed_pages(&nb.id).unwrap().is_empty());
+        // Gone for good: not in the trash.
+        db.purge_page(&third.id).unwrap();
+        assert!(db.trashed_pages(&nb.id).unwrap().is_empty());
+        db.delete_page(&second.id).unwrap();
+        db.empty_page_trash(&nb.id, None).unwrap();
+        assert!(db.trashed_pages(&nb.id).unwrap().is_empty());
+        assert!(db.restore_page(&second.id).is_err());
     }
 
     #[test]

@@ -7,6 +7,8 @@ section here before it can be published (`scripts/check-version.py`).
 
 ## 0.18.0
 
+- **Undo for pages:** adding, deleting, duplicating and moving pages and changing their paper can be undone (and redone) with the rest, in the order you did them.
+- **Recently deleted:** a deleted page goes to its notebook's *Recently deleted* (in the pages panel) for 30 days, with everything on it; restore it from there, or tap *Undo* in the message.
 - **The assistant:** tap *Ask* in the library, or the sparkle in a notebook, and say what you want in your own words, in any language. It answers from your notes (handwriting the AI has read and PDF text included), and it can make things for you: folders and notebooks, typed pages (worksheets with questions and answer lines, summaries, tables), headings and a contents page, lessons in your daftar for a class on given days (following the timetable, skipping holidays), copying pages between notebooks, renaming, moving and covers.
 - **You stay in charge:** before it changes anything, it shows the plan step by step: *Do it* or *Cancel*. One *Undo all of it* takes the whole job back. It never deletes anything, and password-protected notebooks are never read or changed.
 - It needs an AI that can use tools (Settings → AI): Claude, GPT or Gemini, or a local model with tool support.

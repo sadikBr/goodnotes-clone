@@ -1016,7 +1016,7 @@ void Assistant::undo() {
         touch(j["id"].toString());
       } else if (op == "moveFolder") core("moveFolder", {{"id", j["id"]}, {"parentId", j["to"]}});
       else if (op == "moveNotebook") core("moveNotebook", {{"id", j["id"]}, {"folderId", j["to"]}});
-      else if (op == "deletePage") core("deletePage", {{"pageId", j["id"]}});
+      else if (op == "deletePage") core("purgePage", {{"pageId", j["id"]}});
       else if (op == "removeElements") {
         QSet<QString> ids;
         for (const QJsonValue& v : j["ids"].toArray()) ids.insert(v.toString());

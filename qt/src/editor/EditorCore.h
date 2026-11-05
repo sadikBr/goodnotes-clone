@@ -96,6 +96,10 @@ public:
   void redo();
   bool canUndo() const { return !m_undo.empty(); }
   bool canRedo() const { return !m_redo.empty(); }
+  size_t undoDepth() const { return m_undo.size(); }
+  size_t redoDepth() const { return m_redo.size(); }
+  /// Goes up with each new change (not with undo or redo).
+  quint64 newChanges = 0;
   void addElement(ElPtr el);
   bool dirty() const;
   /// Pages with unsaved changes (their flags are cleared: the app saves them).

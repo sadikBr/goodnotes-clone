@@ -218,6 +218,14 @@ void InkCanvas::pushToolState() {
 void InkCanvas::afterCore() {
   if (!m_ed) return;
   ed::EditorCore& c = *m_ed;
+  // Something new was done: what was undone can't come back.
+  if (c.newChanges != m_seenChanges) {
+    m_seenChanges = c.newChanges;
+    if (!m_pageRedo.empty()) {
+      m_pageRedo.clear();
+      emit historyChanged();
+    }
+  }
   if (double(c.rev) != m_coreRev) {
     m_coreRev = double(c.rev);
     for (int i = 0; i < int(m_pages.size()); ++i)
@@ -375,6 +383,8 @@ void InkCanvas::setNotebookId(const QString& id) {
   if (id == m_notebookId) return;
   flush();
   m_notebookId = id;
+  m_pageUndo.clear();
+  m_pageRedo.clear();
   emit notebookIdChanged();
   loadNotebook();
 }
@@ -594,9 +604,11 @@ void InkCanvas::addPage(int index, const QString& tmpl) {
   flush();
   QString err;
   QJsonObject args{{"notebookId", m_notebookId}, {"index", index < 0 ? QJsonValue() : QJsonValue(index)}, {"template", tmpl.isEmpty() ? QJsonValue() : QJsonValue(tmpl)}};
-  InkleafCore::instance()->callJson("addPage", args, &err);
+  const QJsonObject added = InkleafCore::instance()->callJson("addPage", args, &err).toObject();
   if (!err.isEmpty()) return emit message(err, true);
   reloadPages();
+  recordPageOp("add", {{"pageId", added["id"]}, {"index", index < 0 ? QJsonValue() : QJsonValue(index)}, {"template", tmpl.isEmpty() ? QJsonValue() : QJsonValue(tmpl)}},
+               QString("page %1 added").arg(pageIndexOf(added["id"].toString()) + 1));
   refreshContentsPage();
   goToPage(index < 0 ? int(m_pages.size()) - 1 : index);
 }
@@ -605,9 +617,11 @@ void InkCanvas::duplicatePage(int index) {
   if (index < 0 || index >= int(m_pages.size())) return;
   flush();
   QString err;
-  InkleafCore::instance()->callJson("duplicatePage", {{"pageId", m_pages[index].id}}, &err);
+  const QString source = m_pages[index].id;
+  const QJsonObject copy = InkleafCore::instance()->callJson("duplicatePage", {{"pageId", source}}, &err).toObject();
   if (!err.isEmpty()) return emit message(err, true);
   reloadPages();
+  recordPageOp("duplicate", {{"pageId", copy["id"]}, {"source", source}, {"index", index + 1}}, QString("page %1 duplicated").arg(index + 1));
   refreshContentsPage();
   goToPage(index + 1);
 }
@@ -616,20 +630,24 @@ void InkCanvas::deletePage(int index) {
   if (index < 0 || index >= int(m_pages.size()) || m_pages.size() <= 1) return;
   flush();
   QString err;
-  InkleafCore::instance()->callJson("deletePage", {{"pageId", m_pages[index].id}}, &err);
+  const QString id = m_pages[index].id;
+  InkleafCore::instance()->callJson("deletePage", {{"pageId", id}}, &err);
   if (!err.isEmpty()) return emit message(err, true);
   reloadPages();
   refreshContentsPage();
+  recordPageOp("delete", {{"pageId", id}}, QString("page %1 deleted").arg(index + 1));
 }
 
 void InkCanvas::movePage(int index, int to) {
   if (index < 0 || index >= int(m_pages.size()) || to < 0 || to >= int(m_pages.size()) || index == to) return;
   flush();
   QString err;
-  InkleafCore::instance()->callJson("movePage", {{"pageId", m_pages[index].id}, {"newIndex", to}}, &err);
+  const QString id = m_pages[index].id;
+  InkleafCore::instance()->callJson("movePage", {{"pageId", id}, {"newIndex", to}}, &err);
   if (!err.isEmpty()) return emit message(err, true);
   reloadPages();
   refreshContentsPage();
+  recordPageOp("move", {{"pageId", id}, {"from", index}, {"to", to}}, QString("page %1 moved").arg(index + 1));
 }
 
 void InkCanvas::togglePageFavourite(int index) {
@@ -642,6 +660,14 @@ void InkCanvas::togglePageFavourite(int index) {
 
 void InkCanvas::setPaper(int index, const QString& tmpl, const QString& color, bool allPages) {
   flush();
+  QJsonArray before, after;
+  for (int i = 0; i < int(m_pages.size()); ++i) {
+    if (!allPages && i != index) continue;
+    const Page& p = m_pages[i];
+    before.append(QJsonObject{{"id", p.id}, {"template", p.tmpl}, {"paper", p.paper}});
+    after.append(QJsonObject{{"id", p.id}, {"template", tmpl.isEmpty() ? p.tmpl : tmpl}, {"paper", color.isEmpty() ? p.paper : color}});
+  }
+  recordPageOp("paper", {{"before", before}, {"after", after}}, allPages ? QStringLiteral("paper of every page") : QString("paper of page %1").arg(index + 1));
   for (int i = 0; i < int(m_pages.size()); ++i) {
     if (!allPages && i != index) continue;
     const Page& p = m_pages[i];
@@ -1054,18 +1080,142 @@ void InkCanvas::updateCursor() {
 
 // --- editing commands --------------------------------------------------------------------
 
-bool InkCanvas::canUndo() const { return m_ed && m_ed->canUndo(); }
-bool InkCanvas::canRedo() const { return m_ed && m_ed->canRedo(); }
+bool InkCanvas::canUndo() const { return (m_ed && m_ed->canUndo()) || !m_pageUndo.empty(); }
+bool InkCanvas::canRedo() const { return (m_ed && m_ed->canRedo()) || !m_pageRedo.empty(); }
 
 void InkCanvas::undo() {
-  if (m_ed) m_ed->clearFade(), m_ed->undo();
+  if (!m_ed) return;
+  // A page change made after the last ink change goes first.
+  if (!m_pageUndo.empty() && m_pageUndo.back().depth >= m_ed->undoDepth()) {
+    PageOp op = m_pageUndo.back();
+    m_pageUndo.pop_back();
+    if (applyPageOp(op, true)) {
+      op.depth = m_ed->redoDepth();
+      m_pageRedo.push_back(op);
+      emit message("Undone: " + op.label, false);
+    }
+    emit historyChanged();
+    return;
+  }
+  m_ed->clearFade(), m_ed->undo();
   syncEditing();
   afterCore();
 }
 void InkCanvas::redo() {
-  if (m_ed) m_ed->redo();
+  if (!m_ed) return;
+  if (!m_pageRedo.empty() && m_pageRedo.back().depth >= m_ed->redoDepth()) {
+    PageOp op = m_pageRedo.back();
+    m_pageRedo.pop_back();
+    if (applyPageOp(op, false)) {
+      op.depth = m_ed->undoDepth();
+      m_pageUndo.push_back(op);
+      emit message("Redone: " + op.label, false);
+    }
+    emit historyChanged();
+    return;
+  }
+  m_ed->redo();
   syncEditing();
   afterCore();
+}
+
+void InkCanvas::recordPageOp(const QString& kind, const QJsonObject& data, const QString& label) {
+  if (!m_ed) return;
+  m_pageUndo.push_back({kind, data, label, m_ed->undoDepth()});
+  if (m_pageUndo.size() > 60) m_pageUndo.erase(m_pageUndo.begin());
+  m_pageRedo.clear();
+  emit historyChanged();
+}
+
+bool InkCanvas::applyPageOp(const PageOp& op, bool back) {
+  finishEdit();
+  flush();
+  QString err;
+  auto call = [&](const QString& cmd, const QJsonObject& args) {
+    if (!err.isEmpty()) return QJsonValue();
+    return InkleafCore::instance()->callJson(cmd, args, &err);
+  };
+  const QJsonObject& d = op.data;
+  int goTo = -1;
+  if (op.kind == "add" || op.kind == "duplicate") {
+    if (back) call("purgePage", {{"pageId", d["pageId"]}});
+    else {
+      // Again: a new page (a new id) in the same place, as it was made.
+      const QJsonObject p = op.kind == "add" ? call("addPage", {{"notebookId", m_notebookId}, {"index", d["index"]}, {"template", d["template"]}}).toObject()
+                                             : call("duplicatePage", {{"pageId", d["source"]}}).toObject();
+      const_cast<PageOp&>(op).data["pageId"] = p["id"];
+    }
+  } else if (op.kind == "delete") {
+    if (back) call("restorePage", {{"pageId", d["pageId"]}});
+    else call("deletePage", {{"pageId", d["pageId"]}});
+  } else if (op.kind == "move") {
+    call("movePage", {{"pageId", d["pageId"]}, {"newIndex", back ? d["from"] : d["to"]}});
+  } else if (op.kind == "paper") {
+    for (const QJsonValue& v : d[back ? "before" : "after"].toArray()) {
+      const QJsonObject p = v.toObject();
+      call("setPageTemplate", {{"pageId", p["id"]}, {"template", p["template"]}, {"paperColor", p["paper"]}});
+    }
+  }
+  if (!err.isEmpty()) {
+    emit message(err, true);
+    return false;
+  }
+  reloadPages();
+  refreshContentsPage();
+  // Show where it happened.
+  const QString pid = d["pageId"].toString();
+  if (!pid.isEmpty()) goTo = pageIndexOf(pid);
+  if (goTo < 0 && op.kind == "paper" && !d["before"].toArray().isEmpty()) goTo = pageIndexOf(d["before"].toArray()[0].toObject()["id"].toString());
+  if (goTo < 0 && (op.kind == "add" || op.kind == "duplicate")) goTo = std::min(d["index"].toInt(currentPage()), int(m_pages.size()) - 1);
+  if (goTo >= 0) goToPage(goTo);
+  if (op.kind == "paper")
+    for (int i = 0; i < int(m_pages.size()); ++i) {
+      m_ed->load(i);
+      m_ed->markDirty(i);
+    }
+  flush();
+  return true;
+}
+
+QVariantList InkCanvas::trashedPages() {
+  if (m_notebookId.isEmpty()) return {};
+  QString err;
+  return InkleafCore::instance()->callJson("trashedPages", {{"notebookId", m_notebookId}}, &err).toArray().toVariantList();
+}
+
+void InkCanvas::restorePage(const QString& pageId) {
+  finishEdit();
+  flush();
+  QString err;
+  InkleafCore::instance()->callJson("restorePage", {{"pageId", pageId}}, &err);
+  if (!err.isEmpty()) return emit message(err, true);
+  // (Taking back its delete no longer makes sense: it's back.)
+  m_pageUndo.erase(std::remove_if(m_pageUndo.begin(), m_pageUndo.end(), [&](const PageOp& o) { return o.kind == "delete" && o.data["pageId"].toString() == pageId; }), m_pageUndo.end());
+  reloadPages();
+  refreshContentsPage();
+  const int at = pageIndexOf(pageId);
+  if (at >= 0) goToPage(at);
+  emit historyChanged();
+}
+
+void InkCanvas::forgetTrashedPage(const QString& pageId) {
+  QString err;
+  InkleafCore::instance()->callJson("emptyPageTrash", {{"notebookId", m_notebookId}, {"pageId", pageId}}, &err);
+  if (!err.isEmpty()) return emit message(err, true);
+  m_pageUndo.erase(std::remove_if(m_pageUndo.begin(), m_pageUndo.end(), [&](const PageOp& o) { return o.data["pageId"].toString() == pageId; }), m_pageUndo.end());
+  m_pageRedo.erase(std::remove_if(m_pageRedo.begin(), m_pageRedo.end(), [&](const PageOp& o) { return o.data["pageId"].toString() == pageId; }), m_pageRedo.end());
+  emit pagesChanged();
+  emit historyChanged();
+}
+
+void InkCanvas::emptyPageTrash() {
+  QString err;
+  InkleafCore::instance()->callJson("emptyPageTrash", {{"notebookId", m_notebookId}}, &err);
+  if (!err.isEmpty()) return emit message(err, true);
+  m_pageUndo.erase(std::remove_if(m_pageUndo.begin(), m_pageUndo.end(), [](const PageOp& o) { return o.kind == "delete"; }), m_pageUndo.end());
+  m_pageRedo.erase(std::remove_if(m_pageRedo.begin(), m_pageRedo.end(), [](const PageOp& o) { return o.kind == "delete"; }), m_pageRedo.end());
+  emit pagesChanged();
+  emit historyChanged();
 }
 void InkCanvas::deleteSelection() {
   if (m_ed) m_ed->deleteSelection();

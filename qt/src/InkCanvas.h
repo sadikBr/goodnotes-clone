@@ -289,6 +289,14 @@ public:
   Q_INVOKABLE void addHeading(int index, const QString& title, int level = 0);
   Q_INVOKABLE void changeHeading(const QString& id, const QVariantMap& change);
   Q_INVOKABLE void removeHeading(const QString& id);
+  /// The notebook's deleted pages: [{ id, position, template, paperColor, width, height, thumbnail, trashedAt }].
+  Q_INVOKABLE QVariantList trashedPages();
+  /// Puts a deleted page back (and goes to it); removes one for good; empties the trash.
+  Q_INVOKABLE void restorePage(const QString& pageId);
+  Q_INVOKABLE void forgetTrashedPage(const QString& pageId);
+  Q_INVOKABLE void emptyPageTrash();
+  /// What the last page change was, for a message ("Page 3 deleted"); empty if none.
+  Q_INVOKABLE QString lastPageChange() const { return m_pageUndo.empty() ? QString() : m_pageUndo.back().label; }
   /// Keeps page `index` as one of your templates; returns an error, or "".
   Q_INVOKABLE QString savePageAsTemplate(int index, const QString& name);
   /// Page `index` shows one of your templates as its paper (taking its size).
@@ -553,6 +561,19 @@ private:
   bool m_readOnly = false;
   bool m_hideSelection = false;
   bool m_hoverQueued = false;
+  /// Page changes (added, deleted, duplicated, moved, paper), undone with the
+  /// ink in the order they happened: each knows how deep the ink history was.
+  struct PageOp {
+    QString kind;
+    QJsonObject data;
+    QString label;
+    size_t depth = 0;
+  };
+  std::vector<PageOp> m_pageUndo, m_pageRedo;
+  quint64 m_seenChanges = 0;
+  void recordPageOp(const QString& kind, const QJsonObject& data, const QString& label);
+  /// Carries out (forward) or takes back a page change; false if it couldn't.
+  bool applyPageOp(const PageOp& op, bool back);
   /// Input from the zoom box: how much larger it shows the page than the canvas does.
   double m_inputMag = 1;
   void setHover(QPointF p);
