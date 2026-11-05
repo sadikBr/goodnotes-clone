@@ -29,6 +29,56 @@ bool isTap(const std::vector<Pt>& pts, double within) {
   for (const Pt& p : pts) x0 = std::min(x0, p[0]), x1 = std::max(x1, p[0]), y0 = std::min(y0, p[1]), y1 = std::max(y1, p[1]);
   return x1 - x0 < within && y1 - y0 < within;
 }
+/// The parts of a stroke inside [0, w] × [0, h], cut where it crosses the edge.
+std::vector<std::vector<Pt>> clipToRect(const std::vector<Pt>& pts, double w, double h) {
+  auto inside = [&](const Pt& p) { return p[0] >= 0 && p[1] >= 0 && p[0] <= w && p[1] <= h; };
+  std::vector<std::vector<Pt>> out;
+  if (pts.empty()) return out;
+  if (std::all_of(pts.begin(), pts.end(), inside)) return {pts};
+  std::vector<Pt> cur;
+  if (inside(pts[0])) cur.push_back(pts[0]);
+  for (size_t i = 0; i + 1 < pts.size(); ++i) {
+    const Pt a = pts[i], b = pts[i + 1];
+    // Liang–Barsky: the part of segment a→b inside the rectangle.
+    double t0 = 0, t1 = 1;
+    const double dx = b[0] - a[0], dy = b[1] - a[1];
+    bool visible = true;
+    for (const auto& [pp, q] : {std::pair{-dx, a[0]}, std::pair{dx, w - a[0]}, std::pair{-dy, a[1]}, std::pair{dy, h - a[1]}}) {
+      if (std::abs(pp) < 1e-12) {
+        if (q < 0) visible = false;
+      } else {
+        const double t = q / pp;
+        if (pp < 0) t0 = std::max(t0, t);
+        else t1 = std::min(t1, t);
+      }
+    }
+    if (!visible || t0 > t1) {
+      if (cur.size() > 1) out.push_back(cur);
+      cur.clear();
+      continue;
+    }
+    auto at = [&](double t) { return Pt{a[0] + dx * t, a[1] + dy * t, a[2] + (b[2] - a[2]) * t}; };
+    if (t0 > 0) {
+      if (cur.size() > 1) out.push_back(cur);
+      cur = {at(t0)};
+    } else if (cur.empty()) {
+      cur.push_back(a);
+    }
+    cur.push_back(t1 < 1 ? at(t1) : b);
+    if (t1 < 1) {
+      out.push_back(cur);
+      cur.clear();
+    }
+  }
+  if (cur.size() > 1) out.push_back(cur);
+  // Drop crumbs: pieces shorter than a dot.
+  out.erase(std::remove_if(out.begin(), out.end(), [](const std::vector<Pt>& v) {
+              double len = 0;
+              for (size_t i = 1; i < v.size(); ++i) len += std::hypot(v[i][0] - v[i - 1][0], v[i][1] - v[i - 1][1]);
+              return len < 0.5;
+            }), out.end());
+  return out;
+}
 /// Scribbling with these is shading or painting, never a scratch-out.
 bool scratchable(const QString& style) { return style != "marker" && style != "watercolor" && style != "neon" && style != "tape"; }
 /// Pens whose look a held shape keeps (it is drawn with the pen, not as a plain shape).
@@ -706,11 +756,29 @@ void EditorCore::up() {
           el.width = ink::tapeWidth(float(el.width));
           el.points = straightTape(g.points, el.width);
         }
-        const QString id = el.id;
-        addElement(makeEl(std::move(el)));
-        if (tl == "pen" && g.tool == "pen") {
-          m_recentInk.push_back({id, g.times.back(), flat(g.points)});
-          if (m_recentInk.size() > 6) m_recentInk.erase(m_recentInk.begin());
+        // Ink stays on the paper: the parts off its edge are cut away (a stroke
+        // that leaves and comes back becomes several).
+        const std::vector<std::vector<Pt>> parts = clipToRect(el.points, pageWidth(), pageHeight());
+        if (parts.empty()) break;
+        if (parts.size() == 1) {
+          el.points = parts[0];
+          const QString id = el.id;
+          addElement(makeEl(std::move(el)));
+          if (tl == "pen" && g.tool == "pen") {
+            m_recentInk.push_back({id, g.times.back(), flat(g.points)});
+            if (m_recentInk.size() > 6) m_recentInk.erase(m_recentInk.begin());
+          }
+        } else {
+          snapshot();
+          Els& els = elements();
+          for (const std::vector<Pt>& part : parts) {
+            El piece = el;
+            piece.id = newId();
+            piece.z = nextZ();
+            piece.points = part;
+            els.push_back(makeEl(std::move(piece)));
+          }
+          changed();
         }
       }
       break;

@@ -14,6 +14,7 @@
 #include <QPdfWriter>
 #include <QPixmap>
 #include <QQuickWindow>
+#include <QSGClipNode>
 #include <QSGFlatColorMaterial>
 #include <QSGGeometryNode>
 #include <QSGImageNode>
@@ -1287,6 +1288,22 @@ int InkCanvas::pageAt(QPointF s) const {
   return (p.x() >= 0 && p.y() >= 0 && p.x() <= pg.w && p.y() <= pg.h) ? i : -1;
 }
 
+int InkCanvas::pageNear(QPointF s, double within) const {
+  int best = -1;
+  double bestD = within;
+  for (int i = 0; i < int(m_pages.size()); ++i) {
+    const QRectF r = pageRectToItem(i, QRectF(0, 0, m_pages[i].w, m_pages[i].h));
+    const double dx = std::max({r.left() - s.x(), 0.0, s.x() - r.right()});
+    const double dy = std::max({r.top() - s.y(), 0.0, s.y() - r.bottom()});
+    const double d = std::hypot(dx, dy);
+    if (d <= bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
 int InkCanvas::currentPage() const {
   int i = -1;
   toPage(QPointF(width() / 2, height() / 2), &i);
@@ -1579,7 +1596,9 @@ void InkCanvas::press(QPointF s, float pressure, bool stylus, const QString& too
     update();
     return;
   }
-  const int pi = pageAt(s);
+  int pi = pageAt(s);
+  // The eraser and the lasso may start just off the paper (to reach ink at its edge).
+  if (pi < 0 && (tool == "eraser" || tool == "lasso")) pi = pageNear(s, 160);
   if (pi < 0) {
     if (m_tool == "lasso") if (m_ed) m_ed->clearSelection();
     if (m_ed) m_ed->finishTextEdit();
@@ -1989,6 +2008,7 @@ QSGNode* InkCanvas::updatePaintNode(QSGNode* old, UpdatePaintNodeData*) {
   auto* root = old;
   QSGTransformNode *content, *liveT, *overlayT, *rulerT;
   QSGGeometryNode *live, *liveGlow, *ring, *laser;
+  QSGClipNode* liveClip;
   if (!root) {
     root = new QSGNode;
     content = new QSGTransformNode;
@@ -2000,8 +2020,15 @@ QSGNode* InkCanvas::updatePaintNode(QSGNode* old, UpdatePaintNodeData*) {
     ring = meshNode({}, QColor(100, 100, 100, 200));
     laser = meshNode({}, Qt::red);
     static_cast<QSGFlatColorMaterial*>(laser->material())->setFlag(QSGMaterial::Blending);
-    liveT->appendChildNode(liveGlow);
-    liveT->appendChildNode(live);
+    // The stroke being written is clipped to its page (ink stays on the paper).
+    liveClip = new QSGClipNode;
+    liveClip->setIsRectangular(true);
+    auto* clipGeom = new QSGGeometry(QSGGeometry::defaultAttributes_Point2D(), 4);
+    liveClip->setGeometry(clipGeom);
+    liveClip->setFlag(QSGNode::OwnsGeometry);
+    liveT->appendChildNode(liveClip);
+    liveClip->appendChildNode(liveGlow);
+    liveClip->appendChildNode(live);
     root->appendChildNode(content);
     root->appendChildNode(liveT);
     root->appendChildNode(overlayT);
@@ -2018,7 +2045,8 @@ QSGNode* InkCanvas::updatePaintNode(QSGNode* old, UpdatePaintNodeData*) {
     rulerT = static_cast<QSGTransformNode*>(overlayT->nextSibling());
     ring = static_cast<QSGGeometryNode*>(rulerT->nextSibling());
     laser = static_cast<QSGGeometryNode*>(ring->nextSibling());
-    liveGlow = static_cast<QSGGeometryNode*>(liveT->firstChild());
+    liveClip = static_cast<QSGClipNode*>(liveT->firstChild());
+    liveGlow = static_cast<QSGGeometryNode*>(liveClip->firstChild());
     live = static_cast<QSGGeometryNode*>(liveGlow->nextSibling());
   }
 
@@ -2171,6 +2199,12 @@ QSGNode* InkCanvas::updatePaintNode(QSGNode* old, UpdatePaintNodeData*) {
     lm.translate((m_maxPageW - pg.w) / 2, pg.top);
     liveT->setMatrix(lm);
     liveT->markDirty(QSGNode::DirtyMatrix);
+    const QRectF clip(0, 0, pg.w, pg.h);
+    if (liveClip->clipRect() != clip) {
+      liveClip->setClipRect(clip);
+      QSGGeometry::updateRectGeometry(liveClip->geometry(), clip);
+      liveClip->markDirty(QSGNode::DirtyGeometry);
+    }
   }
 
   // The overlay (selection, lasso, previews), in its page's place.

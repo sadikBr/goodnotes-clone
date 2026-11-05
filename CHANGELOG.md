@@ -7,6 +7,7 @@ section here before it can be published (`scripts/check-version.py`).
 
 ## 0.16.1
 
+- **Fixed:** ink stays on the paper: a stroke that runs off the edge is cut there, while you write and once it's saved. The eraser and the lasso work when you start them just off the paper, so ink already outside can be cleaned up.
 - **One look for corners:** buttons, fields, menus, panels, dialogs, badges, switches (in menus too), sliders, colour swatches and the handles on a selection, the ruler and the protractor share one set of squarer corners across the app. *More colours* is a rainbow square.
 - **Colour picker:** the swatches fill the width, the knobs have a dark edge so they show on white and yellow, the hue bar is easier to grab, dark swatches have a visible edge in dark mode, and hex codes work with or without #.
 - **Tools in the top bar** look and work like the side rail: one strip, Select first, the same groups, and your colours with **+** at the end.

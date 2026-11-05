@@ -364,6 +364,8 @@ private:
   QPointF toPage(QPointF screen, int* pageIndex) const;
   QPointF toPageOf(int page, QPointF screen) const;
   int pageAt(QPointF screen) const;
+  /// The page within `within` screen pixels of `s` (the closest), or -1.
+  int pageNear(QPointF s, double within) const;
   void zoomAt(qreal z, QPointF screenAnchor);
   void refresh();
   double renderScale() const;
