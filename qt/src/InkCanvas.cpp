@@ -1,5 +1,6 @@
 #include "draw/Elements.h"
 #include "InkCanvas.h"
+#include <QTemporaryDir>
 #include "PaperImage.h"
 #include "editor/Geometry.h"
 
@@ -649,6 +650,45 @@ void InkCanvas::setPaper(int index, const QString& tmpl, const QString& color, b
       m_ed->markDirty(i);
     }
   flush();
+}
+
+QString InkCanvas::savePageAsTemplate(int index, const QString& name) {
+  if (index < 0 || index >= int(m_pages.size())) return "No page to keep";
+  // The page as a one-page PDF (vectors: it stays sharp at any size).
+  QTemporaryDir dir;
+  if (!dir.isValid()) return "Couldn't keep the page";
+  const QString file = dir.filePath("template.pdf");
+  const QString err = exportPdf(file, {index}, name);
+  if (!err.isEmpty()) return err;
+  QFile f(file);
+  if (!f.open(QIODevice::ReadOnly)) return "Couldn't keep the page";
+  const QByteArray bytes = f.readAll();
+  const Page& p = m_pages[index];
+  const QString preview = exportPage(index, std::min(1.0, 360.0 / std::max(p.w, p.h)), false).value("dataUrl").toString();
+  QString e;
+  InkleafCore::instance()->callJson("savePageTemplate", {{"name", name}, {"preview", preview}, {"width", p.w}, {"height", p.h}, {"notebookId", m_notebookId}}, &e, bytes);
+  return e;
+}
+
+void InkCanvas::usePageTemplate(int index, const QString& templateId) {
+  if (index < 0 || index >= int(m_pages.size())) return;
+  finishEdit();
+  flush();
+  QString err;
+  InkleafCore::instance()->callJson("usePageTemplate", {{"pageId", m_pages[index].id}, {"templateId", templateId}}, &err);
+  if (!err.isEmpty()) return emit message(err, true);
+  reloadPages();
+  // The library picture follows the new paper.
+  m_ed->load(index);
+  m_ed->markDirty(index);
+  flush();
+}
+
+void InkCanvas::addTemplatePage(int index, const QString& templateId) {
+  addPage(index);
+  const int at = index < 0 ? int(m_pages.size()) - 1 : std::min(index, int(m_pages.size()) - 1);
+  usePageTemplate(at, templateId);
+  goToPage(at);
 }
 
 QJsonArray InkCanvas::sceneJson(int index) {

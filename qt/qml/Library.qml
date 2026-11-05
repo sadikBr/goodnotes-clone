@@ -362,6 +362,11 @@ Rectangle {
                 const pages = run("pages", { notebookId: nb.id })
                 if (pages && pages.length) run("setPageTemplate", { pageId: pages[0].id, template: "cover-" + r.design, paperColor: r.cover })
             }
+            // One of your templates: the first page (after the cover) shows it; new pages follow it.
+            if (r.mine) {
+                const pages = run("pages", { notebookId: nb.id })
+                if (pages && pages.length > 1) run("usePageTemplate", { pageId: pages[1].id, templateId: r.mine.id })
+            }
             DaftarApi.setUpCover(nb)
             root.openRequested(nb.id, nb.title)
         }

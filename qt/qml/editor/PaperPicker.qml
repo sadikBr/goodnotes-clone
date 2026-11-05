@@ -24,9 +24,27 @@ Popup {
     Overlay.modal: Item {}
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
-    readonly property var categories: [{ id: "basic", label: "Basic", short: "Basic" }, { id: "notes", label: "Notes", short: "Notes" }, { id: "science", label: "Maths & science", short: "Maths" }, { id: "writing", label: "Writing & art", short: "Writing" }, { id: "planner", label: "Planner", short: "Planner" }, { id: "teacher", label: "Teacher", short: "Teacher" }]
+    readonly property var categories: [{ id: "basic", label: "Basic", short: "Basic" }, { id: "notes", label: "Notes", short: "Notes" }, { id: "science", label: "Maths & science", short: "Maths" }, { id: "writing", label: "Writing & art", short: "Writing" }, { id: "planner", label: "Planner", short: "Planner" }, { id: "teacher", label: "Teacher", short: "Teacher" }, { id: "mine", label: "Your templates", short: "Yours" }]
     property var all: []
+    /// Your templates (pages you kept).
+    property var mine: []
+    function reloadMine() { try { mine = InkleafCore.call("pageTemplates") } catch (e) { mine = [] } }
     Component.onCompleted: all = Catalog.templates()
+    onAboutToShow: reloadMine()
+    FormDialog { id: ask }
+    PopupMenu { id: menu }
+    function keepPage() {
+        ask.ask("Keep this page as a template", [{ name: "name", label: "Name", value: "My template" }], "Keep", r => {
+            const err = root.canvas.savePageAsTemplate(root.page, r.name.trim())
+            if (err) root.canvas.message(err, true)
+            else { root.canvas.message("“" + r.name.trim() + "” is in your templates", false); root.reloadMine() }
+        }, { message: "Everything on it, its paper and any PDF behind it, becomes paper you can use for new pages and notebooks. What you write on top stays erasable; the template doesn't." })
+    }
+    function useMine(t, allPages) {
+        root.close()
+        if (allPages) for (let i = 0; i < root.canvas.pages.length; ++i) root.canvas.usePageTemplate(i, t.id)
+        else root.canvas.usePageTemplate(root.page, t.id)
+    }
 
     function show(anchor, pageIndex) {
         page = pageIndex
@@ -51,7 +69,111 @@ Popup {
             value: root.category
             onPicked: v => root.category = v
         }
+        // Your templates: keep this page, or use one you kept.
         GridLayout {
+            visible: root.category === "mine"
+            columns: 4
+            columnSpacing: 10
+            rowSpacing: 10
+            AbstractButton {
+                id: keepCard
+                implicitWidth: 96
+                implicitHeight: 136
+                hoverEnabled: true
+                onClicked: root.keepPage()
+                ToolTip.visible: hovered
+                ToolTip.delay: 500
+                ToolTip.text: "Keep this page, as it is now, as paper to use again"
+                background: Item {}
+                contentItem: ColumnLayout {
+                    spacing: 6
+                    Item {
+                        Layout.preferredWidth: 88
+                        Layout.preferredHeight: 110
+                        Layout.alignment: Qt.AlignHCenter
+                        DashedBox { anchors.fill: parent; radius: Theme.radius; color: keepCard.hovered ? Theme.accent : Theme.borderStrong; fill: keepCard.hovered ? Theme.accentSoft : "transparent" }
+                        Column {
+                            anchors.centerIn: parent
+                            spacing: 6
+                            Rectangle {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: 30; height: 30; radius: Theme.radius
+                                antialiasing: true
+                                color: keepCard.hovered ? Theme.accent : Theme.surface2
+                                Icon { anchors.centerIn: parent; name: "plus"; size: 16; color: keepCard.hovered ? Theme.accentContrast : Theme.muted }
+                            }
+                            Label { anchors.horizontalCenter: parent.horizontalCenter; text: "This page"; font.pixelSize: 11; font.weight: Font.DemiBold; color: keepCard.hovered ? Theme.accent : Theme.muted }
+                        }
+                    }
+                    Label { text: "Keep as template"; font.pixelSize: 12; color: keepCard.hovered ? Theme.accent : Theme.text; Layout.alignment: Qt.AlignHCenter }
+                }
+            }
+            Repeater {
+                model: root.category === "mine" ? root.mine : []
+                delegate: AbstractButton {
+                    id: tcard
+                    required property var modelData
+                    implicitWidth: 96
+                    implicitHeight: 136
+                    hoverEnabled: true
+                    onClicked: root.useMine(modelData, false)
+                    function more() {
+                        menu.show(moreBtn, [
+                            { icon: "page", label: "Use on this page", action: () => root.useMine(tcard.modelData, false) },
+                            { icon: "plus", label: "New page from it", action: () => { root.close(); root.canvas.addTemplatePage(root.page + 1, tcard.modelData.id) } },
+                            { icon: "stack", label: "Use on every page", action: () => root.useMine(tcard.modelData, true) },
+                            { icon: "pen", label: "Rename", action: () => ask.ask("Rename template", [{ name: "name", label: "Name", value: tcard.modelData.name }], "Save", r => {
+                                try { InkleafCore.call("renamePageTemplate", { id: tcard.modelData.id, name: r.name.trim() }); root.reloadMine() } catch (e) { root.canvas.message(String(e.message || e), true) }
+                            }) },
+                            { icon: "trash", label: "Delete", danger: true, action: () => ask.ask("Delete “" + tcard.modelData.name + "”?", [], "Delete", () => {
+                                try { InkleafCore.call("deletePageTemplate", { id: tcard.modelData.id }); root.reloadMine() } catch (e) { root.canvas.message(String(e.message || e), true) }
+                            }, { danger: true, message: "Pages already made from it keep it." }) }
+                        ])
+                    }
+                    TapHandler { acceptedButtons: Qt.RightButton; onTapped: tcard.more() }
+                    onPressAndHold: more()
+                    background: Item {}
+                    contentItem: ColumnLayout {
+                        spacing: 6
+                        Item {
+                            Layout.preferredWidth: 88
+                            Layout.preferredHeight: 110
+                            Layout.alignment: Qt.AlignHCenter
+                            Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: -1; radius: Theme.radius; color: tcard.hovered ? Theme.borderStrong : Theme.border }
+                            Rectangle { anchors.fill: parent; color: "#ffffff" }
+                            Image {
+                                anchors.fill: parent
+                                source: tcard.modelData.preview || ""
+                                fillMode: Image.PreserveAspectFit
+                                asynchronous: true
+                            }
+                            // ⋯: use it elsewhere, rename or delete it.
+                            AbstractButton {
+                                id: moreBtn
+                                visible: tcard.hovered || menu.opened
+                                anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 4
+                                width: 24; height: 24
+                                hoverEnabled: true
+                                onClicked: tcard.more()
+                                background: Rectangle { antialiasing: true; radius: Theme.radiusSm; color: parent.hovered ? Theme.surface : Theme.alpha(Theme.surface, 0.9); border.color: Theme.border }
+                                contentItem: Item { Icon { anchors.centerIn: parent; name: "more"; size: 14; color: Theme.text } }
+                            }
+                        }
+                        Label { text: tcard.modelData.name; font.pixelSize: 12; color: Theme.text; Layout.alignment: Qt.AlignHCenter; elide: Text.ElideRight; Layout.maximumWidth: 92 }
+                    }
+                }
+            }
+        }
+        Label {
+            visible: root.category === "mine" && root.mine.length === 0
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            text: "Make a page once (a form, a planner, a worksheet, a PDF page) and keep it here to use it again on any page or notebook."
+            font.pixelSize: 12
+            color: Theme.muted
+        }
+        GridLayout {
+            visible: root.category !== "mine"
             columns: 4
             columnSpacing: 10
             rowSpacing: 10
@@ -86,13 +208,15 @@ Popup {
                 }
             }
         }
-        Label { text: "Paper colour"; font.pixelSize: 12; font.weight: Font.DemiBold; color: Theme.muted; Layout.topMargin: 6 }
+        Label { visible: root.category !== "mine"; text: "Paper colour"; font.pixelSize: 12; font.weight: Font.DemiBold; color: Theme.muted; Layout.topMargin: 6 }
         Swatches {
+            visible: root.category !== "mine"
             colors: Theme.paperColors
             value: root.paper
             onPicked: c => { root.close(); root.canvas.setPaper(root.page, "", c, false) }
         }
         UiButton {
+            visible: root.category !== "mine"
             Layout.fillWidth: true
             text: "Apply this paper to all pages"
             onClicked: { root.close(); root.canvas.setPaper(root.page, root.current, root.paper, true) }

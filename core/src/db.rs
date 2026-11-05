@@ -16,7 +16,7 @@ use crate::error::{AppError, AppResult};
 use crate::lock::{self, ContentKey, LockInfo};
 use std::collections::HashMap;
 
-const SCHEMA_VERSION: i64 = 7;
+const SCHEMA_VERSION: i64 = 8;
 
 /// Ids of the folders in the trash and every folder inside them, at any
 /// depth: what's in a trashed folder is in the trash with it.
@@ -156,6 +156,19 @@ pub struct Snippet {
     pub id: String,
     pub name: String,
     pub data: String,
+    pub preview: Option<String>,
+    pub width: f64,
+    pub height: f64,
+    pub created_at: i64,
+    pub used_at: Option<i64>,
+}
+
+/// One of your page templates (its PDF is fetched on its own).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PageTemplate {
+    pub id: String,
+    pub name: String,
     pub preview: Option<String>,
     pub width: f64,
     pub height: f64,
@@ -614,6 +627,27 @@ impl Db {
                     used_at INTEGER
                 );",
             )?;
+            conn.pragma_update(None, "user_version", 7)?;
+        }
+        if version < 8 {
+            // v8: your own page templates (a page kept as a PDF), and which
+            // template a notebook's copy of one came from (to use it once).
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS page_templates (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    data BLOB NOT NULL,
+                    preview TEXT,
+                    width REAL NOT NULL,
+                    height REAL NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    used_at INTEGER
+                );",
+            )?;
+            let cols: Vec<String> = conn.prepare("PRAGMA table_info(assets)")?.query_map([], |r| r.get::<_, String>(1))?.collect::<Result<_, _>>()?;
+            if !cols.iter().any(|c| c == "origin") {
+                conn.execute_batch("ALTER TABLE assets ADD COLUMN origin TEXT;")?;
+            }
             conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         }
         // PDFs stored for an import that never finished.
@@ -1361,21 +1395,27 @@ impl Db {
         let count = notebook.page_count;
         let index = index.unwrap_or(count).clamp(0, count);
         let tx = conn.transaction()?;
-        let neighbour: Option<(String, String, f64, f64, Option<String>)> = tx
+        let neighbour: Option<(String, String, f64, f64, Option<String>, Option<String>)> = tx
             .query_row(
-                "SELECT template, paper_color, width, height, section FROM pages WHERE notebook_id = ?1
-                 ORDER BY ABS(position - ?2) LIMIT 1",
+                // (A page made from one of your templates: the new one is too.)
+                "SELECT p.template, p.paper_color, p.width, p.height, p.section,
+                        CASE WHEN a.origin IS NOT NULL THEN p.background_asset END
+                 FROM pages p LEFT JOIN assets a ON a.id = p.background_asset
+                 WHERE p.notebook_id = ?1 ORDER BY ABS(p.position - ?2) LIMIT 1",
                 params![notebook_id, index - 1],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
             )
             .optional()?;
-        let (n_template, paper, width, height, section) = neighbour.unwrap_or((
+        let (n_template, paper, width, height, section, from_template) = neighbour.unwrap_or((
             notebook.default_template.clone(),
             "#fffdf7".into(),
             DEFAULT_PAGE_WIDTH,
             DEFAULT_PAGE_HEIGHT,
             None,
+            None,
         ));
+        // A paper asked for by name replaces the template.
+        let from_template = if template.is_some() { None } else { from_template };
         tx.execute(
             "UPDATE pages SET position = position + 1 WHERE notebook_id = ?1 AND position >= ?2",
             params![notebook_id, index],
@@ -1383,9 +1423,9 @@ impl Db {
         let now = now_ms();
         let id = new_id();
         tx.execute(
-            "INSERT INTO pages (id, notebook_id, position, template, paper_color, width, height, created_at, updated_at, section)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9)",
-            params![id, notebook_id, index, template.unwrap_or(&n_template), paper, width, height, now, section],
+            "INSERT INTO pages (id, notebook_id, position, template, paper_color, width, height, created_at, updated_at, section, background_asset, background_page)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?10, CASE WHEN ?10 IS NULL THEN NULL ELSE 0 END)",
+            params![id, notebook_id, index, template.unwrap_or(&n_template), paper, width, height, now, section, from_template],
         )?;
         tx.execute(
             "UPDATE notebooks SET updated_at = ?2 WHERE id = ?1",
@@ -1753,6 +1793,119 @@ impl Db {
     pub fn use_snippet(&self, id: &str) -> AppResult<()> {
         self.conn().execute("UPDATE snippets SET used_at = ?2 WHERE id = ?1", params![id, now_ms()])?;
         Ok(())
+    }
+
+    // ------------------------------------------------------ your page templates
+
+    /// Your templates, most recently used (or saved) first.
+    pub fn page_templates(&self) -> AppResult<Vec<PageTemplate>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id, name, preview, width, height, created_at, used_at FROM page_templates ORDER BY COALESCE(used_at, created_at) DESC, rowid DESC",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(PageTemplate {
+                id: r.get(0)?,
+                name: r.get(1)?,
+                preview: r.get(2)?,
+                width: r.get(3)?,
+                height: r.get(4)?,
+                created_at: r.get(5)?,
+                used_at: r.get(6)?,
+            })
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    /// Keeps a page (drawn as a one-page PDF) as a template. Not from a locked
+    /// notebook: templates aren't encrypted.
+    pub fn save_page_template(&self, name: &str, pdf: &[u8], preview: Option<&str>, width: f64, height: f64, from_notebook: Option<&str>) -> AppResult<PageTemplate> {
+        let conn = self.conn();
+        if let Some(nb) = from_notebook {
+            if notebook_lock(&conn, nb)?.is_some() {
+                return Err(AppError::Invalid(
+                    "This notebook is password protected: its pages can't become templates (they would be kept unencrypted).".into(),
+                ));
+            }
+        }
+        if !pdf.starts_with(b"%PDF") {
+            return Err(AppError::Invalid("a template is kept as a PDF".into()));
+        }
+        if pdf.len() > MAX_PDF_BYTES {
+            return Err(AppError::Invalid("that page is too large to keep as a template".into()));
+        }
+        if !(width.is_finite() && height.is_finite() && (20.0..=20_000.0).contains(&width) && (20.0..=20_000.0).contains(&height)) {
+            return Err(AppError::Invalid("unsupported page size".into()));
+        }
+        let t = PageTemplate {
+            id: new_id(),
+            name: validate_name(name)?,
+            preview: preview.map(str::to_string),
+            width,
+            height,
+            created_at: now_ms(),
+            used_at: None,
+        };
+        conn.execute(
+            "INSERT INTO page_templates (id, name, data, preview, width, height, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![t.id, t.name, pdf, t.preview, t.width, t.height, t.created_at],
+        )?;
+        Ok(t)
+    }
+
+    pub fn rename_page_template(&self, id: &str, name: &str) -> AppResult<()> {
+        let name = validate_name(name)?;
+        let n = self.conn().execute("UPDATE page_templates SET name = ?2 WHERE id = ?1", params![id, name])?;
+        expect_one(n, id)
+    }
+
+    /// Deletes a template; pages made from it keep it (each notebook has its own copy).
+    pub fn delete_page_template(&self, id: &str) -> AppResult<()> {
+        self.conn().execute("DELETE FROM page_templates WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    /// Puts a template on a page: the page takes its size and shows it under
+    /// what's written (on plain white paper). The notebook keeps one copy of
+    /// each template it uses, encrypted with it when it's locked.
+    pub fn use_page_template(&self, page_id: &str, template_id: &str) -> AppResult<Page> {
+        let mut conn = self.conn();
+        let (notebook_id, lock) = page_notebook(&conn, page_id)?;
+        let key = self.need_key(&lock)?;
+        let (data, width, height): (Vec<u8>, f64, f64) = conn
+            .query_row("SELECT data, width, height FROM page_templates WHERE id = ?1", [template_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .optional()?
+            .ok_or_else(|| AppError::NotFound(template_id.to_string()))?;
+        let now = now_ms();
+        let tx = conn.transaction()?;
+        let existing: Option<String> = tx
+            .query_row("SELECT id FROM assets WHERE notebook_id = ?1 AND origin = ?2", params![notebook_id, template_id], |r| r.get(0))
+            .optional()?;
+        let asset = match existing {
+            Some(a) => a,
+            None => {
+                let id = new_id();
+                let stored = match &key {
+                    Some(k) => lock::encrypt_blob(k, &data),
+                    None => data,
+                };
+                tx.execute(
+                    "INSERT INTO assets (id, notebook_id, kind, data, created_at, origin) VALUES (?1, ?2, 'pdf', ?3, ?4, ?5)",
+                    params![id, notebook_id, stored, now, template_id],
+                )?;
+                id
+            }
+        };
+        let n = tx.execute(
+            "UPDATE pages SET template = 'blank', paper_color = '#ffffff', width = ?2, height = ?3, background_asset = ?4, background_page = 0,
+                              thumbnail = NULL, updated_at = ?5 WHERE id = ?1",
+            params![page_id, width, height, asset, now],
+        )?;
+        expect_one(n, page_id)?;
+        tx.execute("UPDATE page_templates SET used_at = ?2 WHERE id = ?1", params![template_id, now])?;
+        tx.execute("UPDATE notebooks SET updated_at = ?2 WHERE id = ?1", params![notebook_id, now])?;
+        tx.commit()?;
+        Ok(self.reveal_page(get_page(&conn, page_id)?, &lock))
     }
 
     // ------------------------------------------------------------- AI reading
@@ -2743,6 +2896,34 @@ mod tests {
         db.set_notebook_cover(&nb.id, "#dc2626").unwrap();
         assert_eq!(db.pages(&nb.id).unwrap()[0].paper_color, "#dc2626");
         assert!(db.set_notebook_cover(&nb.id, "red").is_err());
+    }
+
+    #[test]
+    fn page_templates_are_kept_and_used_once_per_notebook() {
+        let db = Db::open_in_memory().unwrap();
+        let nb = db.create_notebook(&NewNotebook { title: "Forms".into(), ..Default::default() }).unwrap();
+        let pdf = b"%PDF-1.4 template".to_vec();
+        let t = db.save_page_template("Weekly form", &pdf, Some("data:image/png;base64,AA"), 595.0, 842.0, Some(&nb.id)).unwrap();
+        assert_eq!(db.page_templates().unwrap().len(), 1);
+        assert!(db.save_page_template("Bad", b"not a pdf", None, 595.0, 842.0, None).is_err());
+        let first = db.pages(&nb.id).unwrap()[0].clone();
+        let p = db.use_page_template(&first.id, &t.id).unwrap();
+        assert_eq!((p.width, p.height, p.template.as_str()), (595.0, 842.0, "blank"));
+        let asset = p.background_asset.clone().unwrap();
+        assert_eq!(db.asset_bytes(&asset).unwrap(), pdf);
+        // A second page from it shares the notebook's copy.
+        let second = db.add_page(&nb.id, None, None).unwrap();
+        assert_eq!(db.use_page_template(&second.id, &t.id).unwrap().background_asset, Some(asset.clone()));
+        db.rename_page_template(&t.id, "Form").unwrap();
+        assert_eq!(db.page_templates().unwrap()[0].name, "Form");
+        // A page added after one carries on with its template.
+        let third = db.add_page(&nb.id, None, None).unwrap();
+        assert_eq!(third.background_asset, Some(asset.clone()));
+        assert_eq!(db.add_page(&nb.id, None, Some("ruled")).unwrap().background_asset, None);
+        // Deleting the template leaves the pages as they are.
+        db.delete_page_template(&t.id).unwrap();
+        assert!(db.page_templates().unwrap().is_empty());
+        assert_eq!(db.asset_bytes(&asset).unwrap(), pdf);
     }
 
     #[test]

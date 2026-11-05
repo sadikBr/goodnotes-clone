@@ -24,6 +24,10 @@ Popup {
     property string paper: "#fffdf7"
     property string cover: Theme.coverColors[0]
     property string design: "classic"
+    /// One of your templates instead of a paper ("" for none): [{ id, name, preview, width, height }].
+    property var mine: []
+    property string mineId: ""
+    readonly property var mineT: mine.find(t => t.id === mineId) || null
     readonly property bool narrow: width < 640
     readonly property bool landscape: orientation === "landscape"
 
@@ -38,6 +42,8 @@ Popup {
         paper = p.paper || "#fffdf7"
         cover = p.cover || Theme.coverColors[0]
         design = p.design || "classic"
+        try { mine = InkleafCore.call("pageTemplates") } catch (e) { mine = [] }
+        mineId = ""
         step = 0
         open()
         titleField.forceActiveFocus()
@@ -45,7 +51,7 @@ Popup {
     }
     function create() {
         close()
-        created({ title: title.trim() || "Untitled notebook", template: template, size: size, orientation: orientation, paper: paper, cover: cover, design: design })
+        created({ title: title.trim() || "Untitled notebook", template: template, size: size, orientation: orientation, paper: paper, cover: cover, design: design, mine: mineT })
     }
     function coverUrl(d) {
         return "image://cover/" + d + "/" + cover.replace("#", "") + "/" + (landscape ? 1 : 0) + "/" + encodeURIComponent(previewTitle || "Untitled")
@@ -100,11 +106,18 @@ Popup {
                     source: root.opened && root.step === 0 ? root.coverUrl(root.design) : ""
                 }
                 Image {
-                    visible: root.step === 1
+                    visible: root.step === 1 && !root.mineT
                     anchors.fill: parent
                     sourceSize: Qt.size(parent.width * 2, parent.height * 2)
-                    source: root.opened && root.step === 1 ? "image://paper/" + root.template + "/" + root.paper.replace("#", "") + "/whole" : ""
+                    source: root.opened && root.step === 1 && !root.mineT ? "image://paper/" + root.template + "/" + root.paper.replace("#", "") + "/whole" : ""
                     fillMode: Image.Stretch
+                }
+                Rectangle { visible: root.step === 1 && !!root.mineT; anchors.fill: parent; color: "#ffffff" }
+                Image {
+                    visible: root.step === 1 && !!root.mineT
+                    anchors.fill: parent
+                    source: root.mineT ? root.mineT.preview || "" : ""
+                    fillMode: Image.PreserveAspectFit
                 }
                 transform: Rotation { origin.x: 100; origin.y: 141; axis { x: 0; y: 1; z: 0 } angle: -6 }
             }
@@ -113,6 +126,7 @@ Popup {
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: 26
                 text: root.step === 0 ? (root.designs.find(d => d.value === root.design) || { label: "" }).label + " cover"
+                                      : root.mineT ? root.mineT.name + " · your template"
                                       : (root.templates.find(t => t.value === root.template) || { label: "" }).label + " · " + (Theme.paperSizes.find(p => p.id === root.size) || { label: "" }).label
                 color: Theme.muted
                 font.pixelSize: 12
@@ -244,6 +258,42 @@ Popup {
                     }
                     FieldLabel { text: "Paper colour" }
                     Swatches { Layout.fillWidth: true; colors: Theme.paperColors; value: root.paper; onPicked: c => root.paper = c }
+                    // Your templates first (they set the size themselves).
+                    FieldLabel { visible: root.mine.length > 0; text: "Your templates" }
+                    GridLayout {
+                        visible: root.mine.length > 0
+                        Layout.fillWidth: true
+                        readonly property int cols: Math.max(3, Math.floor((paperCol.width + 8) / 84))
+                        readonly property real cellW: (paperCol.width - (cols - 1) * 8) / cols
+                        columns: cols
+                        columnSpacing: 8
+                        rowSpacing: 8
+                        Repeater {
+                            model: root.mine
+                            delegate: AbstractButton {
+                                id: mv
+                                required property var modelData
+                                readonly property bool on: root.mineId === modelData.id
+                                Layout.preferredWidth: parent.cellW
+                                implicitHeight: 104
+                                hoverEnabled: true
+                                onClicked: root.mineId = on ? "" : modelData.id
+                                background: Rectangle { antialiasing: true; radius: Theme.radius; color: mv.on ? Theme.accentSoft : mv.hovered ? Theme.surface2 : "transparent"; border.width: 1.5; border.color: mv.on ? Theme.accent : "transparent" }
+                                contentItem: Item {
+                                    Rectangle {
+                                        id: mpic
+                                        readonly property real k: Math.min(50 / mv.modelData.width, 68 / mv.modelData.height)
+                                        x: Math.round((mv.width - width) / 2); y: 6 + Math.round((68 - height) / 2)
+                                        width: Math.round(mv.modelData.width * k); height: Math.round(mv.modelData.height * k)
+                                        color: Theme.border
+                                        Rectangle { anchors.fill: parent; anchors.margins: 1; color: "#ffffff" }
+                                        Image { anchors.fill: parent; anchors.margins: 1; source: mv.modelData.preview || ""; fillMode: Image.PreserveAspectFit; asynchronous: true }
+                                    }
+                                    Label { y: 80; anchors.horizontalCenter: parent.horizontalCenter; width: mv.width - 6; text: mv.modelData.name; font.pixelSize: 11; color: Theme.text; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight }
+                                }
+                            }
+                        }
+                    }
                     // The kinds of paper, by group, as small pages.
                     Repeater {
                         model: [...new Set(root.templates.map(t => t.group))]
@@ -266,11 +316,11 @@ Popup {
                                     delegate: AbstractButton {
                                         id: pv
                                         required property var modelData
-                                        readonly property bool on: root.template === modelData.value
+                                        readonly property bool on: !root.mineT && root.template === modelData.value
                                         Layout.preferredWidth: parent.cellW
                                         implicitHeight: 104
                                         hoverEnabled: true
-                                        onClicked: root.template = modelData.value
+                                        onClicked: { root.template = modelData.value; root.mineId = "" }
                                         background: Rectangle { antialiasing: true; radius: Theme.radius; color: pv.on ? Theme.accentSoft : pv.hovered ? Theme.surface2 : "transparent"; border.width: 1.5; border.color: pv.on ? Theme.accent : "transparent" }
                                         contentItem: Item {
                                             Rectangle {

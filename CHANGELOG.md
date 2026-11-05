@@ -7,6 +7,7 @@ section here before it can be published (`scripts/check-version.py`).
 
 ## 0.16.2
 
+- **Your own templates:** make a page once (a form, a planner, a worksheet, a PDF page) and keep it: *Paper → Yours → This page*. Use it on any page, on every page, for a new page, or for a new notebook; pages added after it carry on with it. It's part of the paper, so the eraser leaves it alone.
 - **Crop pictures:** select a picture and tap *Crop*. Drag the corners and sides, or drag inside to move what's kept; cut it as a rectangle, with rounded corners or as a circle, and keep it square, 4 : 3, 16 : 9 or as it was. *Reset* brings the whole picture back, any time.
 - **Fixed:** hovering a tool in the side rail or top bar now keeps it highlighted (it flashed grey and then vanished).
 - **Sizes you can see, and one of your own:** every tool's sizes now show how they look (the pen's stroke, a highlighter swipe, the eraser's circle, letters for text), and after its three sizes there's a fourth that's yours. Tap it to use it, and tap it again to set it: a live preview, a slider, − and +, or type a size like 12.

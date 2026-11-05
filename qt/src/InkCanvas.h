@@ -241,6 +241,12 @@ public:
   Q_INVOKABLE void togglePageFavourite(int index);
   /// Paper style and/or colour for one page or all of them.
   Q_INVOKABLE void setPaper(int index, const QString& tmpl, const QString& color, bool allPages);
+  /// Keeps page `index` as one of your templates; returns an error, or "".
+  Q_INVOKABLE QString savePageAsTemplate(int index, const QString& name);
+  /// Page `index` shows one of your templates as its paper (taking its size).
+  Q_INVOKABLE void usePageTemplate(int index, const QString& templateId);
+  /// A new page at `index` (-1: at the end) from one of your templates.
+  Q_INVOKABLE void addTemplatePage(int index, const QString& templateId);
   /// Reloads pages from the library (after changes made elsewhere).
   Q_INVOKABLE void reloadPages(bool elementsToo = false);
   /// Saves pending changes now (before leaving the notebook).
