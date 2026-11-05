@@ -50,6 +50,8 @@ Item {
     signal cropRequested()
     /// Link the selection (to a page, a notebook or a website).
     signal linkRequested()
+    /// Check the spelling of the handwriting in the selection.
+    signal spellRequested()
     ColorPopover { id: colorPop }
 
     Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 3 }
@@ -77,7 +79,7 @@ Item {
                 { label: "Solve step by step", action: () => root.askAi("solve") },
                 { label: "Summarise", action: () => root.askAi("summarise") },
                 { label: "Translate…", action: () => root.askAi("translate") }
-            ].concat(root.s.hasInk ? [{ label: "Turn handwriting into text", action: () => inkToText.start() }] : [], [
+            ].concat(root.s.hasInk ? [{ label: "Turn handwriting into text", action: () => inkToText.start() }, { label: "Check spelling", action: () => root.spellRequested() }] : [], [
                 { label: "Ask a question…", action: () => root.askAi("ask") }
             ]))
             background: Rectangle { antialiasing: true; radius: Theme.radius; color: parent.hovered ? Theme.alpha(Theme.accent, 0.12) : "transparent" }

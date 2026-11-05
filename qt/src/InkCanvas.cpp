@@ -1213,6 +1213,78 @@ quint64 InkCanvas::pageVersion(int page) const {
   return page >= 0 && page < int(m_pages.size()) ? m_pages[page].version : 0;
 }
 
+// --- spelling -------------------------------------------------------------------------
+
+QVariantList InkCanvas::inkWords(int page, bool selectionOnly) {
+  QVariantList out;
+  if (!m_ed || page < 0 || page >= int(m_pages.size())) return out;
+  int n = 1;
+  for (const auto& w : m_ed->inkWords(page, selectionOnly))
+    out.append(QVariantMap{{"n", n++}, {"x", w.box.x}, {"y", w.box.y}, {"w", w.box.w}, {"h", w.box.h}, {"ids", w.ids}});
+  return out;
+}
+
+QString InkCanvas::numberedWordsImage(int page, const QVariantList& words) {
+  if (page < 0 || page >= int(m_pages.size()) || words.isEmpty()) return {};
+  QRectF all;
+  for (const QVariant& v : words) {
+    const QVariantMap w = v.toMap();
+    all = all.united(QRectF(w["x"].toDouble(), w["y"].toDouble(), w["w"].toDouble(), w["h"].toDouble()));
+  }
+  const Page& p = m_pages[page];
+  all = all.adjusted(-28, -28, 16, 16).intersected(QRectF(0, 0, p.w, p.h));
+  const double scale = std::clamp(1800.0 / std::max(all.width(), all.height()), 0.6, 3.0);
+  // The writing on white (no paper: its lines would only get in the way).
+  QImage img(int(std::ceil(all.width() * scale)), int(std::ceil(all.height() * scale)), QImage::Format_ARGB32_Premultiplied);
+  img.fill(Qt::white);
+  QPainter painter(&img);
+  painter.drawImage(QRectF(0, 0, img.width(), img.height()), draw::elementsImage(sceneJson(page), scale, all));
+  painter.setRenderHint(QPainter::Antialiasing);
+  QFont f;
+  f.setPixelSize(int(std::clamp(14 * scale / 1.5, 12.0, 26.0)));
+  f.setBold(true);
+  painter.setFont(f);
+  for (const QVariant& v : words) {
+    const QVariantMap w = v.toMap();
+    const QPointF at((w["x"].toDouble() - all.x()) * scale, (w["y"].toDouble() - all.y()) * scale);
+    const QString label = QString::number(w["n"].toInt());
+    const QRectF r(at.x() - f.pixelSize() * 0.9, at.y() - f.pixelSize() * 1.15, f.pixelSize() * (0.75 + 0.6 * label.size()), f.pixelSize() * 1.25);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(220, 38, 38));
+    painter.drawRoundedRect(r, 4, 4);
+    painter.setPen(Qt::white);
+    painter.drawText(r, Qt::AlignCenter, label);
+  }
+  painter.end();
+  QByteArray bytes;
+  QBuffer buf(&bytes);
+  buf.open(QIODevice::WriteOnly);
+  img.save(&buf, "JPEG", 85);
+  return "data:image/jpeg;base64," + QString::fromLatin1(bytes.toBase64());
+}
+
+QVariantMap InkCanvas::strokesBox(int page, const QStringList& ids) {
+  if (!m_ed || page < 0 || page >= int(m_pages.size()) || ids.isEmpty()) return {};
+  QSet<QString> want(ids.begin(), ids.end());
+  std::optional<ed::Rect> box;
+  int found = 0;
+  for (const ed::ElPtr& el : m_ed->load(page))
+    if (want.contains(el->id)) {
+      const ed::Rect b = ed::bounds(*el);
+      box = box ? *ed::unionRects({*box, b}) : b;
+      ++found;
+    }
+  if (found != int(want.size()) || !box) return {};
+  return {{"x", box->x}, {"y", box->y}, {"w", box->w}, {"h", box->h}};
+}
+
+void InkCanvas::selectElements(int page, const QStringList& ids) {
+  if (!m_ed || page < 0 || page >= int(m_pages.size())) return;
+  setTool("lasso");
+  m_ed->selectIds(page, ids);
+  afterCore();
+}
+
 void InkCanvas::linkSelection(const QVariantMap& link) {
   if (!m_ed) return;
   m_ed->linkSelection(QJsonObject::fromVariantMap(link));

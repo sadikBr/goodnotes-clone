@@ -504,6 +504,8 @@ Rectangle {
                             onClicked: menu.show(moreBtn, [
                                 { icon: "stylus", label: "Pen-only mode", toggle: AppSettings.store.penOnly, action: () => AppSettings.store.penOnly = !AppSettings.store.penOnly },
                                 { icon: "focus", label: "Focus mode", key: "F", toggle: root.focusMode, action: () => root.focusMode = !root.focusMode },
+                                { icon: "zoombox", label: "Zoom box", key: "Z", toggle: zoomBox.active, action: () => zoomBox.active ? zoomBox.stop() : zoomBox.start() },
+                                { icon: "spell", label: "Check spelling on this page", action: () => spell.check(root.mainCanvas.currentPage, false) },
                                 { icon: "sidebar", label: "Tools on the side", toggle: root.rail, action: () => AppSettings.store.toolbar = root.rail ? "top" : "rail" },
                                 { separator: true },
                                 { icon: "sidebar", label: root.sidebarShown ? "Hide pages" : "Show pages", key: "[", action: () => root.toggleSidebar() },
@@ -657,7 +659,9 @@ Rectangle {
                     onSavePieceRequested: root.savePiece()
                     onCropRequested: cropper.start()
                     onLinkRequested: linkDialog.show()
+                    onSpellRequested: spell.check(root.mainCanvas.activePage, true)
                 }
+                SpellCheck { id: spell; anchors.fill: parent; z: 5; canvas: root.mainCanvas; visible: !cropper.active; onNotify: (m, e) => root.notify(m, e) }
                 LinkDialog { id: linkDialog; canvas: root.mainCanvas; notebookId: root.notebookId }
                 LinkLayer {
                     anchors.fill: parent

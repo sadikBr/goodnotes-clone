@@ -157,6 +157,15 @@ public:
   bool linkSelection(const QJsonObject& link);
   /// Page `page`'s links: where each is (linked things near each other together) and where it goes.
   std::vector<std::pair<Rect, QJsonObject>> linksOn(int page);
+  /// Selects these elements on page `pi`.
+  void selectIds(int pi, const QStringList& ids);
+  /// The words written on page `pi` (pen strokes grouped into lines and words; only the
+  /// selected ones if `selectionOnly`): each word's box and strokes, in reading order.
+  struct InkWord {
+    Rect box;
+    QStringList ids;
+  };
+  std::vector<InkWord> inkWords(int pi, bool selectionOnly);
   /// The selected picture's src (one picture selected; else empty).
   QString selectedImageSrc();
   bool cropSelectedImage(double x, double y, double w, double h, const QVariantList& crop, const QString& mask);

@@ -211,6 +211,15 @@ public:
   QImage regionImage(int page, const QRectF& region, double scale);
   QJsonObject liveStroke(int page) const;
   quint64 pageVersion(int page) const;
+  /// Spelling: the words written on page `page` (only selected ones if `selectionOnly`):
+  /// [{ n, x, y, w, h, ids }] (page units), in reading order.
+  Q_INVOKABLE QVariantList inkWords(int page, bool selectionOnly);
+  /// Those words as a picture, each numbered beside it (for the AI to read): a data: URL.
+  Q_INVOKABLE QString numberedWordsImage(int page, const QVariantList& words);
+  /// Where these strokes are now ({ x, y, w, h }), or nothing if any of them is gone.
+  Q_INVOKABLE QVariantMap strokesBox(int page, const QStringList& ids);
+  /// Selects these elements on page `page`.
+  Q_INVOKABLE void selectElements(int page, const QStringList& ids);
   /// Links the selection to `link` ({ kind: "page", page } | { kind: "notebook", notebook, title } |
   /// { kind: "url", url }); an empty one unlinks it.
   Q_INVOKABLE void linkSelection(const QVariantMap& link);

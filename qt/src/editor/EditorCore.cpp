@@ -1630,6 +1630,99 @@ bool EditorCore::updateSelectedGraph(const QVariantMap& spec) {
   return true;
 }
 
+// ------------------------------------------------------------ words (spelling)
+
+void EditorCore::selectIds(int pi, const QStringList& ids) {
+  activate(pi);
+  m_selection.clear();
+  QSet<QString> want(ids.begin(), ids.end());
+  for (const ElPtr& el : load(pi))
+    if (want.contains(el->id)) m_selection.insert(el->id);
+  ++selectionRev;
+}
+
+std::vector<EditorCore::InkWord> EditorCore::inkWords(int pi, bool selectionOnly) {
+  struct S {
+    Rect b;
+    QString id;
+  };
+  std::vector<S> big, small;
+  for (const ElPtr& el : load(pi)) {
+    if (el->kind != Kind::Stroke || el->tool != "pen" || el->points.empty()) continue;
+    if (selectionOnly && !m_selection.contains(el->id)) continue;
+    const QString style = el->style.value_or("fountain");
+    if (style == "tape" || style == "construction") continue;
+    const Rect b = bounds(*el);
+    // Long lines and drawings aren't words.
+    if (b.w > 900 || b.h > 260) continue;
+    (std::max(b.w, b.h) < 7 ? small : big).push_back({b, el->id});
+  }
+  // Lines: strokes that share most of their height.
+  std::sort(big.begin(), big.end(), [](const S& a, const S& b) { return a.b.y + a.b.h / 2 < b.b.y + b.b.h / 2; });
+  struct Line {
+    double top, bottom;
+    std::vector<S> items;
+  };
+  std::vector<Line> lines;
+  for (const S& s : big) {
+    Line* best = nullptr;
+    double bestOverlap = 0;
+    for (size_t i = lines.size() > 4 ? lines.size() - 4 : 0; i < lines.size(); ++i) {
+      Line& l = lines[i];
+      const double overlap = std::min(l.bottom, s.b.y + s.b.h) - std::max(l.top, s.b.y);
+      const double need = 0.4 * std::min(l.bottom - l.top, s.b.h);
+      if (overlap >= need && overlap > bestOverlap) best = &l, bestOverlap = overlap;
+    }
+    if (best) {
+      best->top = std::min(best->top, s.b.y);
+      best->bottom = std::max(best->bottom, s.b.y + s.b.h);
+      best->items.push_back(s);
+    } else {
+      lines.push_back({s.b.y, s.b.y + s.b.h, {s}});
+    }
+  }
+  std::sort(lines.begin(), lines.end(), [](const Line& a, const Line& b) { return a.top < b.top; });
+  // Words: strokes in a line closer than about a third of its height.
+  std::vector<InkWord> out;
+  for (Line& l : lines) {
+    std::sort(l.items.begin(), l.items.end(), [](const S& a, const S& b) { return a.b.x < b.b.x; });
+    std::vector<double> hs;
+    for (const S& s : l.items) hs.push_back(s.b.h);
+    std::nth_element(hs.begin(), hs.begin() + hs.size() / 2, hs.end());
+    const double gap = std::max(5.0, 0.38 * hs[hs.size() / 2]);
+    InkWord w{l.items[0].b, {l.items[0].id}};
+    for (size_t i = 1; i < l.items.size(); ++i) {
+      const S& s = l.items[i];
+      if (s.b.x - (w.box.x + w.box.w) < gap) {
+        w.box = *unionRects({w.box, s.b});
+        w.ids << s.id;
+      } else {
+        out.push_back(w);
+        w = {s.b, {s.id}};
+      }
+    }
+    out.push_back(w);
+  }
+  // Dots and accents: with the word they're over or next to.
+  for (const S& s : small) {
+    InkWord* best = nullptr;
+    double bestD = 30;
+    for (InkWord& w : out) {
+      const double cx = s.b.x + s.b.w / 2, cy = s.b.y + s.b.h / 2;
+      const double dx = std::max({w.box.x - cx, 0.0, cx - (w.box.x + w.box.w)});
+      const double dy = std::max({w.box.y - cy, 0.0, cy - (w.box.y + w.box.h)});
+      const double d = std::hypot(dx, dy);
+      if (d < bestD) best = &w, bestD = d;
+    }
+    if (best) {
+      best->box = *unionRects({best->box, s.b});
+      best->ids << s.id;
+    }
+  }
+  if (out.size() > 400) out.resize(400);
+  return out;
+}
+
 // ------------------------------------------------------------ links
 
 bool EditorCore::linkSelection(const QJsonObject& link) {
