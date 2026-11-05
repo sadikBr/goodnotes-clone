@@ -85,9 +85,11 @@ QJsonObject Meta::toJson() const {
   QJsonArray tt, hs;
   for (const Lesson& l : timetable) tt.append(QJsonObject{{"day", l.day}, {"start", l.start}, {"end", l.end}, {"cls", l.cls}});
   for (const Holiday& h : holidays) hs.append(h.toJson());
-  QJsonObject o{{"kind", "daftar"},       {"year", year},       {"region", region},   {"directorate", directorate}, {"school", school},
+  QJsonObject o = extra;
+  const QJsonObject own{{"kind", "daftar"},       {"year", year},       {"region", region},   {"directorate", directorate}, {"school", school},
                 {"teacher", teacher},     {"payroll", payroll}, {"subject", subject}, {"classes", QJsonArray::fromStringList(classes)},
                 {"timetable", tt},        {"holidays", hs}};
+  for (auto it = own.begin(); it != own.end(); ++it) o[it.key()] = it.value();
   if (!classColors.isEmpty()) o["classColors"] = classColors;
   return o;
 }
@@ -114,6 +116,9 @@ Meta Meta::fromJson(const QJsonObject& o) {
   }
   for (const QJsonValue& v : o["holidays"].toArray()) m.holidays.push_back(Holiday::fromJson(v.toObject()));
   m.classColors = o["classColors"].toObject();
+  static const QStringList known{"kind", "year", "region", "directorate", "school", "teacher", "payroll", "subject", "classes", "timetable", "holidays", "classColors"};
+  for (auto it = o.begin(); it != o.end(); ++it)
+    if (!known.contains(it.key())) m.extra[it.key()] = it.value();
   return m;
 }
 

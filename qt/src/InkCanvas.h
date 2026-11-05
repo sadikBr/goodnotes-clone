@@ -241,6 +241,16 @@ public:
   Q_INVOKABLE void togglePageFavourite(int index);
   /// Paper style and/or colour for one page or all of them.
   Q_INVOKABLE void setPaper(int index, const QString& tmpl, const QString& color, bool allPages);
+  /// One of the notebook's settings (its `meta` JSON): the contents' headings, cards…
+  Q_INVOKABLE QVariant notebookSetting(const QString& key);
+  Q_INVOKABLE void setNotebookSetting(const QString& key, const QVariant& value);
+  /// The contents, in page order: the PDF's own (kind "pdf") and your headings
+  /// (kind "heading", with an id): [{ kind, title, level, page, id }].
+  Q_INVOKABLE QVariantList contents();
+  /// Your headings: one for page `index`; a change ({ title, level }); gone.
+  Q_INVOKABLE void addHeading(int index, const QString& title, int level = 0);
+  Q_INVOKABLE void changeHeading(const QString& id, const QVariantMap& change);
+  Q_INVOKABLE void removeHeading(const QString& id);
   /// Keeps page `index` as one of your templates; returns an error, or "".
   Q_INVOKABLE QString savePageAsTemplate(int index, const QString& name);
   /// Page `index` shows one of your templates as its paper (taking its size).
@@ -282,6 +292,8 @@ signals:
   void settingsChanged();
   void viewChanged();
   void pagesChanged();
+  /// The notebook's settings changed (its headings, cards…).
+  void notebookSettingsChanged();
   void historyChanged();
   void selectionChanged();
   void editingChanged();

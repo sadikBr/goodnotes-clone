@@ -10,6 +10,8 @@
 #ifdef INKLEAF_HAVE_QTPDF
 #include <QPdfDocument>
 #include <QPdfDocumentRenderOptions>
+#include <QPdfBookmarkModel>
+#include <functional>
 #elif defined(Q_OS_ANDROID)
 #include <QJniEnvironment>
 #include <QJniObject>
@@ -51,6 +53,22 @@ public:
       img = doc.render(page, clip.size(), opt);
     }
     return img;
+  }
+  std::vector<Entry> outline() override {
+    std::vector<Entry> out;
+    QPdfBookmarkModel model;
+    model.setDocument(&doc);
+    const std::function<void(const QModelIndex&)> walk = [&](const QModelIndex& parent) {
+      for (int r = 0; r < model.rowCount(parent); ++r) {
+        const QModelIndex i = model.index(r, 0, parent);
+        const QString title = model.data(i, int(QPdfBookmarkModel::Role::Title)).toString().simplified();
+        if (!title.isEmpty())
+          out.push_back({title, model.data(i, int(QPdfBookmarkModel::Role::Level)).toInt(), model.data(i, int(QPdfBookmarkModel::Role::Page)).toInt()});
+        if (out.size() < 2000) walk(i);
+      }
+    };
+    walk({});
+    return out;
   }
 };
 }  // namespace
@@ -135,6 +153,11 @@ QSizeF PdfDocs::pageSize(const QString& asset, int page) {
   PdfFile* d = doc(asset);
   if (!d || page < 0 || page >= d->pageCount()) return {};
   return d->pageSize(page) * kUnitsPerPoint;
+}
+
+std::vector<PdfFile::Entry> PdfDocs::outline(const QString& asset) {
+  PdfFile* d = doc(asset);
+  return d ? d->outline() : std::vector<PdfFile::Entry>{};
 }
 
 QImage PdfDocs::render(const QString& asset, int page, double scale, QRectF region) {

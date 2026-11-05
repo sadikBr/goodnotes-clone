@@ -652,6 +652,96 @@ void InkCanvas::setPaper(int index, const QString& tmpl, const QString& color, b
   flush();
 }
 
+// --- the notebook's settings: contents -------------------------------------------------
+
+QVariant InkCanvas::notebookSetting(const QString& key) {
+  if (m_notebookId.isEmpty()) return {};
+  const QJsonObject nb = InkleafCore::instance()->callJson("notebook", {{"id", m_notebookId}}).toObject();
+  const QJsonObject meta = QJsonDocument::fromJson(nb["meta"].toString().toUtf8()).object();
+  return meta.value(key).toVariant();
+}
+
+void InkCanvas::setNotebookSetting(const QString& key, const QVariant& value) {
+  if (m_notebookId.isEmpty()) return;
+  const QJsonObject nb = InkleafCore::instance()->callJson("notebook", {{"id", m_notebookId}}).toObject();
+  QJsonObject meta = QJsonDocument::fromJson(nb["meta"].toString().toUtf8()).object();
+  const QJsonValue v = QJsonValue::fromVariant(value);
+  if (v.isNull() || v.isUndefined() || (v.isArray() && v.toArray().isEmpty())) meta.remove(key);
+  else meta[key] = v;
+  QString err;
+  InkleafCore::instance()->callJson("setNotebookMeta", {{"id", m_notebookId}, {"meta", meta.isEmpty() ? QJsonValue() : QJsonValue(QString::fromUtf8(QJsonDocument(meta).toJson(QJsonDocument::Compact)))}}, &err);
+  if (!err.isEmpty()) return emit message(err, true);
+  emit notebookSettingsChanged();
+}
+
+QVariantList InkCanvas::contents() {
+  struct E {
+    int page, order;
+    QVariantMap v;
+  };
+  std::vector<E> all;
+  int order = 0;
+  // The PDFs' own contents, on the pages that show them.
+  QHash<QString, QHash<int, int>> shown;  // asset → its page → notebook page
+  for (int i = 0; i < int(m_pages.size()); ++i) {
+    const QString asset = m_pages[i].meta["backgroundAsset"].toString();
+    if (!asset.isEmpty() && !m_pages[i].meta["backgroundPage"].isNull()) {
+      auto& pages = shown[asset];
+      const int bp = m_pages[i].meta["backgroundPage"].toInt();
+      if (!pages.contains(bp)) pages.insert(bp, i);
+    }
+  }
+  for (auto it = shown.constBegin(); it != shown.constEnd(); ++it)
+    for (const PdfFile::Entry& e : PdfDocs::instance().outline(it.key()))
+      if (it->contains(e.page))
+        all.push_back({it->value(e.page), order++, {{"kind", "pdf"}, {"title", e.title}, {"level", std::min(e.level, 3)}, {"page", it->value(e.page)}}});
+  // A daftar's classes: where each one's pages start.
+  QString section;
+  for (int i = 0; i < int(m_pages.size()); ++i) {
+    const QString sec = m_pages[i].meta["section"].toString();
+    if (!sec.isEmpty() && sec != section) all.push_back({i, order++, {{"kind", "section"}, {"title", sec}, {"level", 0}, {"page", i}}});
+    section = sec;
+  }
+  // Your headings.
+  QHash<QString, int> index;
+  for (int i = 0; i < int(m_pages.size()); ++i) index.insert(m_pages[i].id, i);
+  for (const QVariant& h : notebookSetting("contents").toList()) {
+    const QVariantMap m = h.toMap();
+    const auto at = index.constFind(m.value("page").toString());
+    if (at == index.constEnd()) continue;  // its page was deleted
+    all.push_back({*at, order++, {{"kind", "heading"}, {"id", m.value("id")}, {"title", m.value("title")}, {"level", std::clamp(m.value("level").toInt(), 0, 3)}, {"page", *at}}});
+  }
+  std::stable_sort(all.begin(), all.end(), [](const E& a, const E& b) { return a.page != b.page ? a.page < b.page : a.order < b.order; });
+  QVariantList out;
+  for (const E& e : all) out.append(e.v);
+  return out;
+}
+
+void InkCanvas::addHeading(int index, const QString& title, int level) {
+  if (index < 0 || index >= int(m_pages.size()) || title.trimmed().isEmpty()) return;
+  QVariantList list = notebookSetting("contents").toList();
+  list.append(QVariantMap{{"id", QUuid::createUuid().toString(QUuid::WithoutBraces)}, {"page", m_pages[index].id}, {"title", title.trimmed().left(200)}, {"level", std::clamp(level, 0, 3)}});
+  setNotebookSetting("contents", list);
+}
+
+void InkCanvas::changeHeading(const QString& id, const QVariantMap& change) {
+  QVariantList list = notebookSetting("contents").toList();
+  for (QVariant& h : list) {
+    QVariantMap m = h.toMap();
+    if (m.value("id").toString() != id) continue;
+    if (change.contains("title") && !change.value("title").toString().trimmed().isEmpty()) m["title"] = change.value("title").toString().trimmed().left(200);
+    if (change.contains("level")) m["level"] = std::clamp(change.value("level").toInt(), 0, 3);
+    h = m;
+  }
+  setNotebookSetting("contents", list);
+}
+
+void InkCanvas::removeHeading(const QString& id) {
+  QVariantList list = notebookSetting("contents").toList();
+  list.erase(std::remove_if(list.begin(), list.end(), [&](const QVariant& h) { return h.toMap().value("id").toString() == id; }), list.end());
+  setNotebookSetting("contents", list);
+}
+
 QString InkCanvas::savePageAsTemplate(int index, const QString& name) {
   if (index < 0 || index >= int(m_pages.size())) return "No page to keep";
   // The page as a one-page PDF (vectors: it stays sharp at any size).

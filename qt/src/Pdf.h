@@ -9,6 +9,7 @@
 #include <QVariantList>
 #include <QtQml/qqmlregistration.h>
 #include <memory>
+#include <vector>
 
 /// One open PDF file: Qt PDF, or Android's PdfRenderer where Qt PDF isn't shipped.
 class PdfFile {
@@ -21,6 +22,13 @@ public:
   virtual QSizeF pageSize(int page) const = 0;
   /// The page drawn `full` pixels big; only `clip` of it when that isn't empty. White behind.
   virtual QImage render(int page, QSize full, QRect clip = {}) = 0;
+  /// The PDF's own contents (its bookmarks): title, depth (0: top) and page.
+  struct Entry {
+    QString title;
+    int level = 0;
+    int page = 0;
+  };
+  virtual std::vector<Entry> outline() { return {}; }
 };
 
 /// Open PDFs by asset id (copied to the cache folder once, then loaded from there).
@@ -32,6 +40,8 @@ public:
   QImage render(const QString& asset, int page, double scale, QRectF region = {});
   /// The page's size in page units.
   QSizeF pageSize(const QString& asset, int page);
+  /// The PDF's own contents.
+  std::vector<PdfFile::Entry> outline(const QString& asset);
 
 private:
   PdfFile* doc(const QString& asset);

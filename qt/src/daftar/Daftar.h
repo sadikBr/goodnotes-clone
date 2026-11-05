@@ -38,6 +38,8 @@ struct Meta {
   std::vector<Holiday> holidays;
   /// Colours chosen for classes ({ class: "#rrggbb" }); the others take the palette's.
   QJsonObject classColors;
+  /// The notebook's other settings (its contents, cards…), kept as they are.
+  QJsonObject extra;
   QString colorOf(const QString& cls) const;
   QJsonObject toJson() const;
   static Meta fromJson(const QJsonObject& o);
