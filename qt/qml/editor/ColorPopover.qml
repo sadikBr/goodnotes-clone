@@ -49,19 +49,21 @@ Popup {
     }
     contentItem: ColumnLayout {
         spacing: 12
+        // Seven to a row, filling the width.
         Swatches {
+            id: sw
             Layout.fillWidth: true
             colors: root.palette
             value: root.value
-            size: 26
-            spacing: 6
+            size: 28
+            spacing: Math.max(4, (width - 7 * size) / 6)
             onPicked: c => { root.pick(c); root.close() }
         }
         // Saturation (across) and brightness (down) for the hue.
         Rectangle { antialiasing: true;
             id: sv
             Layout.fillWidth: true
-            Layout.preferredHeight: 130
+            Layout.preferredHeight: 136
             radius: Theme.radius
             gradient: Gradient {
                 orientation: Gradient.Horizontal
@@ -76,10 +78,12 @@ Popup {
                     GradientStop { position: 1; color: "#000000" }
                 }
             }
+            // The knob: white, with a dark edge, so it shows on any colour.
             Rectangle { antialiasing: true;
-                x: root.sat * sv.width - 8; y: (1 - root.val) * sv.height - 8
-                width: 16; height: 16; radius: Theme.radiusXs
-                color: "transparent"; border.color: "#ffffff"; border.width: 2
+                x: root.sat * sv.width - 9; y: (1 - root.val) * sv.height - 9
+                width: 18; height: 18; radius: Theme.radiusXs + 1
+                color: "transparent"; border.color: Qt.rgba(0, 0, 0, 0.45); border.width: 1
+                Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: 1; radius: Theme.radiusXs; color: "transparent"; border.color: "#ffffff"; border.width: 2.5 }
             }
             MouseArea {
                 anchors.fill: parent
@@ -96,7 +100,7 @@ Popup {
         Rectangle { antialiasing: true;
             id: hueBar
             Layout.fillWidth: true
-            Layout.preferredHeight: 14
+            Layout.preferredHeight: 18
             radius: Theme.radiusSm
             gradient: Gradient {
                 orientation: Gradient.Horizontal
@@ -108,7 +112,14 @@ Popup {
                 GradientStop { position: 0.83; color: "#ff00ff" }
                 GradientStop { position: 1.0; color: "#ff0000" }
             }
-            Rectangle { antialiasing: true; x: root.hue * hueBar.width - 8; y: -2; width: 16; height: 18; radius: Theme.radiusXs; color: "transparent"; border.color: "#ffffff"; border.width: 2 }
+            Rectangle {
+                antialiasing: true
+                x: Math.max(-2, Math.min(hueBar.width - width + 2, root.hue * hueBar.width - width / 2)); y: -3
+                width: 14; height: hueBar.height + 6; radius: Theme.radiusXs
+                color: Qt.hsva(root.hue, 1, 1, 1)
+                border.color: Qt.rgba(0, 0, 0, 0.45); border.width: 1
+                Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: 1; radius: Theme.radiusXs - 1; color: "transparent"; border.color: "#ffffff"; border.width: 2.5 }
+            }
             MouseArea {
                 anchors.fill: parent
                 function at(m) { root.hue = Math.max(0, Math.min(0.999, m.x / width)); root.fromHsv() }
@@ -118,12 +129,14 @@ Popup {
         }
         RowLayout {
             spacing: 8
-            Rectangle { antialiasing: true; Layout.preferredWidth: 28; Layout.preferredHeight: 28; radius: Theme.swatchRadius(28); color: root.value; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4) }
+            Rectangle { antialiasing: true; Layout.preferredWidth: 34; Layout.preferredHeight: 34; radius: Theme.radius; color: root.value; border.color: Theme.dark ? Qt.rgba(1, 1, 1, 0.16) : Qt.rgba(0, 0, 0, 0.14) }
             UiField {
                 Layout.fillWidth: true
                 implicitHeight: 34
                 text: root.value
-                onAccepted: if (/^#[0-9a-f]{6}$/i.test(text)) { root.pick(text.toLowerCase()); root.close() }
+                font.family: "monospace"
+                // "fbee07" or "#FBEE07": both work.
+                onAccepted: { const t = text.trim().replace(/^#?/, "#"); if (/^#[0-9a-f]{6}$/i.test(t)) { root.pick(t.toLowerCase()); root.close() } }
             }
         }
     }

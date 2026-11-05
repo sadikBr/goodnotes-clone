@@ -246,7 +246,7 @@ Item {
                     onClicked: on ? colorPop.show(sw, root.prefs.paletteFor(root.tool), modelData, c => root.prefs.setColor(root.tool, index, c)) : root.prefs.selectColor(root.tool, index)
                     background: Item {
                         Rectangle { antialiasing: true; anchors.fill: parent; anchors.margins: -4; radius: Theme.swatchRadius(width); color: "transparent"; border.width: 2; border.color: Theme.mix(sw.modelData, Theme.text, 0.2); visible: sw.on }
-                        Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.swatchRadius(width); color: sw.modelData; border.width: 1; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4) }
+                        Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.swatchRadius(width); color: sw.modelData; border.width: 1; border.color: Theme.dark ? Qt.rgba(1, 1, 1, 0.16) : Qt.rgba(0, 0, 0, 0.14) }
                     }
                 }
             }

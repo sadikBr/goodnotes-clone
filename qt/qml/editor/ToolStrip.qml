@@ -128,7 +128,7 @@ Rectangle {
                 ToolTip.text: "Tap to use · hold or right-click to remove"
                 contentItem: Item {
                     Rectangle { antialiasing: true; anchors.centerIn: parent; width: 28; height: 28; radius: Theme.swatchRadius(28); color: "transparent"; border.width: 2; border.color: sw.modelData; visible: sw.on }
-                    Rectangle { antialiasing: true; anchors.centerIn: parent; width: sw.on ? 20 : 22; height: width; radius: Theme.swatchRadius(width); color: sw.modelData; border.width: 1; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4); scale: sw.hovered ? 1.1 : 1; Behavior on scale { NumberAnimation { duration: 120 } } }
+                    Rectangle { antialiasing: true; anchors.centerIn: parent; width: sw.on ? 20 : 22; height: width; radius: Theme.swatchRadius(width); color: sw.modelData; border.width: 1; border.color: Theme.dark ? Qt.rgba(1, 1, 1, 0.16) : Qt.rgba(0, 0, 0, 0.14); scale: sw.hovered ? 1.1 : 1; Behavior on scale { NumberAnimation { duration: 120 } } }
                 }
             }
         }
