@@ -8,6 +8,7 @@ section here before it can be published (`scripts/check-version.py`).
 ## 0.18.0
 
 - **Find in a notebook:** Ctrl+F, or the search button above the page. It finds words in typed text, tables, a PDF's own text (marked right on the word) and handwriting the AI has read; Enter goes to the next one. Arabic matches with or without short vowels and hamza.
+- **Present:** F5, or ⋯ → Present. The page you're on goes full screen on a second screen or projector (or into its own window you can drag there), with your ink as you write and the laser pointer; your tools stay on your screen. B blanks the screen for a moment.
 - **Undo for pages:** adding, deleting, duplicating and moving pages and changing their paper can be undone (and redone) with the rest, in the order you did them.
 - **Recently deleted:** a deleted page goes to its notebook's *Recently deleted* (in the pages panel) for 30 days, with everything on it; restore it from there, or tap *Undo* in the message.
 - **The assistant:** tap *Ask* in the library, or the sparkle in a notebook, and say what you want in your own words, in any language. It answers from your notes (handwriting the AI has read and PDF text included), and it can make things for you: folders and notebooks, typed pages (worksheets with questions and answer lines, summaries, tables), headings and a contents page, lessons in your daftar for a class on given days (following the timetable, skipping holidays), copying pages between notebooks, renaming, moving and covers.

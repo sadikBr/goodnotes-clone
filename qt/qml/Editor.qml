@@ -90,6 +90,11 @@ Rectangle {
         onAccepted: root.activeCanvas.insertImage(selectedFile.toString())
     }
     PopupMenu { id: menu }
+    PresentWindow { id: presenter; canvas: root.mainCanvas; onVisibleChanged: if (!visible) blank = false }
+    function togglePresenting() {
+        if (presenter.visible) presenter.close()
+        else { presenter.start(); root.notify(presenter.second ? "Presenting on the other screen · F5 to stop" : "Presenting in its own window: drag it to the projector · double-click for full screen", false) }
+    }
     readonly property PopupMenu mainMenu: menu
     // Picks a colour to add to the side rail (added once it closes).
     ColorPopover {
@@ -509,6 +514,7 @@ Rectangle {
                                 { icon: "stylus", label: "Pen-only mode", toggle: AppSettings.store.penOnly, action: () => AppSettings.store.penOnly = !AppSettings.store.penOnly },
                                 { icon: "focus", label: "Focus mode", key: "F", toggle: root.focusMode, action: () => root.focusMode = !root.focusMode },
                                 { icon: "zoombox", label: "Zoom box", key: "Z", toggle: zoomBox.active, action: () => zoomBox.active ? zoomBox.stop() : zoomBox.start() },
+                                { icon: "present", label: "Present", key: "F5", toggle: presenter.visible, action: () => root.togglePresenting() },
                                 { icon: "spell", label: "Check spelling on this page", action: () => spell.check(root.mainCanvas.currentPage, false) },
                                 { icon: "sidebar", label: "Tools on the side", toggle: root.rail, action: () => AppSettings.store.toolbar = root.rail ? "top" : "rail" },
                                 { separator: true },
@@ -705,6 +711,45 @@ Rectangle {
                 CropOverlay { id: cropper; canvas: root.mainCanvas; anchors.fill: parent; z: 20 }
                 ZoomBox { id: zoomBox; canvas: root.mainCanvas; anchors.fill: parent; z: 7 }
                 FindBar { id: finder; canvas: root.mainCanvas; anchors.fill: parent; z: 9 }
+
+                // Presenting: what's on the projector, and Blank / Stop.
+                Rectangle {
+                    id: presentPill
+                    z: 9
+                    visible: presenter.visible
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.top: parent.top
+                    anchors.topMargin: finder.active ? 70 : 12
+                    height: 38
+                    width: presentRow.implicitWidth + 16
+                    radius: Theme.radiusLg
+                    antialiasing: true
+                    color: Theme.surface
+                    border.color: Theme.border
+                    Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 3; z: -1 }
+                    MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons }
+                    RowLayout {
+                        id: presentRow
+                        anchors.centerIn: parent
+                        spacing: 4
+                        Rectangle {
+                            Layout.leftMargin: 6
+                            width: 8; height: 8; radius: 4
+                            color: presenter.blank ? Theme.muted : "#ef4444"
+                            SequentialAnimation on opacity { running: presenter.visible && !presenter.blank; loops: Animation.Infinite; NumberAnimation { to: 0.35; duration: 900 } NumberAnimation { to: 1; duration: 900 } }
+                        }
+                        Label {
+                            Layout.leftMargin: 4
+                            Layout.rightMargin: 6
+                            text: presenter.blank ? "Presenting · screen blank" : "Presenting page " + (root.mainCanvas.currentPage + 1)
+                            font.pixelSize: 13
+                            font.weight: Font.DemiBold
+                            color: Theme.text
+                        }
+                        IconButton { iconName: "blank"; tip: presenter.blank ? "Show the page again (B)" : "Blank the screen (B)"; active: presenter.blank; implicitWidth: 30; implicitHeight: 30; iconSize: 16; onClicked: presenter.blank = !presenter.blank }
+                        IconButton { iconName: "close"; tip: "Stop presenting (F5)"; implicitWidth: 30; implicitHeight: 30; iconSize: 16; onClicked: presenter.close() }
+                    }
+                }
 
                 // What you just picked, beside the rail for a moment ("Fountain pen · 3 px").
                 Rectangle {
@@ -1003,6 +1048,8 @@ Rectangle {
     Shortcut { sequence: "R"; enabled: !root.typing; onActivated: canvas.instrument.visible ? canvas.showInstrument("") : canvas.showInstrument(canvas.instrument.kind || "ruler") }
     Shortcut { sequence: "F"; enabled: !root.typing; onActivated: root.focusMode = !root.focusMode }
     Shortcut { sequences: [StandardKey.Find]; onActivated: finder.open() }
+    Shortcut { sequence: "F5"; onActivated: root.togglePresenting() }
+    Shortcut { sequence: "B"; enabled: !root.typing && presenter.visible; onActivated: presenter.blank = !presenter.blank }
     Shortcut { sequence: "Z"; enabled: !root.typing; onActivated: zoomBox.active ? zoomBox.stop() : zoomBox.start() }
     Shortcut { sequence: "["; enabled: !root.typing; onActivated: root.toggleSidebar() }
     Shortcut { sequence: "?"; enabled: !root.typing; onActivated: shortcuts.open() }

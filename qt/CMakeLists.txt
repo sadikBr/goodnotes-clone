@@ -211,6 +211,7 @@ qt_add_qml_module(inkleaf
     qml/editor/LinkLayer.qml
     qml/editor/ZoomBox.qml
     qml/editor/FindBar.qml
+    qml/editor/PresentWindow.qml
     qml/editor/SpellCheck.qml
     qml/editor/ToolStrip.qml
     qml/editor/ToolDrawer.qml

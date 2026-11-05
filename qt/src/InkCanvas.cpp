@@ -1244,6 +1244,29 @@ QVariantList InkCanvas::find(const QString& query) {
   return out;
 }
 
+QVariantMap InkCanvas::laserOnPage(int page) const {
+  QVariantMap out;
+  if (page < 0 || page >= int(m_pages.size())) return out;
+  const bool on = m_laserDot.x() >= 0 && pageAt(m_laserDot) == page;
+  if (on) {
+    const QPointF p = toPageOf(page, m_laserDot);
+    out["dot"] = QVariantMap{{"x", p.x()}, {"y", p.y()}};
+  }
+  QVariantList runs;
+  for (const auto& run : m_laser) {
+    QVariantList pts;
+    for (const QPointF& q : run) {
+      const QPointF p = toPageOf(page, q);
+      pts << p.x() << p.y();
+    }
+    if (pts.size() >= 4) runs << QVariant(pts);
+  }
+  out["runs"] = runs;
+  out["alpha"] = laserColorAlpha();
+  out["color"] = laserColor().name();
+  return out;
+}
+
 QVariantList InkCanvas::trashedPages() {
   if (m_notebookId.isEmpty()) return {};
   QString err;
@@ -2254,6 +2277,7 @@ void InkCanvas::drag(QPointF s, float pressure, bool stylus, Qt::KeyboardModifie
       m_liveChanged = true;
       m_ed->move(p.x(), p.y(), pr, nowMs(), bool(mods & Qt::ShiftModifier), false);
       afterCore();
+      emit liveInkChanged();
       return;
     }
   }
@@ -2299,6 +2323,7 @@ void InkCanvas::release() {
   m_g = Gesture();
   m_liveChanged = true;
   afterCore();
+  if (k == Gesture::Draw) emit liveInkChanged();
   if (m_growable) QTimer::singleShot(0, this, &InkCanvas::growIfNeeded);
 }
 

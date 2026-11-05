@@ -293,6 +293,9 @@ public:
   /// AI has read): [{ page, x, y, w, h (page units; none for handwriting), kind, snippet, at }],
   /// in page order. `at` is where the match is in the snippet.
   Q_INVOKABLE QVariantList find(const QString& query);
+  /// The laser pointer on page `page`, in page units (for a presentation):
+  /// { dot: { x, y } or null, runs: [[x, y, x, y, …], …], alpha }.
+  Q_INVOKABLE QVariantMap laserOnPage(int page) const;
   /// The notebook's deleted pages: [{ id, position, template, paperColor, width, height, thumbnail, trashedAt }].
   Q_INVOKABLE QVariantList trashedPages();
   /// Puts a deleted page back (and goes to it); removes one for good; empties the trash.
