@@ -1216,26 +1216,6 @@ quint64 InkCanvas::pageVersion(int page) const {
   return page >= 0 && page < int(m_pages.size()) ? m_pages[page].version : 0;
 }
 
-QString InkCanvas::regionPicture(int page, const QRectF& rect, int maxSide) {
-  if (page < 0 || page >= int(m_pages.size())) return {};
-  const Page& p = m_pages[page];
-  const QRectF r = rect.intersected(QRectF(0, 0, p.w, p.h));
-  if (r.isEmpty()) return {};
-  const QImage img = regionImage(page, r, std::clamp(double(maxSide) / std::max(r.width(), r.height()), 0.3, 4.0));
-  QByteArray bytes;
-  QBuffer buf(&bytes);
-  buf.open(QIODevice::WriteOnly);
-  img.save(&buf, "PNG");
-  return "data:image/png;base64," + QString::fromLatin1(bytes.toBase64());
-}
-
-QVariantMap InkCanvas::selectionArea() {
-  if (!m_ed) return {};
-  const auto box = m_ed->selectionBounds();
-  if (!box) return {};
-  return {{"page", m_ed->active}, {"x", box->x}, {"y", box->y}, {"w", box->w}, {"h", box->h}};
-}
-
 // --- spelling -------------------------------------------------------------------------
 
 QVariantList InkCanvas::inkWords(int page, bool selectionOnly) {

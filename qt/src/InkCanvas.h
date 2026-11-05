@@ -211,10 +211,6 @@ public:
   QImage regionImage(int page, const QRectF& region, double scale);
   QJsonObject liveStroke(int page) const;
   quint64 pageVersion(int page) const;
-  /// `rect` of page `page` (page units) as a picture at most `maxSide` pixels across: a data: URL.
-  Q_INVOKABLE QString regionPicture(int page, const QRectF& rect, int maxSide = 900);
-  /// The selection's page and box ({ page, x, y, w, h }; nothing if nothing's selected).
-  Q_INVOKABLE QVariantMap selectionArea();
   /// Spelling: the words written on page `page` (only selected ones if `selectionOnly`):
   /// [{ n, x, y, w, h, ids }] (page units), in reading order.
   Q_INVOKABLE QVariantList inkWords(int page, bool selectionOnly);

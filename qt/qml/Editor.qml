@@ -506,7 +506,6 @@ Rectangle {
                                 { icon: "focus", label: "Focus mode", key: "F", toggle: root.focusMode, action: () => root.focusMode = !root.focusMode },
                                 { icon: "zoombox", label: "Zoom box", key: "Z", toggle: zoomBox.active, action: () => zoomBox.active ? zoomBox.stop() : zoomBox.start() },
                                 { icon: "spell", label: "Check spelling on this page", action: () => spell.check(root.mainCanvas.currentPage, false) },
-                                { icon: "cards", label: "Flashcards", key: flash.dueCount() > 0 ? String(flash.dueCount()) : "", action: () => flash.open() },
                                 { icon: "sidebar", label: "Tools on the side", toggle: root.rail, action: () => AppSettings.store.toolbar = root.rail ? "top" : "rail" },
                                 { separator: true },
                                 { icon: "sidebar", label: root.sidebarShown ? "Hide pages" : "Show pages", key: "[", action: () => root.toggleSidebar() },
@@ -661,9 +660,7 @@ Rectangle {
                     onCropRequested: cropper.start()
                     onLinkRequested: linkDialog.show()
                     onSpellRequested: spell.check(root.mainCanvas.activePage, true)
-                    onCardRequested: flash.startCard()
                 }
-                Flashcards { id: flash; anchors.fill: parent; z: 6; canvas: root.mainCanvas; onNotify: (m, e) => root.notify(m, e) }
                 SpellCheck { id: spell; anchors.fill: parent; z: 5; canvas: root.mainCanvas; visible: !cropper.active; onNotify: (m, e) => root.notify(m, e) }
                 LinkDialog { id: linkDialog; canvas: root.mainCanvas; notebookId: root.notebookId }
                 LinkLayer {
