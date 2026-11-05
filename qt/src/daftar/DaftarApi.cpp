@@ -143,7 +143,7 @@ QVariantMap DaftarApi::create(const QVariantMap& values, const QString& folderId
   try {
     const daftar::Meta meta = metaFrom(*this, values);
     const QString title = values.value("title").toString().trimmed();
-    const QJsonObject nb = daftar::createDaftar(title.isEmpty() ? QStringLiteral("دفتر النصوص") : title, folderId, values.value("cover").toString().isEmpty() ? QStringLiteral("#5b2a5e") : values.value("cover").toString(), meta);
+    const QJsonObject nb = daftar::createDaftar(title.isEmpty() ? QStringLiteral("دفتر النصوص") : title, folderId, values.value("cover").toString().isEmpty() ? QStringLiteral("#5b2a5e") : values.value("cover").toString(), meta, values.value("design").toString());
     try {
       cover::setUpCover(nb);
     } catch (const store::StoreError& e) {

@@ -494,12 +494,14 @@ QJsonObject addLessonPage(const QJsonObject& nb, const Meta& meta, const QString
   return addFilledPage(nb, at, draw::lessonTemplateFor(std::max(0, int(meta.classes.indexOf(cls)))), meta, cls);
 }
 
-QJsonObject createDaftar(const QString& title, const QString& folderId, const QString& coverColor, const Meta& meta) {
+QJsonObject createDaftar(const QString& title, const QString& folderId, const QString& coverColor, const Meta& meta, const QString& design) {
   const QJsonObject nb = store::createNotebook({{"title", title}, {"folderId", folderId.isEmpty() ? QJsonValue() : QJsonValue(folderId)}, {"coverColor", coverColor}, {"template", "daftar-title"}, {"paperColor", "#ffffff"}, {"coverPage", true}});
   const QString id = nb["id"].toString();
   const QJsonArray pages = store::pages(id);
   const QJsonObject cover = pages.at(0).toObject(), titlePage = pages.at(1).toObject();
-  store::setPageTemplate(cover["id"].toString(), "cover-zellige", coverColor);
+  // The designs with a panel for the daftar's details (zellige, arabesque, berber).
+  const QString tmpl = design == "arabesque" || design == "berber" ? "cover-" + design : QStringLiteral("cover-zellige");
+  store::setPageTemplate(cover["id"].toString(), tmpl, coverColor);
   store::saveElements(titlePage["id"].toString(), pageElements("daftar-title", meta, QString(), titlePage["width"].toDouble(), titlePage["height"].toDouble()));
   int at = 2;
   auto add = [&](const QString& t, const QString& cls) { addFilledPage(nb, at++, t, meta, cls); };

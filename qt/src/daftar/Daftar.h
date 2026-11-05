@@ -119,7 +119,7 @@ std::vector<int> classExportPages(const std::vector<PageInfo>& pages, const QStr
 
 // --- creating and updating (the library)
 /// Creates a daftar laid out like the printed books; returns the notebook.
-QJsonObject createDaftar(const QString& title, const QString& folderId, const QString& coverColor, const Meta& meta);
+QJsonObject createDaftar(const QString& title, const QString& folderId, const QString& coverColor, const Meta& meta, const QString& design = QStringLiteral("zellige"));
 /// Adds a lesson page at the end of a class's section; returns it.
 QJsonObject addLessonPage(const QJsonObject& nb, const Meta& meta, const QString& cls);
 /// Fills in the cover once its title and date are placed.

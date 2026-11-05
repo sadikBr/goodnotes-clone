@@ -255,6 +255,12 @@ pub const TEMPLATES: &[&str] = &[
     "cover-kraft",
     "cover-dots",
     "cover-zellige",
+    "cover-arabesque",
+    "cover-berber",
+    "cover-botanical",
+    "cover-terrazzo",
+    "cover-sunrise",
+    "cover-blueprint",
 ];
 
 fn validate_template(t: &str) -> AppResult<()> {

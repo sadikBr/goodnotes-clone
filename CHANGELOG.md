@@ -8,6 +8,7 @@ section here before it can be published (`scripts/check-version.py`).
 ## 0.16.0
 
 - **Daftar setup, step by step:** school, classes, timetable, holidays and cover, one at a time, in Arabic first. Classes are added as chips; the timetable is painted on a weekly grid (pick a class, tap or drag over its hours). The same steps open from Daftar settings.
+- **Six new covers:** Arabesque (an interlaced star lattice under a pointed arch), Berber rug, Botanical, Terrazzo, Sunrise and Blueprint. A daftar can now have the Zellige, Arabesque or Berber cover.
 - **Rename a class** in Daftar settings and its pages, student list and lessons follow the new name.
 - **Tools on the side:** the tools now sit in a rail down the left side, leaving the top bar to the notebook. Prefer them in the top bar? Settings → Appearance → Tools, or ⋯ → Tools on the side. Select comes first, and the rail and its options have squarer corners.
 - **New tool icons:** clearer select, pen, highlighter, eraser, shapes, text, sticky note, ruler, laser and hand icons, with a soft tint.

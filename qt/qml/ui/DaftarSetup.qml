@@ -23,6 +23,10 @@ Popup {
     /// [{ name, from, to }]
     property var holidays: []
     property string cover: "#5b2a5e"
+    /// The cover's pattern: the designs with a panel for the daftar's details.
+    property string design: "zellige"
+    readonly property var designs: [{ id: "zellige", ar: "زليج", fr: "Zellige" }, { id: "arabesque", ar: "أرابيسك", fr: "Arabesque" }, { id: "berber", ar: "زربية أمازيغية", fr: "Berber rug" }]
+    function coverUrl(d) { return "image://cover/" + d + "/" + cover.replace("#", "") + "/0/" + encodeURIComponent(v.title || "دفتر النصوص") }
     property string error: ""
 
     readonly property var days: DaftarApi.days()
@@ -44,6 +48,7 @@ Popup {
         lessons = parse(values.timetable)
         holidays = parse(values.holidays)
         cover = "#5b2a5e"
+        design = "zellige"
         error = ""
         step = 0
         brush = classes.length ? classes[0].name : ""
@@ -134,7 +139,7 @@ Popup {
     function values() {
         const renames = {}
         for (const c of classes) if (c.orig && c.orig !== c.name) renames[c.orig] = c.name
-        return Object.assign({}, v, { classes: names.join(", "), timetable: JSON.stringify(lessons), holidays: JSON.stringify(holidays.filter(h => h.name || h.from)), cover: cover, renames: JSON.stringify(renames) })
+        return Object.assign({}, v, { classes: names.join(", "), timetable: JSON.stringify(lessons), holidays: JSON.stringify(holidays.filter(h => h.name || h.from)), cover: cover, design: design, renames: JSON.stringify(renames) })
     }
     function next() {
         error = ""
@@ -560,29 +565,58 @@ Popup {
                 }
             }
 
-            // 5. Cover (new daftars).
-            ColumnLayout {
-                spacing: 14
-                Both { Layout.leftMargin: 24; Layout.topMargin: 20; ar: "لون الغلاف"; fr: "Cover colour" }
-                RowLayout {
-                    Layout.leftMargin: 24
-                    spacing: 28
-                    // The book in its colour.
-                    Square {
-                        Layout.preferredWidth: 150; Layout.preferredHeight: 206
-                        radius: 6
-                        color: root.cover
-                        Rectangle { width: 10; height: parent.height; color: Qt.rgba(0, 0, 0, 0.18) }
-                        Column {
-                            anchors.centerIn: parent
-                            spacing: 4
-                            Label { anchors.horizontalCenter: parent.horizontalCenter; text: "دفتر النصوص"; font.pixelSize: 18; font.weight: Font.Bold; color: "white" }
-                            Label { anchors.horizontalCenter: parent.horizontalCenter; text: root.v.year || ""; font.pixelSize: 12; color: Qt.rgba(1, 1, 1, 0.8) }
+            // 5. Cover (new daftars): the pattern and its colour, with the cover as it will be.
+            RowLayout {
+                spacing: 28
+                Item {
+                    Layout.leftMargin: 28
+                    Layout.topMargin: 22
+                    Layout.alignment: Qt.AlignTop
+                    Layout.preferredWidth: 220; Layout.preferredHeight: 311
+                    Shadow { anchors.fill: parent; radius: 6; level: 3 }
+                    LiveImage { anchors.fill: parent; sourceSize: Qt.size(440, 622); source: root.opened && root.step === 4 ? root.coverUrl(root.design) : "" }
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.rightMargin: 24
+                    Layout.topMargin: 22
+                    spacing: 12
+                    Both { ar: "الزخرفة"; fr: "Pattern" }
+                    RowLayout {
+                        spacing: 10
+                        Repeater {
+                            model: root.designs
+                            delegate: AbstractButton {
+                                id: dz
+                                required property var modelData
+                                readonly property bool on: root.design === modelData.id
+                                implicitWidth: 112; implicitHeight: 186
+                                hoverEnabled: true
+                                onClicked: root.design = modelData.id
+                                background: Square { color: dz.on ? Theme.accentSoft : dz.hovered ? Theme.surface2 : "transparent"; border.width: 1.5; border.color: dz.on ? Theme.accent : "transparent" }
+                                contentItem: Item {
+                                    Item {
+                                        id: dzPic
+                                        x: (dz.width - 84) / 2; y: 8
+                                        width: 84; height: 119
+                                        Shadow { anchors.fill: parent; radius: 3; level: 1 }
+                                        LiveImage { anchors.fill: parent; sourceSize: Qt.size(168, 238); source: root.opened && root.step === 4 ? root.coverUrl(dz.modelData.id) : "" }
+                                    }
+                                    Column {
+                                        anchors.top: dzPic.bottom; anchors.topMargin: 6
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        Label { anchors.horizontalCenter: parent.horizontalCenter; text: dz.modelData.ar; font.pixelSize: 13; font.weight: Font.DemiBold; color: Theme.text }
+                                        Label { anchors.horizontalCenter: parent.horizontalCenter; text: dz.modelData.fr; font.pixelSize: 11; color: Theme.muted }
+                                    }
+                                }
+                            }
                         }
                     }
-                    Swatches { Layout.preferredWidth: 220; colors: root.coverColors; value: root.cover; size: 34; onPicked: c => root.cover = c }
+                    Both { Layout.topMargin: 6; ar: "اللون"; fr: "Colour" }
+                    Swatches { Layout.fillWidth: true; colors: root.coverColors; value: root.cover; size: 32; onPicked: c => root.cover = c }
+                    Item { Layout.fillHeight: true }
                 }
-                Item { Layout.fillHeight: true }
             }
         }
 
