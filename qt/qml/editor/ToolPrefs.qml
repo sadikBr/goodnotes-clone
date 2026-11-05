@@ -36,6 +36,8 @@ QtObject {
     property Prefs store: Prefs {
         category: "editor"
         property string favs: "{}"
+        /// The side rail's colours, chosen by you: { tool: ["#hex", …] } (none at first).
+        property string railColors: "{}"
         property string daftarOutlines: "[]"
         property string tool: "pen"
         property string penStyle: "fountain"
@@ -76,6 +78,31 @@ QtObject {
     function setColor(tool, i, c) { const d = JSON.parse(JSON.stringify(data)); d[tool].colors[i] = c; d[tool].color = i; save(d) }
     function selectSize(tool, i) { const d = JSON.parse(JSON.stringify(data)); d[tool].size = i; save(d) }
     function setSize(tool, i, v) { const d = JSON.parse(JSON.stringify(data)); d[tool].sizes[i] = v; d[tool].size = i; save(d) }
+
+    // --- the side rail's colours ---
+    readonly property int maxRailColors: 8
+    property var railData: { try { const v = JSON.parse(store.railColors); return v && typeof v === "object" ? v : {} } catch (e) { return {} } }
+    function railColors(tool) { return Array.isArray(railData[tool]) ? railData[tool] : [] }
+    function saveRail(tool, list) {
+        const d = JSON.parse(JSON.stringify(railData))
+        d[tool] = list
+        railData = d
+        store.railColors = JSON.stringify(d)
+    }
+    function addRailColor(tool, c) {
+        const list = railColors(tool).filter(x => x.toLowerCase() !== c.toLowerCase())
+        if (list.length >= maxRailColors) list.shift()
+        saveRail(tool, list.concat([c]))
+    }
+    function removeRailColor(tool, c) { saveRail(tool, railColors(tool).filter(x => x !== c)) }
+    /// Writes with `c`: picks it if it's one of the tool's favourites, else puts it in the current one.
+    function useColor(tool, c) {
+        const f = data[tool]
+        if (!f) return
+        const i = f.colors.findIndex(x => x.toLowerCase() === c.toLowerCase())
+        if (i >= 0) selectColor(tool, i)
+        else setColor(tool, f.color, c)
+    }
 
     readonly property var colors: ({ pen: color("pen"), highlighter: color("highlighter"), shape: color("shape"), text: color("text"), sticky: color("sticky"), laser: color("laser") })
     readonly property var widths: ({ pen: size("pen"), highlighter: size("highlighter"), eraser: size("eraser"), shape: size("shape"), text: size("text"), sticky: size("sticky") })

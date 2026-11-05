@@ -68,6 +68,23 @@ Rectangle {
         onAccepted: root.activeCanvas.insertImage(selectedFile.toString())
     }
     PopupMenu { id: menu }
+    // Picks a colour to add to the side rail (added once it closes).
+    ColorPopover {
+        id: railColorPop
+        property string tool: ""
+        property string picked: ""
+        onClosed: if (picked) root.toolPrefs.addRailColor(tool, picked)
+        /// Beside this button (the rail's +), once its size is known.
+        property Item beside: null
+        function place() {
+            if (!beside) return
+            const p = beside.mapToItem(parent, 0, 0)
+            x = p.x + beside.width + 14
+            y = Math.max(8, Math.min(parent.height - height - 8, p.y + beside.height / 2 - height / 2))
+        }
+        onHeightChanged: place()
+        onOpened: place()
+    }
     PaperPicker { id: paperPicker; canvas: root.mainCanvas }
     CoverPicker { id: coverPicker; canvas: root.mainCanvas; notebookId: root.notebookId; title: root.title }
     FormDialog { id: dialog }
@@ -514,6 +531,7 @@ Rectangle {
                         // Presses on the rail stay off the page.
                         MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons }
                         readonly property var fav: root.toolPrefs.get(canvas.tool)
+                        readonly property bool hasColor: !!fav && fav.colors.length > 0
                         // Select first; then what writes, what's placed on the page, and presenting / moving around.
                         readonly property var groups: [["lasso"], ["pen", "highlighter", "eraser"], ["shape", "text", "sticky", "ruler"], ["laser", "hand"]]
                         Column {
@@ -555,7 +573,7 @@ Rectangle {
                                         readonly property bool on: !!canvas.instrument.visible
                                         active: on
                                         tip: "Ruler, protractor, set squares (R)"
-                                        onClicked: menu.show(railRuler, [
+                                        onClicked: menu.showBeside(railRuler, [
                                             { label: "Ruler", checked: on && canvas.instrument.kind === "ruler", action: () => canvas.showInstrument("ruler") },
                                             { label: "Protractor", checked: on && canvas.instrument.kind === "protractor", action: () => canvas.showInstrument("protractor") },
                                             { label: "Set square 45°", checked: on && canvas.instrument.kind === "square45", action: () => canvas.showInstrument("square45") },
@@ -564,25 +582,53 @@ Rectangle {
                                     }
                                 }
                             }
-                            // The tool's favourite colours, a tap away.
-                            Item { visible: railColors.count > 0; width: 42; height: 9; Rectangle { anchors.centerIn: parent; width: 26; height: 1; color: Theme.border } }
+                            // Your colours for this tool (none until you add some), and + to add one.
+                            Item { visible: toolRail.hasColor; width: 42; height: 9; Rectangle { anchors.centerIn: parent; width: 26; height: 1; color: Theme.border } }
                             Repeater {
-                                id: railColors
-                                model: toolRail.fav ? toolRail.fav.colors.slice(0, 4) : []
+                                model: toolRail.hasColor ? root.toolPrefs.railColors(canvas.tool) : []
                                 delegate: AbstractButton {
                                     id: railSw
                                     required property string modelData
-                                    required property int index
-                                    readonly property bool on: toolRail.fav && toolRail.fav.color === index
-                                    width: 42; height: 30
+                                    readonly property bool on: String(canvas.colors[canvas.tool] || "").toLowerCase() === modelData.toLowerCase()
+                                    width: 42; height: 32
                                     hoverEnabled: true
-                                    onClicked: root.toolPrefs.selectColor(canvas.tool, index)
+                                    onClicked: root.toolPrefs.useColor(canvas.tool, modelData)
+                                    onPressAndHold: railSw.askRemove()
+                                    function askRemove() { menu.showBeside(railSw, [{ icon: "trash", label: "Remove this colour", danger: true, action: () => root.toolPrefs.removeRailColor(canvas.tool, railSw.modelData) }]) }
+                                    TapHandler { acceptedButtons: Qt.RightButton; onTapped: railSw.askRemove() }
                                     ToolTip.visible: hovered
-                                    ToolTip.delay: 600
-                                    ToolTip.text: on ? "Tap the tool again to change its colours" : "Use this colour"
+                                    ToolTip.delay: 700
+                                    ToolTip.text: "Tap to use · hold or right-click to remove"
                                     contentItem: Item {
-                                        Rectangle { antialiasing: true; anchors.centerIn: parent; width: 26; height: 26; radius: 7; color: "transparent"; border.width: 2; border.color: railSw.modelData; visible: railSw.on }
-                                        Rectangle { antialiasing: true; anchors.centerIn: parent; width: railSw.on ? 18 : 20; height: width; radius: 5; color: railSw.modelData; border.width: 1; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4); scale: railSw.hovered ? 1.1 : 1; Behavior on scale { NumberAnimation { duration: 120 } } }
+                                        Rectangle { antialiasing: true; anchors.centerIn: parent; width: 28; height: 28; radius: 14; color: "transparent"; border.width: 2; border.color: railSw.modelData; visible: railSw.on }
+                                        Rectangle { antialiasing: true; anchors.centerIn: parent; width: railSw.on ? 20 : 22; height: width; radius: width / 2; color: railSw.modelData; border.width: 1; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.4); scale: railSw.hovered ? 1.1 : 1; Behavior on scale { NumberAnimation { duration: 120 } } }
+                                    }
+                                }
+                            }
+                            AbstractButton {
+                                id: railAdd
+                                visible: toolRail.hasColor && root.toolPrefs.railColors(canvas.tool).length < root.toolPrefs.maxRailColors
+                                width: 42; height: 34
+                                hoverEnabled: true
+                                ToolTip.visible: hovered
+                                ToolTip.delay: 500
+                                ToolTip.text: "Add a colour here"
+                                onClicked: {
+                                    railColorPop.tool = canvas.tool
+                                    railColorPop.picked = ""
+                                    railColorPop.show(railAdd, root.toolPrefs.paletteFor(canvas.tool), root.toolPrefs.color(canvas.tool), c => { railColorPop.picked = c; root.toolPrefs.useColor(railColorPop.tool, c) })
+                                    railColorPop.beside = railAdd
+                                    railColorPop.place()
+                                }
+                                contentItem: Item {
+                                    Rectangle {
+                                        antialiasing: true
+                                        anchors.centerIn: parent
+                                        width: 24; height: 24; radius: 12
+                                        color: railAdd.hovered ? Theme.surface2 : "transparent"
+                                        border.width: 1.5
+                                        border.color: railAdd.hovered ? Theme.accent : Theme.muted
+                                        Icon { anchors.centerIn: parent; name: "plus"; size: 14; color: railAdd.hovered ? Theme.accent : Theme.muted }
                                     }
                                 }
                             }
