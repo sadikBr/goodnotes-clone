@@ -110,6 +110,7 @@ qt_add_executable(inkleaf
   src/PdfOutline.h src/PdfOutline.cpp
   src/Assistant.h src/Assistant.cpp
   src/ContentsPage.h src/ContentsPage.cpp
+  src/FindText.h src/FindText.cpp
   src/Updater.h src/Updater.cpp
   src/math/MathExpr.h src/math/MathExpr.cpp
   src/math/MathKit.h src/math/MathKit.cpp
@@ -209,6 +210,7 @@ qt_add_qml_module(inkleaf
     qml/editor/LinkDialog.qml
     qml/editor/LinkLayer.qml
     qml/editor/ZoomBox.qml
+    qml/editor/FindBar.qml
     qml/editor/SpellCheck.qml
     qml/editor/ToolStrip.qml
     qml/editor/ToolDrawer.qml

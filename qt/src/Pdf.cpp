@@ -11,6 +11,8 @@
 #include <QPdfDocument>
 #include <QPdfDocumentRenderOptions>
 #include <QPdfBookmarkModel>
+#include <QPdfSearchModel>
+#include <QPdfLink>
 #include <functional>
 #elif defined(Q_OS_ANDROID)
 #include <QJniEnvironment>
@@ -54,6 +56,22 @@ public:
     }
     return img;
   }
+  std::vector<std::vector<QRectF>> find(int page, const QString& what) override {
+    std::vector<std::vector<QRectF>> out;
+    if (page < 0 || page >= doc.pageCount() || what.trimmed().isEmpty()) return out;
+    if (!search) {
+      search = std::make_unique<QPdfSearchModel>();
+      search->setDocument(&doc);
+    }
+    if (search->searchString() != what) search->setSearchString(what);
+    for (const QPdfLink& l : search->resultsOnPage(page)) {
+      std::vector<QRectF> rs;
+      for (const QRectF& r : l.rectangles()) rs.push_back(r);
+      if (!rs.empty()) out.push_back(std::move(rs));
+    }
+    return out;
+  }
+  std::unique_ptr<QPdfSearchModel> search;
   QString text(int page) override { return page >= 0 && page < doc.pageCount() ? doc.getAllText(page).text() : QString(); }
   std::vector<Entry> outline() override {
     std::vector<Entry> out;
@@ -159,6 +177,15 @@ QSizeF PdfDocs::pageSize(const QString& asset, int page) {
 std::vector<PdfFile::Entry> PdfDocs::outline(const QString& asset) {
   PdfFile* d = doc(asset);
   return d ? d->outline() : std::vector<PdfFile::Entry>{};
+}
+
+std::vector<std::vector<QRectF>> PdfDocs::find(const QString& asset, int page, const QString& what) {
+  PdfFile* d = doc(asset);
+  if (!d) return {};
+  auto out = d->find(page, what);
+  for (auto& m : out)
+    for (QRectF& r : m) r = QRectF(r.x() * kUnitsPerPoint, r.y() * kUnitsPerPoint, r.width() * kUnitsPerPoint, r.height() * kUnitsPerPoint);
+  return out;
 }
 
 QString PdfDocs::text(const QString& asset, int page) {

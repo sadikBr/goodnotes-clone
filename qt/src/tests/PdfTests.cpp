@@ -3,6 +3,7 @@
 #include <QPdfWriter>
 #include <QTemporaryDir>
 
+#include "../FindText.h"
 #include "../PdfOutline.h"
 #include "SelfTest.h"
 
@@ -39,4 +40,15 @@ TEST("pdf", "chapters are added to an exported PDF, nested and in any language")
   CHECK_EQ(m.data(second, int(QPdfBookmarkModel::Role::Title)).toString(), QString("الطاقة"));
   CHECK_EQ(m.data(second, int(QPdfBookmarkModel::Role::Page)).toInt(), 2);
 #endif
+}
+
+TEST("find", "matches ignore case, Arabic vowels, tatweel and hamza on alef") {
+  using namespace findtext;
+  CHECK_EQ(findFolded("Slide 4: What is BIOLOGY?", foldForFind("biology")), 17);
+  CHECK_EQ(findFolded(QString::fromUtf8("الأستاذ(ة)"), foldForFind(QString::fromUtf8("الاستاذ"))), 0);
+  CHECK_EQ(findFolded(QString::fromUtf8("درسٌ في الكَسور"), foldForFind(QString::fromUtf8("الكسور"))), 8);
+  CHECK_EQ(findFolded("abc abc", "abc", 1), 4);
+  CHECK_EQ(findFolded("abc", "x"), -1);
+  const QVariantMap m = snippetAround("one two three", 4, 3);
+  CHECK_EQ(m["snippet"].toString().mid(m["at"].toInt(), 3), QString("two"));
 }

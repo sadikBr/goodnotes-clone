@@ -31,6 +31,8 @@ public:
   virtual std::vector<Entry> outline() { return {}; }
   /// The page's text (empty where it can't be read).
   virtual QString text(int) { return {}; }
+  /// Where `what` is on the page (each match's rectangles, in points).
+  virtual std::vector<std::vector<QRectF>> find(int, const QString&) { return {}; }
 };
 
 /// Open PDFs by asset id (copied to the cache folder once, then loaded from there).
@@ -46,6 +48,8 @@ public:
   std::vector<PdfFile::Entry> outline(const QString& asset);
   /// A page's text.
   QString text(const QString& asset, int page);
+  /// Where `what` is on a page: each match's rectangles, in page units of the PDF page.
+  std::vector<std::vector<QRectF>> find(const QString& asset, int page, const QString& what);
 
 private:
   PdfFile* doc(const QString& asset);

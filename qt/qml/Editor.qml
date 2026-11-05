@@ -382,6 +382,7 @@ Rectangle {
                     spacing: 8
                     Item { Layout.fillWidth: true }
                     Pill {
+                        IconButton { iconName: "search"; tip: "Find in this notebook (Ctrl+F)"; implicitWidth: 34; implicitHeight: 34; active: finder.active; onClicked: finder.active ? finder.close() : finder.open() }
                         IconButton { iconName: "sparkle"; tip: "Assistant: ask, or have it make things"; implicitWidth: 34; implicitHeight: 34; iconColor: Theme.accent; onClicked: assistant.opened ? assistant.close() : assistant.show({ id: root.notebookId, title: root.title, page: canvas.currentPage, daftar: !!root.daftar }) }
                     }
                     Pill {
@@ -703,6 +704,7 @@ Rectangle {
                 }
                 CropOverlay { id: cropper; canvas: root.mainCanvas; anchors.fill: parent; z: 20 }
                 ZoomBox { id: zoomBox; canvas: root.mainCanvas; anchors.fill: parent; z: 7 }
+                FindBar { id: finder; canvas: root.mainCanvas; anchors.fill: parent; z: 9 }
 
                 // What you just picked, beside the rail for a moment ("Fountain pen · 3 px").
                 Rectangle {
@@ -1000,6 +1002,7 @@ Rectangle {
     Shortcut { sequences: ["PgUp", "Left"]; enabled: !root.typing; onActivated: canvas.goToPage(canvas.currentPage - 1) }
     Shortcut { sequence: "R"; enabled: !root.typing; onActivated: canvas.instrument.visible ? canvas.showInstrument("") : canvas.showInstrument(canvas.instrument.kind || "ruler") }
     Shortcut { sequence: "F"; enabled: !root.typing; onActivated: root.focusMode = !root.focusMode }
+    Shortcut { sequences: [StandardKey.Find]; onActivated: finder.open() }
     Shortcut { sequence: "Z"; enabled: !root.typing; onActivated: zoomBox.active ? zoomBox.stop() : zoomBox.start() }
     Shortcut { sequence: "["; enabled: !root.typing; onActivated: root.toggleSidebar() }
     Shortcut { sequence: "?"; enabled: !root.typing; onActivated: shortcuts.open() }

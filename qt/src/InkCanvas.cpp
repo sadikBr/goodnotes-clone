@@ -1,5 +1,7 @@
 #include "draw/Elements.h"
 #include "InkCanvas.h"
+#include "FindText.h"
+#include "editor/Table.h"
 #include "ContentsPage.h"
 #include "PdfOutline.h"
 #include <QJSValue>
@@ -1175,6 +1177,71 @@ bool InkCanvas::applyPageOp(const PageOp& op, bool back) {
     }
   flush();
   return true;
+}
+
+using findtext::foldForFind;
+using findtext::findFolded;
+using findtext::snippetAround;
+
+QVariantList InkCanvas::find(const QString& query) {
+  QVariantList out;
+  const QString q = foldForFind(query.trimmed());
+  if (!m_ed || q.size() < 1) return out;
+  finishEdit();
+  QHash<QString, int> pageOf;
+  for (int i = 0; i < int(m_pages.size()); ++i) pageOf.insert(m_pages[i].id, i);
+  QHash<QString, QString> ink;
+  QString err;
+  for (const QJsonValue& v : InkleafCore::instance()->callJson("inkTexts", {{"notebookId", m_notebookId}}, &err).toArray()) ink.insert(v.toObject()["pageId"].toString(), v.toObject()["text"].toString());
+  for (int i = 0; i < int(m_pages.size()) && out.size() < 500; ++i) {
+    const Page& p = m_pages[i];
+    auto add = [&](const QString& kind, const QRectF& r, const QString& text, int at) {
+      QVariantMap m = snippetAround(text, at, int(query.trimmed().size()));
+      m["page"] = i;
+      m["kind"] = kind;
+      if (!r.isNull()) {
+        m["x"] = r.x();
+        m["y"] = r.y();
+        m["w"] = r.width();
+        m["h"] = r.height();
+      }
+      out.append(m);
+    };
+    // Typed text, notes and tables: each match, on its element.
+    for (const ed::ElPtr& e : m_ed->load(i)) {
+      QString text;
+      if (e->kind == ed::Kind::Text || e->kind == ed::Kind::Sticky) text = e->text;
+      else if (e->kind == ed::Kind::Table) {
+        const ed::TableData t = ed::tableData(*e);
+        QStringList cells;
+        for (const QStringList& row : t.cells) cells << row.join("  ·  ");
+        text = cells.join("\n");
+      } else continue;
+      if (text.isEmpty()) continue;
+      const ed::Rect b = ed::bounds(*e);
+      for (int at = findFolded(text, q); at >= 0; at = findFolded(text, q, at + 1)) add("text", QRectF(b.x, b.y, b.w, b.h), text, at);
+    }
+    // The PDF behind it: each match where it is on the page.
+    const QString asset = p.meta["backgroundAsset"].toString();
+    if (!asset.isEmpty() && !p.meta["backgroundPage"].isNull()) {
+      const int bp = p.meta["backgroundPage"].toInt();
+      const QSizeF ps = PdfDocs::instance().pageSize(asset, bp);
+      const double sx = ps.width() > 0 ? p.w / ps.width() : 1, sy = ps.height() > 0 ? p.h / ps.height() : 1;
+      const QString text = PdfDocs::instance().text(asset, bp);
+      int at = -1;
+      for (const auto& m : PdfDocs::instance().find(asset, bp, query.trimmed())) {
+        QRectF r;
+        for (const QRectF& x : m) r = r.united(QRectF(x.x() * sx, x.y() * sy, x.width() * sx, x.height() * sy));
+        at = findFolded(text, q, at + 1);
+        add("pdf", r, text, std::max(0, at));
+      }
+    }
+    // Handwriting the AI has read: the page (no place on it).
+    const QString hw = ink.value(p.id);
+    if (!hw.isEmpty())
+      for (int at = findFolded(hw, q); at >= 0; at = findFolded(hw, q, at + 1)) add("handwriting", QRectF(), hw, at);
+  }
+  return out;
 }
 
 QVariantList InkCanvas::trashedPages() {

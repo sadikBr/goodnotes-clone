@@ -289,6 +289,10 @@ public:
   Q_INVOKABLE void addHeading(int index, const QString& title, int level = 0);
   Q_INVOKABLE void changeHeading(const QString& id, const QVariantMap& change);
   Q_INVOKABLE void removeHeading(const QString& id);
+  /// Finds `query` in the notebook (typed text, tables, PDF text, handwriting the
+  /// AI has read): [{ page, x, y, w, h (page units; none for handwriting), kind, snippet, at }],
+  /// in page order. `at` is where the match is in the snippet.
+  Q_INVOKABLE QVariantList find(const QString& query);
   /// The notebook's deleted pages: [{ id, position, template, paperColor, width, height, thumbnail, trashedAt }].
   Q_INVOKABLE QVariantList trashedPages();
   /// Puts a deleted page back (and goes to it); removes one for good; empties the trash.

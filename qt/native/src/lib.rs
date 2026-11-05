@@ -130,6 +130,7 @@ impl Core {
                 let (done, total) = db.reading_progress()?;
                 ok(json!({ "done": done, "total": total }))
             }
+            "inkTexts" => to(&db.ink_texts(&a.s("notebookId")?)?.into_iter().map(|(id, text)| json!({ "pageId": id, "text": text })).collect::<Vec<_>>()),
             "setPageInkText" => to(&db.set_page_ink_text(&a.s("pageId")?, &a.s("text")?)?),
             "saveElements" => to(&db.save_elements(&a.s("pageId")?, &a.de::<Vec<Element>>("elements")?)?),
             // shape and symbol recognition (points: [x, y, …])
