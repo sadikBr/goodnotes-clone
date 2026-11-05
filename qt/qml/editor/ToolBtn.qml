@@ -33,7 +33,9 @@ AbstractButton {
         Rectangle { antialiasing: true;
             anchors.fill: parent
             radius: root.corner
-            color: root.active ? root.dip : root.hovered ? Theme.alpha(Theme.surface, 0.55) : "transparent"
+            // (A tint of the text colour shows on any panel; fading from the same tint
+            // at nothing keeps it from flashing grey on the way.)
+            color: root.active ? root.dip : root.hovered ? Theme.alpha(Theme.text, Theme.dark ? 0.10 : 0.07) : Theme.alpha(Theme.text, 0)
             Behavior on color { ColorAnimation { duration: 180 } }
         }
         // The ink drop: 6px of the ink with a hairline halo (box-shadow 0 0 0 0.5px).

@@ -7,6 +7,7 @@ section here before it can be published (`scripts/check-version.py`).
 
 ## 0.16.2
 
+- **Fixed:** hovering a tool in the side rail or top bar now keeps it highlighted (it flashed grey and then vanished).
 - **Sizes you can see, and one of your own:** every tool's sizes now show how they look (the pen's stroke, a highlighter swipe, the eraser's circle, letters for text), and after its three sizes there's a fourth that's yours. Tap it to use it, and tap it again to set it: a live preview, a slider, − and +, or type a size like 12.
 - **Fixed:** a tool's options could open away from it right after a notebook opened.
 
