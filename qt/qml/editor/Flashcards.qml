@@ -15,7 +15,12 @@ Item {
 
     // ------------------------------------------------------------ the cards
     property var cards: []
-    function load() { const v = canvas.notebookSetting("cards"); cards = Array.isArray(v) ? v : [] }
+    function load() {
+        const v = canvas.notebookSetting("cards")
+        const list = []
+        if (v && v.length !== undefined) for (let i = 0; i < v.length; ++i) if (v[i] && v[i].front) list.push(v[i])
+        cards = list
+    }
     function save(next) { cards = next; canvas.setNotebookSetting("cards", next) }
     Connections {
         target: root.canvas
@@ -118,7 +123,7 @@ Item {
     function schedule(c, grade) {
         let ease = c.ease || 2.5, iv = c.interval || 0
         if (grade === 0) { ease = Math.max(1.3, ease - 0.2); iv = 0 }
-        else if (grade === 1) { ease = Math.max(1.3, ease - 0.15); iv = Math.max(1, iv * 1.2) }
+        else if (grade === 1) { ease = Math.max(1.3, ease - 0.15); iv = iv < 1 ? 0.5 : iv * 1.2 }
         else if (grade === 2) iv = iv < 1 ? 1 : iv * ease
         else { ease = ease + 0.15; iv = iv < 1 ? 4 : iv * ease * 1.3 }
         iv = Math.min(iv, 3650)
@@ -126,7 +131,7 @@ Item {
     }
     function whenText(days) {
         if (days < 1 / 24) return "< 1 min"
-        if (days < 1) return Math.round(days * 24) + " h"
+        if (days < 0.95) return Math.max(1, Math.round(days * 24)) + " h"
         if (days < 30) return Math.round(days) + (Math.round(days) === 1 ? " day" : " days")
         if (days < 365) return Math.round(days / 30) + " mo"
         return (days / 365).toFixed(1) + " yr"
@@ -355,42 +360,43 @@ Item {
                     }
                 }
                 // Done (or nothing to study).
-                ColumnLayout {
+                Item {
                     visible: !study.card
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    spacing: 10
-                    Item { Layout.fillHeight: true }
-                    Rectangle {
-                        Layout.alignment: Qt.AlignHCenter
-                        Layout.preferredWidth: 76; Layout.preferredHeight: 76
-                        radius: 38
-                        antialiasing: true
-                        color: Theme.accentSoft
-                        Icon { anchors.centerIn: parent; name: root.cards.length ? "check" : "cards"; size: 34; color: Theme.accent }
+                    ColumnLayout {
+                        anchors.centerIn: parent
+                        width: Math.min(parent.width, 440)
+                        spacing: 10
+                        Rectangle {
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredWidth: 76; Layout.preferredHeight: 76
+                            radius: 38
+                            antialiasing: true
+                            color: Theme.accentSoft
+                            Icon { anchors.centerIn: parent; name: root.cards.length ? "check" : "cards"; size: 34; color: Theme.accent }
+                        }
+                        Label {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: root.cards.length === 0 ? "No cards yet" : study.done > 0 ? "Well done! That's all for now" : "Nothing to study right now"
+                            font.pixelSize: 18; font.weight: Font.DemiBold; color: Theme.text
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.Wrap
+                            text: root.cards.length === 0 ? "Select a question on a page and choose ⋯ → Make a flashcard; then select its answer, or type it."
+                                  : root.nextDue ? "The next card is due in " + root.whenText((root.nextDue.due - Date.now()) / 86400000) + "." : ""
+                            font.pixelSize: 13; color: Theme.muted
+                        }
+                        UiButton {
+                            visible: root.cards.length > 0
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.topMargin: 6
+                            text: root.cards.length === 1 ? "Study it again anyway" : "Study all " + root.cards.length + " anyway"
+                            onClicked: study.start(true)
+                        }
                     }
-                    Label {
-                        Layout.alignment: Qt.AlignHCenter
-                        text: root.cards.length === 0 ? "No cards yet" : study.done > 0 ? "Well done! That's all for now" : "Nothing to study right now"
-                        font.pixelSize: 18; font.weight: Font.DemiBold; color: Theme.text
-                    }
-                    Label {
-                        Layout.alignment: Qt.AlignHCenter
-                        Layout.maximumWidth: 420
-                        horizontalAlignment: Text.AlignHCenter
-                        wrapMode: Text.Wrap
-                        text: root.cards.length === 0 ? "Select a question on a page and choose ⋯ → Make a flashcard; then select its answer, or type it."
-                              : root.nextDue ? "The next card is due in " + root.whenText((root.nextDue.due - Date.now()) / 86400000) + "." : ""
-                        font.pixelSize: 13; color: Theme.muted
-                    }
-                    UiButton {
-                        visible: root.cards.length > 0
-                        Layout.alignment: Qt.AlignHCenter
-                        Layout.topMargin: 6
-                        text: "Study all " + root.cards.length + " anyway"
-                        onClicked: study.start(true)
-                    }
-                    Item { Layout.fillHeight: true }
                 }
             }
 

@@ -1,5 +1,6 @@
 #include "draw/Elements.h"
 #include "InkCanvas.h"
+#include <QJSValue>
 #include <QTemporaryDir>
 #include "PaperImage.h"
 #include "editor/Geometry.h"
@@ -665,7 +666,9 @@ void InkCanvas::setNotebookSetting(const QString& key, const QVariant& value) {
   if (m_notebookId.isEmpty()) return;
   const QJsonObject nb = InkleafCore::instance()->callJson("notebook", {{"id", m_notebookId}}).toObject();
   QJsonObject meta = QJsonDocument::fromJson(nb["meta"].toString().toUtf8()).object();
-  const QJsonValue v = QJsonValue::fromVariant(value);
+  // (A list or object from QML comes wrapped as a script value.)
+  const QVariant plain = value.canConvert<QJSValue>() ? value.value<QJSValue>().toVariant() : value;
+  const QJsonValue v = QJsonValue::fromVariant(plain);
   if (v.isNull() || v.isUndefined() || (v.isArray() && v.toArray().isEmpty())) meta.remove(key);
   else meta[key] = v;
   QString err;
