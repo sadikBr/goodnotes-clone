@@ -29,15 +29,23 @@ Item {
     property bool moreMenuOpen: false
 
     HoverHandler { id: hover; cursorShape: root.trash ? Qt.ArrowCursor : Qt.PointingHandCursor }
-    TapHandler {
+    // Taps as clicks (not a pointer handler): a pen tap on something over the
+    // card (its ⋯, a menu, a dialog) stays there instead of opening the card too.
+    MouseArea {
         id: tap
-        acceptedModifiers: Qt.NoModifier
-        onTapped: root.selecting ? root.toggled(false) : root.activated()
-        onLongPressed: root.toggled(false)
+        anchors.fill: parent
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        property bool held: false
+        onPressed: held = false
+        onPressAndHold: { held = true; root.toggled(false) }
+        onClicked: m => {
+            if (held) return
+            if (m.button === Qt.RightButton) return root.moreRequested(more)
+            if (m.modifiers & Qt.ShiftModifier) return root.toggled(true)
+            if (m.modifiers & Qt.ControlModifier) return root.toggled(false)
+            root.selecting ? root.toggled(false) : root.activated()
+        }
     }
-    TapHandler { acceptedModifiers: Qt.ControlModifier; onTapped: root.toggled(false) }
-    TapHandler { acceptedModifiers: Qt.ShiftModifier; onTapped: root.toggled(true) }
-    TapHandler { acceptedButtons: Qt.RightButton; onTapped: root.moreRequested(more) }
 
     Item {
         id: art

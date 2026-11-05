@@ -390,7 +390,7 @@ Popup {
                                         visible: !chip.editing
                                         text: chip.modelData.name
                                         font.pixelSize: 14; font.weight: Font.DemiBold; color: Theme.text
-                                        TapHandler { onTapped: { chip.editing = true; renameField.text = chip.modelData.name; renameField.forceActiveFocus(); renameField.selectAll() } }
+                                        MouseArea { anchors.fill: parent; onClicked: { chip.editing = true; renameField.text = chip.modelData.name; renameField.forceActiveFocus(); renameField.selectAll() } }
                                         HoverHandler { cursorShape: Qt.IBeamCursor }
                                     }
                                     TextField {

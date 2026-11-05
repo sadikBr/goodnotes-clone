@@ -166,7 +166,7 @@ Item {
                 visible: changeList.visible && !root.allShown && root.changes.length > root.brief
                 text: "Show all " + root.changes.length + " changes"
                 font.pixelSize: 12; font.weight: Font.DemiBold; color: Theme.accent
-                TapHandler { onTapped: root.allShown = true }
+                MouseArea { anchors.fill: parent; onClicked: root.allShown = true }
                 HoverHandler { cursorShape: Qt.PointingHandCursor }
             }
             Loader { visible: root.wide; active: root.wide; sourceComponent: actions; Layout.topMargin: 6; Layout.alignment: Qt.AlignRight }
