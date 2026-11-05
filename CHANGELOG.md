@@ -7,6 +7,7 @@ section here before it can be published (`scripts/check-version.py`).
 
 ## 0.16.2
 
+- **Zoom box:** for small spaces (forms, a daftar's cells). Tap the zoom box button by the zoom controls (or press Z): write large in the panel at the bottom and it lands small in the frame on the page. End a stroke in the panel's shaded right side and the frame moves along; at the end of the line it goes to the next. Drag the frame to move it, its side to change how much it magnifies.
 - **Links:** select anything (ink, text, a picture) and tap the link button to link it to a page of this notebook, another notebook or a website. A small chip shows where it goes; tap it to follow, and *Back to page …* takes you back.
 - **Contents:** the pages panel has a *Contents* view. A PDF's own chapters show there, a daftar's classes too, and you can add headings and sub-headings for any page (*Add heading*, or *Add to contents…* in a page's ⋯ menu). Tap one to go there; the one you're on is marked.
 - **Your own templates:** make a page once (a form, a planner, a worksheet, a PDF page) and keep it: *Paper → Yours → This page*. Use it on any page, on every page, for a new page, or for a new notebook; pages added after it carry on with it. It's part of the paper, so the eraser leaves it alone.

@@ -106,6 +106,7 @@ qt_add_executable(inkleaf
   src/tests/TextAndSnapTests.cpp src/tests/MathTests.cpp src/tests/TableTests.cpp src/tests/GestureTests.cpp src/tests/DaftarTests.cpp src/tests/Samples.h src/tests/Samples.cpp src/tests/Golden.h src/tests/Golden.cpp src/tests/EditorSessions.h src/tests/EditorSessions.cpp src/tests/JsonCompare.h
   src/PaperImage.h src/PaperImage.cpp
   src/Pdf.h src/Pdf.cpp
+  src/ZoomBoxView.h src/ZoomBoxView.cpp
   src/Updater.h src/Updater.cpp
   src/math/MathExpr.h src/math/MathExpr.cpp
   src/math/MathKit.h src/math/MathKit.cpp
@@ -203,6 +204,7 @@ qt_add_qml_module(inkleaf
     qml/editor/CropOverlay.qml
     qml/editor/LinkDialog.qml
     qml/editor/LinkLayer.qml
+    qml/editor/ZoomBox.qml
     qml/editor/ToolStrip.qml
     qml/editor/ToolDrawer.qml
     qml/editor/SelectionBar.qml

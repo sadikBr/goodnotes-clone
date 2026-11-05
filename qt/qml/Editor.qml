@@ -675,7 +675,7 @@ Rectangle {
                     Behavior on opacity { NumberAnimation { duration: 180 } }
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.bottom: parent.bottom
-                    anchors.bottomMargin: 22
+                    anchors.bottomMargin: zoomBox.active ? zoomBox.panelHeight + 34 : 22
                     height: 36
                     width: backRow.implicitWidth + 28
                     hoverEnabled: true
@@ -695,6 +695,7 @@ Rectangle {
                     }
                 }
                 CropOverlay { id: cropper; canvas: root.mainCanvas; anchors.fill: parent; z: 20 }
+                ZoomBox { id: zoomBox; canvas: root.mainCanvas; anchors.fill: parent; z: 7 }
 
                 // What you just picked, beside the rail for a moment ("Fountain pen · 3 px").
                 Rectangle {
@@ -752,6 +753,8 @@ Rectangle {
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
                     anchors.margins: 16
+                    // Above the zoom box while it's open.
+                    anchors.bottomMargin: zoomBox.active ? zoomBox.panelHeight + 28 : 16
                     z: 8
                     property bool quiet: false
                     opacity: quiet ? 0.12 : 1
@@ -781,6 +784,7 @@ Rectangle {
                         Label { text: Math.round(canvas.zoom * 100) + "%"; color: Theme.muted; font.pixelSize: 13; font.weight: Font.DemiBold; Layout.preferredWidth: 46; horizontalAlignment: Text.AlignHCenter }
                         IconButton { iconName: "zoomIn"; tip: "Zoom in (Ctrl+=)"; implicitWidth: 30; implicitHeight: 30; iconSize: 16; onClicked: canvas.zoomBy(1.2) }
                         IconButton { iconName: "fit"; tip: "Fit width (Ctrl+0)"; implicitWidth: 30; implicitHeight: 30; iconSize: 16; onClicked: canvas.fitWidth() }
+                        IconButton { iconName: "zoombox"; tip: zoomBox.active ? "Close the zoom box" : "Zoom box: write large, it lands small (Z)"; active: zoomBox.active; implicitWidth: 30; implicitHeight: 30; iconSize: 16; onClicked: zoomBox.active ? zoomBox.stop() : zoomBox.start() }
                     }
                 }
 
@@ -976,6 +980,7 @@ Rectangle {
     Shortcut { sequences: ["PgUp", "Left"]; enabled: !root.typing; onActivated: canvas.goToPage(canvas.currentPage - 1) }
     Shortcut { sequence: "R"; enabled: !root.typing; onActivated: canvas.instrument.visible ? canvas.showInstrument("") : canvas.showInstrument(canvas.instrument.kind || "ruler") }
     Shortcut { sequence: "F"; enabled: !root.typing; onActivated: root.focusMode = !root.focusMode }
+    Shortcut { sequence: "Z"; enabled: !root.typing; onActivated: zoomBox.active ? zoomBox.stop() : zoomBox.start() }
     Shortcut { sequence: "["; enabled: !root.typing; onActivated: root.toggleSidebar() }
     Shortcut { sequence: "?"; enabled: !root.typing; onActivated: shortcuts.open() }
     Repeater {

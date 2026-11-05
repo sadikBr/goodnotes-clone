@@ -1,6 +1,8 @@
 // The app's icons: SVG path data by name (24 × 24, stroked; see Icon.qml).
 .pragma library
 var paths = {
+ "next": "<path d=\"M5 12h14M13 6l6 6-6 6\"/>",
+ "newline": "<path d=\"M19 5v6a3 3 0 0 1-3 3H6\"/><path d=\"M10 10l-4 4 4 4\"/>",
  "crop": "<path d=\"M7 3v13.5a.5.5 0 0 0 .5.5H21\"/><path d=\"M3 7h13.5a.5.5 0 0 1 .5.5V21\"/>",
  "reset": "<path d=\"M4.5 12a7.5 7.5 0 1 0 2.2-5.3\"/><path d=\"M4.5 4v3.5H8\"/>",
  "link": "<path d=\"M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1\"/><path d=\"M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1\"/>",

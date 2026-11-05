@@ -1141,6 +1141,78 @@ bool InkCanvas::updateGraph(const QVariantMap& spec) {
   return true;
 }
 
+// --- the zoom box -----------------------------------------------------------------------
+
+void InkCanvas::zoomBoxPress(int page, qreal x, qreal y, qreal pressure, bool stylus, qreal mag) {
+  if (page < 0 || page >= int(m_pages.size())) return;
+  m_inputMag = std::max(1.0, double(mag));
+  press(pageRectToItem(page, QRectF(x, y, 0, 0)).topLeft(), float(pressure), stylus, QString(), false, {});
+  emit liveInkChanged();
+}
+
+void InkCanvas::zoomBoxDrag(qreal x, qreal y, qreal pressure, bool stylus) {
+  if (m_g.page < 0 || m_g.page >= int(m_pages.size())) return;
+  drag(pageRectToItem(m_g.page, QRectF(x, y, 0, 0)).topLeft(), float(pressure), stylus, {});
+  emit liveInkChanged();
+}
+
+void InkCanvas::zoomBoxRelease() {
+  release();
+  m_inputMag = 1;
+  emit liveInkChanged();
+}
+
+void InkCanvas::ensureVisible(int page, const QRectF& rect) {
+  if (page < 0 || page >= int(m_pages.size())) return;
+  const QRectF r = pageRectToItem(page, rect);
+  const QRectF view(0, 0, width(), height());
+  if (view.adjusted(16, 16, -16, -16).contains(r)) return;
+  m_scrollGlide.stop();
+  // Its middle a third of the way down (the zoom box covers the bottom).
+  if (r.top() < 16 || r.bottom() > height() - 16) m_scroll.ry() += r.center().y() - height() * 0.3;
+  if (r.left() < 16 || r.right() > width() - 16) m_scroll.rx() += r.center().x() - width() / 2;
+  clampScroll();
+  emit viewChanged();
+  refresh();
+}
+
+QSizeF InkCanvas::pageSize(int page) const {
+  if (page < 0 || page >= int(m_pages.size())) return {};
+  return {m_pages[page].w, m_pages[page].h};
+}
+
+QImage InkCanvas::regionImage(int page, const QRectF& region, double scale) {
+  if (page < 0 || page >= int(m_pages.size()) || region.isEmpty()) return {};
+  const Page& p = m_pages[page];
+  QImage img = paperWithBackground(p, scale, region).convertToFormat(QImage::Format_ARGB32_Premultiplied);
+  const QImage ink = draw::elementsImage(sceneJson(page), scale, region);
+  if (!img.isNull() && !ink.isNull()) {
+    QPainter painter(&img);
+    painter.drawImage(QRectF(0, 0, img.width(), img.height()), ink);
+  }
+  return img;
+}
+
+QJsonObject InkCanvas::liveStroke(int page) const {
+  if (m_g.kind != Gesture::Draw || m_g.page != page || m_g.pts.size() < 1 || m_liveHidden) return {};
+  QJsonArray pts;
+  for (const ink::Point& q : m_g.pts) pts.append(QJsonArray{q.x, q.y, q.p});
+  const bool hl = m_g.pen == ink::Pen::Highlighter;
+  QJsonObject el{{"id", "live"}, {"z", 0}, {"kind", "stroke"}, {"tool", hl ? "highlighter" : "pen"}, {"color", m_g.color.name(QColor::HexRgb)},
+                 {"width", m_g.width}, {"points", pts}};
+  if (!hl) el["style"] = m_tool == "shape" ? QStringLiteral("ballpoint") : m_penStyleName;
+  if (m_g.dashed) {
+    el["dash"] = m_g.dashed == 2 ? "dot" : "dash";
+    el["gap"] = m_penGap;
+  }
+  if (m_g.color.alphaF() < 1) el["opacity"] = m_g.color.alphaF();
+  return el;
+}
+
+quint64 InkCanvas::pageVersion(int page) const {
+  return page >= 0 && page < int(m_pages.size()) ? m_pages[page].version : 0;
+}
+
 void InkCanvas::linkSelection(const QVariantMap& link) {
   if (!m_ed) return;
   m_ed->linkSelection(QJsonObject::fromVariantMap(link));
@@ -1854,11 +1926,11 @@ void InkCanvas::drag(QPointF s, float pressure, bool stylus, Qt::KeyboardModifie
       }
       const ink::Point& last = m_g.pts.back();
       // Lazy pen: the ink trails the tip by at most about a screen pixel.
-      const float lazy = float(kLazyPen / m_zoom);
+      const float lazy = float(kLazyPen / (m_zoom * m_inputMag));
       const float d = float(std::hypot(p.x() - last.x, p.y() - last.y));
       if (d <= lazy) return;
       p = QPointF(last.x + (p.x() - last.x) * (d - lazy) / d, last.y + (p.y() - last.y) * (d - lazy) / d);
-      if (std::hypot(p.x() - last.x, p.y() - last.y) < 0.4 / m_zoom) return;
+      if (std::hypot(p.x() - last.x, p.y() - last.y) < 0.4 / (m_zoom * m_inputMag)) return;
       const float pr = ink::speedSensitive(m_g.pen) ? m_g.speed.next(float(p.x()), float(p.y()), nowMs(), stylus ? pressure : -1.f) : (stylus ? pressure : 0.5f);
       m_g.pts.push_back({float(p.x()), float(p.y()), pr});
       ink::strokeMesh(m_g.pts, m_g.pen, m_g.width, m_g.pen == ink::Pen::Ballpoint && m_tool == "shape" ? 0.f : float(m_smoothing), *m_g.mesh, m_g.dashed, float(m_penGap));

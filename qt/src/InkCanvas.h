@@ -197,6 +197,20 @@ public:
   Q_INVOKABLE void insertGraph(const QVariantMap& spec);
   /// Changes the selected graph.
   Q_INVOKABLE bool updateGraph(const QVariantMap& spec);
+  /// The zoom box writes through these: a press, its moves and its end at page
+  /// `page`'s point (x, y) (page units), from a view `mag` times larger than the page here.
+  Q_INVOKABLE void zoomBoxPress(int page, qreal x, qreal y, qreal pressure, bool stylus, qreal mag);
+  Q_INVOKABLE void zoomBoxDrag(qreal x, qreal y, qreal pressure, bool stylus);
+  Q_INVOKABLE void zoomBoxRelease();
+  /// Scrolls so `rect` of page `page` (page units) is on screen, if it isn't.
+  Q_INVOKABLE void ensureVisible(int page, const QRectF& rect);
+  /// Page `page`'s size (page units).
+  Q_INVOKABLE QSizeF pageSize(int page) const;
+  /// For the zoom box: `region` of page `page` drawn `scale` pixels per unit (paper, PDF, everything on it),
+  /// the stroke being written on it now (JSON, empty if none), and a number that changes when the page does.
+  QImage regionImage(int page, const QRectF& region, double scale);
+  QJsonObject liveStroke(int page) const;
+  quint64 pageVersion(int page) const;
   /// Links the selection to `link` ({ kind: "page", page } | { kind: "notebook", notebook, title } |
   /// { kind: "url", url }); an empty one unlinks it.
   Q_INVOKABLE void linkSelection(const QVariantMap& link);
@@ -299,6 +313,8 @@ signals:
   void settingsChanged();
   void viewChanged();
   void pagesChanged();
+  /// The stroke being written changed (the zoom box shows it too).
+  void liveInkChanged();
   /// The notebook's settings changed (its headings, cards…).
   void notebookSettingsChanged();
   void historyChanged();
@@ -519,6 +535,8 @@ private:
   bool m_rubbing = false;
   bool m_readOnly = false;
   bool m_hideSelection = false;
+  /// Input from the zoom box: how much larger it shows the page than the canvas does.
+  double m_inputMag = 1;
   void setHover(QPointF p);
   qreal m_pinchStartDist = 0, m_pinchStartZoom = 1;
   QPointF m_pinchMid;
