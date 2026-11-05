@@ -2134,6 +2134,14 @@ impl Db {
         Ok((done, total))
     }
 
+    /// The handwriting the AI has read on each page of a notebook: [(page id, text)].
+    pub fn ink_texts(&self, notebook_id: &str) -> AppResult<Vec<(String, String)>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare("SELECT id, ink_text FROM pages WHERE notebook_id = ?1 AND ink_text IS NOT NULL AND ink_text != '' ORDER BY position")?;
+        let rows = stmt.query_map([notebook_id], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
     /// What the AI read in a page's handwriting (kept for search; not for locked notebooks).
     pub fn set_page_ink_text(&self, page_id: &str, text: &str) -> AppResult<()> {
         let conn = self.conn();
