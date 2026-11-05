@@ -89,6 +89,7 @@ private:
   int m_generation = 0;
   int m_rounds = 0;
   QString m_note;  ///< told to the model with the next message (what the user did with the plan)
+  QString m_sentNote;  ///< the note sent with the question being answered
   QString m_ctxNotebook, m_ctxTitle;
   int m_ctxPage = -1;
 };

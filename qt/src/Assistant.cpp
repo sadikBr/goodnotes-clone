@@ -107,6 +107,7 @@ void Assistant::stop() {
   // The conversation stays usable: the unanswered turn is dropped.
   while (!m_api.isEmpty() && m_api.last().toObject()["role"].toString() != "user") m_api.removeLast();
   if (!m_api.isEmpty()) m_api.removeLast();
+  m_note = m_sentNote + m_note;
   m_plan = {};
   m_planState.clear();
   addUi({{"role", "error"}, {"text", "Stopped."}});
@@ -136,6 +137,7 @@ void Assistant::send(const QString& text) {
   const QDate today = QDate::currentDate();
   const QString when = "Today is " + QLocale(QLocale::English).toString(today, "dddd d MMMM yyyy") + " (" + today.toString(Qt::ISODate) + ").";
   m_api.append(QJsonObject{{"role", "user"}, {"text", m_note + "[" + when + " " + where + "]\n\n" + t}});
+  m_sentNote = m_note;
   m_note.clear();
   m_rounds = 0;
   m_busy = true;
@@ -167,6 +169,7 @@ void Assistant::onStep(int generation, const QJsonValue& answer, const QString& 
     // The question is dropped, so asking again works.
     while (!m_api.isEmpty() && m_api.last().toObject()["role"].toString() != "user") m_api.removeLast();
     if (!m_api.isEmpty()) m_api.removeLast();
+    m_note = m_sentNote + m_note;  // (still to be told, with the next question)
     m_plan = {};
     addUi({{"role", "error"}, {"text", text}});
     return;
