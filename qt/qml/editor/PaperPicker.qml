@@ -15,7 +15,8 @@ Popup {
     property string category: "basic"
     parent: Overlay.overlay
     padding: 14
-    width: 452
+    // Five papers a row: the categories fit above them.
+    width: 5 * 96 + 4 * 10 + 28
     focus: true
     // Modal without dimming: a press outside only closes it (it doesn't draw on the
     // page or reopen it from its button), as in the web app.
@@ -72,7 +73,7 @@ Popup {
         // Your templates: keep this page, or use one you kept.
         GridLayout {
             visible: root.category === "mine"
-            columns: 4
+            columns: 5
             columnSpacing: 10
             rowSpacing: 10
             AbstractButton {
@@ -174,7 +175,7 @@ Popup {
         }
         GridLayout {
             visible: root.category !== "mine"
-            columns: 4
+            columns: 5
             columnSpacing: 10
             rowSpacing: 10
             Repeater {
