@@ -499,8 +499,8 @@ Popup {
                         title: "Tools"
                         SettingRow {
                             first: true
-                            title: "Where the tools sit"; help: "The top bar, or a rail down the left side that leaves the top bar to the notebook."
-                            Segmented { options: [{ value: "top", label: "Top bar" }, { value: "rail", label: "Side rail" }]; value: root.s.toolbar; onPicked: v => root.s.toolbar = v }
+                            title: "Where the tools sit"; help: "A rail down the left side that leaves the top bar to the notebook, or the top bar."
+                            Segmented { options: [{ value: "rail", label: "Side rail" }, { value: "top", label: "Top bar" }]; value: root.s.toolbar; onPicked: v => root.s.toolbar = v }
                         }
                     }
                 }

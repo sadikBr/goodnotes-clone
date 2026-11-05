@@ -28,7 +28,7 @@ QtObject {
         /// "light" | "dark" | "system"
         property string theme: "system"
         /// Where the editor's tools sit: "top" (in the top bar) | "rail" (down the left side).
-        property string toolbar: "top"
+        property string toolbar: "rail"
     }
     readonly property real streamline: smoothingLevels[store.smoothing] ?? 0.38
 
