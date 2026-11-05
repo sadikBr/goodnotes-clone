@@ -110,17 +110,40 @@ Rectangle {
     readonly property real toolCenter: {
         const a = drawer.anchorItem
         if (!a) return area.width / 2
-        void (a.x + a.width + trays.x + trays.width + header.width + area.x + area.width + toolRail.y + toolRail.height + a.y)
-        void (a.parent ? a.parent.x : 0)
-        void (a.parent && a.parent.parent ? a.parent.parent.x : 0)
+        void root.anchorMoved
         return a.mapToItem(area, a.width / 2, 0).x
     }
     /// The same button's middle, down the page area (the rail's drawer points at it).
     readonly property real toolMiddle: {
-        void root.toolCenter
         const a = drawer.anchorItem
-        return a ? a.mapToItem(area, 0, a.height / 2).y : area.height / 2
+        if (!a) return area.height / 2
+        void root.anchorMoved
+        return a.mapToItem(area, 0, a.height / 2).y
     }
+    /// Changes whenever the active tool's button, or anything holding it, moves or
+    /// resizes (the strip re-centres when its colours come and go), so the drawer
+    /// keeps pointing at it.
+    property int anchorMoved: 0
+    property var anchorChain: []
+    function watchAnchor() {
+        for (const it of anchorChain) {
+            try {
+                it.xChanged.disconnect(bumpAnchor); it.yChanged.disconnect(bumpAnchor)
+                it.widthChanged.disconnect(bumpAnchor); it.heightChanged.disconnect(bumpAnchor)
+            } catch (e) {}  // (an item that has gone)
+        }
+        const chain = []
+        for (let it = drawer.anchorItem; it && it !== root; it = it.parent) chain.push(it)
+        for (const it of chain) {
+            it.xChanged.connect(bumpAnchor); it.yChanged.connect(bumpAnchor)
+            it.widthChanged.connect(bumpAnchor); it.heightChanged.connect(bumpAnchor)
+        }
+        anchorChain = chain
+        bumpAnchor()
+    }
+    function bumpAnchor() { anchorMoved++ }
+    Connections { target: drawer; function onAnchorItemChanged() { root.watchAnchor() } }
+    Connections { target: area; function onWidthChanged() { root.bumpAnchor() } function onHeightChanged() { root.bumpAnchor() } }
 
     /** Saves everything (before a sync or a backup); returns this notebook's id. */
     function saveForSync() {
@@ -498,7 +521,8 @@ Rectangle {
                         id: toolRail
                         visible: root.rail && !root.focusMode
                         x: 10
-                        anchors.verticalCenter: parent.verticalCenter
+                        // At the top, so its tools never move (its colours come and go below them).
+                        y: 14
                         vertical: true
                         canvas: root.mainCanvas
                         prefs: root.toolPrefs

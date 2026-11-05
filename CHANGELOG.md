@@ -7,6 +7,7 @@ section here before it can be published (`scripts/check-version.py`).
 
 ## 0.16.1
 
+- **Fixed:** the tools no longer shift. Your colours stay in the side rail and top bar for every tool (dimmed for tools without colours), the rail stays at the top, and a tool's options always open right beside it.
 - **Each pen type has its own colours and sizes:** the marker, tape, neon and the rest remember theirs (bright markers, pastel tape…), and the options show each size as a line drawn with that pen.
 - **Class colours:** in the daftar setup, tap a class's colour to choose another from 15 distinct colours; the timetable uses it.
 - **Timetable step** redesigned: the week in a card with today marked, lesson blocks in their class colour, hours per class and per week, and a preview of where a tap will place the class.

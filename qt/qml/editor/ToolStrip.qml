@@ -104,14 +104,18 @@ Rectangle {
                 }
             }
         }
-        // Your colours (the same for every tool that has one), and +.
-        Sep { visible: root.hasColor }
+        // Your colours (the same for every tool that has one), and +. They stay
+        // put for every tool (dimmed for one without colours), so nothing shifts.
+        Sep {}
         Repeater {
-            model: root.hasColor ? root.presets : []
+            model: root.presets
             delegate: AbstractButton {
                 id: sw
+                enabled: root.hasColor
+                opacity: enabled ? 1 : 0.3
+                Behavior on opacity { NumberAnimation { duration: 120 } }
                 required property string modelData
-                readonly property bool on: String(root.canvas.colors[root.canvas.tool] || "").toLowerCase() === modelData.toLowerCase()
+                readonly property bool on: root.hasColor && String(root.canvas.colors[root.canvas.tool] || "").toLowerCase() === modelData.toLowerCase()
                 width: root.vertical ? root.btn : 32
                 height: root.vertical ? 32 : root.btn
                 hoverEnabled: true
@@ -134,7 +138,10 @@ Rectangle {
         }
         AbstractButton {
             id: add
-            visible: root.hasColor && root.presets.length < root.prefs.maxRailColors
+            visible: root.presets.length < root.prefs.maxRailColors
+            enabled: root.hasColor
+            opacity: enabled ? 1 : 0.3
+            Behavior on opacity { NumberAnimation { duration: 120 } }
             width: root.vertical ? root.btn : 34
             height: root.vertical ? 34 : root.btn
             hoverEnabled: true
