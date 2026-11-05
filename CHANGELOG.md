@@ -5,22 +5,22 @@ Updates → What's new) and on its GitHub release. Keep them short, one line
 per change, written for the people using Inkleaf. A release needs its
 section here before it can be published (`scripts/check-version.py`).
 
-## 0.16.2
+## 0.17.0
 
-- **Lesson log in any of its colours:** in *Paper → Teacher*, the dots under *Lesson log* pick plum, blue, green, pink, navy or orange.
+- **Crop pictures:** select a picture and tap *Crop*. Drag the corners and sides, or drag inside to move what's kept; cut it as a rectangle, with rounded corners or as a circle, and keep it square, 4 : 3, 16 : 9 or as it was. *Reset* brings the whole picture back, any time.
+- **Your own templates:** make a page once (a form, a planner, a worksheet, a PDF page) and keep it: *Paper → Yours → This page*. Use it on any page, on every page, for a new page, or for a new notebook; pages added after it carry on with it. It's part of the paper, so the eraser leaves it alone.
+- **Contents:** the pages panel switches between pages, bookmarks and contents (the icons at its top). Contents lists a PDF's own chapters, a daftar's classes and headings you add for any page (*Add heading*, or *Add to contents…* in a page's ⋯ menu), one clean line each ("Slide 3: Objectives" shows *Objectives* under a small *Slide 3*), with the one you're on marked.
 - **Contents page:** *Insert → Contents page* puts a page at the front listing your headings and a PDF's chapters with their page numbers; tap an entry's arrow to go there. It keeps itself up to date as you add headings or pages.
 - **Chapters in exported PDFs:** a PDF you export opens with its contents (your headings, a PDF's own chapters, a daftar's classes) in the reader's sidebar.
+- **Links:** select anything (ink, text, a picture) and tap the link button to link it to a page of this notebook, another notebook or a website. A small chip shows where it goes; tap it to follow, and *Back to page …* takes you back.
+- **Zoom box:** for small spaces (forms, a daftar's cells). Tap the zoom box button by the zoom controls (or press Z): write large in the panel at the bottom and it lands small in the frame on the page. End a stroke in the panel's shaded right side and the frame moves along; at the end of the line it goes to the next. Drag the frame to move it, its side to change how much it magnifies.
+- **Spelling for handwriting:** *⋯ → Check spelling on this page* (or *Ask AI → Check spelling* for a selection). The AI reads your words in whatever language you write, and the misspelled ones get a red wavy line; tap it for suggestions. One puts the word there as text in a handwriting font, or choose *Ignore*. Needs the AI (Settings → AI).
+- **Lesson log in any of its colours:** in *Paper → Teacher*, the dots under *Lesson log* pick plum, blue, green, pink, navy or orange.
+- **Sizes you can see, and one of your own:** every tool's sizes now show how they look (the pen's stroke, a highlighter swipe, the eraser's circle, letters for text), and after its three sizes there's a fourth that's yours. Tap it to use it, and tap it again to set it: a live preview, a slider, − and +, or type a size like 12.
 - **The shelf's first card is yours to choose:** it makes one thing with a tap (a notebook at first). Its ⇄ button, or *Settings → Appearance → Library*, switches it to a daftar, PDFs, a folder, a sketchbook or a whiteboard. *New* in the sidebar still has them all.
 - **Fixed:** the eraser's circle stays under the pen instead of trailing behind it.
 - **Fixed:** with the pen in the library, tapping a document's or folder's ⋯ opens its menu, and tapping a menu or a dialog over the shelf no longer opens what's behind it too.
-- **Spelling for handwriting:** *⋯ → Check spelling on this page* (or *Ask AI → Check spelling* for a selection). The AI reads your words in whatever language you write, and the misspelled ones get a red wavy line; tap it for suggestions. One puts the word there as text in a handwriting font, or choose *Ignore*. Needs the AI (Settings → AI).
-- **Zoom box:** for small spaces (forms, a daftar's cells). Tap the zoom box button by the zoom controls (or press Z): write large in the panel at the bottom and it lands small in the frame on the page. End a stroke in the panel's shaded right side and the frame moves along; at the end of the line it goes to the next. Drag the frame to move it, its side to change how much it magnifies.
-- **Links:** select anything (ink, text, a picture) and tap the link button to link it to a page of this notebook, another notebook or a website. A small chip shows where it goes; tap it to follow, and *Back to page …* takes you back.
-- **Contents:** the pages panel switches between pages, bookmarks and contents (the icons at its top). Contents lists a PDF's own chapters, a daftar's classes and headings you add for any page (*Add heading*, or *Add to contents…* in a page's ⋯ menu), one clean line each ("Slide 3: Objectives" shows *Objectives* under a small *Slide 3*), with the one you're on marked.
-- **Your own templates:** make a page once (a form, a planner, a worksheet, a PDF page) and keep it: *Paper → Yours → This page*. Use it on any page, on every page, for a new page, or for a new notebook; pages added after it carry on with it. It's part of the paper, so the eraser leaves it alone.
-- **Crop pictures:** select a picture and tap *Crop*. Drag the corners and sides, or drag inside to move what's kept; cut it as a rectangle, with rounded corners or as a circle, and keep it square, 4 : 3, 16 : 9 or as it was. *Reset* brings the whole picture back, any time.
 - **Fixed:** hovering a tool in the side rail or top bar now keeps it highlighted (it flashed grey and then vanished).
-- **Sizes you can see, and one of your own:** every tool's sizes now show how they look (the pen's stroke, a highlighter swipe, the eraser's circle, letters for text), and after its three sizes there's a fourth that's yours. Tap it to use it, and tap it again to set it: a live preview, a slider, − and +, or type a size like 12.
 - **Fixed:** a tool's options could open away from it right after a notebook opened.
 
 ## 0.16.1
