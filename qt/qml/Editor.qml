@@ -521,8 +521,7 @@ Rectangle {
                         id: toolRail
                         visible: root.rail && !root.focusMode
                         x: 10
-                        // At the top, so its tools never move (its colours come and go below them).
-                        y: 14
+                        anchors.verticalCenter: parent.verticalCenter
                         vertical: true
                         canvas: root.mainCanvas
                         prefs: root.toolPrefs
