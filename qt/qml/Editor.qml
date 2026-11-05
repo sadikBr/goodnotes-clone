@@ -531,7 +531,7 @@ Rectangle {
                 daftar: !!root.daftar
                 onAddDaftarPage: { if (canvas.daftar("addClassPage", [root.notebookId]).plain) canvas.addPage(-1, "") }
                 Layout.fillHeight: true
-                Layout.preferredWidth: root.sidebarShown && !root.focusMode ? 168 : 0
+                Layout.preferredWidth: root.sidebarShown && !root.focusMode ? pageSidebar.wantWidth : 0
                 visible: Layout.preferredWidth > 0
                 Behavior on Layout.preferredWidth { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
             }

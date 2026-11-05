@@ -22,6 +22,8 @@ Rectangle {
     readonly property bool onlyBookmarks: mode === "bookmarks"
     readonly property bool showContents: mode === "contents"
     property var contents: []
+    /// Wider while the contents are shown (titles need the room).
+    readonly property real wantWidth: showContents ? 236 : 168
     function reloadContents() { contents = showContents ? root.canvas.contents() : [] }
     onShowContentsChanged: reloadContents()
     Connections {
@@ -40,46 +42,63 @@ Rectangle {
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
-        // Pages, only the bookmarked ones, or the contents: one switch.
+        // Pages, only the bookmarked ones, or the contents: one switch of icons,
+        // and what's shown, with how many, under it.
         Rectangle {
             Layout.fillWidth: true
             Layout.topMargin: 10
             Layout.leftMargin: 10
             Layout.rightMargin: 10
-            Layout.bottomMargin: 4
-            implicitHeight: 32
+            implicitHeight: 34
             radius: Theme.radiusLg
             antialiasing: true
             color: Theme.surface2
             RowLayout {
                 anchors.fill: parent
-                anchors.margins: 2
+                anchors.margins: 3
                 spacing: 2
                 Repeater {
-                    model: [{ v: "pages", label: "Pages", tip: "All the pages" }, { v: "bookmarks", icon: "bookmark", tip: "Only bookmarked pages" }, { v: "contents", label: "Contents", tip: "Headings and a PDF's chapters" }]
+                    model: [{ v: "pages", icon: "stack", tip: "Pages" }, { v: "bookmarks", icon: "bookmark", tip: "Bookmarked pages" }, { v: "contents", icon: "contents", tip: "Contents: headings and a PDF's chapters" }]
                     delegate: AbstractButton {
                         id: tab
                         required property var modelData
                         readonly property bool on: root.mode === modelData.v
-                        Layout.fillWidth: !modelData.icon
-                        Layout.preferredWidth: modelData.icon ? 30 : -1
+                        Layout.fillWidth: true
                         Layout.fillHeight: true
                         hoverEnabled: true
                         ToolTip.visible: hovered
                         ToolTip.delay: 600
-                        ToolTip.text: modelData.tip + (modelData.v === "bookmarks" ? " (" + root.bookmarks + ")" : "")
+                        ToolTip.text: modelData.tip
                         onClicked: root.mode = modelData.v
                         background: Item {
                             Rectangle { visible: tab.on; antialiasing: true; y: 1; width: parent.width; height: parent.height; radius: Theme.radius; color: Qt.rgba(0, 0, 0, Theme.dark ? 0.3 : 0.08) }
                             Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radius; color: tab.on ? Theme.surface : tab.hovered ? Theme.alpha(Theme.text, 0.05) : "transparent" }
                         }
-                        contentItem: Item {
-                            Label { visible: !tab.modelData.icon; anchors.centerIn: parent; text: tab.modelData.label || ""; font.pixelSize: 12; font.weight: Font.DemiBold; color: tab.on ? Theme.text : Theme.muted }
-                            Icon { visible: !!tab.modelData.icon; anchors.centerIn: parent; name: tab.modelData.icon || "bookmark"; size: 15; color: tab.on ? Theme.accent : Theme.muted }
-                        }
+                        contentItem: Item { Icon { anchors.centerIn: parent; name: tab.modelData.icon; size: 16; color: tab.on ? Theme.accent : tab.hovered ? Theme.text : Theme.muted } }
                     }
                 }
             }
+        }
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.topMargin: 10
+            Layout.leftMargin: 16
+            Layout.rightMargin: 14
+            Layout.bottomMargin: 2
+            spacing: 6
+            Label {
+                text: root.showContents ? "Contents" : root.onlyBookmarks ? "Bookmarks" : "Pages"
+                font.pixelSize: 13; font.weight: Font.DemiBold; color: Theme.text
+            }
+            Rectangle {
+                antialiasing: true
+                Layout.preferredHeight: 17
+                Layout.preferredWidth: countLabel.implicitWidth + 10
+                radius: Theme.radiusSm
+                color: Theme.surface2
+                Label { id: countLabel; anchors.centerIn: parent; text: root.showContents ? root.contents.length : root.onlyBookmarks ? root.bookmarks : root.canvas.pageCount; font.pixelSize: 10; font.weight: Font.Bold; color: Theme.muted }
+            }
+            Item { Layout.fillWidth: true }
         }
         Label {
             visible: !root.showContents && root.onlyBookmarks && root.bookmarks === 0
@@ -179,35 +198,50 @@ Rectangle {
                 }
             }
         }
-        // The contents: the PDF's own and your headings; tap one to go there.
+        // The contents: the PDF's own, a daftar's classes and your headings;
+        // tap one to go there. One line each: "Slide 3: Objectives" shows
+        // "Objectives", with "Slide 3" small above it.
         ListView {
             id: toc
             visible: root.showContents
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            topMargin: 6
+            topMargin: 4
             bottomMargin: 8
-            spacing: 2
+            spacing: 1
             model: root.contents
             ScrollBar.vertical: ScrollBar {}
+            // Keeps the one you're on in view.
+            readonly property int hereIndex: { let h = -1; for (let i = 0; i < root.contents.length; ++i) if (root.contents[i].page <= root.canvas.currentPage) h = i; return h }
+            onHereIndexChanged: if (hereIndex >= 0) positionViewAtIndex(hereIndex, ListView.Contain)
             delegate: AbstractButton {
                 id: entry
                 required property var modelData
                 required property int index
                 readonly property bool mine: modelData.kind === "heading"
-                // The entry for the page you're on (the last one at or before it).
-                readonly property bool here: modelData.page <= root.canvas.currentPage && (index === root.contents.length - 1 || root.contents[index + 1].page > root.canvas.currentPage)
-                x: 10
-                width: toc.width - 20
-                implicitHeight: Math.max(34, entryRow.implicitHeight + 12)
+                readonly property bool section: modelData.kind === "section"
+                readonly property int level: Math.min(3, modelData.level || 0)
+                readonly property bool here: index === toc.hereIndex
+                // "Slide 3: Objectives", "Chapter 2 – Energy": the label and the title.
+                readonly property var parts: {
+                    const t = String(modelData.title || "")
+                    const m = t.match(/^((?:slide|chapter|chapitre|part|partie|unit|unité|lesson|leçon|section|module|week|semaine|day|jour|الدرس|الفصل|الوحدة)?\s*[0-9IVXLivxl]+[0-9.]*)\s*[:.\-–—]\s+(.+)$/i)
+                    return m ? { label: m[1], title: m[2] } : { label: "", title: t }
+                }
+                x: 8
+                width: toc.width - 16
+                implicitHeight: (parts.label ? 40 : 32)
                 hoverEnabled: true
                 onClicked: root.canvas.goToPage(modelData.page)
+                ToolTip.visible: hovered && titleLabel.truncated
+                ToolTip.delay: 600
+                ToolTip.text: modelData.title
                 function more() {
                     menu.show(moreBtn, [
                         { icon: "pen", label: "Rename", action: () => ask.ask("Rename heading", [{ name: "title", label: "Heading", value: entry.modelData.title }], "Save", r => root.canvas.changeHeading(entry.modelData.id, { title: r.title })) },
-                        entry.modelData.level > 0 ? { icon: "up", label: "Make it a heading", action: () => root.canvas.changeHeading(entry.modelData.id, { level: entry.modelData.level - 1 }) }
-                                                  : { icon: "down", label: "Make it a sub-heading", action: () => root.canvas.changeHeading(entry.modelData.id, { level: 1 }) },
+                        entry.level > 0 ? { icon: "up", label: "Make it a heading", action: () => root.canvas.changeHeading(entry.modelData.id, { level: entry.level - 1 }) }
+                                        : { icon: "down", label: "Make it a sub-heading", action: () => root.canvas.changeHeading(entry.modelData.id, { level: 1 }) },
                         { separator: true },
                         { icon: "trash", label: "Remove from contents", danger: true, action: () => root.canvas.removeHeading(entry.modelData.id) }
                     ])
@@ -217,35 +251,60 @@ Rectangle {
                     antialiasing: true
                     radius: Theme.radius
                     color: entry.here ? Theme.accentSoft : entry.hovered ? Theme.surface2 : "transparent"
-                    // The current one: a bar at its side.
-                    Rectangle { visible: entry.here; x: 0; y: 7; width: 3; height: parent.height - 14; radius: 1.5; color: Theme.accent }
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                }
+                // Deeper levels sit on a guide line.
+                Repeater {
+                    model: entry.level
+                    Rectangle { required property int index; x: 12 + index * 12; y: 0; width: 1; height: entry.height; color: entry.here ? Theme.alpha(Theme.accent, 0.4) : Theme.border }
                 }
                 contentItem: RowLayout {
-                    id: entryRow
-                    spacing: 7
-                    Item { Layout.preferredWidth: 4 + entry.modelData.level * 12 }
-                    Icon {
-                        Layout.alignment: Qt.AlignTop
-                        Layout.topMargin: 1
-                        name: entry.mine ? "heading" : entry.modelData.kind === "section" ? "stack" : "page"
-                        size: entry.modelData.level > 0 ? 12 : 14
-                        color: entry.here ? Theme.accent : Theme.muted
+                    spacing: 8
+                    Item { Layout.preferredWidth: 4 + entry.level * 12 }
+                    // Your headings: a small accent mark; a daftar's class: a dot.
+                    Rectangle {
+                        visible: entry.mine || entry.section
+                        Layout.alignment: Qt.AlignVCenter
+                        Layout.preferredWidth: entry.section ? 7 : 3
+                        Layout.preferredHeight: entry.section ? 7 : 14
+                        radius: entry.section ? 3.5 : 1.5
+                        color: Theme.accent
+                        opacity: entry.here ? 1 : 0.7
                     }
-                    Label {
+                    ColumnLayout {
                         Layout.fillWidth: true
-                        text: entry.modelData.title
-                        wrapMode: Text.Wrap
-                        maximumLineCount: 2
-                        elide: Text.ElideRight
-                        font.pixelSize: entry.modelData.level > 0 ? 12 : 13
-                        font.weight: entry.modelData.level > 0 ? Font.Normal : Font.DemiBold
-                        color: entry.here ? Theme.accent : Theme.text
+                        spacing: 0
+                        Label {
+                            visible: !!entry.parts.label
+                            Layout.fillWidth: true
+                            text: entry.parts.label
+                            elide: Text.ElideRight
+                            font.pixelSize: 10
+                            font.weight: Font.DemiBold
+                            font.letterSpacing: 0.3
+                            color: entry.here ? Theme.accent : Theme.muted
+                        }
+                        Label {
+                            id: titleLabel
+                            Layout.fillWidth: true
+                            text: entry.parts.title
+                            elide: Text.ElideRight
+                            font.pixelSize: entry.level > 0 ? 12 : 13
+                            font.weight: entry.here ? Font.DemiBold : entry.level > 0 ? Font.Normal : Font.Medium
+                            color: entry.here ? Theme.accent : entry.level > 0 ? Theme.mix(Theme.text, Theme.muted, 0.35) : Theme.text
+                        }
                     }
                     Item {
-                        Layout.alignment: Qt.AlignTop
-                        Layout.preferredWidth: 26
-                        Layout.preferredHeight: 18
-                        Label { visible: !(entry.mine && (entry.hovered || menu.opened)); anchors.right: parent.right; text: entry.modelData.page + 1; font.pixelSize: 11; color: Theme.muted }
+                        Layout.preferredWidth: 24
+                        Layout.fillHeight: true
+                        Label {
+                            visible: !(entry.mine && (entry.hovered || menu.opened))
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: entry.modelData.page + 1
+                            font.pixelSize: 11
+                            color: entry.here ? Theme.accent : Theme.muted
+                        }
                         IconButton {
                             id: moreBtn
                             visible: entry.mine && (entry.hovered || menu.opened)
@@ -269,7 +328,7 @@ Rectangle {
             verticalAlignment: Text.AlignTop
             wrapMode: Text.Wrap
             horizontalAlignment: Text.AlignHCenter
-            text: "No contents yet. Add a heading for the page you're on and jump back to it from here; a PDF's own chapters show here too."
+            text: "Nothing here yet. Add a heading for the page you're on to jump back to it from here. A PDF's own chapters show here too."
             font.pixelSize: 12
             color: Theme.muted
         }
