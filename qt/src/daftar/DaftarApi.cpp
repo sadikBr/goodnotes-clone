@@ -170,9 +170,19 @@ QVariantMap DaftarApi::update(const QString& notebookId, const QVariantMap& valu
   const Refresh refresh;
   try {
     const QJsonObject nb = store::notebook(notebookId);
-    const auto before = daftar::parseDaftar(nb["meta"]);
+    auto before = daftar::parseDaftar(nb["meta"]);
     if (!before) return {{"removed", QStringList()}};
     const daftar::Meta next = metaFrom(*this, values);
+    // Renamed classes keep their pages: the pages move to the new name first.
+    const QJsonObject renames = QJsonDocument::fromJson(values.value("renames").toString().toUtf8()).object();
+    for (auto it = renames.begin(); it != renames.end(); ++it) {
+      const QString from = it.key(), to = it.value().toString().trimmed();
+      if (to.isEmpty() || from == to || !before->classes.contains(from) || !next.classes.contains(to) || before->classes.contains(to)) continue;
+      for (const QJsonValue& v : store::pages(notebookId))
+        if (v.toObject()["section"].toString() == from) store::setPageSection(v.toObject()["id"].toString(), to);
+      // (The old timetable stays as it was: its notes on the timetable page are matched by their old text.)
+      before->classes[before->classes.indexOf(from)] = to;
+    }
     daftar::updateDaftar(nb, *before, next);
     QStringList removed;
     for (const QString& c : before->classes)

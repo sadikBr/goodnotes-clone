@@ -152,6 +152,7 @@ qt_add_qml_module(inkleaf
     qml/ui/SignInDialog.qml
     qml/ui/UpdateBanner.qml
     qml/ui/NewNotebookDialog.qml
+    qml/ui/DaftarSetup.qml
     qml/IconButton.qml
     qml/Icon.qml
     qml/IconData.js
