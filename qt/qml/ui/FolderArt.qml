@@ -43,9 +43,9 @@ Item {
         radiusTopLeft: 4; radiusTopRight: 12; radiusBottomRight: 12; radiusBottomLeft: 12
     }
 
-    // The sheets inside (the latest notebook in front).
+    // The sheets inside (the latest notebook in front); an empty folder has none.
     Repeater {
-        model: root.sheets.length ? [1, 0].filter(i => i < root.sheets.length) : [0]
+        model: [1, 0].filter(i => i < root.sheets.length)
         delegate: Item {
             id: sheet
             required property int modelData
@@ -64,13 +64,6 @@ Item {
                 color: sheet.nb ? sheet.nb.coverColor : "#fbfaf6"
                 source: sheet.nb && sheet.nb.thumbnail ? sheet.nb.thumbnail : ""
                 radiusTopLeft: 4; radiusTopRight: 4; radiusBottomLeft: 4; radiusBottomRight: 4
-            }
-            // An empty folder: a ruled sheet.
-            Column {
-                visible: !sheet.nb
-                anchors.fill: parent; topPadding: 13; spacing: 13
-                clip: true
-                Repeater { model: Math.floor(sheet.height / 14); Rectangle { width: sheet.width; height: 1; color: "#e7e3d8" } }
             }
         }
     }
