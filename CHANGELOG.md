@@ -8,7 +8,7 @@ section here before it can be published (`scripts/check-version.py`).
 ## 0.16.1
 
 - **Each pen type has its own colours and sizes:** the marker, tape, neon and the rest remember theirs (bright markers, pastel tape…), and the options show each size as a line drawn with that pen.
-- **Class colours:** in the daftar setup, tap a class's colour to choose another from 16 clearly different ones; the timetable uses it.
+- **Class colours:** in the daftar setup, tap a class's colour to choose another from 15 distinct colours; the timetable uses it.
 - **Timetable step** redesigned: the week in a card with today marked, lesson blocks in their class colour, hours per class and per week, and a preview of where a tap will place the class.
 - **Shapes stay on the paper too:** anything past a page's edge is hidden.
 - **Fixed:** a stroke that closes the tool's options now writes; only a plain tap just closes them.

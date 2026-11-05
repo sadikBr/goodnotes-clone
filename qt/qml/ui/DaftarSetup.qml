@@ -31,9 +31,10 @@ Popup {
 
     readonly property var days: DaftarApi.days()
     /// The class colours: the first eight are given in turn, the rest can be chosen.
-    // (Clearly different hues, light enough for dark writing; the same first eight as daftar/Daftar.cpp CLASS_COLORS.)
-    readonly property var classPalette: ["#fca5a5", "#fde047", "#86efac", "#7dd3fc", "#d8b4fe", "#fdba74", "#5eead4", "#f9a8d4",
-                                         "#f87171", "#facc15", "#bef264", "#60a5fa", "#a5b4fc", "#fb923c", "#e7c6a1", "#d6d3d1"]
+    // One of each colour family (no two shades of one colour), light enough for dark
+    // writing; the first eight are the same as daftar/Daftar.cpp CLASS_COLORS.
+    readonly property var classPalette: ["#f87171", "#facc15", "#4ade80", "#60a5fa", "#c084fc", "#fb923c", "#2dd4bf", "#f472b6",
+                                         "#a3e635", "#22d3ee", "#818cf8", "#e879f9", "#c8a27a", "#b5b35c", "#a8a29e"]
     /// Colours chosen for classes: { name: "#hex" }.
     property var chosen: ({})
     readonly property var coverColors: ["#5b2a5e", "#1f7a4a", "#1f6fd1", "#2d2f72", "#d1245f", "#e0612a", "#0d9488", "#475569"]
