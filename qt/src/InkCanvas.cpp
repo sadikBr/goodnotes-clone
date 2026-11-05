@@ -54,6 +54,8 @@ constexpr int kMaxTexture = 4096;  // pixels per side of one picture
 constexpr double kLaserHold = 900, kLaserFade = 300, kLaserCoreFade = 480;
 
 double nowMs() { return draw::clockMs(); }
+// How often a pen's moves erase (or move things) and move the eraser's ring: about the screen's rate.
+constexpr int kMoveEveryMs = 7;
 
 QSGGeometryNode* meshNode(const std::vector<QPointF>& tris, const QColor& color) {
   auto* g = new QSGGeometry(QSGGeometry::defaultAttributes_Point2D(), int(tris.size()));
@@ -172,6 +174,14 @@ InkCanvas::InkCanvas(QQuickItem* parent) : QQuickItem(parent) {
     afterCore();
     update();
   });
+  m_pendingMoveTimer.setSingleShot(true);
+  m_pendingMoveTimer.setTimerType(Qt::PreciseTimer);
+  m_pendingMoveTimer.setInterval(kMoveEveryMs);
+  connect(&m_pendingMoveTimer, &QTimer::timeout, this, &InkCanvas::flushPendingMove);
+  m_hoverTimer.setSingleShot(true);
+  m_hoverTimer.setTimerType(Qt::PreciseTimer);
+  m_hoverTimer.setInterval(kMoveEveryMs);
+  connect(&m_hoverTimer, &QTimer::timeout, this, [this] { m_hoverAt = nowMs(); emit pointerChanged(); });
   m_laserTick.setInterval(16);
   connect(&m_laserTick, &QTimer::timeout, this, [this] {
     const double now = nowMs();
@@ -2286,12 +2296,16 @@ void InkCanvas::drag(QPointF s, float pressure, bool stylus, Qt::KeyboardModifie
 void InkCanvas::setHover(QPointF p) {
   if (p == m_hover) return;
   m_hover = p;
-  // Told once per turn of the event loop, with the latest place: a pen moves a
-  // few hundred times a second, and the eraser's ring (in QML) following each
-  // move fell behind the pen.
-  if (m_hoverQueued) return;
-  m_hoverQueued = true;
-  QMetaObject::invokeMethod(this, [this] { m_hoverQueued = false; emit pointerChanged(); }, Qt::QueuedConnection);
+  // A pen moves a few hundred times a second: told at most once every few
+  // milliseconds, straight away, and the last place by a timer.
+  const double now = nowMs();
+  if (now - m_hoverAt >= kMoveEveryMs || p.x() < 0) {
+    m_hoverTimer.stop();
+    m_hoverAt = now;
+    emit pointerChanged();
+  } else if (!m_hoverTimer.isActive()) {
+    m_hoverTimer.start();
+  }
 }
 
 void InkCanvas::release() {
@@ -2387,9 +2401,9 @@ bool InkCanvas::eventFilter(QObject* watched, QEvent* event) {
     }
     setHover(local);
     if (m_g.kind == Gesture::Core) {
-      const bool queued = m_pendingMove.waiting;
       m_pendingMove = {local, curved(te->pressure()), te->modifiers(), true};
-      if (!queued) QMetaObject::invokeMethod(this, &InkCanvas::flushPendingMove, Qt::QueuedConnection);
+      if (nowMs() - m_pendingMoveAt >= kMoveEveryMs) flushPendingMove();
+      else if (!m_pendingMoveTimer.isActive()) m_pendingMoveTimer.start();
     } else {
       drag(local, curved(te->pressure()), true, te->modifiers());
     }
@@ -2406,8 +2420,10 @@ bool InkCanvas::eventFilter(QObject* watched, QEvent* event) {
 }
 
 void InkCanvas::flushPendingMove() {
+  m_pendingMoveTimer.stop();
   if (!m_pendingMove.waiting) return;
   m_pendingMove.waiting = false;
+  m_pendingMoveAt = nowMs();
   if (m_g.kind == Gesture::Core) drag(m_pendingMove.local, m_pendingMove.pressure, true, m_pendingMove.mods);
 }
 

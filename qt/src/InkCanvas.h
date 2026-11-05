@@ -519,8 +519,10 @@ private:
   /// Pen moves for the eraser, lasso, moving and resizing come far more
   /// often than the screen shows them (unlike the mouse's, Qt doesn't merge
   /// them), and each erases or moves things on the page: the latest is kept
-  /// and done once, on the next turn of the event loop. (Strokes keep every
-  /// point.)
+  /// and done at most once every few milliseconds, right as a move comes in
+  /// (or, when the pen stops, by a timer). Not through Qt's queue of posted
+  /// calls: Windows holds those back while pen input keeps coming, and the
+  /// eraser fell far behind the pen. (Strokes keep every point.)
   struct PendingMove {
     QPointF local;
     float pressure = 0.5f;
@@ -528,6 +530,11 @@ private:
     bool waiting = false;
   } m_pendingMove;
   void flushPendingMove();
+  double m_pendingMoveAt = 0;
+  QTimer m_pendingMoveTimer;
+  /// The pointer is told to QML the same way (the eraser's ring follows it).
+  double m_hoverAt = 0;
+  QTimer m_hoverTimer;
   bool m_writing = false;
   void setWriting(bool on) {
     if (on == m_writing) return;
@@ -567,7 +574,6 @@ private:
   bool m_rubbing = false;
   bool m_readOnly = false;
   bool m_hideSelection = false;
-  bool m_hoverQueued = false;
   /// Page changes (added, deleted, duplicated, moved, paper), undone with the
   /// ink in the order they happened: each knows how deep the ink history was.
   struct PageOp {
