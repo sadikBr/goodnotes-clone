@@ -22,8 +22,8 @@ Rectangle {
     readonly property bool onlyBookmarks: mode === "bookmarks"
     readonly property bool showContents: mode === "contents"
     property var contents: []
-    /// Wider while the contents are shown (titles need the room).
-    readonly property real wantWidth: showContents ? 236 : 168
+    /// The panel's width (the same for pages, bookmarks and contents).
+    readonly property real wantWidth: 236
     function reloadContents() { contents = showContents ? root.canvas.contents() : [] }
     onShowContentsChanged: reloadContents()
     Connections {
@@ -258,6 +258,9 @@ Rectangle {
                     model: entry.level
                     Rectangle { required property int index; x: 12 + index * 12; y: 0; width: 1; height: entry.height; color: entry.here ? Theme.alpha(Theme.accent, 0.4) : Theme.border }
                 }
+                // Room on both sides, so nothing touches the entry's edge.
+                leftPadding: 0
+                rightPadding: 8
                 contentItem: RowLayout {
                     spacing: 8
                     Item { Layout.preferredWidth: 4 + entry.level * 12 }
@@ -295,21 +298,30 @@ Rectangle {
                         }
                     }
                     Item {
-                        Layout.preferredWidth: 24
+                        Layout.preferredWidth: Math.max(26, pageNo.implicitWidth + 12)
                         Layout.fillHeight: true
-                        Label {
+                        // The page, as a small soft badge.
+                        Rectangle {
                             visible: !(entry.mine && (entry.hovered || menu.opened))
-                            anchors.right: parent.right
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: entry.modelData.page + 1
-                            font.pixelSize: 11
-                            color: entry.here ? Theme.accent : Theme.muted
+                            anchors.centerIn: parent
+                            width: pageNo.implicitWidth + 12
+                            height: 20
+                            radius: Theme.radiusSm
+                            antialiasing: true
+                            color: entry.here ? Theme.alpha(Theme.accent, 0.16) : entry.hovered ? Theme.surface3 : Theme.surface2
+                            Label {
+                                id: pageNo
+                                anchors.centerIn: parent
+                                text: entry.modelData.page + 1
+                                font.pixelSize: 11
+                                font.weight: Font.DemiBold
+                                color: entry.here ? Theme.accent : Theme.muted
+                            }
                         }
                         IconButton {
                             id: moreBtn
                             visible: entry.mine && (entry.hovered || menu.opened)
-                            anchors.right: parent.right
-                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.centerIn: parent
                             width: 24; height: 24
                             iconSize: 14
                             iconName: "more"
