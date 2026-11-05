@@ -23,6 +23,8 @@ void setUpCover(const QJsonObject& nb);
 /// Applies a design and colour: switches the cover page's design (moving its
 /// title and date into place, keeping their text), or adds a cover page.
 void applyCover(const QJsonObject& nb, const QString& design, const QString& color);
+/// A notebook was renamed: the title on its cover (if it has one) follows.
+void retitle(const QString& notebookId, const QString& oldTitle, const QString& title);
 /// A picture of a cover design with the given title and colour, `pixelWidth` wide.
 QImage coverPreview(const QString& design, const QString& color, const QString& title, int pixelWidth, bool landscape);
 

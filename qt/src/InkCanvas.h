@@ -511,6 +511,8 @@ private:
   } m_tap;
   QString m_penCursor = "cross";
   double m_lastPenMs = -1e9;
+  /// Where the mouse pointer was left while the pen was in use (its hover moves from there are ignored).
+  QPointF m_staleHover{-1e9, -1e9};
   /// A pen press seen by the window, waiting for Qt Quick to say where it
   /// goes: if it reaches this item (as the mouse press Qt makes from it),
   /// it starts a stroke with this pressure; if a menu, button or panel on

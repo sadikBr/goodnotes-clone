@@ -287,8 +287,11 @@ Rectangle {
                         hoverEnabled: true
                         onClicked: dialog.ask("Rename notebook", [{ name: "title", label: "Title", value: root.title }], "Save", r => {
                             try {
+                                canvas.flush()
                                 InkleafCore.call("renameNotebook", { id: root.notebookId, title: r.title.trim() })
                                 root.title = r.title.trim()
+                                // The cover's title changed with it.
+                                canvas.reloadPages(true)
                             } catch (e) { root.notify(String(e.message || e), true) }
                         })
                         background: Rectangle { antialiasing: true; radius: Theme.radius; color: titleBtn.hovered ? Theme.surface2 : "transparent" }

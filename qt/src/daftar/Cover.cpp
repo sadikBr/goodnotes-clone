@@ -141,6 +141,26 @@ void applyCover(const QJsonObject& nb, const QString& design, const QString& col
   refreshCoverThumbnail(store::pages(id).at(0).toObject());
 }
 
+void retitle(const QString& notebookId, const QString& oldTitle, const QString& title) {
+  const QJsonArray pages = store::pages(notebookId);
+  if (pages.isEmpty()) return;
+  const QJsonObject page = pages.at(0).toObject();
+  const QString tmpl = page["template"].toString();
+  if (!draw::isCoverTemplate(tmpl)) return;
+  std::vector<ed::El> els = store::elements(page["id"].toString());
+  int at = -1;
+  for (int i = 0; i < int(els.size()) && at < 0; ++i) {
+    const ed::El& e = els[size_t(i)];
+    if (e.kind == ed::Kind::Text && (e.role == QStringLiteral("cover-title") || (!e.role && e.text == oldTitle))) at = i;
+  }
+  if (at < 0 || els[size_t(at)].text == title) return;
+  // Laid out again for the new length (a long title gets smaller letters).
+  const Placed l = layoutText(draw::coverDesignOf(tmpl), title, monthYear(), page["width"].toDouble(), page["height"].toDouble());
+  place(els[size_t(at)], l.title, "cover-title");
+  store::saveElements(page["id"].toString(), els);
+  refreshCoverThumbnail(page);
+}
+
 namespace {
 
 /// A design's picture without its title and date, drawn as renderPage draws

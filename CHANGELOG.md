@@ -5,6 +5,13 @@ Updates → What's new) and on its GitHub release. Keep them short, one line
 per change, written for the people using Inkleaf. A release needs its
 section here before it can be published (`scripts/check-version.py`).
 
+## 0.18.1
+
+- **Fixed:** with a pen, a second eraser circle stayed where the pen first touched, and the real one was pulled back to it now and then. One circle now, under the pen.
+- **Fixed:** renaming a notebook now changes the title on its cover too (from the library, the notebook and the assistant).
+- **Fixed:** *Restore* in Recently deleted closed the window without bringing the page back.
+- **Recently deleted**, redone: a list with each page's picture, when it was deleted and how long it stays, and *Restore* and delete right there (no need to hover). Pages deleted before they were ever saved now show what was on them.
+
 ## 0.18.0
 
 - **Find in a notebook:** Ctrl+F, or the search button above the page. It finds words in typed text, tables, a PDF's own text (marked right on the word) and handwriting the AI has read; Enter goes to the next one. Arabic matches with or without short vowels and hamza.

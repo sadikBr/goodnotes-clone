@@ -46,6 +46,9 @@ Rectangle {
     }
     /// The notebook's deleted pages.
     property var trashed: []
+    // Called from a row of Recently deleted (which closing the window destroys, so the work is done here).
+    function restoreFromTrash(id) { trashPop.close(); canvas.restorePage(id) }
+    function forgetFromTrash(id) { canvas.forgetTrashedPage(id); if (trashed.length === 0) trashPop.close() }
     function reloadTrash() { trashed = root.canvas.notebookId ? root.canvas.trashedPages() : [] }
     Connections {
         target: root.canvas
@@ -448,8 +451,8 @@ Rectangle {
         id: trashPop
         parent: Overlay.overlay
         anchors.centerIn: parent
-        width: Math.min(parent.width - 32, 560)
-        height: Math.min(parent.height - 64, 520)
+        width: Math.min(parent.width - 32, 480)
+        height: Math.min(parent.height - 64, Math.max(240, 96 * Math.max(1, root.trashed.length) + 16 + 148))
         padding: 0
         modal: true
         focus: true
@@ -462,9 +465,10 @@ Rectangle {
         contentItem: ColumnLayout {
             spacing: 0
             RowLayout {
-                Layout.fillWidth: true
-                Layout.margins: 18
-                spacing: 10
+                // Its own width (the margins inside a ColumnLayout left it at its contents' width, the X beside the title).
+                Layout.preferredWidth: trashPop.width - 36
+                Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.topMargin: 16; Layout.bottomMargin: 16
+                spacing: 12
                 Rectangle {
                     Layout.preferredWidth: 34; Layout.preferredHeight: 34; radius: Theme.radius; antialiasing: true
                     color: Theme.surface2
@@ -476,74 +480,82 @@ Rectangle {
                     Label { text: "Recently deleted"; font.pixelSize: 16; font.weight: Font.DemiBold; color: Theme.text }
                     Label { text: "Deleted pages stay here for 30 days."; font.pixelSize: 12; color: Theme.muted }
                 }
+                Item { Layout.fillWidth: true }
                 IconButton { iconName: "close"; tip: "Close"; onClicked: trashPop.close() }
             }
             Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.border }
-            Flickable {
+            ListView {
+                id: tlist
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                contentHeight: tgrid.height + 32
+                topMargin: 8; bottomMargin: 8
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollBar {}
+                model: trashPop.opened ? root.trashed : []
                 Label {
                     visible: root.trashed.length === 0
                     anchors.centerIn: parent
                     text: "Nothing here."
                     font.pixelSize: 13; color: Theme.muted
                 }
-                Flow {
-                    id: tgrid
-                    x: 18; y: 16
-                    width: parent.width - 36
-                    spacing: 14
-                    readonly property real cell: Math.floor((width - 3 * 14) / 4)
-                    Repeater {
-                        model: trashPop.opened ? root.trashed : []
-                        delegate: ColumnLayout {
-                            id: tp
-                            required property var modelData
-                            width: tgrid.cell
-                            spacing: 6
-                            readonly property real days: Math.max(0, 30 - Math.floor((Date.now() - modelData.trashedAt) / 86400000))
-                            Item {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: width * (tp.modelData.height || 1123) / (tp.modelData.width || 794)
-                                HoverHandler { id: th }
-                                Rectangle { anchors.fill: parent; anchors.margins: -1; radius: Theme.radiusSm; antialiasing: true; color: Theme.border }
-                                RoundImage {
-                                    anchors.fill: parent
-                                    color: tp.modelData.paperColor || "#fffdf7"
-                                    source: tp.modelData.thumbnail || ""
-                                    radiusTopLeft: 4; radiusTopRight: 4; radiusBottomLeft: 4; radiusBottomRight: 4
-                                }
-                                // On hover: put it back, or delete it for good.
-                                Rectangle {
-                                    anchors.fill: parent
-                                    radius: Theme.radiusSm
-                                    color: Qt.rgba(0, 0, 0, 0.45)
-                                    visible: th.hovered
-                                    ColumnLayout {
-                                        anchors.centerIn: parent
-                                        spacing: 6
-                                        UiButton { kind: "primary"; text: "Restore"; implicitHeight: 30; Layout.alignment: Qt.AlignHCenter; onClicked: { const id = tp.modelData.id; trashPop.close(); root.canvas.restorePage(id) } }
-                                        UiButton { kind: "danger"; text: "Delete"; implicitHeight: 28; Layout.alignment: Qt.AlignHCenter; onClicked: root.canvas.forgetTrashedPage(tp.modelData.id) }
-                                    }
-                                }
-                            }
-                            Label {
-                                Layout.fillWidth: true
-                                horizontalAlignment: Text.AlignHCenter
-                                text: "Was page " + (tp.modelData.position + 1)
-                                font.pixelSize: 12; font.weight: Font.DemiBold; color: Theme.text
-                            }
-                            Label {
-                                Layout.fillWidth: true
-                                horizontalAlignment: Text.AlignHCenter
-                                text: tp.days <= 1 ? "Gone tomorrow" : tp.days + " days left"
-                                font.pixelSize: 11; color: Theme.muted
+                // One deleted page: its picture, where it was and when, and the two choices, always there.
+                delegate: Item {
+                    id: tp
+                    required property var modelData
+                    required property int index
+                    width: tlist.width
+                    height: 96
+                    readonly property real ago: Math.max(0, Math.floor((Date.now() - modelData.trashedAt) / 86400000))
+                    readonly property real daysLeft: Math.max(0, 30 - ago)
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.leftMargin: 10; anchors.rightMargin: 10
+                        radius: Theme.radius
+                        antialiasing: true
+                        color: rowHover.hovered ? Theme.surface2 : "transparent"
+                        HoverHandler { id: rowHover }
+                    }
+                    Rectangle { visible: tp.index > 0; x: 18; width: parent.width - 36; height: 1; color: Theme.border; opacity: 0.6 }
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 20; anchors.rightMargin: 20
+                        spacing: 14
+                        Item {
+                            readonly property real ratio: (tp.modelData.height || 1123) / (tp.modelData.width || 794)
+                            Layout.preferredHeight: 74
+                            Layout.preferredWidth: Math.min(96, 74 / ratio)
+                            Rectangle { anchors.fill: parent; anchors.margins: -1; radius: 5; antialiasing: true; color: Theme.border }
+                            Shadow { anchors.fill: parent; radius: 4; level: 1 }
+                            RoundImage {
+                                anchors.fill: parent
+                                color: tp.modelData.paperColor || "#fffdf7"
+                                source: tp.modelData.thumbnail || ""
+                                radiusTopLeft: 4; radiusTopRight: 4; radiusBottomLeft: 4; radiusBottomRight: 4
                             }
                         }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 3
+                            Label { text: "Page " + (tp.modelData.position + 1); font.pixelSize: 14; font.weight: Font.DemiBold; color: Theme.text }
+                            Label {
+                                Layout.fillWidth: true
+                                elide: Text.ElideRight
+                                text: (tp.ago === 0 ? "Deleted today" : tp.ago === 1 ? "Deleted yesterday" : "Deleted " + tp.ago + " days ago")
+                                font.pixelSize: 12; color: Theme.muted
+                            }
+                            Rectangle {
+                                Layout.topMargin: 2
+                                Layout.preferredHeight: 20
+                                Layout.preferredWidth: leftLbl.implicitWidth + 14
+                                radius: 10
+                                antialiasing: true
+                                color: tp.daysLeft <= 3 ? Theme.alpha(Theme.danger, 0.12) : Theme.surface2
+                                Label { id: leftLbl; anchors.centerIn: parent; text: tp.daysLeft <= 1 ? "Gone tomorrow" : tp.daysLeft + " days left"; font.pixelSize: 11; font.weight: Font.Medium; color: tp.daysLeft <= 3 ? Theme.danger : Theme.muted }
+                            }
+                        }
+                        UiButton { kind: "primary"; text: "Restore"; iconName: "reset"; implicitHeight: 34; onClicked: root.restoreFromTrash(tp.modelData.id) }
+                        IconButton { iconName: "trash"; tip: "Delete for good"; implicitWidth: 34; implicitHeight: 34; iconSize: 16; onClicked: root.forgetFromTrash(tp.modelData.id) }
                     }
                 }
             }
@@ -553,7 +565,7 @@ Rectangle {
                 Layout.margins: 14
                 Layout.leftMargin: 18
                 spacing: 8
-                UiButton { kind: "danger"; text: "Empty"; iconName: "trash"; enabled: root.trashed.length > 0; onClicked: confirmEmpty.open() }
+                UiButton { kind: "ghost"; text: "Delete all"; iconName: "trash"; visible: root.trashed.length > 1; onClicked: confirmEmpty.open() }
                 Item { Layout.fillWidth: true }
                 UiButton { text: "Done"; kind: "primary"; onClicked: trashPop.close() }
             }

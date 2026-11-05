@@ -641,6 +641,8 @@ void InkCanvas::duplicatePage(int index) {
 void InkCanvas::deletePage(int index) {
   if (index < 0 || index >= int(m_pages.size()) || m_pages.size() <= 1) return;
   flush();
+  // A fresh picture of it for Recently deleted (a page never saved had none).
+  storeThumbnail(index);
   QString err;
   const QString id = m_pages[index].id;
   InkleafCore::instance()->callJson("deletePage", {{"pageId", id}}, &err);
@@ -2468,6 +2470,17 @@ void InkCanvas::mouseReleaseEvent(QMouseEvent* e) {
 }
 
 void InkCanvas::hoverMoveEvent(QHoverEvent* e) {
+  // While a pen is on or near the screen its own (tablet) moves place the
+  // pointer. The mouse pointer then stays where the pen first touched, and Qt
+  // Quick keeps sending hover moves from there: they made a second, stuck
+  // eraser ring and pulled the real one back and forth.
+  // After the pen, the mouse's hover counts again once the mouse really moves.
+  if (m_g.stylus || nowMs() - m_lastPenMs < 600) {
+    m_staleHover = e->position();
+    return;
+  }
+  if (e->position() == m_staleHover) return;
+  m_staleHover = QPointF(-1e9, -1e9);
   setHover(e->position());
   if (m_tool == "laser") {
     m_laserDot = e->position();
@@ -2485,6 +2498,7 @@ void InkCanvas::hoverMoveEvent(QHoverEvent* e) {
 }
 
 void InkCanvas::hoverLeaveEvent(QHoverEvent*) {
+  if (m_g.stylus || nowMs() - m_lastPenMs < 600) return;
   setHover(QPointF(-1, -1));
   m_laserDot = QPointF(-1, -1);
   emit laserChanged();

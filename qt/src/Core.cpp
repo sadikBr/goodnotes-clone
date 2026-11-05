@@ -1,4 +1,6 @@
 #include "Core.h"
+#include "daftar/Cover.h"
+#include "daftar/Store.h"
 
 #include <QPointer>
 #include <QFile>
@@ -51,7 +53,7 @@ QString libraryDir() {
 
 /// Commands that change what the library shows.
 bool changesLibrary(const QString& cmd) {
-  static const QStringList reads = {"library", "trash", "search", "notebook", "pages", "elements", "assetBytes", "buildDocument", "backupStatus", "syncStatus", "dataDir", "anyUnlocked", "snippets", "saveSnippet", "renameSnippet", "deleteSnippet", "useSnippet", "aiStatus", "aiTest", "aiAsk", "aiStep", "pageTemplates", "notesForAi", "pagesToRead", "readingProgress", "setPageInkText", "simplifyStroke", "recognizeHandwriting", "inspectBackup"};
+  static const QStringList reads = {"library", "trash", "search", "notebook", "pages", "elements", "assetBytes", "buildDocument", "backupStatus", "syncStatus", "dataDir", "anyUnlocked", "snippets", "saveSnippet", "renameSnippet", "deleteSnippet", "useSnippet", "aiStatus", "aiTest", "aiAsk", "aiStep", "pageTemplates", "notesForAi", "pagesToRead", "readingProgress", "setPageInkText", "simplifyStroke", "recognizeHandwriting", "inspectBackup", "renameNotebookOnly"};
   return !reads.contains(cmd) && cmd != "saveElements" && cmd != "setPageThumbnail";
 }
 }  // namespace
@@ -91,6 +93,19 @@ QJsonValue InkleafCore::callJson(const QString& cmd, const QJsonObject& args, QS
   if (!m_core) {
     if (error) *error = m_lastError;
     return {};
+  }
+  // Renaming a notebook: the title on its cover follows (from every place that renames).
+  if (cmd == QLatin1String("renameNotebook")) {
+    const QString id = args["id"].toString(), before = store::notebook(id)["title"].toString();
+    QString err;
+    const QJsonValue v = callJson(QStringLiteral("renameNotebookOnly"), args, &err, bytes);
+    if (!err.isEmpty()) {
+      if (error) *error = err;
+      return v;
+    }
+    if (before != args["title"].toString().trimmed()) cover::retitle(id, before, args["title"].toString().trimmed());
+    emit libraryChanged();
+    return v;
   }
   const QByteArray a = QJsonDocument(args).toJson(QJsonDocument::Compact);
   InkleafResult r = inkleaf_call(m_core, cmd.toUtf8().constData(), a.constData(), reinterpret_cast<const uint8_t*>(bytes.constData()), size_t(bytes.size()));

@@ -69,7 +69,7 @@ impl Core {
             // notebooks
             "createNotebook" => to(&db.create_notebook(&a.de::<NewNotebook>("input")?)?),
             "notebook" => to(&db.notebook(&a.s("id")?)?),
-            "renameNotebook" => to(&db.rename_notebook(&a.s("id")?, &a.s("title")?)?),
+            "renameNotebook" | "renameNotebookOnly" => to(&db.rename_notebook(&a.s("id")?, &a.s("title")?)?),
             "moveNotebook" => to(&db.move_notebook(&a.s("id")?, a.opt_s("folderId").as_deref())?),
             "setNotebookCover" => to(&db.set_notebook_cover(&a.s("id")?, &a.s("color")?)?),
             "setNotebookMeta" => to(&db.set_notebook_meta(&a.s("id")?, a.opt_s("meta").as_deref())?),
