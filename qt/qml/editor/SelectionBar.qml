@@ -52,6 +52,8 @@ Item {
     signal linkRequested()
     /// Check the spelling of the handwriting in the selection.
     signal spellRequested()
+    /// Make a flashcard: the selection is its question.
+    signal cardRequested()
     ColorPopover { id: colorPop }
 
     Shadow { anchors.fill: parent; radius: Theme.radiusLg; level: 3 }
@@ -285,7 +287,8 @@ Item {
             onClicked: menu.show(moreBtn, [
                 { icon: "copy", label: "Duplicate", key: "Ctrl+D", action: () => root.canvas.duplicateSelection() },
                 { icon: "page", label: "Copy", key: "Ctrl+C", action: () => root.canvas.copySelection() },
-                { icon: "stack", label: "Save to my pieces", action: () => root.savePieceRequested() }
+                { icon: "stack", label: "Save to my pieces", action: () => root.savePieceRequested() },
+                { icon: "cards", label: "Make a flashcard", sub: "This is the question; then pick its answer", action: () => root.cardRequested() }
             ], 240)
         }
         SmallTool { iconName: "trash"; tip: "Delete"; onClicked: root.canvas.deleteSelection() }
