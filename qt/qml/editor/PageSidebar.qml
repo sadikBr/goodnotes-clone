@@ -81,10 +81,10 @@ Rectangle {
         }
         RowLayout {
             Layout.fillWidth: true
-            Layout.topMargin: 10
-            Layout.leftMargin: 16
-            Layout.rightMargin: 14
-            Layout.bottomMargin: 2
+            Layout.topMargin: 12
+            Layout.leftMargin: 20
+            Layout.rightMargin: 18
+            Layout.bottomMargin: 4
             spacing: 6
             Label {
                 text: root.showContents ? "Contents" : root.onlyBookmarks ? "Bookmarks" : "Pages"
@@ -229,8 +229,8 @@ Rectangle {
                     const m = t.match(/^((?:slide|chapter|chapitre|part|partie|unit|unité|lesson|leçon|section|module|week|semaine|day|jour|الدرس|الفصل|الوحدة)?\s*[0-9IVXLivxl]+[0-9.]*)\s*[:.\-–—]\s+(.+)$/i)
                     return m ? { label: m[1], title: m[2] } : { label: "", title: t }
                 }
-                x: 8
-                width: toc.width - 16
+                x: 10
+                width: toc.width - 20
                 implicitHeight: (parts.label ? 40 : 32)
                 hoverEnabled: true
                 onClicked: root.canvas.goToPage(modelData.page)
@@ -256,14 +256,13 @@ Rectangle {
                 // Deeper levels sit on a guide line.
                 Repeater {
                     model: entry.level
-                    Rectangle { required property int index; x: 12 + index * 12; y: 0; width: 1; height: entry.height; color: entry.here ? Theme.alpha(Theme.accent, 0.4) : Theme.border }
+                    Rectangle { required property int index; x: 14 + index * 12; y: 0; width: 1; height: entry.height; color: entry.here ? Theme.alpha(Theme.accent, 0.4) : Theme.border }
                 }
                 // Room on both sides, so nothing touches the entry's edge.
-                leftPadding: 0
+                leftPadding: 10 + entry.level * 12
                 rightPadding: 8
                 contentItem: RowLayout {
                     spacing: 8
-                    Item { Layout.preferredWidth: 4 + entry.level * 12 }
                     // Your headings: a small accent mark; a daftar's class: a dot.
                     Rectangle {
                         visible: entry.mine || entry.section
@@ -348,8 +347,8 @@ Rectangle {
             id: addHeading
             visible: root.showContents
             Layout.fillWidth: true
-            Layout.leftMargin: 18
-            Layout.rightMargin: 18
+            Layout.leftMargin: 10
+            Layout.rightMargin: 10
             Layout.topMargin: 6
             Layout.bottomMargin: 16
             implicitHeight: 40
@@ -371,8 +370,8 @@ Rectangle {
             id: add
             visible: !root.showContents
             Layout.fillWidth: true
-            Layout.leftMargin: 18
-            Layout.rightMargin: 18
+            Layout.leftMargin: 10
+            Layout.rightMargin: 10
             Layout.topMargin: 6
             Layout.bottomMargin: 16
             implicitHeight: 40
