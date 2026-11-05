@@ -548,6 +548,10 @@ Rectangle {
         id: aiPanel
         onSettingsRequested: root.settingsRequested()
     }
+    AssistantPanel {
+        id: assistant
+        onSettingsRequested: root.settingsRequested()
+    }
     function askLibrary() {
         aiPanel.start({
             heading: "Ask your library",
@@ -813,7 +817,7 @@ Rectangle {
                     ToolTip.visible: hovered
                     ToolTip.delay: 600
                     ToolTip.text: "Ask AI about your notes"
-                    onClicked: aiPanel.opened ? aiPanel.close() : root.askLibrary()
+                    onClicked: assistant.opened ? assistant.close() : assistant.show(null)
                 }
                 IconButton {
                     visible: root.anyUnlocked

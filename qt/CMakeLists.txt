@@ -108,6 +108,7 @@ qt_add_executable(inkleaf
   src/Pdf.h src/Pdf.cpp
   src/ZoomBoxView.h src/ZoomBoxView.cpp
   src/PdfOutline.h src/PdfOutline.cpp
+  src/Assistant.h src/Assistant.cpp
   src/Updater.h src/Updater.cpp
   src/math/MathExpr.h src/math/MathExpr.cpp
   src/math/MathKit.h src/math/MathKit.cpp
@@ -180,6 +181,7 @@ qt_add_qml_module(inkleaf
     qml/ui/DashedBox.qml
     qml/ui/ImportPanel.qml
     qml/ui/AiPanel.qml
+    qml/ui/AssistantPanel.qml
     qml/editor/ToolPrefs.qml
     qml/editor/ToolBtn.qml
     qml/editor/Pill.qml

@@ -127,6 +127,10 @@ std::vector<int> classExportPages(const std::vector<PageInfo>& pages, const QStr
 QJsonObject createDaftar(const QString& title, const QString& folderId, const QString& coverColor, const Meta& meta, const QString& design = QStringLiteral("zellige"));
 /// Adds a lesson page at the end of a class's section; returns it.
 QJsonObject addLessonPage(const QJsonObject& nb, const Meta& meta, const QString& cls);
+/// A lesson written for class `cls` on `date` (its row: the date, class and time
+/// from the timetable, and `lines` in the activities), in the next free row of
+/// the class's lesson pages, or on a new one. Returns { pageId, newPage, ids }.
+QJsonObject addLessonOn(const QString& notebookId, const QString& cls, const QDate& date, const QStringList& lines);
 /// Fills in the cover once its title and date are placed.
 void finishDaftarCover(const QJsonObject& nb, const Meta& meta);
 /// Applies changed details: filled-in values written again, new classes get their sections.

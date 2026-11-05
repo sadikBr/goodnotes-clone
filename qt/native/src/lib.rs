@@ -117,6 +117,7 @@ impl Core {
             "aiSetup" => to(&self.ai.change(a.de::<AiChange>("change")?)?),
             "aiTest" => to(&self.ai.test()?),
             "aiAsk" => to(&self.ai.ask(&a.de::<AskRequest>("request")?)?),
+            "aiStep" => to(&self.ai.step(&a.de::<inkleaf_core::ai::StepRequest>("request")?)?),
             "notesForAi" => to(&db.notes_for_ai(a.opt_s("notebookId").as_deref(), &a.opt_s("question").unwrap_or_default(), a.opt_i("budget").unwrap_or(60_000).max(1000) as usize)?),
             "pagesToRead" => to(&db.pages_to_read(a.opt_i("limit").unwrap_or(5), a.opt_i("settleMs").unwrap_or(60_000))?),
             "readingProgress" => {

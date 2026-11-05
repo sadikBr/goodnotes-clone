@@ -515,18 +515,26 @@ pub fn ask_stream(s: &AiSettings, req: &AskRequest, on: &mut dyn FnMut(&str) -> 
 
 /// Sends the request (streamed or not); the server's response, or a readable error.
 fn send(s: &AiSettings, req: &AskRequest, stream: bool) -> AppResult<ureq::Response> {
+    if req.messages.is_empty() {
+        return Err(AppError::Invalid("Nothing to ask.".into()));
+    }
+    let official = s.base_url.trim().is_empty();
+    let model = s.model_name();
+    let body = if s.provider == "anthropic" { anthropic_body(&model, req, official) } else { openai_body(&s.provider, &model, req) };
+    post(s, body, stream)
+}
+
+/// Sends a request body to the provider (its URL, key and headers); the response, or a readable error.
+fn post(s: &AiSettings, mut body: Value, stream: bool) -> AppResult<ureq::Response> {
     let problem = s.problem();
     if !problem.is_empty() {
         return Err(AppError::Invalid(problem));
-    }
-    if req.messages.is_empty() {
-        return Err(AppError::Invalid("Nothing to ask.".into()));
     }
     let url = s.url();
     let model = s.model_name();
     let local = is_local(&url);
     let agent = agent(local);
-    let (request, mut body) = if s.provider == "anthropic" {
+    let request = if s.provider == "anthropic" {
         let official = s.base_url.trim().is_empty();
         let mut r = agent
             .post(&format!("{url}/v1/messages"))
@@ -536,13 +544,13 @@ fn send(s: &AiSettings, req: &AskRequest, stream: bool) -> AppResult<ureq::Respo
         if official && claude_has_fallbacks(&model) {
             r = r.set("anthropic-beta", "server-side-fallback-2026-07-01");
         }
-        (r, anthropic_body(&model, req, official))
+        r
     } else {
         let mut r = agent.post(&format!("{url}/chat/completions")).set("content-type", "application/json");
         if !s.api_key.trim().is_empty() {
             r = r.set("authorization", &format!("Bearer {}", s.api_key.trim()));
         }
-        (r, openai_body(&s.provider, &model, req))
+        r
     };
     if stream {
         body["stream"] = json!(true);
@@ -565,6 +573,214 @@ pub fn ask(s: &AiSettings, req: &AskRequest) -> AppResult<String> {
     let resp = send(s, req, false)?;
     let v: Value = serde_json::from_str(&resp.into_string()?).map_err(|_| AppError::Invalid("The AI server's answer wasn't understood.".into()))?;
     if s.provider == "anthropic" { anthropic_text(&v) } else { openai_text(&v) }
+}
+
+// ------------------------------------------------------------ tools (the assistant)
+
+/// A tool the model may use: its name, what it does, and its input (a JSON schema).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Tool {
+    pub name: String,
+    pub description: String,
+    pub schema: Value,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ToolCall {
+    pub id: String,
+    pub name: String,
+    pub input: Value,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ToolResult {
+    pub id: String,
+    pub content: String,
+    pub error: bool,
+}
+
+/// A turn of a conversation with tools: the user's words, the model's (with the
+/// tools it called), or the results of those calls ("tool").
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct StepMessage {
+    pub role: String,
+    pub text: String,
+    pub images: Vec<String>,
+    pub calls: Vec<ToolCall>,
+    pub results: Vec<ToolResult>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct StepRequest {
+    pub system: String,
+    pub messages: Vec<StepMessage>,
+    pub tools: Vec<Tool>,
+    pub max_tokens: Option<u32>,
+}
+
+/// The model's turn: what it says and the tools it wants used (none: it's done).
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct StepAnswer {
+    pub text: String,
+    pub calls: Vec<ToolCall>,
+}
+
+pub fn anthropic_step_body(model: &str, req: &StepRequest, official: bool) -> Value {
+    let mut messages: Vec<Value> = Vec::new();
+    for m in &req.messages {
+        match m.role.as_str() {
+            "assistant" => {
+                let mut content = Vec::new();
+                if !m.text.trim().is_empty() {
+                    content.push(json!({ "type": "text", "text": m.text }));
+                }
+                for c in &m.calls {
+                    content.push(json!({ "type": "tool_use", "id": c.id, "name": c.name, "input": if c.input.is_object() { c.input.clone() } else { json!({}) } }));
+                }
+                messages.push(json!({ "role": "assistant", "content": content }));
+            }
+            "tool" => {
+                let content: Vec<Value> = m.results.iter().map(|r| json!({ "type": "tool_result", "tool_use_id": r.id, "content": r.content, "is_error": r.error })).collect();
+                messages.push(json!({ "role": "user", "content": content }));
+            }
+            _ => {
+                let mut content: Vec<Value> = m.images.iter().map(|i| json!({ "type": "image", "source": { "type": "base64", "media_type": media_type(i), "data": b64_of(i) } })).collect();
+                content.push(json!({ "type": "text", "text": m.text }));
+                messages.push(json!({ "role": "user", "content": content }));
+            }
+        }
+    }
+    let tools: Vec<Value> = req.tools.iter().map(|t| json!({ "name": t.name, "description": t.description, "input_schema": t.schema })).collect();
+    let mut body = json!({ "model": model, "max_tokens": req.max_tokens.unwrap_or(16000), "messages": messages, "tools": tools });
+    if !req.system.is_empty() {
+        body["system"] = json!(req.system);
+    }
+    if claude_takes_effort(model) {
+        body["output_config"] = json!({ "effort": "medium" });
+    }
+    if official && claude_has_fallbacks(model) {
+        body["fallbacks"] = json!("default");
+    }
+    body
+}
+
+pub fn openai_step_body(provider: &str, model: &str, req: &StepRequest) -> Value {
+    let mut messages = Vec::new();
+    if !req.system.is_empty() {
+        messages.push(json!({ "role": "system", "content": req.system }));
+    }
+    for m in &req.messages {
+        match m.role.as_str() {
+            "assistant" => {
+                let mut msg = json!({ "role": "assistant", "content": if m.text.is_empty() { Value::Null } else { json!(m.text) } });
+                if !m.calls.is_empty() {
+                    msg["tool_calls"] = json!(m
+                        .calls
+                        .iter()
+                        .map(|c| json!({ "id": c.id, "type": "function", "function": { "name": c.name, "arguments": c.input.to_string() } }))
+                        .collect::<Vec<_>>());
+                }
+                messages.push(msg);
+            }
+            "tool" => {
+                for r in &m.results {
+                    messages.push(json!({ "role": "tool", "tool_call_id": r.id, "content": r.content }));
+                }
+            }
+            _ => {
+                if m.images.is_empty() {
+                    messages.push(json!({ "role": "user", "content": m.text }));
+                } else {
+                    let mut content = vec![json!({ "type": "text", "text": m.text })];
+                    for i in &m.images {
+                        let url = if i.starts_with("data:") { i.clone() } else { format!("data:image/png;base64,{i}") };
+                        content.push(json!({ "type": "image_url", "image_url": { "url": url } }));
+                    }
+                    messages.push(json!({ "role": "user", "content": content }));
+                }
+            }
+        }
+    }
+    let tools: Vec<Value> = req
+        .tools
+        .iter()
+        .map(|t| json!({ "type": "function", "function": { "name": t.name, "description": t.description, "parameters": t.schema } }))
+        .collect();
+    let mut body = json!({ "model": model, "messages": messages, "tools": tools });
+    body[if provider == "openai" { "max_completion_tokens" } else { "max_tokens" }] = json!(req.max_tokens.unwrap_or(8000));
+    body
+}
+
+pub fn anthropic_step_answer(v: &Value) -> AppResult<StepAnswer> {
+    if v.get("stop_reason").and_then(Value::as_str) == Some("refusal") {
+        return Err(AppError::Invalid("The model declined to do that.".into()));
+    }
+    let mut out = StepAnswer::default();
+    for b in v.get("content").and_then(Value::as_array).into_iter().flatten() {
+        match b.get("type").and_then(Value::as_str) {
+            Some("text") => out.text.push_str(b.get("text").and_then(Value::as_str).unwrap_or("")),
+            Some("tool_use") => out.calls.push(ToolCall {
+                id: b.get("id").and_then(Value::as_str).unwrap_or("").to_string(),
+                name: b.get("name").and_then(Value::as_str).unwrap_or("").to_string(),
+                input: b.get("input").cloned().unwrap_or(json!({})),
+            }),
+            _ => {}
+        }
+    }
+    out.text = out.text.trim().to_string();
+    Ok(out)
+}
+
+pub fn openai_step_answer(v: &Value) -> AppResult<StepAnswer> {
+    let msg = v.pointer("/choices/0/message").ok_or_else(|| AppError::Invalid("The AI server's answer wasn't understood.".into()))?;
+    let mut out = StepAnswer::default();
+    out.text = match msg.get("content") {
+        Some(Value::String(s)) => strip_thinking(s).trim().to_string(),
+        Some(Value::Array(parts)) => parts.iter().filter_map(|p| p.get("text").and_then(Value::as_str)).collect::<Vec<_>>().join("").trim().to_string(),
+        _ => String::new(),
+    };
+    for (k, c) in msg.get("tool_calls").and_then(Value::as_array).into_iter().flatten().enumerate() {
+        let args = c.pointer("/function/arguments");
+        // Arguments come as a JSON string (some servers send the object itself).
+        let input = match args {
+            Some(Value::String(s)) => serde_json::from_str(s).unwrap_or(json!({})),
+            Some(o @ Value::Object(_)) => o.clone(),
+            _ => json!({}),
+        };
+        out.calls.push(ToolCall {
+            id: c.get("id").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| format!("call_{k}")),
+            name: c.pointer("/function/name").and_then(Value::as_str).unwrap_or("").to_string(),
+            input,
+        });
+    }
+    if out.text.is_empty() && out.calls.is_empty() && msg.get("refusal").and_then(Value::as_str).is_some() {
+        return Err(AppError::Invalid("The model declined to do that.".into()));
+    }
+    Ok(out)
+}
+
+/// One turn of the model, with tools: what it says and the tools it calls.
+pub fn step(s: &AiSettings, req: &StepRequest) -> AppResult<StepAnswer> {
+    if req.messages.is_empty() {
+        return Err(AppError::Invalid("Nothing to ask.".into()));
+    }
+    let model = s.model_name();
+    let anthropic = s.provider == "anthropic";
+    let body = if anthropic { anthropic_step_body(&model, req, s.base_url.trim().is_empty()) } else { openai_step_body(&s.provider, &model, req) };
+    let resp = post(s, body, false)?;
+    let v: Value = serde_json::from_str(&resp.into_string()?).map_err(|_| AppError::Invalid("The AI server's answer wasn't understood.".into()))?;
+    if anthropic { anthropic_step_answer(&v) } else { openai_step_answer(&v) }
+}
+
+impl Ai {
+    pub fn step(&self, req: &StepRequest) -> AppResult<StepAnswer> {
+        step(&self.settings(), req)
+    }
 }
 
 #[cfg(test)]
@@ -599,6 +815,36 @@ mod tests {
         let o = openai_body("openai", "m", &req(vec![]));
         assert_eq!(o["messages"][1]["content"], "What is this?");
         assert!(o.get("max_completion_tokens").is_some());
+    }
+
+    #[test]
+    fn tool_turns_round_trip_for_both_kinds_of_server() {
+        let req = StepRequest {
+            system: "Help.".into(),
+            tools: vec![Tool { name: "create_folder".into(), description: "Makes a folder".into(), schema: json!({ "type": "object", "properties": { "name": { "type": "string" } } }) }],
+            messages: vec![
+                StepMessage { role: "user".into(), text: "Make a Biology folder".into(), ..Default::default() },
+                StepMessage { role: "assistant".into(), text: "".into(), calls: vec![ToolCall { id: "t1".into(), name: "create_folder".into(), input: json!({ "name": "Biology" }) }], ..Default::default() },
+                StepMessage { role: "tool".into(), results: vec![ToolResult { id: "t1".into(), content: "ok".into(), error: false }], ..Default::default() },
+            ],
+            max_tokens: None,
+        };
+        let a = anthropic_step_body("claude-opus-5-5", &req, true);
+        assert_eq!(a["tools"][0]["input_schema"]["type"], "object");
+        assert_eq!(a["messages"][1]["content"][0]["type"], "tool_use");
+        assert_eq!(a["messages"][2]["role"], "user");
+        assert_eq!(a["messages"][2]["content"][0]["tool_use_id"], "t1");
+        let o = openai_step_body("openai", "gpt", &req);
+        assert_eq!(o["tools"][0]["function"]["name"], "create_folder");
+        assert_eq!(o["messages"][2]["tool_calls"][0]["function"]["arguments"], "{\"name\":\"Biology\"}");
+        assert_eq!(o["messages"][3]["role"], "tool");
+        // Answers with calls.
+        let ca = anthropic_step_answer(&json!({ "stop_reason": "tool_use", "content": [{ "type": "text", "text": "Sure." }, { "type": "tool_use", "id": "x", "name": "create_folder", "input": { "name": "Bio" } }] })).unwrap();
+        assert_eq!(ca.calls[0].input["name"], "Bio");
+        assert_eq!(ca.text, "Sure.");
+        let oa = openai_step_answer(&json!({ "choices": [{ "message": { "content": null, "tool_calls": [{ "id": "y", "type": "function", "function": { "name": "create_folder", "arguments": "{\"name\":\"Bio\"}" } }] } }] })).unwrap();
+        assert_eq!(oa.calls[0].name, "create_folder");
+        assert_eq!(oa.calls[0].input["name"], "Bio");
     }
 
     #[test]

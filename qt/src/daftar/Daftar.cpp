@@ -1,5 +1,6 @@
 // Daftar annossous (was src/daftar.ts); see Daftar.h.
 #include "Daftar.h"
+#include "../editor/EditorCore.h"
 
 #include <QJsonDocument>
 #include <QRegularExpression>
@@ -499,6 +500,57 @@ QJsonObject addFilledPage(const QJsonObject& nb, int at, const QString& tmpl, co
 }
 
 }  // namespace
+
+QJsonObject addLessonOn(const QString& notebookId, const QString& cls, const QDate& date, const QStringList& lines) {
+  const QJsonObject nb = store::notebook(notebookId);
+  const auto meta = parseDaftar(nb["meta"]);
+  if (!meta) throw store::StoreError("That notebook isn't a daftar");
+  if (!meta->classes.contains(cls)) throw store::StoreError("The daftar has no class “" + cls + "” (its classes: " + meta->classes.join(", ") + ")");
+  const int need = std::max(1, int(lines.size()));
+  // The class's lesson pages, the last one used first.
+  QJsonObject page;
+  std::optional<int> row;
+  std::vector<ed::El> els;
+  const QJsonArray pages = store::pages(notebookId);
+  for (int i = pages.size() - 1; i >= 0 && !row; --i) {
+    const QJsonObject p = pages[i].toObject();
+    if (p["section"].toString() != cls || !draw::isLessonTemplate(p["template"].toString())) continue;
+    std::vector<ed::El> mine = store::elements(p["id"].toString());
+    std::vector<InkRect> ink;
+    for (const ed::El& e : mine) {
+      if (e.kind == ed::Kind::Text && e.role == QStringLiteral("daftar-field")) continue;
+      const ed::Rect& b = ed::EditorCore::boxOf(e);
+      ink.push_back({b.x, b.y, b.x + b.w, b.y + b.h});
+    }
+    row = nextFreeRow(ink, p["width"].toDouble(), p["height"].toDouble(), need);
+    if (row) {
+      page = p;
+      els = std::move(mine);
+    }
+    break;  // only the last page of the class: earlier ones are full or older
+  }
+  bool fresh = false;
+  if (!row) {
+    page = addLessonPage(nb, *meta, cls);
+    els = store::elements(page["id"].toString());
+    row = 0;
+    fresh = true;
+  }
+  const double w = page["width"].toDouble(), h = page["height"].toDouble();
+  std::vector<ed::El> add = lessonEntry(*meta, cls, *row, w, h, QDateTime(date, QTime(8, 0)), {});
+  for (ed::El& e : outlineElements(lines, *row, w, h)) add.push_back(std::move(e));
+  double z = 0;
+  for (const ed::El& e : els) z = std::max(z, e.z);
+  QJsonArray ids;
+  for (ed::El& e : add) {
+    if (e.id.isEmpty()) e.id = ed::newId();
+    e.z = ++z;
+    ids.append(e.id);
+    els.push_back(std::move(e));
+  }
+  store::saveElements(page["id"].toString(), els);
+  return {{"pageId", page["id"].toString()}, {"newPage", fresh}, {"ids", ids}};
+}
 
 QJsonObject addLessonPage(const QJsonObject& nb, const Meta& meta, const QString& cls) {
   const QJsonArray pages = store::pages(nb["id"].toString());

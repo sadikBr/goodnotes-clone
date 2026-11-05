@@ -382,7 +382,7 @@ Rectangle {
                     spacing: 8
                     Item { Layout.fillWidth: true }
                     Pill {
-                        IconButton { iconName: "sparkle"; tip: "Ask AI about this notebook"; implicitWidth: 34; implicitHeight: 34; iconColor: Theme.accent; onClicked: aiPanel.opened ? aiPanel.close() : root.askAboutNotebook() }
+                        IconButton { iconName: "sparkle"; tip: "Assistant: ask, or have it make things"; implicitWidth: 34; implicitHeight: 34; iconColor: Theme.accent; onClicked: assistant.opened ? assistant.close() : assistant.show({ id: root.notebookId, title: root.title, page: canvas.currentPage, daftar: !!root.daftar }) }
                     }
                     Pill {
                         IconButton { iconName: "undo"; tip: "Undo (Ctrl+Z)"; implicitWidth: 34; implicitHeight: 34; enabled: root.activeCanvas.canUndo; onClicked: root.activeCanvas.undo() }
@@ -897,6 +897,19 @@ Rectangle {
                 extra: "The user is a maths teacher or student working in their notebook; answer in the language they use, at school level, with clear numbered steps and the final answer at the end.",
                 prompt: "Solve step by step: " + expr
             })
+        }
+    }
+    AssistantPanel {
+        id: assistant
+        onSettingsRequested: root.settingsRequested()
+    }
+    // A plan the assistant carries out: what's on screen is saved first, and
+    // this notebook shows its changes after.
+    Connections {
+        target: Assistant
+        function onAboutToChange() { root.saveForSync() }
+        function onNotebooksChanged(ids) {
+            if (ids.indexOf(root.notebookId) >= 0 || ids.indexOf("*") >= 0) { canvas.reloadPages(true); root.loadDaftar() }
         }
     }
     AiPanel {
