@@ -103,10 +103,11 @@ qt_add_executable(inkleaf
   src/daftar/DaftarEditor.h src/daftar/DaftarEditor.cpp
   src/tests/SelfTest.h src/tests/SelfTest.cpp
   src/tests/GeometryTests.cpp
-  src/tests/TextAndSnapTests.cpp src/tests/MathTests.cpp src/tests/TableTests.cpp src/tests/GestureTests.cpp src/tests/DaftarTests.cpp src/tests/Samples.h src/tests/Samples.cpp src/tests/Golden.h src/tests/Golden.cpp src/tests/EditorSessions.h src/tests/EditorSessions.cpp src/tests/JsonCompare.h
+  src/tests/TextAndSnapTests.cpp src/tests/MathTests.cpp src/tests/TableTests.cpp src/tests/GestureTests.cpp src/tests/DaftarTests.cpp src/tests/PdfTests.cpp src/tests/Samples.h src/tests/Samples.cpp src/tests/Golden.h src/tests/Golden.cpp src/tests/EditorSessions.h src/tests/EditorSessions.cpp src/tests/JsonCompare.h
   src/PaperImage.h src/PaperImage.cpp
   src/Pdf.h src/Pdf.cpp
   src/ZoomBoxView.h src/ZoomBoxView.cpp
+  src/PdfOutline.h src/PdfOutline.cpp
   src/Updater.h src/Updater.cpp
   src/math/MathExpr.h src/math/MathExpr.cpp
   src/math/MathKit.h src/math/MathKit.cpp

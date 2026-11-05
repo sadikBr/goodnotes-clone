@@ -1,5 +1,6 @@
 #include "draw/Elements.h"
 #include "InkCanvas.h"
+#include "PdfOutline.h"
 #include <QJSValue>
 #include <QTemporaryDir>
 #include "PaperImage.h"
@@ -845,6 +846,18 @@ QString InkCanvas::exportPdf(const QString& path, const QVariantList& indexes, c
     }  // the canvas restores the painter for the next page
   }
   painter.end();
+  // The contents (a PDF's own chapters, a daftar's classes, your headings) as
+  // the file's chapters, for the pages in it.
+  QHash<int, int> at;
+  for (int k = 0; k < indexes.size(); ++k)
+    if (!at.contains(indexes[k].toInt())) at.insert(indexes[k].toInt(), k);
+  std::vector<pdfoutline::Entry> chapters;
+  for (const QVariant& v : contents()) {
+    const QVariantMap e = v.toMap();
+    const auto it = at.constFind(e.value("page").toInt());
+    if (it != at.constEnd()) chapters.push_back({e.value("title").toString(), e.value("level").toInt(), *it});
+  }
+  if (!chapters.empty() && !pdfoutline::add(file, chapters)) qWarning("Couldn't add the contents to %s", qPrintable(file));
   return {};
 }
 
