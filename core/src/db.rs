@@ -1604,6 +1604,12 @@ impl Db {
         expect_one(n, page_id)
     }
 
+    /// Forgets a page's picture (what's on it changed elsewhere): the editor draws a new one.
+    pub fn clear_page_thumbnail(&self, page_id: &str) -> AppResult<()> {
+        let n = self.conn().execute("UPDATE pages SET thumbnail = NULL WHERE id = ?1", [page_id])?;
+        expect_one(n, page_id)
+    }
+
     pub fn set_page_thumbnail(&self, page_id: &str, thumbnail: &str) -> AppResult<()> {
         if !thumbnail.starts_with("data:image/") {
             return Err(AppError::Invalid(

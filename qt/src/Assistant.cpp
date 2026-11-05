@@ -780,6 +780,7 @@ void Assistant::execute(const QJsonObject& stepIn) {
     auto flush = [&]() {
       if (added.isEmpty() && in["page"].toInt(0) <= 0) return;
       store::saveElements(page["id"].toString(), els);
+      core("clearPageThumbnail", {{"pageId", page["id"]}});
     };
     auto room = [&](double h) {
       if (y + h <= H - margin || y <= top + 1) return;
@@ -960,6 +961,7 @@ void Assistant::execute(const QJsonObject& stepIn) {
       els.push_back(std::move(e));
     }
     store::saveElements(pageId, els);
+    core("clearPageThumbnail", {{"pageId", pageId}});
     touch(id);
     return;
   }
@@ -967,6 +969,7 @@ void Assistant::execute(const QJsonObject& stepIn) {
     QStringList lines;
     for (const QJsonValue& v : in["lines"].toArray()) lines << v.toString().trimmed().left(140);
     const QJsonObject r = daftar::addLessonOn(in["notebook_id"].toString(), in["class"].toString().trimmed(), QDate::fromString(in["date"].toString(), Qt::ISODate), lines.mid(0, 8));
+    core("clearPageThumbnail", {{"pageId", r["pageId"]}});
     if (r["newPage"].toBool()) journal({{"op", "deletePage"}, {"id", r["pageId"]}});
     else journal({{"op", "removeElements"}, {"pageId", r["pageId"]}, {"ids", r["ids"]}});
     touch(in["notebook_id"].toString());
@@ -1017,8 +1020,10 @@ void Assistant::undo() {
         std::vector<ed::El> els = store::elements(j["pageId"].toString());
         els.erase(std::remove_if(els.begin(), els.end(), [&](const ed::El& e) { return ids.contains(e.id); }), els.end());
         store::saveElements(j["pageId"].toString(), els);
+        core("clearPageThumbnail", {{"pageId", j["pageId"]}});
       } else if (op == "pageRows") {
         core("saveElements", {{"pageId", j["pageId"]}, {"elements", j["rows"]}});
+        core("clearPageThumbnail", {{"pageId", j["pageId"]}});
       } else if (op == "setMeta") {
         core("setNotebookMeta", {{"id", j["id"]}, {"meta", j["meta"]}});
         touch(j["id"].toString());

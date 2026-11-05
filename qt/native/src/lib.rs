@@ -87,6 +87,7 @@ impl Core {
             "setPageTemplate" => to(&db.set_page_template(&a.s("pageId")?, &a.s("template")?, a.opt_s("paperColor").as_deref())?),
             "setPageSize" => to(&db.set_page_size(&a.s("pageId")?, a.f("width")?, a.f("height")?)?),
             "setPageFavourite" => to(&db.set_page_favourite(&a.s("pageId")?, a.b("favourite")?)?),
+            "clearPageThumbnail" => to(&db.clear_page_thumbnail(&a.s("pageId")?)?),
             "setPageThumbnail" => to(&db.set_page_thumbnail(&a.s("pageId")?, &a.s("thumbnail")?)?),
             "setPageSection" => to(&db.set_page_section(&a.s("pageId")?, a.opt_s("section").as_deref())?),
             "elements" => to(&db.elements(&a.s("pageId")?)?),
