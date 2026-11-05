@@ -506,7 +506,7 @@ Rectangle {
                                 { icon: "focus", label: "Focus mode", key: "F", toggle: root.focusMode, action: () => root.focusMode = !root.focusMode },
                                 { icon: "zoombox", label: "Zoom box", key: "Z", toggle: zoomBox.active, action: () => zoomBox.active ? zoomBox.stop() : zoomBox.start() },
                                 { icon: "spell", label: "Check spelling on this page", action: () => spell.check(root.mainCanvas.currentPage, false) },
-                                { icon: "cards", label: "Flashcards", sub: flash.cards.length ? flash.dueCount() + " to study · " + flash.cards.length + (flash.cards.length === 1 ? " card" : " cards") : "Study from your notes", action: () => flash.open() },
+                                { icon: "cards", label: "Flashcards", key: flash.dueCount() > 0 ? String(flash.dueCount()) : "", action: () => flash.open() },
                                 { icon: "sidebar", label: "Tools on the side", toggle: root.rail, action: () => AppSettings.store.toolbar = root.rail ? "top" : "rail" },
                                 { separator: true },
                                 { icon: "sidebar", label: root.sidebarShown ? "Hide pages" : "Show pages", key: "[", action: () => root.toggleSidebar() },

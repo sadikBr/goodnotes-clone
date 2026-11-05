@@ -196,7 +196,11 @@ Item {
             Shadow { anchors.fill: parent; radius: Theme.radiusXl; level: 4 }
             Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusXl; color: Theme.surface; border.color: Theme.border }
         }
-        contentItem: ColumnLayout {
+        // (In an item that fills the panel: a popup's own content layout can stay narrow.)
+        contentItem: Item {
+        focus: true
+        ColumnLayout {
+            anchors.fill: parent
             spacing: 0
             focus: true
             Keys.onSpacePressed: if (panel.tab === "study" && study.card) study.flipped = !study.flipped
@@ -220,10 +224,10 @@ Item {
                 }
                 ColumnLayout {
                     spacing: 1
-                    Layout.fillWidth: true
                     Label { text: "Flashcards"; font.pixelSize: 17; font.weight: Font.DemiBold; color: Theme.text }
                     Label { text: { void root.cards; const d = root.dueCount(); return root.cards.length === 0 ? "None yet" : d + " to study · " + root.cards.length + " in this notebook" } font.pixelSize: 12; color: Theme.muted }
                 }
+                Item { Layout.fillWidth: true }
                 Segmented {
                     options: [{ value: "study", label: "Study" }, { value: "all", label: "All cards" }]
                     value: panel.tab
@@ -466,6 +470,7 @@ Item {
                     }
                 }
             }
+        }
         }
     }
 }
