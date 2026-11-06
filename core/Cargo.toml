@@ -1,6 +1,6 @@
 [package]
 name = "inkleaf-core"
-version = "0.18.1"
+version = "0.19.0"
 description = "Inkleaf's core: the notebook database, sync, backups, exports and ink geometry, shared by the apps"
 edition = "2021"
 rust-version = "1.90"
