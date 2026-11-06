@@ -122,6 +122,7 @@ Nib nibFor(Pen pen, float width) {
   }
 }
 
+
 /// perfect-freehand's radius for a pressure (sine easing out of the thinning).
 float radiusFor(const Nib& nib, float pressure) {
   const float t = 0.5f - nib.thinning * (0.5f - pressure);
@@ -328,5 +329,7 @@ void strokeMesh(const std::vector<Point>& raw, Pen pen, float width, float strea
     out.glow = std::move(g.tris);
   }
 }
+
+float lineWidth(Pen pen, float width) { return pen == Pen::Tape ? tapeWidth(width) : nibFor(pen, width).size; }
 
 }  // namespace ink

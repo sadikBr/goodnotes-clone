@@ -31,6 +31,8 @@ bool meshDrawn(const QString& style, bool highlighter);
 float tapeWidth(float penWidth);
 /// The colour a live stroke is drawn in (see-through pens are lighter).
 QColor liveColor(const QColor& c, Pen pen);
+/// How wide a pen's line comes out at medium pressure, for a chosen width (what the phone pad previews).
+float lineWidth(Pen pen, float width);
 
 /// The smoothing levels (Settings → Writing).
 constexpr float kSmoothOff = 0.f, kSmoothLight = 0.2f, kSmoothNormal = 0.38f, kSmoothStrong = 0.62f;

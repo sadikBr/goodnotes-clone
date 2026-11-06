@@ -517,6 +517,7 @@ Rectangle {
                                 { icon: "stylus", label: "Pen-only mode", toggle: AppSettings.store.penOnly, action: () => AppSettings.store.penOnly = !AppSettings.store.penOnly },
                                 { icon: "focus", label: "Focus mode", key: "F", toggle: root.focusMode, action: () => root.focusMode = !root.focusMode },
                                 { icon: "zoombox", label: "Zoom box", key: "Z", toggle: zoomBox.active, action: () => zoomBox.active ? zoomBox.stop() : zoomBox.start() },
+                                ...(Qt.platform.os === "android" || Qt.platform.os === "ios" ? [] : [{ icon: "phone", label: "Write from your phone", toggle: phoneWriting.active, action: () => phoneWriting.open() }]),
                                 { icon: "present", label: "Present", key: "F5", toggle: presenter.visible, action: () => root.togglePresenting() },
                                 { icon: "spell", label: "Check spelling on this page", action: () => spell.check(root.mainCanvas.currentPage, false) },
                                 { icon: "sidebar", label: "Tools on the side", toggle: root.rail, action: () => AppSettings.store.toolbar = root.rail ? "top" : "rail" },
@@ -716,6 +717,13 @@ Rectangle {
                 CropOverlay { id: cropper; canvas: root.mainCanvas; anchors.fill: parent; z: 20 }
                 ZoomBox { id: zoomBox; canvas: root.mainCanvas; anchors.fill: parent; z: 7 }
                 FindBar { id: finder; canvas: root.mainCanvas; anchors.fill: parent; z: 9 }
+                PhoneWriting {
+                    id: phoneWriting
+                    canvas: root.mainCanvas
+                    anchors.fill: parent
+                    z: 9
+                    onToolPicked: tool => { root.mainCanvas.tool = tool; prefs.store.tool = tool }
+                }
 
                 // Presenting: what's on the projector, and Blank / Stop.
                 Rectangle {

@@ -1,0 +1,309 @@
+<!doctype html>
+<!-- Inkleaf: write from your phone. Served by Inkleaf on your computer (only
+     while "Write from your phone" is open there); what you write here lands on
+     the page you're on. One finger writes; two fingers move and zoom. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#151517">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Inkleaf pad</title>
+<style>
+  :root { --bg: #151517; --bar: #1f1f22; --line: #2e2e33; --text: #ececef; --muted: #9a9aa3; --accent: #34d399; --accentText: #06281c; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden; overscroll-behavior: none; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  #app { position: fixed; inset: 0; display: flex; flex-direction: column; }
+  #bar { flex: none; display: flex; align-items: center; gap: 4px; padding: 6px 6px; padding-top: max(6px, env(safe-area-inset-top));
+    background: var(--bar); border-bottom: 1px solid var(--line); }
+  .group { display: flex; align-items: center; gap: 2px; background: #18181b; border-radius: 12px; padding: 3px; }
+  button { appearance: none; border: 0; background: transparent; color: var(--text); width: 36px; height: 38px; border-radius: 9px;
+    display: grid; place-items: center; padding: 0; font: inherit; }
+  button:active { background: #2b2b30; }
+  button.on { background: var(--accent); color: var(--accentText); }
+  button:disabled { opacity: .35; }
+  button svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .spacer { flex: 1; }
+  #pageNo { min-width: 38px; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+  #dot { width: 9px; height: 9px; border-radius: 50%; background: #f59e0b; margin: 0 4px 0 1px; flex: none; transition: background .2s; }
+  #dot.live { background: var(--accent); box-shadow: 0 0 0 3px rgba(52, 211, 153, .18); }
+  #stage { position: relative; flex: 1; min-height: 0; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #note { position: absolute; inset: 0; display: grid; place-items: center; padding: 28px; text-align: center; background: rgba(21, 21, 23, .92);
+    transition: opacity .25s; }
+  #note.gone { opacity: 0; pointer-events: none; }
+  #note h2 { margin: 0 0 8px; font-size: 18px; }
+  #note p { margin: 0; color: var(--muted); max-width: 320px; }
+  .spin { width: 28px; height: 28px; margin: 0 auto 16px; border-radius: 50%; border: 3px solid #333; border-top-color: var(--accent); animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #hint { position: absolute; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); background: rgba(24, 24, 27, .9);
+    color: var(--text); padding: 8px 14px; border-radius: 20px; font-size: 13px; white-space: nowrap; transition: opacity .4s; pointer-events: none; }
+  #hint.gone { opacity: 0; }
+  @media (max-width: 370px) { button { width: 32px; } #bar { gap: 3px; padding-left: 5px; padding-right: 5px; } }
+  #prev, #next { width: 30px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="bar">
+    <div class="group">
+      <button data-tool="pen" aria-label="Pen"><svg viewBox="0 0 24 24"><path d="M4 20l1.2-4.6L15.8 4.8a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8L8.6 18.8z"/><path d="M13.8 6.8l3.4 3.4"/></svg></button>
+      <button data-tool="highlighter" aria-label="Highlighter"><svg viewBox="0 0 24 24"><path d="M9 15l-2.5 2.5H3.5L6 15"/><path d="M8.5 13.5l7.8-7.8a2 2 0 0 1 2.8 0l1.2 1.2a2 2 0 0 1 0 2.8l-7.8 7.8z"/><path d="M8 13l3 3"/><path d="M3 21h18"/></svg></button>
+      <button data-tool="eraser" aria-label="Eraser"><svg viewBox="0 0 24 24"><path d="M8.5 19.5L3.8 14.8a2 2 0 0 1 0-2.8l8-8a2 2 0 0 1 2.8 0l5.4 5.4a2 2 0 0 1 0 2.8l-7.7 7.3z"/><path d="M9 9.5l6 6"/><path d="M8.5 19.5H20"/></svg></button>
+    </div>
+    <div class="group">
+      <button id="undo" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+      <button id="redo" aria-label="Redo"><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
+    </div>
+    <div class="spacer"></div>
+    <div class="group">
+      <button id="prev" aria-label="Previous page"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <div id="pageNo">–</div>
+      <button id="next" aria-label="Next page"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+    </div>
+    <button id="full" aria-label="Full screen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+    <div id="dot" title="Connection"></div>
+  </div>
+  <div id="stage">
+    <canvas id="view"></canvas>
+    <div id="hint" class="gone">One finger writes · two fingers move and zoom</div>
+    <div id="note"><div><div class="spin"></div><h2>Connecting to Inkleaf…</h2><p>Keep <b>Write from your phone</b> open on your computer.</p></div></div>
+  </div>
+</div>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const view = $("view"), ctx = view.getContext("2d"), stage = $("stage");
+
+// What the computer told us: the page, the part of it shown here (page units), the tool.
+let S = null;             // { page, pages, pw, ph, x, y, w, tool, color, width }
+let region = null;        // { x, y, w } — what's shown (ours while two fingers move it)
+let pic = null;           // { bmp, page, x, y, w, h } — the latest picture of the page
+let vw = 1, vh = 1, dpr = 1;
+let seq = 0;              // strokes ended here
+let pending = [];         // ended strokes not yet in a picture: drawn here until one is
+let stroke = null;        // the stroke being written
+let ws = null, tries = 0;
+
+// ---------------------------------------------------------------- the connection
+function connect() {
+  ws = new WebSocket("ws://" + location.host + "/ws" + location.search);
+  ws.binaryType = "blob";
+  let header = null;
+  ws.onopen = () => { tries = 0; $("dot").classList.add("live"); sayHello(); };
+  ws.onmessage = async e => {
+    if (typeof e.data === "string") {
+      const m = JSON.parse(e.data);
+      if (m.t === "state") {
+        S = m;
+        if (!gesture) region = { x: m.x, y: m.y, w: m.w };
+        $("pageNo").textContent = (m.page + 1) + " / " + m.pages;
+        $("prev").disabled = m.page <= 0;
+        $("next").disabled = m.page >= m.pages - 1;
+        for (const b of document.querySelectorAll("[data-tool]")) b.classList.toggle("on", b.dataset.tool === m.tool);
+        $("note").classList.add("gone");
+        if (!hintShown) { hintShown = true; $("hint").classList.remove("gone"); setTimeout(() => $("hint").classList.add("gone"), 3500); }
+        dirty();
+      } else if (m.t === "img") header = m;
+    } else if (header) {
+      const h = header; header = null;
+      const bmp = await createImageBitmap(e.data);
+      if (pic && pic.bmp.close) pic.bmp.close();
+      pic = { bmp, page: h.page, x: h.x, y: h.y, w: h.w, h: h.h };
+      pending = pending.filter(p => p.seq > h.s || p.page !== h.page);
+      dirty();
+    }
+  };
+  ws.onclose = () => {
+    $("dot").classList.remove("live");
+    stroke = null;
+    tries++;
+    showNote(tries > 4 ? "Can't reach Inkleaf" : "Reconnecting…",
+      tries > 4 ? "Is <b>Write from your phone</b> still open on your computer? If you closed it, scan the new code it shows." : "Keep <b>Write from your phone</b> open on your computer.", tries <= 4);
+    setTimeout(connect, Math.min(4000, 600 * tries));
+  };
+}
+function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
+function sayHello() { send({ t: "hello", w: vw, h: vh, dpr }); }
+function showNote(title, text, spin) {
+  $("note").innerHTML = "<div>" + (spin ? '<div class="spin"></div>' : "") + "<h2>" + title + "</h2><p>" + text + "</p></div>";
+  $("note").classList.remove("gone");
+}
+let hintShown = false;
+
+// ---------------------------------------------------------------- size
+function resize() {
+  const r = stage.getBoundingClientRect();
+  dpr = Math.min(3, window.devicePixelRatio || 1);
+  vw = Math.max(1, r.width); vh = Math.max(1, r.height);
+  view.width = Math.round(vw * dpr); view.height = Math.round(vh * dpr);
+  sayHello();
+  dirty();
+}
+new ResizeObserver(resize).observe(stage);
+
+// ---------------------------------------------------------------- drawing
+let queued = false;
+function dirty() { if (!queued) { queued = true; requestAnimationFrame(paint); } }
+function k() { return region ? vw / region.w : 1; }
+function toScreen(px, py) { return [(px - region.x) * k(), (py - region.y) * k()]; }
+function paint() {
+  queued = false;
+  flushMoves();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = "#26262a";
+  ctx.fillRect(0, 0, vw, vh);
+  if (!S || !region) return;
+  const s = k();
+  // The page's edges (beyond them: the desk).
+  ctx.fillStyle = "#ffffff";
+  const [ex, ey] = toScreen(0, 0);
+  ctx.fillRect(ex, ey, S.pw * s, S.ph * s);
+  if (pic && pic.page === S.page) {
+    const [px, py] = toScreen(pic.x, pic.y);
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(pic.bmp, px, py, pic.w * s, pic.h * s);
+  }
+  for (const p of pending) if (p.page === S.page) drawStroke(p);
+  if (stroke && stroke.live) drawStroke(stroke);
+  // The eraser: its circle where the finger is.
+  if (stroke && stroke.tool === "eraser" && stroke.pts.length) {
+    const [x, y] = toScreen(stroke.pts[stroke.pts.length - 2], stroke.pts[stroke.pts.length - 1]);
+    ctx.beginPath(); ctx.arc(x, y, Math.max(4, stroke.width * s / 2), 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(244,114,182,.18)"; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(190,24,93,.8)"; ctx.stroke();
+  }
+}
+function drawStroke(p) {
+  if (p.tool === "eraser" || p.tool === "lasso" || p.tool === "hand" || p.pts.length < 2) return;
+  const s = k();
+  ctx.save();
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.strokeStyle = p.color || "#1d1f23";
+  ctx.lineWidth = Math.max(1, p.line * s);
+  ctx.globalAlpha = p.alpha;
+  if (p.tool === "highlighter") { ctx.globalCompositeOperation = "multiply"; ctx.lineCap = "butt"; }
+  ctx.beginPath();
+  let [x, y] = toScreen(p.pts[0], p.pts[1]);
+  ctx.moveTo(x, y);
+  if (p.pts.length === 2) ctx.lineTo(x + 0.01, y);
+  for (let i = 2; i + 1 < p.pts.length; i += 2) { [x, y] = toScreen(p.pts[i], p.pts[i + 1]); ctx.lineTo(x, y); }
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------- touch
+const fingers = new Map();  // pointerId → { x, y } (screen)
+let gesture = null;         // two fingers: { c0, d0, r0 }
+let blocked = false;        // after two fingers, until all are lifted: no writing
+let outbox = [];            // moves not sent yet (sent once a frame)
+
+function local(e) { const r = view.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+function toPage(pt) { return [region.x + pt.x / k(), region.y + pt.y / k()]; }
+function centre() { const a = [...fingers.values()]; return { x: (a[0].x + a[1].x) / 2, y: (a[0].y + a[1].y) / 2 }; }
+function spread() { const a = [...fingers.values()]; return Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); }
+
+view.addEventListener("pointerdown", e => {
+  e.preventDefault();
+  view.setPointerCapture(e.pointerId);
+  fingers.set(e.pointerId, local(e));
+  if (!S || !region) return;
+  if (fingers.size === 1 && !blocked) {
+    const [x, y] = toPage(local(e));
+    stroke = { pts: [x, y], live: false, t0: performance.now(), sx: e.clientX, sy: e.clientY, tool: S.tool, color: S.color, alpha: S.alpha ?? 1, line: S.line || S.width, width: S.width, page: S.page };
+  } else if (fingers.size === 2) {
+    // A second finger: the page moves. A stroke just begun is dropped; one under way ends.
+    if (stroke && stroke.live) endStroke(); else stroke = null;
+    blocked = true;
+    gesture = { c0: centre(), d0: Math.max(10, spread()), r0: { ...region } };
+  }
+  dirty();
+});
+view.addEventListener("pointermove", e => {
+  if (!fingers.has(e.pointerId)) return;
+  const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+  fingers.set(e.pointerId, local(e));
+  if (gesture && fingers.size >= 2) { moveView(); return; }
+  if (!stroke) return;
+  for (const ev of (evs.length ? evs : [e])) {
+    const [x, y] = toPage(local(ev));
+    stroke.pts.push(x, y);
+    if (stroke.live) outbox.push(x, y);
+  }
+  // Written, not a second finger on its way: it starts (with what's been drawn so far).
+  if (!stroke.live && (Math.hypot(e.clientX - stroke.sx, e.clientY - stroke.sy) > 4 || performance.now() - stroke.t0 > 70)) startStroke();
+  dirty();
+});
+function lift(e) {
+  if (!fingers.has(e.pointerId)) return;
+  fingers.delete(e.pointerId);
+  if (gesture && fingers.size < 2) {
+    gesture = null;
+    send({ t: "view", x: region.x, y: region.y, w: region.w, end: true });
+  }
+  if (stroke) {
+    if (!stroke.live && e.type !== "pointercancel") startStroke();  // a tap: a dot
+    if (stroke.live) endStroke();
+    stroke = null;
+  }
+  if (fingers.size === 0) blocked = false;
+  dirty();
+}
+view.addEventListener("pointerup", lift);
+view.addEventListener("pointercancel", lift);
+view.addEventListener("contextmenu", e => e.preventDefault());
+
+function startStroke() {
+  stroke.live = true;
+  send({ t: "d", x: stroke.pts[0], y: stroke.pts[1] });
+  outbox = stroke.pts.slice(2);
+}
+function flushMoves() {
+  if (outbox.length) { send({ t: "m", p: outbox.map(v => Math.round(v * 100) / 100) }); outbox = []; }
+}
+function endStroke() {
+  flushMoves();
+  seq++;
+  send({ t: "u", s: seq });
+  stroke.seq = seq;
+  pending.push(stroke);
+}
+// Two fingers: the point under them stays under them; apart is closer in.
+let viewSent = 0;
+function moveView() {
+  const c = centre(), d = Math.max(10, spread()), g = gesture;
+  const aspect = vh / vw;
+  const maxW = Math.min(S.pw, S.ph / aspect);
+  const w = Math.min(maxW, Math.max(Math.min(60, maxW), g.r0.w * g.d0 / d));
+  const ax = g.r0.x + g.c0.x / vw * g.r0.w, ay = g.r0.y + g.c0.y / vw * g.r0.w;  // the page point first under the fingers
+  let x = ax - c.x / vw * w, y = ay - c.y / vw * w;
+  x = Math.min(Math.max(0, x), S.pw - w);
+  y = Math.min(Math.max(0, y), Math.max(0, S.ph - w * aspect));
+  region = { x, y, w };
+  const now = performance.now();
+  if (now - viewSent > 60) { viewSent = now; send({ t: "view", x, y, w }); }
+  dirty();
+}
+
+// ---------------------------------------------------------------- the bar
+for (const b of document.querySelectorAll("[data-tool]")) b.onclick = () => send({ t: "tool", id: b.dataset.tool });
+$("undo").onclick = () => send({ t: "undo" });
+$("redo").onclick = () => send({ t: "redo" });
+$("prev").onclick = () => send({ t: "page", d: -1 });
+$("next").onclick = () => send({ t: "page", d: 1 });
+$("full").onclick = () => {
+  const d = document;
+  if (d.fullscreenElement) d.exitFullscreen && d.exitFullscreen();
+  else { const el = d.documentElement; (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el); }
+};
+// Keep the bar from scrolling or zooming the page.
+$("bar").addEventListener("touchmove", e => e.preventDefault(), { passive: false });
+document.addEventListener("gesturestart", e => e.preventDefault());
+
+resize();
+connect();
+</script>
+</body>
+</html>
