@@ -185,11 +185,18 @@ function drawStroke(p) {
   ctx.lineWidth = Math.max(1, p.line * s);
   ctx.globalAlpha = p.alpha;
   if (p.tool === "highlighter") { ctx.globalCompositeOperation = "multiply"; ctx.lineCap = "butt"; }
+  // Smoothed (through the middles of its segments), as the computer draws it.
   ctx.beginPath();
+  const n = p.pts.length / 2;
   let [x, y] = toScreen(p.pts[0], p.pts[1]);
   ctx.moveTo(x, y);
-  if (p.pts.length === 2) ctx.lineTo(x + 0.01, y);
-  for (let i = 2; i + 1 < p.pts.length; i += 2) { [x, y] = toScreen(p.pts[i], p.pts[i + 1]); ctx.lineTo(x, y); }
+  if (n === 1) ctx.lineTo(x + 0.01, y);
+  for (let i = 1; i < n; i++) {
+    const [cx, cy] = toScreen(p.pts[2 * i], p.pts[2 * i + 1]);
+    if (i === n - 1) { ctx.lineTo(cx, cy); break; }
+    const [nx, ny] = toScreen(p.pts[2 * i + 2], p.pts[2 * i + 3]);
+    ctx.quadraticCurveTo(cx, cy, (cx + nx) / 2, (cy + ny) / 2);
+  }
   ctx.stroke();
   ctx.restore();
 }
@@ -212,7 +219,7 @@ view.addEventListener("pointerdown", e => {
   if (!S || !region) return;
   if (fingers.size === 1 && !blocked) {
     const [x, y] = toPage(local(e));
-    stroke = { pts: [x, y], live: false, t0: performance.now(), sx: e.clientX, sy: e.clientY, tool: S.tool, color: S.color, alpha: S.alpha ?? 1, line: S.line || S.width, width: S.width, page: S.page };
+    stroke = { pts: [x, y], times: [0], at: e.timeStamp, live: false, t0: performance.now(), sx: e.clientX, sy: e.clientY, tool: S.tool, color: S.color, alpha: S.alpha ?? 1, line: S.line || S.width, width: S.width, page: S.page };
   } else if (fingers.size === 2) {
     // A second finger: the page moves. A stroke just begun is dropped; one under way ends.
     if (stroke && stroke.live) endStroke(); else stroke = null;
@@ -229,9 +236,13 @@ view.addEventListener("pointermove", e => {
   if (!stroke) return;
   for (const ev of (evs.length ? evs : [e])) {
     const [x, y] = toPage(local(ev));
+    const t = Math.max(0, ev.timeStamp - stroke.at);
     stroke.pts.push(x, y);
-    if (stroke.live) outbox.push(x, y);
+    stroke.times.push(t);
+    if (stroke.live) outbox.push(x, y, t);
   }
+  // Sent at once (not once a frame): the computer gets each move as soon as it can.
+  if (stroke.live) flushMoves();
   // Written, not a second finger on its way: it starts (with what's been drawn so far).
   if (!stroke.live && (Math.hypot(e.clientX - stroke.sx, e.clientY - stroke.sy) > 4 || performance.now() - stroke.t0 > 70)) startStroke();
   dirty();
@@ -258,7 +269,9 @@ view.addEventListener("contextmenu", e => e.preventDefault());
 function startStroke() {
   stroke.live = true;
   send({ t: "d", x: stroke.pts[0], y: stroke.pts[1] });
-  outbox = stroke.pts.slice(2);
+  outbox = [];
+  for (let i = 1; i < stroke.times.length; i++) outbox.push(stroke.pts[2 * i], stroke.pts[2 * i + 1], stroke.times[i]);
+  flushMoves();
 }
 function flushMoves() {
   if (outbox.length) { send({ t: "m", p: outbox.map(v => Math.round(v * 100) / 100) }); outbox = []; }

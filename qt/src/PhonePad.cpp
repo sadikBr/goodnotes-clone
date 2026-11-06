@@ -429,11 +429,12 @@ void PhonePad::onMessage(const QJsonObject& m) {
     if (m_aspect <= 0) return;
     const double mag = std::max(1.0, (m_viewW / std::max(1.0, m_region.width())) / std::max(0.05, double(m_canvas->zoom())));
     m_stroke = true;
-    m_canvas->zoomBoxPress(m_page, m["x"].toDouble(), m["y"].toDouble(), 0.5, true, mag);
+    m_canvas->remotePress(m_page, m["x"].toDouble(), m["y"].toDouble(), 0, mag);
   } else if (t == "m") {
     if (!m_stroke) return;
+    // [x, y, t, x, y, t, …]: page units, and ms since the stroke began (when it was written).
     const QJsonArray pts = m["p"].toArray();
-    for (int i = 0; i + 1 < pts.size(); i += 2) m_canvas->zoomBoxDrag(pts[i].toDouble(), pts[i + 1].toDouble(), 0.5, true);
+    for (int i = 0; i + 2 < pts.size(); i += 3) m_canvas->remoteDrag(pts[i].toDouble(), pts[i + 1].toDouble(), pts[i + 2].toDouble());
   } else if (t == "u") {
     m_ackSeq = m["s"].toInt();
     endStroke();
@@ -460,7 +461,7 @@ void PhonePad::onMessage(const QJsonObject& m) {
 void PhonePad::endStroke() {
   if (!m_stroke) return;
   m_stroke = false;
-  if (m_canvas) m_canvas->zoomBoxRelease();
+  if (m_canvas) m_canvas->remoteRelease();
 }
 
 // --- the region and what the phone is sent ----------------------------------------------

@@ -205,6 +205,10 @@ public:
   Q_INVOKABLE void zoomBoxPress(int page, qreal x, qreal y, qreal pressure, bool stylus, qreal mag);
   Q_INVOKABLE void zoomBoxDrag(qreal x, qreal y, qreal pressure, bool stylus);
   Q_INVOKABLE void zoomBoxRelease();
+  /// Strokes from the phone pad: page points, each with its time (ms from the stroke's start, as written).
+  void remotePress(int page, qreal x, qreal y, double tMs, qreal mag);
+  void remoteDrag(qreal x, qreal y, double tMs);
+  void remoteRelease();
   /// Scrolls so `rect` of page `page` (page units) is on screen, if it isn't.
   Q_INVOKABLE void ensureVisible(int page, const QRectF& rect);
   /// Page `page`'s size (page units).
@@ -511,6 +515,12 @@ private:
   } m_tap;
   QString m_penCursor = "cross";
   double m_lastPenMs = -1e9;
+  /// Input with no pressure though it's a pen (the phone pad): its weight follows its speed.
+  bool m_noPressure = false;
+  /// When the point being handled was written (the phone pad's), or < 0: now.
+  double m_inputTime = -1;
+  double m_remoteT0 = 0;
+  double inputMs() const;
   /// Where the mouse pointer was left while the pen was in use (its hover moves from there are ignored).
   QPointF m_staleHover{-1e9, -1e9};
   /// A pen press seen by the window, waiting for Qt Quick to say where it

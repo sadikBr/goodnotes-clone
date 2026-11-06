@@ -1436,6 +1436,38 @@ void InkCanvas::zoomBoxDrag(qreal x, qreal y, qreal pressure, bool stylus) {
   emit liveInkChanged();
 }
 
+double InkCanvas::inputMs() const { return m_inputTime >= 0 ? m_inputTime : nowMs(); }
+
+void InkCanvas::remotePress(int page, qreal x, qreal y, double tMs, qreal mag) {
+  if (page < 0 || page >= int(m_pages.size())) return;
+  // A phone's finger or stylus: no pressure (the line's weight follows its
+  // speed, as with the mouse), and the times it was written at, not the
+  // times its moves arrive (they come a few at a time over Wi-Fi).
+  m_noPressure = true;
+  m_remoteT0 = nowMs() - tMs;
+  m_inputTime = nowMs();
+  m_inputMag = std::max(1.0, double(mag));
+  press(pageRectToItem(page, QRectF(x, y, 0, 0)).topLeft(), 0.5f, true, QString(), false, {});
+  m_inputTime = -1;
+  emit liveInkChanged();
+}
+
+void InkCanvas::remoteDrag(qreal x, qreal y, double tMs) {
+  if (m_g.page < 0 || m_g.page >= int(m_pages.size())) return;
+  // Never behind the clock (a late batch), never ahead of it.
+  m_inputTime = std::min(nowMs(), m_remoteT0 + tMs);
+  drag(pageRectToItem(m_g.page, QRectF(x, y, 0, 0)).topLeft(), 0.5f, true, {});
+  m_inputTime = -1;
+  emit liveInkChanged();
+}
+
+void InkCanvas::remoteRelease() {
+  release();
+  m_noPressure = false;
+  m_inputMag = 1;
+  emit liveInkChanged();
+}
+
 void InkCanvas::zoomBoxRelease() {
   release();
   m_inputMag = 1;
@@ -2210,7 +2242,7 @@ void InkCanvas::press(QPointF s, float pressure, bool stylus, const QString& too
   const QPointF p = toPageOf(pi, s);
   m_g.page = pi;
   m_ed->scratchOut = m_scratchOut;
-  const QString r = m_ed->down(pi, p.x(), p.y(), pressure, nowMs(), tool, bool(mods & Qt::ShiftModifier));
+  const QString r = m_ed->down(pi, p.x(), p.y(), pressure, inputMs(), tool, bool(mods & Qt::ShiftModifier));
   m_g.kind = Gesture::Core;
   if (r == "draw") {
     m_g.kind = Gesture::Draw;
@@ -2221,7 +2253,7 @@ void InkCanvas::press(QPointF s, float pressure, bool stylus, const QString& too
     m_g.width = float(m_widths.value(tool, 3).toDouble());
     if (m_g.pen == ink::Pen::Tape) m_g.width = ink::tapeWidth(m_g.width);
     m_g.dashed = m_g.pen == ink::Pen::Construction ? (m_penDash == "dot" ? 2 : 1) : 0;
-    const float pr = ink::speedSensitive(m_g.pen) ? m_g.speed.next(float(p.x()), float(p.y()), nowMs(), stylus ? pressure : -1.f) : (stylus ? pressure : 0.5f);
+    const float pr = ink::speedSensitive(m_g.pen) ? m_g.speed.next(float(p.x()), float(p.y()), inputMs(), stylus && !m_noPressure ? pressure : -1.f) : (stylus && !m_noPressure ? pressure : 0.5f);
     m_g.pts.push_back({float(p.x()), float(p.y()), pr});
     m_g.mesh = std::make_shared<ink::Mesh>();
     ink::strokeMesh(m_g.pts, m_g.pen, m_g.width, shape ? 0.f : float(m_smoothing), *m_g.mesh, m_g.dashed, float(m_penGap));
@@ -2263,7 +2295,7 @@ void InkCanvas::drag(QPointF s, float pressure, bool stylus, Qt::KeyboardModifie
       return;
     case Gesture::Core: {
       const QPointF p = toPageOf(m_g.page, s);
-      m_ed->move(p.x(), p.y(), pressure, nowMs(), bool(mods & Qt::ShiftModifier), bool(mods & Qt::AltModifier));
+      m_ed->move(p.x(), p.y(), pressure, inputMs(), bool(mods & Qt::ShiftModifier), bool(mods & Qt::AltModifier));
       setHover(s);
       afterCore();
       return;
@@ -2272,7 +2304,7 @@ void InkCanvas::drag(QPointF s, float pressure, bool stylus, Qt::KeyboardModifie
       QPointF p = toPageOf(m_g.page, s);
       if (m_liveHidden) {
         // A refined shape follows the pen (rotate, resize, move).
-        m_ed->move(p.x(), p.y(), pressure, nowMs(), bool(mods & Qt::ShiftModifier), false);
+        m_ed->move(p.x(), p.y(), pressure, inputMs(), bool(mods & Qt::ShiftModifier), false);
         afterCore();
         return;
       }
@@ -2283,11 +2315,11 @@ void InkCanvas::drag(QPointF s, float pressure, bool stylus, Qt::KeyboardModifie
       if (d <= lazy) return;
       p = QPointF(last.x + (p.x() - last.x) * (d - lazy) / d, last.y + (p.y() - last.y) * (d - lazy) / d);
       if (std::hypot(p.x() - last.x, p.y() - last.y) < 0.4 / (m_zoom * m_inputMag)) return;
-      const float pr = ink::speedSensitive(m_g.pen) ? m_g.speed.next(float(p.x()), float(p.y()), nowMs(), stylus ? pressure : -1.f) : (stylus ? pressure : 0.5f);
+      const float pr = ink::speedSensitive(m_g.pen) ? m_g.speed.next(float(p.x()), float(p.y()), inputMs(), stylus && !m_noPressure ? pressure : -1.f) : (stylus && !m_noPressure ? pressure : 0.5f);
       m_g.pts.push_back({float(p.x()), float(p.y()), pr});
       ink::strokeMesh(m_g.pts, m_g.pen, m_g.width, m_g.pen == ink::Pen::Ballpoint && m_tool == "shape" ? 0.f : float(m_smoothing), *m_g.mesh, m_g.dashed, float(m_penGap));
       m_liveChanged = true;
-      m_ed->move(p.x(), p.y(), pr, nowMs(), bool(mods & Qt::ShiftModifier), false);
+      m_ed->move(p.x(), p.y(), pr, inputMs(), bool(mods & Qt::ShiftModifier), false);
       afterCore();
       emit liveInkChanged();
       return;
