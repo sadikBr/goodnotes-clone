@@ -243,8 +243,8 @@ void PhonePad::serve(QTcpSocket* s, const QByteArray& request) {
   }
   if (path == "/") {
     QFile f(QStringLiteral(":/phone/pad.html"));
-    f.open(QIODevice::ReadOnly);
-    s->write(httpResponse("200 OK", "text/html; charset=utf-8", f.readAll()));
+    if (f.open(QIODevice::ReadOnly)) s->write(httpResponse("200 OK", "text/html; charset=utf-8", f.readAll()));
+    else s->write(httpResponse("500 Internal Server Error", "text/plain", "The writing page is missing from this build of Inkleaf."));
   } else {
     s->write(httpResponse("404 Not Found", "text/plain", "Not here."));
   }

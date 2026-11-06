@@ -47,15 +47,15 @@ Window {
         id: laser
         anchors.fill: view
         visible: !root.blank
-        property var data: ({})
+        property var info: ({})
         Connections {
             target: root.canvas
-            function onLaserChanged() { laser.data = root.canvas.laserOnPage(root.page); laser.requestPaint() }
+            function onLaserChanged() { laser.info = root.canvas.laserOnPage(root.page); laser.requestPaint() }
         }
         onPaint: {
             const g = getContext("2d")
             g.clearRect(0, 0, width, height)
-            const d = data || {}
+            const d = info || {}
             const k = view.k
             const color = d.color || "#ff1f1f"
             g.lineCap = "round"; g.lineJoin = "round"
