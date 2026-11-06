@@ -5,6 +5,10 @@ Updates → What's new) and on its GitHub release. Keep them short, one line
 per change, written for the people using Inkleaf. A release needs its
 section here before it can be published (`scripts/check-version.py`).
 
+## 0.19.1
+
+- **Fixed:** handwriting came out blotchy in exports (PDF, image, PowerPoint) and page pictures: a pen's pressure jumps from point to point, and the export followed every jump, so the lines swelled into blobs and their edges went lumpy. Exports now even the pressure out and smooth the line as the screen does, so they look like what you wrote.
+
 ## 0.19.0
 
 - **Write from your phone:** no touch screen or drawing tablet? In a notebook, ⋯ → *Write from your phone* shows a code: scan it with your phone (on the same Wi-Fi) and the phone becomes a writing pad. Write with a finger or a stylus and it lands on the page you're on as you write, with the pen, colour and size you picked; two fingers move and zoom the part of the page the phone shows (a green frame shows it on the computer). The phone has the pen, highlighter and eraser, undo and redo, and the pages. Nothing to install on the phone: it's a page in its browser, served by Inkleaf only while this is on, and only to a phone with the code.

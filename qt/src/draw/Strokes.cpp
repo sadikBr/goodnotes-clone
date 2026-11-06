@@ -419,8 +419,27 @@ void drawEffect(Canvas& c, const QJsonObject& el, const std::vector<Pt>& pts, co
 std::vector<std::vector<P2>> strokeOutline(const std::vector<Pt>& raw, const QString& style, double width, bool last, double streamline) {
   FreehandOptions opts = options(style, width, last);
   // Smoothing is applied here, over the whole stroke, rather than inside perfect-freehand.
-  std::vector<Pt> points = smoothPoints(raw, streamline);
-  if (last && raw.size() > 1) points.back() = raw.back();
+  std::vector<Pt> smoothed = smoothPoints(raw, streamline);
+  if (last && raw.size() > 1) smoothed.back() = raw.back();
+  // As the screen draws it (ink::strokeMesh): points closer than this dropped
+  // (a pen sends hundreds a second, and their jitter made lumpy edges), and
+  // the pressure evened out along the stroke (a pen's raw pressure jumps from
+  // one point to the next; followed as it is, the line swelled into blobs).
+  std::vector<Pt> points;
+  points.reserve(smoothed.size());
+  double pr = smoothed.empty() ? 0.5 : smoothed[0][2];
+  for (size_t i = 0; i < smoothed.size(); ++i) {
+    const Pt& q = smoothed[i];
+    pr += (q[2] - pr) * 0.35;
+    const bool end = i + 1 == smoothed.size();
+    if (!points.empty() && !end && std::hypot(q[0] - points.back()[0], q[1] - points.back()[1]) < 0.15) continue;
+    if (!points.empty() && end && std::hypot(q[0] - points.back()[0], q[1] - points.back()[1]) < 0.15) points.pop_back();
+    points.push_back({q[0], q[1], pr});
+  }
+  if (points.empty() && !smoothed.empty()) points.push_back(smoothed[0]);
+  // Then evenly spaced and lightly averaged: the outline is traced along the
+  // line's direction, and a pen's tiny jitters made its edges wobble.
+  if (points.size() > 8) points = calligraphyPath(points, std::max(0.3, width * 0.12), 2);
   opts.streamline = 0;
   const std::vector<int> corners = points.size() > 6 ? sharpCorners(points, width) : std::vector<int>{};
   if (corners.empty()) return {getStroke(fpoints(points, 0, points.size()), opts)};
