@@ -113,6 +113,8 @@ function connect() {
       if (pic && pic.bmp.close) pic.bmp.close();
       pic = { bmp, page: h.page, x: h.x, y: h.y, w: h.w, h: h.h };
       pending = pending.filter(p => p.seq > h.s || p.page !== h.page);
+      // Held still, the line became a shape: the picture has it (and it follows the finger).
+      if (h.shaped && stroke && stroke.live) stroke.shaped = true;
       dirty();
     }
   };
@@ -167,7 +169,7 @@ function paint() {
     ctx.drawImage(pic.bmp, px, py, pic.w * s, pic.h * s);
   }
   for (const p of pending) if (p.page === S.page) drawStroke(p);
-  if (stroke && stroke.live) drawStroke(stroke);
+  if (stroke && stroke.live && !stroke.shaped) drawStroke(stroke);
   // The eraser: its circle where the finger is.
   if (stroke && stroke.tool === "eraser" && stroke.pts.length) {
     const [x, y] = toScreen(stroke.pts[stroke.pts.length - 2], stroke.pts[stroke.pts.length - 1]);
@@ -177,7 +179,7 @@ function paint() {
   }
 }
 function drawStroke(p) {
-  if (p.tool === "eraser" || p.tool === "lasso" || p.tool === "hand" || p.pts.length < 2) return;
+  if (p.shaped || p.tool === "eraser" || p.tool === "lasso" || p.tool === "hand" || p.pts.length < 2) return;
   const s = k();
   ctx.save();
   ctx.lineCap = "round"; ctx.lineJoin = "round";
@@ -220,6 +222,9 @@ view.addEventListener("pointerdown", e => {
   if (fingers.size === 1 && !blocked) {
     const [x, y] = toPage(local(e));
     stroke = { pts: [x, y], times: [0], at: e.timeStamp, live: false, t0: performance.now(), sx: e.clientX, sy: e.clientY, tool: S.tool, color: S.color, alpha: S.alpha ?? 1, line: S.line || S.width, width: S.width, page: S.page };
+    // Put down and held without moving: it starts all the same (unless a second finger comes).
+    const mine = stroke;
+    setTimeout(() => { if (stroke === mine && !mine.live && fingers.size === 1) { startStroke(); dirty(); } }, 70);
   } else if (fingers.size === 2) {
     // A second finger: the page moves. A stroke just begun is dropped; one under way ends.
     if (stroke && stroke.live) endStroke(); else stroke = null;

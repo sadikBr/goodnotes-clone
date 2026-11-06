@@ -215,7 +215,11 @@ public:
   Q_INVOKABLE QSizeF pageSize(int page) const;
   /// For the zoom box: `region` of page `page` drawn `scale` pixels per unit (paper, PDF, everything on it),
   /// the stroke being written on it now (JSON, empty if none), and a number that changes when the page does.
-  QImage regionImage(int page, const QRectF& region, double scale);
+  /// A part of a page as a picture; with `withGesture`, as it looks right now
+  /// (what a gesture under way shows over it, and selected items being moved).
+  QImage regionImage(int page, const QRectF& region, double scale, bool withGesture = false);
+  /// Changes whenever what a gesture shows over the page changes.
+  quint64 gestureRev() const { return m_gestureRev; }
   QJsonObject liveStroke(int page) const;
   quint64 pageVersion(int page) const;
   /// Spelling: the words written on page `page` (only selected ones if `selectionOnly`):
@@ -354,6 +358,8 @@ signals:
   void pagesChanged();
   /// The stroke being written changed (the zoom box shows it too).
   void liveInkChanged();
+  /// What a gesture shows over the page changed (gestureRev).
+  void gestureShown();
   void scrollSpeedChanged();
   /// The notebook's settings changed (its headings, cards…).
   void notebookSettingsChanged();
@@ -517,6 +523,8 @@ private:
   double m_lastPenMs = -1e9;
   /// Input with no pressure though it's a pen (the phone pad): its weight follows its speed.
   bool m_noPressure = false;
+  quint64 m_gestureRev = 0;
+  QJsonArray sceneWithGesture(int page);
   /// When the point being handled was written (the phone pad's), or < 0: now.
   double m_inputTime = -1;
   double m_remoteT0 = 0;

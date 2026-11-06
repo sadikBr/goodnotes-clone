@@ -251,9 +251,11 @@ void InkCanvas::afterCore() {
     m_fadeTick.start();
     emit scratchedOut();
   }
+  bool shown = false;
   if (double(c.overlayRev) != m_overlayRev) {
     m_overlayRev = double(c.overlayRev);
     m_overlayDirty = true;
+    shown = true;
   }
   if (double(c.instrumentRev) != m_instrumentRev) {
     m_instrumentRev = double(c.instrumentRev);
@@ -273,11 +275,17 @@ void InkCanvas::afterCore() {
   if (next != m_liveTransform) {
     m_liveTransform = next;
     m_liveTransformDirty = true;
+    shown = true;
   }
   const bool hidden = c.liveHidden();
   if (hidden != m_liveHidden) {
     m_liveHidden = hidden;
     m_liveChanged = true;
+    shown = true;
+  }
+  if (shown) {
+    ++m_gestureRev;
+    emit gestureShown();
   }
   refresh();
 }
@@ -1493,11 +1501,30 @@ QSizeF InkCanvas::pageSize(int page) const {
   return {m_pages[page].w, m_pages[page].h};
 }
 
-QImage InkCanvas::regionImage(int page, const QRectF& region, double scale) {
+QJsonArray InkCanvas::sceneWithGesture(int page) {
+  QJsonArray out;
+  if (!m_ed) return out;
+  const bool here = page == m_ed->active;
+  const auto lt = here ? m_ed->liveTransform() : std::nullopt;
+  for (const ed::ElPtr& e : m_ed->load(page)) {
+    if (here && m_ed->isHidden(page, e->id)) continue;
+    if (lt && std::find(lt->ids.begin(), lt->ids.end(), e->id) != lt->ids.end()) {
+      const ed::Affine& m = lt->m;
+      out.append(ed::transformElement(*e, m, std::hypot(m.a, m.b), std::hypot(m.c, m.d), std::atan2(m.b, m.a) * 180 / M_PI).toJson());
+      continue;
+    }
+    out.append(e->toJson());
+  }
+  if (here)
+    for (const ed::ElPtr& e : m_ed->gestureShows()) out.append(e->toJson());
+  return out;
+}
+
+QImage InkCanvas::regionImage(int page, const QRectF& region, double scale, bool withGesture) {
   if (page < 0 || page >= int(m_pages.size()) || region.isEmpty()) return {};
   const Page& p = m_pages[page];
   QImage img = paperWithBackground(p, scale, region).convertToFormat(QImage::Format_ARGB32_Premultiplied);
-  const QImage ink = draw::elementsImage(sceneJson(page), scale, region);
+  const QImage ink = draw::elementsImage(withGesture ? sceneWithGesture(page) : sceneJson(page), scale, region);
   if (!img.isNull() && !ink.isNull()) {
     QPainter painter(&img);
     painter.drawImage(QRectF(0, 0, img.width(), img.height()), ink);

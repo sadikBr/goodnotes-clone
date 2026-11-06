@@ -70,6 +70,8 @@ void PhonePad::setCanvas(InkCanvas* c) {
   m_canvas = c;
   if (c) {
     connect(c, &InkCanvas::historyChanged, this, [this] { scheduleImage(60); });
+    // A held stroke turning into a shape, a shape being drawn, a selection moving: shown as it goes.
+    connect(c, &InkCanvas::gestureShown, this, [this] { if (m_stroke) scheduleImage(0); });
     connect(c, &InkCanvas::pagesChanged, this, [this] {
       if (!m_canvas) return;
       m_page = std::clamp(m_page, 0, std::max(0, m_canvas->pageCount() - 1));
@@ -523,23 +525,28 @@ void PhonePad::scheduleImage(int ms) {
 void PhonePad::sendImage() {
   if (!m_ws || !m_canvas || m_aspect <= 0) return;
   const quint64 v = m_canvas->pageVersion(m_page);
-  if (v == m_sentVersion && m_region == m_sentRegion && m_page == m_sentPage) return;
+  const quint64 g = m_canvas->gestureRev();
+  if (v == m_sentVersion && g == m_sentGesture && m_region == m_sentRegion && m_page == m_sentPage) return;
   // While a stroke is under way the page only changes when it's erasing (or
   // moving a selection): shown as it goes, about ten times a second (a pen's
   // stroke is drawn by the phone itself until it ends).
   if (m_stroke && nowMs() - m_imageAt < 100) return scheduleImage(int(100 - (nowMs() - m_imageAt)) + 1);
   m_imageAt = nowMs();
   const double scale = m_viewW / std::max(1.0, m_region.width());
-  const QImage img = m_canvas->regionImage(m_page, m_region, scale);
+  const QImage img = m_canvas->regionImage(m_page, m_region, scale, true);
   if (img.isNull()) return;
   QByteArray jpg;
   QBuffer buf(&jpg);
   buf.open(QIODevice::WriteOnly);
   img.convertToFormat(QImage::Format_RGB32).save(&buf, "JPEG", 82);
   m_sentVersion = v;
+  m_sentGesture = g;
   m_sentRegion = m_region;
   m_sentPage = m_page;
   // Which part it is, and the strokes it includes; then the picture.
-  sendText({{"t", "img"}, {"page", m_page}, {"x", m_region.x()}, {"y", m_region.y()}, {"w", m_region.width()}, {"h", m_region.height()}, {"s", m_ackSeq}});
+  // "shaped": the stroke being written has become a shape (held still) and is
+  // in the picture; the phone stops drawing its own line.
+  const bool shaped = m_stroke && m_canvas->liveStroke(m_page).isEmpty() && m_canvas->tool() != "eraser";
+  sendText({{"t", "img"}, {"page", m_page}, {"x", m_region.x()}, {"y", m_region.y()}, {"w", m_region.width()}, {"h", m_region.height()}, {"s", m_ackSeq}, {"shaped", shaped}});
   sendFrame(0x2, jpg);
 }

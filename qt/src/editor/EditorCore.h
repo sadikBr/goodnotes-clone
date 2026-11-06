@@ -126,6 +126,14 @@ public:
   };
   std::optional<LiveTransform> liveTransform() const;
   bool hasGesture() const { return m_g.type != G::None; }
+  /// What a gesture under way shows over the page and isn't on it yet: a
+  /// held stroke's shape, a shape being drawn, an item being resized.
+  Els gestureShows() const {
+    Els out;
+    if (m_g.preview) out.push_back(m_g.preview);
+    for (const ElPtr& e : m_g.previews) out.push_back(e);
+    return out;
+  }
 
   // ------------------------------------------------------------ instruments
   QVariantMap instrument() const;

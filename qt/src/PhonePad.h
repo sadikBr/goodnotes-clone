@@ -113,7 +113,7 @@ private:
   double m_viewW = 400;  ///< its width in pixels (the picture's size)
   bool m_stroke = false;
   int m_ackSeq = 0;  ///< the last stroke the phone ended (a picture says it includes it)
-  quint64 m_sentVersion = 0;
+  quint64 m_sentVersion = 0, m_sentGesture = 0;
   QRectF m_sentRegion;
   int m_sentPage = -1;
   double m_imageAt = 0;  ///< when the last picture went
