@@ -7,6 +7,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QNetworkInterface>
+#include <QProcess>
+#include <QStandardPaths>
 #include <QRandomGenerator>
 #include <QTcpServer>
 #include <QTcpSocket>
@@ -121,6 +123,37 @@ QString PhonePad::lanAddress() {
   return best;
 }
 
+QString PhonePad::detectFirewall() {
+#if defined(Q_OS_WIN)
+  return QStringLiteral("windows");
+#elif defined(Q_OS_MACOS)
+  return QStringLiteral("macos");
+#elif defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
+  // ufw (Omarchy, Ubuntu, Mint…): on when its config says so (its status needs root).
+  QFile ufw(QStringLiteral("/etc/ufw/ufw.conf"));
+  if (ufw.open(QIODevice::ReadOnly)) {
+    for (const QByteArray& line : ufw.readAll().split('\n'))
+      if (line.trimmed().replace(' ', "").toLower() == "enabled=yes") return QStringLiteral("ufw");
+  }
+  // firewalld (Fedora, openSUSE, RHEL…): asks it whether it's running.
+  const QString fwcmd = QStandardPaths::findExecutable(QStringLiteral("firewall-cmd"), {"/usr/bin", "/usr/sbin", "/bin", "/sbin"});
+  if (!fwcmd.isEmpty()) {
+    QProcess p;
+    p.start(fwcmd, {QStringLiteral("--state")});
+    if (p.waitForFinished(1500) && p.exitCode() == 0 && p.readAllStandardOutput().trimmed() == "running") return QStringLiteral("firewalld");
+  }
+  return {};
+#else
+  return {};
+#endif
+}
+
+QString PhonePad::firewallCommand() const {
+  if (m_firewall == "ufw") return QStringLiteral("sudo ufw allow %1/tcp").arg(m_port);
+  if (m_firewall == "firewalld") return QStringLiteral("sudo firewall-cmd --permanent --add-port=%1/tcp && sudo firewall-cmd --reload").arg(m_port);
+  return {};
+}
+
 void PhonePad::start() {
   if (m_server) return;
   m_error.clear();
@@ -149,6 +182,7 @@ void PhonePad::start() {
   for (int i = 0; i < 4; ++i) m_token += QString::number(QRandomGenerator::system()->generate(), 36);
   m_url = QStringLiteral("http://%1:%2/?k=%3").arg(ip).arg(m_port).arg(m_token);
   m_qr = qrDataUrl(m_url);
+  m_firewall = detectFirewall();
   if (qEnvironmentVariableIsSet("INKLEAF_TRACE")) qInfo("phone pad: %s", qPrintable(m_url));
   emit stateChanged();
 }
@@ -487,10 +521,13 @@ void PhonePad::scheduleImage(int ms) {
 
 void PhonePad::sendImage() {
   if (!m_ws || !m_canvas || m_aspect <= 0) return;
-  // Not while writing (it would come without the stroke): after it.
-  if (m_stroke) return scheduleImage(120);
   const quint64 v = m_canvas->pageVersion(m_page);
   if (v == m_sentVersion && m_region == m_sentRegion && m_page == m_sentPage) return;
+  // While a stroke is under way the page only changes when it's erasing (or
+  // moving a selection): shown as it goes, about ten times a second (a pen's
+  // stroke is drawn by the phone itself until it ends).
+  if (m_stroke && nowMs() - m_imageAt < 100) return scheduleImage(int(100 - (nowMs() - m_imageAt)) + 1);
+  m_imageAt = nowMs();
   const double scale = m_viewW / std::max(1.0, m_region.width());
   const QImage img = m_canvas->regionImage(m_page, m_region, scale);
   if (img.isNull()) return;

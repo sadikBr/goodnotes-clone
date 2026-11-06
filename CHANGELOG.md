@@ -8,7 +8,8 @@ section here before it can be published (`scripts/check-version.py`).
 ## 0.19.0
 
 - **Write from your phone:** no touch screen or drawing tablet? In a notebook, ⋯ → *Write from your phone* shows a code: scan it with your phone (on the same Wi-Fi) and the phone becomes a writing pad. Write with a finger or a stylus and it lands on the page you're on as you write, with the pen, colour and size you picked; two fingers move and zoom the part of the page the phone shows (a green frame shows it on the computer). The phone has the pen, highlighter and eraser, undo and redo, and the pages. Nothing to install on the phone: it's a page in its browser, served by Inkleaf only while this is on, and only to a phone with the code.
-- On Linux with a firewall (Omarchy has one on), allow Inkleaf's port once: `sudo ufw allow 47321/tcp`. The window shows the command.
+- If something keeps the phone out, the window says what: it finds this computer's firewall and gives the one command that lets the phone in (ufw, as on Omarchy and Ubuntu, or firewalld, as on Fedora), or on Windows, how to allow Inkleaf on private networks. When no phone has come after a while, it also says what to check on the network.
+- Erasing from the phone shows on the phone as you rub, not only once you lift.
 
 ## 0.18.1
 

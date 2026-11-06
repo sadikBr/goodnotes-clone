@@ -39,6 +39,10 @@ class PhonePad : public QObject {
   Q_PROPERTY(QRectF region READ region NOTIFY regionChanged)
   /// The phone has told us its screen (the region is known).
   Q_PROPERTY(bool hasRegion READ hasRegion NOTIFY regionChanged)
+  /// The firewall that may keep the phone out: "ufw", "firewalld", "windows", "macos" or "" (none found);
+  /// the command that lets it in (Linux), or "".
+  Q_PROPERTY(QString firewall READ firewall NOTIFY stateChanged)
+  Q_PROPERTY(QString firewallCommand READ firewallCommand NOTIFY stateChanged)
 
 public:
   explicit PhonePad(QObject* parent = nullptr);
@@ -58,6 +62,8 @@ public:
   int page() const { return m_page; }
   QRectF region() const { return m_region; }
   bool hasRegion() const { return m_aspect > 0; }
+  QString firewall() const { return m_firewall; }
+  QString firewallCommand() const;
 
   Q_INVOKABLE void start();
   Q_INVOKABLE void stop();
@@ -65,6 +71,8 @@ public:
   // For the self-tests.
   static QByteArray acceptKey(const QByteArray& key);
   static QString lanAddress();
+  /// Which firewall this computer has on (looked up once per start).
+  static QString detectFirewall();
 
 signals:
   void canvasChanged();
@@ -96,7 +104,7 @@ private:
   QHash<QTcpSocket*, QByteArray> m_pending;  ///< HTTP requests coming in
   QTcpSocket* m_ws = nullptr;                 ///< the phone's live connection
   QByteArray m_wsBuf, m_fragments;
-  QString m_token, m_url, m_qr, m_error;
+  QString m_token, m_url, m_qr, m_error, m_firewall;
   int m_port = 0;
 
   int m_page = 0;
@@ -108,6 +116,7 @@ private:
   quint64 m_sentVersion = 0;
   QRectF m_sentRegion;
   int m_sentPage = -1;
+  double m_imageAt = 0;  ///< when the last picture went
   double m_selfMoveAt = 0;  ///< when we last scrolled the desktop (its view change is ours, not the user's)
   QTimer m_imageTimer;
 };

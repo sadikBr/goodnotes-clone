@@ -14,7 +14,7 @@ Item {
     readonly property bool active: pad.running
     readonly property bool connected: pad.connected
 
-    function open() { pad.start(); dialog.open() }
+    function open() { if (!pad.running) root.slow = false; pad.start(); dialog.open() }
     function stop() { dialog.close(); pad.stop() }
 
     PhonePad {
@@ -23,6 +23,9 @@ Item {
         onToolRequested: tool => root.toolPicked(tool)
         onConnectedChanged: if (connected) hideSoon.restart()
     }
+    /// No phone after a while: the window says what can keep it out.
+    property bool slow: false
+    Timer { id: slowTimer; interval: 20000; running: pad.running && !pad.connected; onTriggered: root.slow = true }
     // Once the phone is in, the window steps aside (the pill stays).
     Timer { id: hideSoon; interval: 1600; onTriggered: if (pad.connected) dialog.close() }
 
@@ -200,24 +203,52 @@ Item {
                         IconButton { iconName: "copy"; tip: "Copy the address"; implicitWidth: 30; implicitHeight: 30; iconSize: 15; onClicked: { clip.text = pad.url; clip.selectAll(); clip.copy() } }
                     }
                 }
-                // A firewall (Omarchy's is on) keeps the phone out until the port is allowed.
+                // What can keep the phone out: this computer's firewall (the one it has), and,
+                // when nothing's come after a while, the network.
                 Rectangle {
-                    visible: Qt.platform.os === "linux" && !pad.connected
+                    visible: pad.running && !pad.connected && (pad.firewall !== "" || root.slow)
                     Layout.fillWidth: true
-                    implicitHeight: fw.implicitHeight + 20
+                    implicitHeight: fw.implicitHeight + 22
                     radius: Theme.radius
-                    color: "transparent"
-                    border.color: Theme.border
+                    color: root.slow ? Theme.alpha("#f59e0b", 0.08) : "transparent"
+                    border.color: root.slow ? Theme.alpha("#f59e0b", 0.5) : Theme.border
+                    Behavior on color { ColorAnimation { duration: 200 } }
                     ColumnLayout {
                         id: fw
                         anchors.left: parent.left; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
                         anchors.leftMargin: 12; anchors.rightMargin: 6
                         spacing: 6
-                        Label { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "Phone can't open the link? Your firewall may be keeping it out. Allow Inkleaf's port once:"; font.pixelSize: 12; color: Theme.muted }
-                        RowLayout {
+                        Label {
+                            visible: root.slow
+                            text: "Phone not connecting?"
+                            font.pixelSize: 13; font.weight: Font.DemiBold; color: Theme.text
+                        }
+                        Label {
+                            visible: text.length > 0
                             Layout.fillWidth: true
-                            Label { Layout.fillWidth: true; text: "sudo ufw allow " + pad.port + "/tcp"; font.family: "monospace"; font.pixelSize: 12; color: Theme.text }
-                            IconButton { iconName: "copy"; tip: "Copy"; implicitWidth: 28; implicitHeight: 28; iconSize: 14; onClicked: { clip.text = "sudo ufw allow " + pad.port + "/tcp"; clip.selectAll(); clip.copy() } }
+                            wrapMode: Text.Wrap
+                            textFormat: Text.StyledText
+                            font.pixelSize: 12; color: Theme.muted; lineHeight: 1.15
+                            text: pad.firewall === "ufw" ? "This computer's firewall (ufw) keeps phones out until Inkleaf's port is allowed. Run this once in a terminal:"
+                                : pad.firewall === "firewalld" ? "This computer's firewall (firewalld) keeps phones out until Inkleaf's port is allowed. Run this once in a terminal:"
+                                : pad.firewall === "windows" ? "When Windows asks whether to allow Inkleaf, tick <b>Private networks</b> and choose <b>Allow</b>. Missed it? Windows Security → Firewall &amp; network protection → Allow an app through firewall → Inkleaf, with Private ticked. This Wi-Fi should be set as a <b>Private</b> network too (Settings → Network)."
+                                : pad.firewall === "macos" ? "If macOS asks whether Inkleaf may accept incoming connections, choose <b>Allow</b>. (System Settings → Network → Firewall → Options, if you said no.)"
+                                : ""
+                        }
+                        RowLayout {
+                            visible: pad.firewallCommand.length > 0
+                            Layout.fillWidth: true
+                            Label { Layout.fillWidth: true; text: pad.firewallCommand; wrapMode: Text.WrapAnywhere; font.family: "monospace"; font.pixelSize: 12; color: Theme.text }
+                            IconButton { iconName: "copy"; tip: "Copy"; implicitWidth: 28; implicitHeight: 28; iconSize: 14; onClicked: { clip.text = pad.firewallCommand; clip.selectAll(); clip.copy() } }
+                        }
+                        Label {
+                            visible: root.slow
+                            Layout.fillWidth: true
+                            wrapMode: Text.Wrap
+                            textFormat: Text.StyledText
+                            font.pixelSize: 12; color: Theme.muted; lineHeight: 1.15
+                            text: "Check that the phone is on the <b>same Wi-Fi</b> as this computer, not on mobile data or a guest network. Some public and office Wi-Fi keep devices from seeing each other."
+                                  + (pad.firewall === "" ? " A firewall on this computer could also be blocking port " + pad.port + "." : "")
                         }
                     }
                 }
