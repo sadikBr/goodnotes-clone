@@ -200,7 +200,7 @@ void dashMesh(const std::vector<Point>& p, float r, bool dots, float gap, Mesh& 
 
 }  // namespace
 
-void strokeMesh(const std::vector<Point>& raw, Pen pen, float width, float streamline, Mesh& out, int dashed, float gap) {
+void strokeMesh(const std::vector<Point>& raw, Pen pen, float width, float streamline, Mesh& out, int dashed, float gap, float minGap) {
   out.tris.clear();
   out.glow.clear();
   if (raw.empty()) return;
@@ -237,7 +237,7 @@ void strokeMesh(const std::vector<Point>& raw, Pen pen, float width, float strea
   std::vector<Point> p;
   p.reserve(pts.size());
   for (const Point& q : pts) {
-    if (!p.empty() && std::hypot(q.x - p.back().x, q.y - p.back().y) < 0.15f) continue;
+    if (!p.empty() && std::hypot(q.x - p.back().x, q.y - p.back().y) < minGap) continue;
     p.push_back(q);
   }
   if (p.size() < 2) {

@@ -8,6 +8,7 @@
 
 #include "../Canvas.h"
 #include "Freehand.h"
+#include "../Ink.h"
 
 namespace draw {
 namespace {
@@ -543,6 +544,37 @@ void drawStroke(Canvas& c, const QJsonObject& el, bool live) {
   }
   if (style == "calligraphy") {
     drawCalligraphy(c, el, pts, width, color);
+    c.restore();
+    return;
+  }
+  // The pens the screen draws as a mesh (fountain, ballpoint, brush): exactly
+  // that mesh, so exports and page pictures are what you saw. (Tracing an
+  // outline from the raw points, as before, gave blobs where a pen started,
+  // stopped or turned sharply.) Its triangles are filled as one shape, all
+  // turned the same way, so where they overlap they merge: no seams, nothing
+  // darker.
+  if (ink::meshDrawn(style, false)) {
+    std::vector<ink::Point> ip;
+    ip.reserve(pts.size());
+    for (const Pt& q : pts) ip.push_back({float(q[0]), float(q[1]), float(q[2])});
+    ink::Mesh mesh;
+    const double streamline = el["smooth"].isDouble() ? el["smooth"].toDouble() : kStreamlineNormal;
+    // Points at least half a unit apart (about 1.5 px at 300 dpi): the same
+    // line to the eye, a third of the triangles (a pen sends hundreds a second).
+    ink::strokeMesh(ip, ink::penFromName(style, false), float(width), float(streamline), mesh, 0, 1, 0.5f);
+    c.beginPath();
+    for (size_t i = 0; i + 2 < mesh.tris.size(); i += 3) {
+      QPointF a = mesh.tris[i], b = mesh.tris[i + 1], d = mesh.tris[i + 2];
+      const double area = (b.x() - a.x()) * (d.y() - a.y()) - (b.y() - a.y()) * (d.x() - a.x());
+      if (std::abs(area) < 1e-9) continue;
+      if (area < 0) std::swap(b, d);
+      c.moveTo(a.x(), a.y());
+      c.lineTo(b.x(), b.y());
+      c.lineTo(d.x(), d.y());
+      c.closePath();
+    }
+    c.setFill(color);
+    c.fill("nonzero");
     c.restore();
     return;
   }

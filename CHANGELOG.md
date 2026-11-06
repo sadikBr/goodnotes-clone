@@ -5,6 +5,10 @@ Updates → What's new) and on its GitHub release. Keep them short, one line
 per change, written for the people using Inkleaf. A release needs its
 section here before it can be published (`scripts/check-version.py`).
 
+## 0.19.2
+
+- **Fixed, properly this time:** exports and page pictures still showed blobs where a stroke started, stopped or turned sharply (0.19.1 only smoothed them). The fountain pen, ballpoint and brush are now exported with exactly the shape the screen draws, so a PDF or image looks like your page.
+
 ## 0.19.1
 
 - **Fixed:** handwriting came out blotchy in exports (PDF, image, PowerPoint) and page pictures: a pen's pressure jumps from point to point, and the export followed every jump, so the lines swelled into blobs and their edges went lumpy. Exports now even the pressure out and smooth the line as the screen does, so they look like what you wrote.

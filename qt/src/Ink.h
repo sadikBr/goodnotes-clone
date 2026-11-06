@@ -62,7 +62,9 @@ struct Mesh {
 
 /// Builds the mesh of a stroke as written. `width` is the stroke's nominal width.
 /// `dashed`: construction lines (0 solid, 1 dashes, 2 dots; `gap` scales the spacing).
-void strokeMesh(const std::vector<Point>& raw, Pen pen, float width, float streamline, Mesh& out, int dashed = 0, float gap = 1.f);
+/// `minGap`: points closer than this (after smoothing) are dropped; exports
+/// pass more (fewer triangles, the same line to the eye).
+void strokeMesh(const std::vector<Point>& raw, Pen pen, float width, float streamline, Mesh& out, int dashed = 0, float gap = 1.f, float minGap = 0.15f);
 
 /// Distance from point to segment (hit-testing for the eraser).
 float segmentDistance(QPointF p, QPointF a, QPointF b);
