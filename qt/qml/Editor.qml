@@ -714,6 +714,7 @@ Rectangle {
                     onMathsRequested: mathCard.start()
                     onGraphEditRequested: g => graphDialog.show(g, true)
                     onSavePieceRequested: root.savePiece()
+                    onExportRequested: selectionExport.open()
                     onCropRequested: cropper.start()
                     onLinkRequested: linkDialog.show()
                     onSpellRequested: spell.check(root.mainCanvas.activePage, true)
@@ -996,6 +997,7 @@ Rectangle {
         }
     }
 
+    SelectionExport { id: selectionExport; canvas: root.mainCanvas; title: root.title; onNotify: (m, e) => root.notify(m, e) }
     // Every page at once (zoom out past the smallest view, or ⋯ → All pages).
     PagesGrid {
         id: pagesGrid

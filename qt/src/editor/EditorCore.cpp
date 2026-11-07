@@ -2682,6 +2682,151 @@ bool EditorCore::joinEnd(Draft& d, P2& end) const {
   return false;
 }
 
+QVariantMap EditorCore::tidySelection() {
+  finishTextEdit();
+  Els& els = elements();
+  QSet<QString> ids = m_selection;
+  if (ids.isEmpty()) return {};
+  int shapes = 0, straightened = 0, joined = 0, levelled = 0;
+  Els next = els;
+  // 1. Strokes drawn as shapes (big enough not to be letters) become those shapes.
+  std::vector<ElPtr> writing;
+  for (ElPtr& el : next) {
+    if (!ids.contains(el->id) || el->kind != Kind::Stroke || el->tool == "highlighter" || el->points.size() < 4) continue;
+    const std::vector<P2> pts = flat(el->points);
+    const Rect r = rectOf(pts);
+    if (std::hypot(r.w, r.h) < 40) {
+      writing.push_back(el);
+      continue;
+    }
+    std::optional<Shape> sh = recognizeShape(pts);
+    if (!sh) sh = fitArc(pts);
+    if (!sh) {
+      writing.push_back(el);
+      continue;
+    }
+    squareUp(*sh);
+    El s;
+    s.id = el->id;
+    s.z = el->z;
+    s.kind = Kind::Shape;
+    s.shape = *sh;
+    s.color = el->color;
+    s.width = el->width;
+    if (el->extra.contains("dash")) s.extra.insert("dash", el->extra.value("dash"));
+    if (el->extra.contains("gap")) s.extra.insert("gap", el->extra.value("gap"));
+    el = makeEl(std::move(s));
+    ++shapes;
+  }
+  // 2. Lines: a round angle, or square / parallel to another line in the selection or on the page.
+  const std::vector<DraftLine> others = draftingLines(next);
+  for (ElPtr& el : next) {
+    if (!ids.contains(el->id) || el->kind != Kind::Shape || !isSegmentKind(el->shape.kind) || el->shape.points.size() < 2) continue;
+    P2 a = el->shape.points.front(), b = el->shape.points.back();
+    const double len = std::hypot(b[0] - a[0], b[1] - a[1]);
+    if (len < 8) continue;
+    std::vector<DraftLine> rest;
+    for (const DraftLine& l : others)
+      if (l.id != el->id) rest.push_back(l);
+    const double dir = std::atan2(b[1] - a[1], b[0] - a[0]);
+    // (Rough drawings get more leeway than live drawing: 4° to a round angle, 8° square or parallel.)
+    const AngleSnap snap = snapDirection(dir, rest, lineThrough(rest, a, 8), 4.0);
+    if (snap.why.isEmpty() || std::abs(snap.angle - dir) < 1e-9) continue;
+    // Turned about its middle, the same length.
+    const P2 m{(a[0] + b[0]) / 2, (a[1] + b[1]) / 2};
+    const P2 u{std::cos(snap.angle) * len / 2, std::sin(snap.angle) * len / 2};
+    El e = *el;
+    e.shape.points.front() = {m[0] - u[0], m[1] - u[1]};
+    e.shape.points.back() = {m[0] + u[0], m[1] + u[1]};
+    el = makeEl(std::move(e));
+    ++straightened;
+  }
+  // 3. Ends that nearly meet join: at a shape's corner if there is one, else where they meet.
+  std::vector<P2> corners;
+  for (const ElPtr& el : next)
+    if (el->kind == Kind::Shape && !isSegmentKind(el->shape.kind) && el->shape.kind != "ellipse" && el->shape.kind != "path" && el->shape.points.size() <= 12)
+      corners.insert(corners.end(), el->shape.points.begin(), el->shape.points.end());
+  struct End { size_t el; bool last; P2 p; };
+  std::vector<End> ends;
+  for (size_t i = 0; i < next.size(); ++i) {
+    const ElPtr& el = next[i];
+    if (!ids.contains(el->id) || el->kind != Kind::Shape || !isSegmentKind(el->shape.kind) || el->shape.points.size() < 2) continue;
+    ends.push_back({i, false, el->shape.points.front()});
+    ends.push_back({i, true, el->shape.points.back()});
+  }
+  std::vector<bool> used(ends.size(), false);
+  const double reach = 12;
+  for (size_t i = 0; i < ends.size(); ++i) {
+    if (used[i]) continue;
+    std::vector<size_t> group{i};
+    for (size_t j = i + 1; j < ends.size(); ++j)
+      if (!used[j] && ends[j].el != ends[i].el && std::hypot(ends[j].p[0] - ends[i].p[0], ends[j].p[1] - ends[i].p[1]) < reach) group.push_back(j);
+    std::optional<P2> to = nearestCorner(corners, ends[i].p, reach);
+    if (group.size() < 2 && !to) continue;
+    // Two lines: where they cross (each keeps its direction), if that's close.
+    if (!to && group.size() == 2) {
+      const El& l1 = *next[ends[group[0]].el];
+      const El& l2 = *next[ends[group[1]].el];
+      const P2 a1 = l1.shape.points.front(), b1 = l1.shape.points.back(), a2 = l2.shape.points.front(), b2 = l2.shape.points.back();
+      const double d1x = b1[0] - a1[0], d1y = b1[1] - a1[1], d2x = b2[0] - a2[0], d2y = b2[1] - a2[1];
+      const double den = d1x * d2y - d1y * d2x;
+      if (std::abs(den) > 1e-9) {
+        const double t = ((a2[0] - a1[0]) * d2y - (a2[1] - a1[1]) * d2x) / den;
+        const P2 x{a1[0] + d1x * t, a1[1] + d1y * t};
+        if (std::hypot(x[0] - ends[i].p[0], x[1] - ends[i].p[1]) < reach * 2) to = x;
+      }
+    }
+    if (!to) {
+      P2 c{0, 0};
+      for (size_t k : group) c[0] += ends[k].p[0] / group.size(), c[1] += ends[k].p[1] / group.size();
+      to = c;
+    }
+    for (size_t k : group) {
+      used[k] = true;
+      El e = *next[ends[k].el];
+      (ends[k].last ? e.shape.points.back() : e.shape.points.front()) = *to;
+      next[ends[k].el] = makeEl(std::move(e));
+    }
+    ++joined;
+  }
+  // 4. A line of handwriting that drifts up or down: levelled (turned about its middle).
+  if (writing.size() >= 3) {
+    double sx = 0, sy = 0, sxx = 0, sxy = 0;
+    double x0 = 1e18, x1 = -1e18, y0 = 1e18, y1 = -1e18;
+    for (const ElPtr& w : writing) {
+      const Rect r = rectOf(flat(w->points));
+      const double cx = r.x + r.w / 2, by = r.y + r.h;  // each stroke's foot
+      sx += cx, sy += by, sxx += cx * cx, sxy += cx * by;
+      x0 = std::min(x0, r.x), x1 = std::max(x1, r.x + r.w), y0 = std::min(y0, r.y), y1 = std::max(y1, r.y + r.h);
+    }
+    const double n = double(writing.size()), den = n * sxx - sx * sx;
+    const double slope = den != 0 ? (n * sxy - sx * sy) / den : 0;
+    const double angle = std::atan(slope);
+    const double deg = std::abs(angle) * 180 / M_PI;
+    // One line of writing (much wider than tall), and a real drift, not a slope on purpose.
+    if (x1 - x0 > 2.5 * (y1 - y0) && deg > 1.5 && deg < 20) {
+      const double cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, c = std::cos(-angle), s = std::sin(-angle);
+      QSet<QString> wid;
+      for (const ElPtr& w : writing) wid.insert(w->id);
+      for (ElPtr& el : next) {
+        if (!wid.contains(el->id)) continue;
+        El e = *el;
+        for (Pt& p : e.points) {
+          const double dx = p[0] - cx, dy = p[1] - cy;
+          p = {cx + dx * c - dy * s, cy + dx * s + dy * c, p[2]};
+        }
+        el = makeEl(std::move(e));
+      }
+      levelled = 1;
+    }
+  }
+  if (shapes + straightened + joined + levelled == 0) return {{"shapes", 0}, {"straightened", 0}, {"joined", 0}, {"levelled", 0}};
+  snapshot();
+  els = std::move(next);
+  changed();
+  return {{"shapes", shapes}, {"straightened", straightened}, {"joined", joined}, {"levelled", levelled}};
+}
+
 void EditorCore::noteSnap(const QString& sig) {
   if (sig == m_snapSig) return;
   if (!sig.isEmpty()) ++snapTicks;

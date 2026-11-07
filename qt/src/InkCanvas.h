@@ -96,6 +96,8 @@ class InkCanvas : public QQuickItem {
   Q_PROPERTY(bool writing READ writing NOTIFY writingChanged)
   Q_PROPERTY(int pageCount READ pageCount NOTIFY pagesChanged)
   Q_PROPERTY(int currentPage READ currentPage NOTIFY viewChanged)
+  /// Goes up whenever a page's picture changes (the pages list itself stays as it is).
+  Q_PROPERTY(int thumbRev READ thumbRev NOTIFY thumbsChanged)
   Q_PROPERTY(int activePage READ activePage NOTIFY selectionChanged)
   /// Pages: [{ id, width, height, template, paperColor, thumbnail, favourite, section }].
   Q_PROPERTY(QVariantList pages READ pages NOTIFY pagesChanged)
@@ -175,6 +177,9 @@ public:
   Q_INVOKABLE void zoomBy(qreal factor);
   Q_INVOKABLE void setZoomLevel(qreal z);
   Q_INVOKABLE void fitWidth();
+  /// A page's picture (a data: URL), up to date (bind with thumbRev).
+  Q_INVOKABLE QString thumbOf(int index) const;
+  int thumbRev() const { return m_thumbRev; }
   /// The whole page in view (its width and height), the page you're on.
   Q_INVOKABLE void fitPage();
   /// Fit width ↔ fit page (a two-finger double tap, Ctrl+9).
@@ -210,6 +215,8 @@ public:
   Q_INVOKABLE void insertText(const QString& text);
   /// Moves the selection by (dx, dy) page units (arrow keys).
   Q_INVOKABLE void nudge(qreal dx, qreal dy);
+  /// "Make it neat" on the selection; what it did ({shapes, straightened, joined, levelled}).
+  Q_INVOKABLE QVariantMap tidySelection();
   /// The colour on the page at (x, y) in the canvas ("#rrggbb"; the paper where nothing's drawn), or "".
   Q_INVOKABLE QString colorAt(qreal x, qreal y);
   /// A graph ({ functions, xmin, xmax, ymin, ymax, grid }): beside the
@@ -368,6 +375,10 @@ public:
   Q_INVOKABLE QVariantMap exportPage(int index, qreal scale, bool jpeg);
   /** Writes these pages as a vector PDF at `path`; returns an error ("" when done). */
   Q_INVOKABLE QString exportPdf(const QString& path, const QVariantList& indexes, const QString& title);
+  /// Exports only what's selected, to `path`: "png" (sharp, 3×) or "pdf" (vectors).
+  /// `transparent`: no paper behind it (just the ink and things); else the page's
+  /// paper (its colour, lines and any PDF behind) cropped round it. "" when done, else why not.
+  Q_INVOKABLE QString exportSelection(const QString& path, const QString& format, bool transparent);
 
 signals:
   /// Zoomed out past the smallest view: the editor shows every page as a grid.
@@ -406,6 +417,7 @@ signals:
   void fingerTapped(bool redo);
   /// A two-finger double tap switched the fit: "page" or "width".
   void fitToggled(const QString& fit);
+  void thumbsChanged();
   /// The text tool tapped a table: type in this cell ({ id, row, col }).
   void cellEditRequested(const QVariantMap& cell);
   void writingChanged();
@@ -492,6 +504,7 @@ private:
   void hapticTick();
   /// Asked once per zoom-out gesture that goes past the smallest zoom: show all the pages.
   bool m_overviewAsked = false;
+  int m_thumbRev = 0;
   QStringList m_holdIds;
   int m_holdPage = -1;
   QPointF m_holdFrom;

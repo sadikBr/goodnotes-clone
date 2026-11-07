@@ -170,6 +170,13 @@ public:
   void insertText(const QString& value, double x, double y, double w);
   /// A point for a figure (a clean dot) at (x, y), named A, B, C… in order on the page.
   void addPoint(double x, double y);
+  /// What's selected (on the active page).
+  Els selectedNow() { return selectedList(); }
+  /// "Make it neat": hand-drawn shapes in the selection become clean ones (handwriting
+  /// stays ink), lines settle on round angles / square / parallel, ends that nearly meet
+  /// join, and a line of writing that drifts is levelled. One undo step. What it did:
+  /// {shapes, straightened, joined, levelled}.
+  QVariantMap tidySelection();
   /// Moves the selection a little (arrow keys); a run of nudges is one undo step.
   void nudge(double dx, double dy);
   /// A graph ({ functions (one per line), xmin, xmax, ymin, ymax, grid }) in

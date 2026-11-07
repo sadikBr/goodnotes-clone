@@ -155,17 +155,30 @@ InkCanvas::InkCanvas(QQuickItem* parent) : QQuickItem(parent) {
   // Pages without a picture yet (new pages, the daftar's, imported PDFs'):
   // one at a time while nothing else is going on.
   connect(&m_thumbFill, &QTimer::timeout, this, [this] {
-    if (m_g.kind != Gesture::None || m_scrollGlide.isActive()) return m_thumbFill.start();
-    for (int i = 0; i < int(m_pages.size()); ++i) {
-      const QJsonObject& m = m_pages[i].meta;
-      // Up to date (pictures from before the current way of drawing them are redone).
-      const QString t = m["thumbnail"].toString();
-      if (t.startsWith(QLatin1String(kThumbPrefix)) || (m_pages[i].tmpl.startsWith("cover") && !t.isEmpty())) continue;
+    if (m_g.kind != Gesture::None || m_scrollGlide.isActive()) return m_thumbFill.start(250);
+    // The pages nearest the one you're on first, as many as fit in a short
+    // moment; then a breath, so writing and scrolling never wait for them.
+    auto stale = [this](int i) {
+      const QString t = m_pages[size_t(i)].meta["thumbnail"].toString();
+      return !(t.startsWith(QLatin1String(kThumbPrefix)) || (m_pages[size_t(i)].tmpl.startsWith("cover") && !t.isEmpty()));
+    };
+    std::vector<int> order;
+    for (int i = 0; i < int(m_pages.size()); ++i)
+      if (stale(i)) order.push_back(i);
+    if (order.empty()) return;
+    const int here = std::max(0, currentPage());
+    std::stable_sort(order.begin(), order.end(), [here](int a, int b) { return std::abs(a - here) < std::abs(b - here); });
+    QElapsedTimer spent;
+    spent.start();
+    int done = 0;
+    for (int i : order) {
       storeThumbnail(i);
-      emit pagesChanged();
-      if (m_pages[i].meta["thumbnail"].toString().startsWith(QLatin1String(kThumbPrefix))) m_thumbFill.start();
-      return;
+      ++done;
+      if (spent.elapsed() > 24) break;
     }
+    ++m_thumbRev;
+    emit thumbsChanged();
+    if (done < int(order.size())) m_thumbFill.start(40);
   });
   m_settle.setSingleShot(true);
   m_settle.setInterval(160);
@@ -532,7 +545,11 @@ void InkCanvas::applyPages(const QJsonArray& pages) {
   m_rebuildAll = true;
   emit pagesChanged();
   refresh();
-  m_thumbFill.start(1500);
+  m_thumbFill.start(300);
+}
+
+QString InkCanvas::thumbOf(int index) const {
+  return index >= 0 && index < int(m_pages.size()) ? m_pages[size_t(index)].meta["thumbnail"].toString() : QString();
 }
 
 QVariantList InkCanvas::pages() const {
@@ -671,7 +688,9 @@ void InkCanvas::flush() {
     // A new page picture for the library and the sidebar.
     storeThumbnail(i);
   }
-  emit pagesChanged();
+  // (Only the pictures changed: the pages list stays, so the sidebar isn't rebuilt each save.)
+  ++m_thumbRev;
+  emit thumbsChanged();
 }
 
 void InkCanvas::storeThumbnail(int i) {
@@ -935,6 +954,65 @@ QString InkCanvas::pagePreview(int index, qreal scale) {
   if (index < 0 || index >= int(m_pages.size())) return {};
   const Page& p = m_pages[index];
   return draw::renderPage(p.tmpl, p.paper, p.w, p.h, sceneJson(index), scale)->toDataURL("image/png");
+}
+
+QString InkCanvas::exportSelection(const QString& path, const QString& format, bool transparent) {
+  const QString file = QUrl(path).isLocalFile() ? QUrl(path).toLocalFile() : path;
+  if (!m_ed) return "Nothing selected";
+  const auto box = m_ed->selectionBounds();
+  const int pi = activePage();
+  if (!box || pi < 0 || pi >= int(m_pages.size())) return "Nothing selected";
+  const Page& p = m_pages[size_t(pi)];
+  // What's selected, in drawing order.
+  ed::Els picked = m_ed->selectedNow();
+  std::sort(picked.begin(), picked.end(), [](const ed::ElPtr& a, const ed::ElPtr& b) { return a->z < b->z; });
+  QJsonArray els;
+  for (const ed::ElPtr& e : picked) els.append(e->toJson());
+  // A little room round it; with paper, never past the page's edges.
+  const double pad = 12;
+  QRectF r(box->x - pad, box->y - pad, box->w + 2 * pad, box->h + 2 * pad);
+  if (!transparent) r = r.intersected(QRectF(0, 0, p.w, p.h));
+  if (r.width() < 1 || r.height() < 1) return "Nothing to export";
+  // The page's PDF, when it has one behind it (only with paper).
+  auto background = [&](double scale) {
+    QImage bg;
+    const QString asset = p.meta["backgroundAsset"].toString();
+    if (!transparent && !asset.isEmpty() && !p.meta["backgroundPage"].isNull()) {
+      const int bp = p.meta["backgroundPage"].toInt();
+      const QImage img = PdfDocs::instance().render(asset, bp, scale * p.w / std::max(1.0, PdfDocs::instance().pageSize(asset, bp).width()));
+      if (!img.isNull()) bg = img.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    }
+    return bg;
+  };
+  auto paint = [&](Canvas& c) {
+    if (transparent)
+      for (const QJsonValue& e : els) draw::drawElement(c, e.toObject());
+    else
+      draw::paintPage(c, p.tmpl, p.paper, p.w, p.h, els, background(3));
+  };
+  if (format == "pdf") {
+    QPdfWriter writer(file);
+    writer.setResolution(96);
+    writer.setCreator("Inkleaf");
+    writer.setPageLayout(QPageLayout(QPageSize(QSizeF(r.width() * 0.75, r.height() * 0.75), QPageSize::Point, QString(), QPageSize::ExactMatch), QPageLayout::Portrait, QMarginsF(0, 0, 0, 0)));
+    QPainter painter;
+    if (!painter.begin(&writer)) return "Couldn't write " + file;
+    painter.setClipRect(QRectF(0, 0, r.width(), r.height()));
+    {
+      Canvas canvas(&painter, int(std::ceil(r.width())), int(std::ceil(r.height())));
+      canvas.translate(-r.x(), -r.y());
+      paint(canvas);
+    }
+    painter.end();
+    return {};
+  }
+  // A picture, three times the page's size (sharp on any screen); see-through where nothing is.
+  const double s = 3;
+  Canvas canvas(int(std::ceil(r.width() * s)), int(std::ceil(r.height() * s)));
+  canvas.setTransform(s, 0, 0, s, -r.x() * s, -r.y() * s);
+  paint(canvas);
+  if (!canvas.image().save(file, "PNG")) return "Couldn't write " + file;
+  return {};
 }
 
 QString InkCanvas::exportPdf(const QString& path, const QVariantList& indexes, const QString& title) {
@@ -1942,6 +2020,13 @@ QString InkCanvas::colorAt(qreal x, qreal y) {
       if (d > bestD) bestD = d, best = c;
     }
   return best.name(QColor::HexRgb);
+}
+
+QVariantMap InkCanvas::tidySelection() {
+  if (!m_ed) return {};
+  const QVariantMap r = m_ed->tidySelection();
+  afterCore();
+  return r;
 }
 
 void InkCanvas::nudge(qreal dx, qreal dy) {

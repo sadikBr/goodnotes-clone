@@ -16,6 +16,9 @@ section here before it can be published (`scripts/check-version.py`).
 - **The eraser grows when you rub fast** and shrinks back when you slow down for details; its ring shows its size.
 - **Pressure in the size preview:** your own size's sample stroke goes from a light touch to a full press, following your Pressure setting (light, normal, firm), so you see how your pen will write.
 - **A little tick on the phone** (a light vibration) when a line snaps to an angle, joins, goes square or parallel, a box squares up, or something lines up while moving.
+- **Make it neat:** select a rough drawing and tap the wand in the selection bar: hand-drawn boxes, triangles, circles, lines and arcs become clean shapes (your handwriting stays as you wrote it), lines settle on round angles or square and parallel to each other, ends that nearly meet join exactly where the lines cross, and a line of writing that drifts up or down is levelled. One undo puts it all back.
+- **Export just the selection:** ⋯ → Export the selection… makes a picture (PNG) or a PDF of only what's selected, either on the page's paper or with a transparent background, ready to drop onto slides, worksheets or another page.
+- **Page thumbnails come sooner:** the pages near the one you're on are drawn first, several at a time, and the pages list no longer redraws itself each time a thumbnail or a save arrives, so long notebooks fill in quickly and the sidebar stays smooth.
 
 ## 0.21.0
 

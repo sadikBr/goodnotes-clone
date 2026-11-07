@@ -111,7 +111,7 @@ Popup {
                         id: picture
                         anchors.fill: parent
                         color: cell.modelData.paperColor || "#fffdf7"
-                        source: cell.modelData.thumbnail || ""
+                        source: root.canvas.thumbRev >= 0 ? root.canvas.thumbOf(cell.index) : ""
                         radiusTopLeft: 5; radiusTopRight: 5; radiusBottomLeft: 5; radiusBottomRight: 5
                     }
                     MouseArea {

@@ -47,6 +47,8 @@ Item {
     signal graphEditRequested(var graph)
     /// Save the selection to my pieces.
     signal savePieceRequested()
+    /// Export only the selection (a picture or a PDF).
+    signal exportRequested()
     /// Crop the selected picture.
     signal cropRequested()
     /// Link the selection (to a page, a notebook or a website).
@@ -303,6 +305,20 @@ Item {
             tip: active ? "Change or remove the link" : "Link it to a page, a notebook or a website"
             onClicked: root.linkRequested()
         }
+        // Make it neat: clean shapes, straight lines, joined ends, level writing.
+        SmallTool {
+            iconName: "sAuto"
+            tip: "Make it neat: clean shapes, straight lines, joined ends, level writing"
+            onClicked: {
+                const r = root.canvas.tidySelection() || {}
+                const parts = []
+                if (r.shapes) parts.push(r.shapes + (r.shapes === 1 ? " shape" : " shapes") + " cleaned up")
+                if (r.straightened) parts.push(r.straightened + (r.straightened === 1 ? " line" : " lines") + " straightened")
+                if (r.joined) parts.push(r.joined + (r.joined === 1 ? " join" : " joins"))
+                if (r.levelled) parts.push("writing levelled")
+                Notice.post(parts.length ? "Neat: " + parts.join(", ") : "Already neat", false, { icon: "sAuto" })
+            }
+        }
         SmallTool {
             id: moreBtn
             iconName: "more"
@@ -310,7 +326,8 @@ Item {
             onClicked: menu.show(moreBtn, [
                 { icon: "copy", label: "Duplicate", key: "Ctrl+D", action: () => root.canvas.duplicateSelection() },
                 { icon: "page", label: "Copy", key: "Ctrl+C", action: () => root.canvas.copySelection() },
-                { icon: "stack", label: "Save to my pieces", action: () => root.savePieceRequested() }
+                { icon: "stack", label: "Save to my pieces", action: () => root.savePieceRequested() },
+                { icon: "download", label: "Export the selection…", action: () => root.exportRequested() }
             ], 240)
         }
         SmallTool { iconName: "trash"; tip: "Delete"; onClicked: root.canvas.deleteSelection() }

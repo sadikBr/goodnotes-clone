@@ -177,7 +177,7 @@ Rectangle {
                         RoundImage {
                             anchors.fill: parent
                             color: cell.modelData.paperColor || "#fffdf7"
-                            source: cell.modelData.thumbnail || ""
+                            source: root.canvas.thumbRev >= 0 ? root.canvas.thumbOf(cell.index) : ""
                             radiusTopLeft: 6; radiusTopRight: 6; radiusBottomLeft: 6; radiusBottomRight: 6
                         }
                     }
