@@ -62,7 +62,6 @@ Rectangle {
     property bool drawerOpen: prefs.store.drawerPinned
     property bool sidebarShown: prefs.store.sidebar
     property bool focusMode: false
-    property bool tipShown: false
     /// The tools sit in a rail down the left side (Settings → Appearance), not in the top bar.
     readonly property bool rail: AppSettings.store.toolbar === "rail"
 
@@ -90,10 +89,6 @@ Rectangle {
         prefs.store.tool = tool
         if (rail) railTag.flash()
         if (!prefs.store.drawerPinned) drawerOpen = false
-        if (!tipShown && !prefs.store.drawerPinned && tool !== "hand") {
-            tipShown = true
-            root.notify("Tip: tap the selected tool again for its colours and sizes", false)
-        }
     }
     function toggleSidebar() {
         prefs.store.sidebar = !prefs.store.sidebar
@@ -735,6 +730,18 @@ Rectangle {
                 CropOverlay { id: cropper; canvas: root.mainCanvas; anchors.fill: parent; z: 20 }
                 ZoomBox { id: zoomBox; canvas: root.mainCanvas; anchors.fill: parent; z: 7 }
                 FindBar { id: finder; canvas: root.mainCanvas; anchors.fill: parent; z: 9 }
+                // A tool's hidden gestures, the first time it's picked.
+                TipCard {
+                    id: tipCard
+                    prefs: prefs
+                    z: 9
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: zoomBox.active ? zoomBox.panelHeight + 34 : 78
+                    onMoreRequested: shortcuts.open()
+                    Connections { target: root.mainCanvas; function onToolChanged() { tipCard.offer(root.mainCanvas.tool) } }
+                    Component.onCompleted: offer(root.mainCanvas.tool)
+                }
                 PhoneWriting {
                     id: phoneWriting
                     canvas: root.mainCanvas
@@ -1054,7 +1061,7 @@ Rectangle {
             prompt: what === "translate" || what === "ask" ? "" : prompts[what]
         })
     }
-    ShortcutsSheet { id: shortcuts }
+    ShortcutsSheet { id: shortcuts; onResetTips: { tipCard.resetAll(); root.notify("Tips will show again as you pick each tool", false) } }
 
     // Keyboard shortcuts (src/editor/editor.ts handleKey).
     readonly property bool typing: !!canvas.editing.id

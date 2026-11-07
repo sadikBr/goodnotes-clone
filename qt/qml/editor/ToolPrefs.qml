@@ -78,6 +78,8 @@ QtObject {
         property real penGap: 1
         property bool penCaseSeen: false
         property bool brushCaseSeen: false
+        /// The tools whose tip card has been put away (["pen", …]).
+        property string tipsSeen: "[]"
         /// The pens and brushes were split, and dashes became each pen's line style (0.20).
         property bool brushesSplit: false
         property string shapeKind: "auto"

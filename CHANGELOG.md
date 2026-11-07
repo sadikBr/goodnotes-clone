@@ -13,6 +13,7 @@ section here before it can be published (`scripts/check-version.py`).
 - **Select without the lasso:** with the pen, brush, highlighter or shape tool, tap a text box, picture, sticky note, graph or a shape's outline to select it; press and hold still on handwriting to select that word; or right-click anything with the mouse. The lasso takes over to move it or resize it, and your tool comes back when you deselect. (Dragging over things still writes on them, and the eraser always erases.)
 - **What you draw is what stays:** the textured and effect pens (pencil, calligraphy, marker, watercolour, neon, chalk, crayon, the brushes) and dashed lines look the same while you draw as when you lift the pen; they used to show a plain line until then.
 - After holding on handwriting to select it, keep the pen down and drag: it moves with you.
+- **Tips:** the first time you pick a tool, a small card says what it can do that you wouldn't guess (hold still for clean shapes, hold on writing to select it, tap to select a picture…). Shortcuts and gestures lists every gesture, and can show the tips again.
 - Blanking the screen while presenting is now **.** (B is the brush).
 
 ## 0.19.2

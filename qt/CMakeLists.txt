@@ -215,6 +215,7 @@ qt_add_qml_module(inkleaf
     qml/editor/FindBar.qml
     qml/editor/PresentWindow.qml
     qml/editor/PhoneWriting.qml
+    qml/editor/TipCard.qml
     qml/editor/SpellCheck.qml
     qml/editor/ToolStrip.qml
     qml/editor/ToolDrawer.qml
