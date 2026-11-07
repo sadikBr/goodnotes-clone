@@ -12,6 +12,10 @@ section here before it can be published (`scripts/check-version.py`).
 - **Square and parallel:** a line that starts on another line settles at a right angle to it (with the little square mark), and a line nearly parallel to another settles parallel (that line lights up and the label shows ∥). The label also gives the angle between it and the line it starts on (∠).
 - **Sizes:** while you hold a shape, or draw one with the shape tool, its size shows under it in centimetres (width × height, ⌀ for a circle); a box that's nearly square, or an ellipse that's nearly round, becomes exactly so.
 - **Points:** press and hold the pen still on blank paper to place a clean dot, named A, B, C… in order on the page (the letter is a text box you can change). Lines join points too.
+- **Page number while scrolling:** moving from page to page shows the page you're on, big, at the top for a moment ("12 / 40").
+- **All pages at a glance:** keep zooming out (pinch, or Ctrl + scroll) past the smallest view, or choose ⋯ → All pages: every page as a grid; tap one to go there (Back or Esc closes it).
+- **Equal spacing:** moving something between two others settles it midway, or at the same gap the others already keep, with marks showing the equal gaps.
+- **Arrow keys move a selection** by 1 (10 with Shift); a run of them undoes in one step. Without a selection, ← and → still turn pages.
 
 ## 0.20.1
 

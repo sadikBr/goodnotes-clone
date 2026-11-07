@@ -1,5 +1,6 @@
 // Was src/editor/geometry.test.ts.
 #include "../editor/Geometry.h"
+#include "../editor/Snap.h"
 #include "SelfTest.h"
 
 using namespace ed;
@@ -354,4 +355,20 @@ TEST("drafting", "nearly square boxes and nearly round ellipses become exact") {
   CHECK(r && squareUp(*r) && std::abs(shapeSize(*r).first - shapeSize(*r).second) < 1e-9);
   auto e = buildShape("ellipse", {0, 0}, {100, 60});
   CHECK(e && !squareUp(*e));
+}
+
+TEST("snapGaps", "a box settles midway between its neighbours, or at the gap they keep") {
+  const std::vector<Rect> others{{0, 0, 50, 50}, {200, 0, 50, 50}};
+  // Between them: 50 … 200, a 40-wide box is midway at x = 105.
+  SnapResult s = snapGaps({100, 5, 40, 40}, others, 3, 0, 7, false, false);
+  CHECK(std::abs(100 + s.dx - 105) < 1e-9 && s.dy == 0 && s.guides.size() == 2);
+  // Too far from midway: left alone.
+  s = snapGaps({100, 5, 40, 40}, others, -30, 0, 7, false, false);
+  CHECK(s.dx == -30 && s.guides.empty());
+  // A third to the right of the pair, at the same gap (150) as between them.
+  s = snapGaps({400, 0, 50, 50}, others, 3, 0, 7, false, false);
+  CHECK(std::abs(400 + s.dx - 400) < 1e-9);
+  // An axis lined up by another guide stays as it is.
+  s = snapGaps({100, 5, 40, 40}, others, 3, 0, 7, true, false);
+  CHECK(s.dx == 3);
 }

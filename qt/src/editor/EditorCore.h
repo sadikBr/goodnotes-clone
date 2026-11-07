@@ -165,6 +165,8 @@ public:
   void insertText(const QString& value, double x, double y, double w);
   /// A point for a figure (a clean dot) at (x, y), named A, B, C… in order on the page.
   void addPoint(double x, double y);
+  /// Moves the selection a little (arrow keys); a run of nudges is one undo step.
+  void nudge(double dx, double dy);
   /// A graph ({ functions (one per line), xmin, xmax, ymin, ymax, grid }) in
   /// the box (x, y, w, h), selected.
   void insertGraph(const QVariantMap& spec, double x, double y, double w, double h);
@@ -291,6 +293,8 @@ private:
     std::vector<Anchor> anchors;
     std::vector<Target> targets;
     std::vector<Guide> guides;
+    std::optional<Rect> gapBox;  ///< the moved things' box, for equal spacing
+    std::vector<Rect> gapOthers;
     // handle
     QString handle;
     // transform
@@ -310,6 +314,9 @@ private:
   };
 
   QSet<QString> m_selection;
+  /// The last nudge: when, and the page's state after it (a run of nudges undoes as one).
+  double m_nudgeAt = -1e9;
+  quint64 m_nudgeRev = 0;
   QSet<QString> m_hidden;
   Gesture m_g;
   quint64 m_serial = 0;

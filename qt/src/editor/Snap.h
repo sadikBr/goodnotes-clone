@@ -25,6 +25,8 @@ struct Guide {
   double value, from, to;
   QString label;
   double labelX, labelY;
+  /// A gap between two things (equal spacing): drawn from `from` to `to` exactly, with end ticks.
+  bool span = false;
 };
 
 struct SnapResult {
@@ -33,6 +35,10 @@ struct SnapResult {
 };
 /// A proposed move adjusted so the nearest anchor within `threshold` lands on a target.
 SnapResult snapMove(const std::vector<Anchor>& anchors, const std::vector<Target>& targets, double dx, double dy, double threshold);
+/// Equal spacing: a moved box (`box` moved by dx, dy) settles midway between its
+/// neighbours on a row or column, or at the gap they already have between them.
+/// Axes already lined up by another guide (`lockX`, `lockY`) are left alone.
+SnapResult snapGaps(const Rect& box, const std::vector<Rect>& others, double dx, double dy, double threshold, bool lockX, bool lockY);
 /// Targets from the paper: ruled lines, the space between them, the margin and page centre.
 std::vector<Target> paperTargets(const std::vector<double>& rules, double spanFrom, double spanTo, bool hasMargin, double margin, double pageW, double pageH);
 /// A box's anchors (anything moved that isn't only text): its edges and middles.

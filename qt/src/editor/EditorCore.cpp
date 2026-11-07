@@ -626,6 +626,15 @@ void EditorCore::move(double x, double y, double p, double t, bool shift, bool a
         g.dx = s.dx;
         g.dy = s.dy;
         g.guides = std::move(s.guides);
+        // Then equal spacing, on an axis no line-up took.
+        if (g.gapBox) {
+          bool lockX = false, lockY = false;
+          for (const Guide& gd : g.guides) (gd.axis == 'x' ? lockX : lockY) = true;
+          SnapResult e = snapGaps(*g.gapBox, g.gapOthers, g.dx, g.dy, 7 / zoom, lockX, lockY);
+          g.dx = e.dx;
+          g.dy = e.dy;
+          for (Guide& gd : e.guides) g.guides.push_back(std::move(gd));
+        }
       }
       break;
     case G::Handle:
@@ -1294,6 +1303,12 @@ void EditorCore::buildSnap(const Els& moving) {
     m_g.snapping = true;
     m_g.anchors = boxAnchors(*box);
     m_g.targets = std::move(targets);
+    // Equal spacing: the other things' boxes (the nearest few hundred).
+    m_g.gapBox = *box;
+    m_g.gapOthers.clear();
+    n = 0;
+    for (const ElPtr& el : elements())
+      if (!ids.contains(el->id) && ++n <= 400) m_g.gapOthers.push_back(bounds(*el));
     return;
   }
   std::vector<Target> targets;
@@ -2600,6 +2615,17 @@ bool EditorCore::joinEnd(Draft& d, P2& end) const {
   return false;
 }
 
+void EditorCore::nudge(double dx, double dy) {
+  if (m_selection.isEmpty() || m_g.type != G::None) return;
+  const double now = draw::clockMs();
+  if (now - m_nudgeAt > 1500 || rev != m_nudgeRev) snapshot();
+  for (ElPtr& el : elements())
+    if (m_selection.contains(el->id)) el = makeEl(translate(*el, dx, dy));
+  changed();
+  m_nudgeAt = now;
+  m_nudgeRev = rev;
+}
+
 void EditorCore::addPoint(double x, double y) {
   // Named after the points already on the page: A, B, … Z, then A1, B1, …
   int n = 0;
@@ -2891,7 +2917,21 @@ void drawGuides(Canvas& c, const std::vector<Guide>& guides, double zoom) {
   c.setTextBaseline("bottom");
   for (const Guide& g : guides) {
     c.beginPath();
-    if (g.axis == 'y') {
+    if (g.span) {
+      // A gap: exactly its length, with a tick at each end.
+      const double t = 4 / zoom;
+      if (g.axis == 'y') {
+        c.moveTo(g.from, g.value);
+        c.lineTo(g.to, g.value);
+        c.moveTo(g.from, g.value - t), c.lineTo(g.from, g.value + t);
+        c.moveTo(g.to, g.value - t), c.lineTo(g.to, g.value + t);
+      } else {
+        c.moveTo(g.value, g.from);
+        c.lineTo(g.value, g.to);
+        c.moveTo(g.value - t, g.from), c.lineTo(g.value + t, g.from);
+        c.moveTo(g.value - t, g.to), c.lineTo(g.value + t, g.to);
+      }
+    } else if (g.axis == 'y') {
       c.moveTo(g.from - 12 / zoom, g.value);
       c.lineTo(g.to + 12 / zoom, g.value);
     } else {

@@ -201,6 +201,8 @@ public:
   Q_INVOKABLE QString selectionText();
   /// Adds `text` as a text box: under the selection, else in the middle of the view.
   Q_INVOKABLE void insertText(const QString& text);
+  /// Moves the selection by (dx, dy) page units (arrow keys).
+  Q_INVOKABLE void nudge(qreal dx, qreal dy);
   /// A graph ({ functions, xmin, xmax, ymin, ymax, grid }): beside the
   /// selection, else in the middle of the view.
   Q_INVOKABLE void insertGraph(const QVariantMap& spec);
@@ -359,6 +361,8 @@ public:
   Q_INVOKABLE QString exportPdf(const QString& path, const QVariantList& indexes, const QString& title);
 
 signals:
+  /// Zoomed out past the smallest view: the editor shows every page as a grid.
+  void overviewRequested();
   void pointerChanged();
   void notebookIdChanged();
   void toolChanged();
@@ -470,6 +474,8 @@ private:
   QTimer m_holdSelect;
   /// Press and hold the pen still on blank paper: a point (a dot named A, B, C…).
   QTimer m_holdPoint;
+  /// Asked once per zoom-out gesture that goes past the smallest zoom: show all the pages.
+  bool m_overviewAsked = false;
   QStringList m_holdIds;
   int m_holdPage = -1;
   QPointF m_holdFrom;

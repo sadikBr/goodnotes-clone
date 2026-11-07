@@ -1895,6 +1895,12 @@ void InkCanvas::insertText(const QString& text) {
   afterCore();
 }
 
+void InkCanvas::nudge(qreal dx, qreal dy) {
+  if (!m_ed) return;
+  m_ed->nudge(dx, dy);
+  afterCore();
+}
+
 QString InkCanvas::selectionText() { return m_ed ? m_ed->selectedText() : QString(); }
 
 bool InkCanvas::applyFontToInk(const QString& text, const QString& font, bool keepInk) {
@@ -2050,7 +2056,17 @@ int InkCanvas::currentPage() const {
 int InkCanvas::activePage() const { return m_ed ? m_ed->active : 0; }
 
 void InkCanvas::zoomAt(qreal z, QPointF anchor) {
-  z = std::clamp(z, kMinZoom, kMaxZoom);
+  // Zoomed out well past the whole page and still going: all the pages, as a grid.
+  const qreal floor = std::max(kMinZoom, m_maxPageW > 0 ? (width() - 2 * kPad) / m_maxPageW * 0.45 : kMinZoom);
+  if (z < floor * 0.95 && m_zoom <= floor * 1.01) {
+    if (!m_overviewAsked) {
+      m_overviewAsked = true;
+      emit overviewRequested();
+    }
+    return;
+  }
+  if (z > floor * 1.05) m_overviewAsked = false;
+  z = std::clamp(z, floor, kMaxZoom);
   const QPointF o = origin();
   const QPointF content((anchor.x() - o.x()) / m_zoom, (anchor.y() - o.y()) / m_zoom);
   m_zoom = z;

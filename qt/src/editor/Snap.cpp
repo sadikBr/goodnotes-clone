@@ -134,4 +134,81 @@ std::vector<Anchor> textAnchors(const El& el) {
   return out;
 }
 
+namespace {
+/// One axis of equal spacing. `lo`/`hi`: a box's start and end along the axis;
+/// `across`: its extent the other way (neighbours must share some of it).
+struct Span {
+  double lo, hi, a0, a1;
+};
+struct GapFit {
+  double shift;
+  std::vector<std::pair<double, double>> gaps;  ///< the equal gaps, start to end along the axis
+  double at;  ///< where across to draw them
+};
+std::optional<GapFit> fitGaps(const Span& r, const std::vector<Span>& others, double threshold) {
+  auto overlaps = [&](const Span& o) { return o.a0 < r.a1 && o.a1 > r.a0; };
+  const Span* left = nullptr;
+  const Span* right = nullptr;
+  for (const Span& o : others) {
+    if (!overlaps(o)) continue;
+    if (o.hi <= r.lo + threshold && (!left || o.hi > left->hi)) left = &o;
+    if (o.lo >= r.hi - threshold && (!right || o.lo < right->lo)) right = &o;
+  }
+  std::optional<GapFit> best;
+  auto offer = [&](double shift, std::vector<std::pair<double, double>> gaps, double at) {
+    if (std::abs(shift) <= threshold && (!best || std::abs(shift) < std::abs(best->shift))) best = GapFit{shift, std::move(gaps), at};
+  };
+  const double mid = (r.a0 + r.a1) / 2;
+  // Midway between the two.
+  if (left && right) {
+    const double shift = ((right->lo - r.hi) - (r.lo - left->hi)) / 2;
+    const double g = r.lo + shift - left->hi;
+    if (g > 0) offer(shift, {{left->hi, left->hi + g}, {r.hi + shift, right->lo}}, mid);
+  }
+  // The gap the neighbours already keep, on the left …
+  if (left) {
+    const Span* left2 = nullptr;
+    for (const Span& o : others)
+      if (&o != left && o.a0 < left->a1 && o.a1 > left->a0 && o.hi <= left->lo && (!left2 || o.hi > left2->hi)) left2 = &o;
+    if (left2) {
+      const double g = left->lo - left2->hi;
+      if (g > 0) offer(left->hi + g - r.lo, {{left2->hi, left->lo}, {left->hi, left->hi + g}}, mid);
+    }
+  }
+  // … or on the right.
+  if (right) {
+    const Span* right2 = nullptr;
+    for (const Span& o : others)
+      if (&o != right && o.a0 < right->a1 && o.a1 > right->a0 && o.lo >= right->hi && (!right2 || o.lo < right2->lo)) right2 = &o;
+    if (right2) {
+      const double g = right2->lo - right->hi;
+      if (g > 0) offer(right->lo - g - r.hi, {{right->lo - g, right->lo}, {right->hi, right2->lo}}, mid);
+    }
+  }
+  return best;
+}
+}  // namespace
+
+SnapResult snapGaps(const Rect& box, const std::vector<Rect>& others, double dx, double dy, double threshold, bool lockX, bool lockY) {
+  SnapResult out{dx, dy, {}};
+  const Rect r{box.x + dx, box.y + dy, box.w, box.h};
+  if (!lockX) {
+    std::vector<Span> spans;
+    for (const Rect& o : others) spans.push_back({o.x, o.x + o.w, o.y, o.y + o.h});
+    if (auto f = fitGaps({r.x, r.x + r.w, r.y, r.y + r.h}, spans, threshold)) {
+      out.dx += f->shift;
+      for (const auto& [a, b] : f->gaps) out.guides.push_back({'y', f->at, a, b, QStringLiteral("="), (a + b) / 2 - 3, f->at, true});
+    }
+  }
+  if (!lockY) {
+    std::vector<Span> spans;
+    for (const Rect& o : others) spans.push_back({o.y, o.y + o.h, o.x, o.x + o.w});
+    if (auto f = fitGaps({r.y, r.y + r.h, r.x, r.x + r.w}, spans, threshold)) {
+      out.dy += f->shift;
+      for (const auto& [a, b] : f->gaps) out.guides.push_back({'x', f->at, a, b, QStringLiteral("="), f->at + 4, (a + b) / 2 + 6, true});
+    }
+  }
+  return out;
+}
+
 }  // namespace ed

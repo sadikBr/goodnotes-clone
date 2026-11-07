@@ -547,6 +547,7 @@ Rectangle {
                                 ...(Theme.phone ? [] : [{ icon: "sidebar", label: "Tools on the side", toggle: root.rail, action: () => AppSettings.store.toolbar = root.rail ? "top" : "rail" }]),
                                 { separator: true },
                                 { icon: "sidebar", label: Theme.phone ? "Pages" : root.sidebarShown ? "Hide pages" : "Show pages", key: Theme.phone ? "" : "[", action: () => root.toggleSidebar() },
+                                { icon: "stack", label: "All pages", action: () => pagesGrid.open() },
                                 { icon: Theme.dark ? "sun" : "moon", label: Theme.dark ? "Light mode" : "Dark mode", action: () => AppSettings.store.theme = Theme.dark ? "light" : "dark" },
                                 { separator: true },
                                 { icon: "keyboard", label: "Shortcuts and gestures", key: "?", action: () => shortcuts.open() },
@@ -982,6 +983,47 @@ Rectangle {
         }
     }
 
+    // Every page at once (zoom out past the smallest view, or ⋯ → All pages).
+    PagesGrid {
+        id: pagesGrid
+        canvas: root.activeCanvas
+        parent: Overlay.overlay
+        width: parent ? parent.width : 0
+        height: parent ? parent.height : 0
+    }
+    Connections {
+        target: root.activeCanvas
+        function onOverviewRequested() { if (!pagesGrid.opened) pagesGrid.open() }
+    }
+    // The page number, big, while you scroll from page to page.
+    Rectangle {
+        id: pageFlash
+        parent: area
+        z: 30
+        readonly property int page: root.activeCanvas.currentPage
+        property bool ready: false
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: 22
+        width: flashText.implicitWidth + 36
+        height: 52
+        radius: 26
+        color: Qt.rgba(0.07, 0.09, 0.15, 0.82)
+        opacity: 0
+        visible: opacity > 0
+        Behavior on opacity { NumberAnimation { duration: 160 } }
+        Label {
+            id: flashText
+            anchors.centerIn: parent
+            textFormat: Text.StyledText
+            text: "<b>" + (pageFlash.page + 1) + "</b><font color='#9ca3af'> / " + root.activeCanvas.pages.length + "</font>"
+            font.pixelSize: 24
+            color: "white"
+        }
+        // Not when the notebook opens (only once you start moving through it).
+        Timer { running: true; interval: 1200; onTriggered: pageFlash.ready = true }
+        Timer { id: flashHide; interval: 900; onTriggered: pageFlash.opacity = 0 }
+        onPageChanged: if (ready && root.activeCanvas.pages.length > 1 && !pagesGrid.opened) { opacity = 1; flashHide.restart() }
+    }
     // A phone's pages: they slide in over the page.
     Drawer {
         id: pagesDrawer
@@ -1160,8 +1202,18 @@ Rectangle {
     Shortcut { sequence: "Ctrl+0"; onActivated: canvas.fitWidth() }
     Shortcut { sequences: ["Delete", "Backspace"]; enabled: !!(!root.typing && (root.activeCanvas.selection.count || 0) > 0); onActivated: root.activeCanvas.deleteSelection() }
     Shortcut { sequence: "Esc"; enabled: !root.typing; onActivated: { if ((root.activeCanvas.selection.count || 0) > 0) root.activeCanvas.clearSelection(); else if (root.focusMode) root.focusMode = false; else root.drawerOpen = prefs.store.drawerPinned } }
-    Shortcut { sequences: ["PgDown", "Right"]; enabled: !root.typing; onActivated: canvas.goToPage(canvas.currentPage + 1) }
-    Shortcut { sequences: ["PgUp", "Left"]; enabled: !root.typing; onActivated: canvas.goToPage(canvas.currentPage - 1) }
+    // Arrows: with something selected they nudge it (1 px; 10 with Shift); else ← → turn pages.
+    readonly property bool nudging: !root.typing && (root.activeCanvas.selection.count || 0) > 0
+    Shortcut { sequences: ["PgDown"]; enabled: !root.typing; onActivated: canvas.goToPage(canvas.currentPage + 1) }
+    Shortcut { sequences: ["PgUp"]; enabled: !root.typing; onActivated: canvas.goToPage(canvas.currentPage - 1) }
+    Shortcut { sequences: ["Right"]; enabled: !root.typing; onActivated: root.nudging ? root.activeCanvas.nudge(1, 0) : canvas.goToPage(canvas.currentPage + 1) }
+    Shortcut { sequences: ["Left"]; enabled: !root.typing; onActivated: root.nudging ? root.activeCanvas.nudge(-1, 0) : canvas.goToPage(canvas.currentPage - 1) }
+    Shortcut { sequences: ["Up"]; enabled: root.nudging; onActivated: root.activeCanvas.nudge(0, -1) }
+    Shortcut { sequences: ["Down"]; enabled: root.nudging; onActivated: root.activeCanvas.nudge(0, 1) }
+    Shortcut { sequences: ["Shift+Right"]; enabled: root.nudging; onActivated: root.activeCanvas.nudge(10, 0) }
+    Shortcut { sequences: ["Shift+Left"]; enabled: root.nudging; onActivated: root.activeCanvas.nudge(-10, 0) }
+    Shortcut { sequences: ["Shift+Up"]; enabled: root.nudging; onActivated: root.activeCanvas.nudge(0, -10) }
+    Shortcut { sequences: ["Shift+Down"]; enabled: root.nudging; onActivated: root.activeCanvas.nudge(0, 10) }
     Shortcut { sequence: "R"; enabled: !root.typing; onActivated: canvas.instrument.visible ? canvas.showInstrument("") : canvas.showInstrument(canvas.instrument.kind || "ruler") }
     Shortcut { sequence: "F"; enabled: !root.typing; onActivated: root.focusMode = !root.focusMode }
     Shortcut { sequences: [StandardKey.Find]; onActivated: finder.open() }
