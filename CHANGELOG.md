@@ -20,6 +20,11 @@ section here before it can be published (`scripts/check-version.py`).
 - Blanking the screen while presenting is now **.** (B is the brush).
 - **Inkleaf on a phone:** on a phone-sized screen (or a window that narrow) the library shows two notebooks a row, its folders slide in from ☰ and New is a round button in the corner. In a notebook the tools are a strip along the bottom with their options just above, the pages slide in from the side, and Find, the assistant, Insert, Paper and Export are in the ⋯ menu, which opens as a sheet from the bottom. The pen and brush cases, colours, papers, covers, the selection bar, Settings (full screen) and the new-notebook dialog all fit the screen.
 - **Fixed:** opening the Trash in a narrow window could close Inkleaf.
+- **The back button and back gesture (Android)** close the menu, drawer or popup on top first, then step back: out of a selection, a search, a folder, a notebook. On the library's first screen Inkleaf goes to the background instead of closing (closing a popup with Back could close the whole app before).
+- **Nothing under the phone's bars:** on Android 15 the top bar and the tool strip stay clear of the status bar, the camera cutout and the gesture bar.
+- **Sync keeps up with you:** Inkleaf syncs when you leave it (switch apps, lock the phone, or click another window on a computer) and again when you come back after a while, and every two minutes instead of five, so what you wrote on one device is on the other when you pick it up. The side bar says how sync is doing: when it last synced, how many changes are waiting, offline, or that it didn't work (tap it to sync now); before you sign in, it takes you to the sync settings.
+- When the notebook you have open was changed on another device, Inkleaf says so: those changes come in when you close it here (and if you changed it too, both versions are kept).
+- Sync errors are written plainly, and a phone names itself "Phone" (not "Tablet") in copies kept after a conflict.
 
 ## 0.19.2
 

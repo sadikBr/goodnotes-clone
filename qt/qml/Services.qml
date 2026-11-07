@@ -1,6 +1,7 @@
 // Background work for the app window (src/syncSettings.ts, backupSettings.ts,
-// updates.ts): Google Drive sync at start, every five minutes and when a
-// notebook is closed; the daily backup check; looking for new versions.
+// updates.ts): Google Drive sync at start, every two minutes, when a
+// notebook is closed and when you leave the app (and come back to it); the
+// daily backup check; looking for new versions.
 // The Settings screen shows and changes their state.
 import QtQuick
 import Inkleaf
@@ -36,6 +37,10 @@ QtObject {
 
     property var syncStatus: null
     property bool syncing: false
+    /// Open notebooks whose changes from elsewhere were waiting (told once each).
+    property var toldDeferred: []
+    /// When the app went to the background (to sync again on coming back after a while).
+    property double awaySince: 0
     /// While signing in: { verificationUrl } (Google's page, opened in the browser).
     property var signInCode: null
 
@@ -60,11 +65,23 @@ QtObject {
                 return
             }
             if (r.downloaded || r.deleted || r.conflicts.length) root.libraryReplaced()
+            // The open notebook changed on another device: said once, it comes in when closed here.
+            for (const t of (r.deferred || [])) {
+                if (root.toldDeferred.indexOf(t) >= 0) continue
+                root.toldDeferred = root.toldDeferred.concat([t])
+                root.notify("“" + t + "” was changed on another device: those changes come in when you close it here", false)
+            }
             if (r.conflicts.length) root.notify("Changed on both devices, both versions kept: " + r.conflicts.join(", "), false)
             else if (manual) root.notify(r.uploaded || r.downloaded || r.deleted ? "Synced: " + r.uploaded + " sent, " + r.downloaded + " received" : "Everything is in sync", false)
         })
     }
-    function defaultDevice() { return Qt.platform.os === "android" ? "Tablet" : Qt.platform.os === "windows" ? "Windows PC" : "Computer" }
+    function defaultDevice() {
+        if (Qt.platform.os === "android") {
+            const sc = Qt.application.screens[0]
+            return sc && Math.min(sc.width, sc.height) < 600 ? "Phone" : "Tablet"
+        }
+        return Qt.platform.os === "windows" ? "Windows PC" : "Computer"
+    }
     function signIn() {
         InkleafCore.callAsync("syncSignInStart", {}, (code, err) => {
             if (err) return root.notify(err, true)
@@ -300,12 +317,29 @@ QtObject {
 
     property list<QtObject> timers: [
         Timer { running: true; interval: 4000; onTriggered: root.syncNow(false) },
-        Timer { running: true; repeat: true; interval: 5 * 60000; onTriggered: root.syncNow(false) },
+        Timer { running: true; repeat: true; interval: 2 * 60000; onTriggered: root.syncNow(false) },
         Timer { running: true; interval: 20000; onTriggered: root.checkBackup() },
         Timer { running: true; repeat: true; interval: 30 * 60000; onTriggered: root.checkBackup() },
         Timer { running: true; interval: 1500; onTriggered: root.greetUpdate() },
         Timer { running: true; interval: 8000; onTriggered: if (root.autoCheck) root.checkForUpdates(false) },
         Timer { running: true; repeat: true; interval: 6 * 3600000; onTriggered: if (root.autoCheck) root.checkForUpdates(false) }
     ]
+    // Leaving the app (another app, the home screen, the phone locked; on a
+    // computer, another window): what was written goes to Drive now, so the
+    // other device has it. Coming back after a while: what changed there comes in.
+    property Connections appState: Connections {
+        target: Qt.application
+        function onStateChanged() {
+            if (Qt.application.state === Qt.ApplicationActive) {
+                if (root.awaySince > 0 && Date.now() - root.awaySince > 30000) root.syncNow(false)
+                root.awaySince = 0
+            } else if (root.awaySince === 0) {
+                root.awaySince = Date.now()
+                leaveSync.restart()
+            }
+        }
+    }
+    // (A moment later: the notebook saves itself first, and a quick flick between windows doesn't count.)
+    property Timer leaveSync: Timer { interval: 1500; onTriggered: if (root.awaySince > 0) root.syncNow(false) }
     Component.onCompleted: { refreshSync(); refreshBackup() }
 }

@@ -95,6 +95,7 @@ qt_add_executable(inkleaf
   src/editor/EditorCore.h src/editor/EditorCore.cpp
   src/draw/Render.h src/draw/Render.cpp
   src/Catalog.h src/Catalog.cpp
+  src/BackKey.h src/BackKey.cpp
   src/daftar/Store.h src/daftar/Store.cpp
   src/daftar/Daftar.h src/daftar/Daftar.cpp
   src/daftar/Cover.h src/daftar/Cover.cpp

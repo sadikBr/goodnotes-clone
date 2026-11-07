@@ -568,9 +568,12 @@ fn call(r: Result<ureq::Response, ureq::Error>) -> AppResult<ureq::Response> {
                 .unwrap_or(body);
             Err(invalid(format!("Google Drive ({code}): {msg}")))
         }
-        Err(e) => Err(invalid(format!("can't reach Google (are you online?): {e}"))),
+        Err(e) => Err(invalid(format!("{OFFLINE}: {e}"))),
     }
 }
+
+/// How a sync that couldn't reach Google starts its error (the app then says "offline").
+const OFFLINE: &str = "can't reach Google (are you online?)";
 
 fn json_of(resp: ureq::Response) -> AppResult<Value> {
     serde_json::from_slice(&read_all(resp)?).map_err(invalid)
@@ -677,6 +680,19 @@ pub struct SyncStatus {
     pub device: String,
     pub last_sync_at: Option<i64>,
     pub last_error: Option<String>,
+    /// Changes made here that haven't gone to Drive yet (notebooks, the folder list, deletions).
+    pub pending: u32,
+    /// The last try couldn't reach Google (no internet): it tries again by itself.
+    pub offline: bool,
+}
+
+/// How many changes here are waiting for the next sync.
+pub fn pending_changes(db: &Db) -> AppResult<u32> {
+    db.with_conn(|c| {
+        let changed: u32 = c.query_row("SELECT COUNT(DISTINCT notebook_id) FROM sync_changes", [], |r| r.get(0))?;
+        let deleted: u32 = c.query_row("SELECT COUNT(*) FROM sync_tombstones", [], |r| r.get(0))?;
+        Ok(changed + deleted)
+    })
 }
 
 /// How to sign in: the page to open (`verification_url`). `user_code` is
@@ -827,6 +843,8 @@ impl SyncManager {
             device: c.device.clone(),
             last_sync_at: c.last_sync_at,
             last_error: c.last_error.clone(),
+            pending: 0,
+            offline: c.last_error.as_deref().is_some_and(|e| e.starts_with(OFFLINE)),
         }
     }
 
@@ -948,9 +966,13 @@ impl SyncManager {
                     self.save(&c);
                     return Err(invalid("Google Drive access ended: sign in again"));
                 }
-                Err(invalid(format!("Google sign-in ({code}): {body}")))
+                let why = serde_json::from_str::<Value>(&body)
+                    .ok()
+                    .and_then(|v| v.get("error_description").or_else(|| v.get("error")).and_then(Value::as_str).map(str::to_string))
+                    .unwrap_or(body);
+                Err(invalid(format!("Google sign-in didn't work ({code}): {why}")))
             }
-            Err(e) => Err(invalid(format!("can't reach Google (are you online?): {e}"))),
+            Err(e) => Err(invalid(format!("{OFFLINE}: {e}"))),
         }
     }
 
@@ -1037,8 +1059,11 @@ mod tests {
         let (pc, tablet, mut drive) = (device(), device(), Mem::default());
         let nb = notebook(&pc, "Maths");
         write(&pc, &nb, "x = 2");
+        assert!(pending_changes(&pc).unwrap() >= 1);
         assert_eq!(sync_with(&pc, &mut drive, "PC", None).unwrap().uploaded, 1);
+        assert_eq!(pending_changes(&pc).unwrap(), 0);
         assert_eq!(sync_with(&tablet, &mut drive, "Tablet", None).unwrap().downloaded, 1);
+        assert_eq!(pending_changes(&tablet).unwrap(), 0);
         assert_eq!(texts(&tablet, &nb), vec!["x = 2"]);
         // Nothing changed: nothing moves.
         let quiet = sync_with(&tablet, &mut drive, "Tablet", None).unwrap();

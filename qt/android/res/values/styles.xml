@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The window around Inkleaf: dark bars (the app draws its own colours inside). -->
+<resources>
+  <style name="InkleafTheme" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+    <item name="android:windowBackground">@color/inkleaf_bars</item>
+    <item name="android:statusBarColor">@color/inkleaf_bars</item>
+    <item name="android:navigationBarColor">@color/inkleaf_bars</item>
+  </style>
+  <color name="inkleaf_bars">#141414</color>
+</resources>

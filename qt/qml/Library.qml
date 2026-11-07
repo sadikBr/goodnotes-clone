@@ -13,6 +13,8 @@ Rectangle {
     signal openRequested(string id, string title)
     signal toggleDark()
     signal settingsRequested()
+    /// The app's background work (sync), for the sync line in the side bar.
+    property var services: null
     signal notify(string message, bool error)
 
     /// { kind: "all" | "favourites" | "trash" | "folder", id? }
@@ -37,6 +39,17 @@ Rectangle {
     /// A bulk action is running: the library reloads once at its end.
     property bool bulk: false
     function keyOf(e) { return e.type + ":" + e.item.id }
+    /// Back (a phone's back button): out of selecting, a search, then a folder or the trash; false on the shelf itself.
+    function goBack() {
+        if (selecting) { clearPicks(); return true }
+        if (query.length > 0) { query = ""; hits = []; return true }
+        if (view.kind !== "all") {
+            const f = view.kind === "folder" ? (library.folders || []).find(x => x.id === view.id) : null
+            show(f && f.parentId ? { kind: "folder", id: f.parentId } : { kind: "all" })
+            return true
+        }
+        return false
+    }
     function clearPicks() { picked = ({}); selectMode = false; lastPicked = "" }
     function pick(entry, range) {
         const key = keyOf(entry)
@@ -776,6 +789,34 @@ Rectangle {
                     }
                 }
                 Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.border; Layout.bottomMargin: 8 }
+                // Sync: when it last happened, what's waiting, or that it didn't work (tap: sync now).
+                NavItem {
+                    id: syncItem
+                    readonly property var st: root.services ? root.services.syncStatus : null
+                    readonly property bool busy: !!(root.services && root.services.syncing)
+                    property int clock: 0
+                    visible: !!(st && st.available)
+                    iconName: st && st.signedIn && st.lastError && !busy ? "cloudOff" : "cloud"
+                    text: {
+                        clock
+                        if (!st || !st.signedIn) return "Sync with Google Drive"
+                        if (busy) return "Syncing…"
+                        if (st.offline) return st.pending > 0 ? "Offline · " + st.pending + " to sync later" : "Offline · will sync later"
+                        if (st.lastError) return "Sync didn't work · retry"
+                        if (st.pending > 0) return st.pending + (st.pending === 1 ? " change" : " changes") + " to sync"
+                        return st.lastSyncAt ? "Synced " + root.services.relativeTime(st.lastSyncAt) : "Not synced yet"
+                    }
+                    ToolTip.visible: hovered && !!(st && st.signedIn)
+                    ToolTip.delay: 500
+                    ToolTip.text: st ? (st.lastError ? st.lastError : "Google Drive" + (st.email ? " · " + st.email : "") + (st.device ? " · this device: " + st.device : "")) : ""
+                    onClicked: {
+                        if (!st || !st.signedIn) { AppSettings.settingsPage = "sync"; root.settingsRequested() }
+                        else root.services.syncNow(true)
+                    }
+                    // Kept current: "2 min ago", and changes made since.
+                    Timer { running: root.visible && syncItem.visible; repeat: true; interval: 30000; onTriggered: { syncItem.clock++; if (root.services) root.services.refreshSync() } }
+                    Component.onCompleted: if (root.services) root.services.refreshSync()
+                }
                 NavItem { text: "Trash"; iconName: "trash"; active: root.view.kind === "trash"; onClicked: root.show({ kind: "trash" }) }
                 NavItem {
                     id: darkItem

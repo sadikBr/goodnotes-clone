@@ -170,7 +170,11 @@ impl Core {
             "inspectBackup" => to(&Db::inspect_backup(Path::new(&a.s("path")?))?),
             "restoreBackup" => to(&db.restore_from(Path::new(&a.s("path")?))?),
             // sync
-            "syncStatus" => to(&self.sync.status()),
+            "syncStatus" => {
+                let mut s = self.sync.status();
+                s.pending = inkleaf_core::sync::pending_changes(db).unwrap_or(0);
+                to(&s)
+            }
             "syncSignInStart" => to(&self.sync.sign_in_start()?),
             "syncSignInWait" => to(&self.sync.sign_in_wait(&a.s("device")?)?),
             "syncSignInCancel" => {

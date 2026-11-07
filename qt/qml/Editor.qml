@@ -1135,6 +1135,15 @@ Rectangle {
 
     // Keyboard shortcuts (src/editor/editor.ts handleKey).
     readonly property bool typing: !!canvas.editing.id
+    /// Back (a phone's back button): undoes the last thing opened or chosen, one at a time; false when there's nothing left (the notebook then closes).
+    function goBack() {
+        if (root.typing) { root.activeCanvas.finishEdit(); return true }
+        if ((root.activeCanvas.selection.count || 0) > 0) { root.activeCanvas.clearSelection(); return true }
+        if (finder.active) { finder.close(); return true }
+        if (root.drawerOpen && !prefs.store.drawerPinned) { root.drawerOpen = false; return true }
+        if (root.focusMode) { root.focusMode = false; return true }
+        return false
+    }
     // Done typing: the keyboard goes back to the page (tool shortcuts work again).
     onTypingChanged: if (!typing) canvas.forceActiveFocus()
     Shortcut { sequences: [StandardKey.Undo]; enabled: !root.typing; onActivated: root.activeCanvas.undo() }

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 15 draws apps under the status bar, the camera cutout and the
+     gesture bar unless they opt out. Inkleaf opts out: its top bar and its
+     tool strip stay clear of them, on every phone. -->
+<resources>
+  <style name="InkleafTheme" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+    <item name="android:windowBackground">@color/inkleaf_bars</item>
+    <item name="android:statusBarColor">@color/inkleaf_bars</item>
+    <item name="android:navigationBarColor">@color/inkleaf_bars</item>
+    <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+  </style>
+</resources>

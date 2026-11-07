@@ -16,6 +16,8 @@ ApplicationWindow {
     font.family: Theme.font
 
     property string openNotebook: ""
+    /// The background work (sync, backups, updates), for the screens.
+    readonly property var work: services
     // Phone-sized: the screens lay themselves out for it.
     Binding { target: Theme; property: "phone"; value: win.width < 600 }
     property string openTitle: ""
@@ -50,7 +52,22 @@ ApplicationWindow {
         switchTimer.restart()
     }
     Timer { id: switchTimer; interval: 1; onTriggered: { const p = win.pendingOpen; win.pendingOpen = null; if (p) win.open(p.id, p.title) } }
-    // Android's back gesture closes the window: from a notebook it goes back to the library.
+    // Back (Android's back button or gesture): popups close first (BackKey), then
+    // the screen steps back; from a notebook to the library; from the shelf,
+    // Inkleaf goes to the background (Android).
+    Connections {
+        target: BackKey
+        function onPressed() {
+            if (loader.item && loader.item.goBack && loader.item.goBack()) return
+            if (win.openNotebook) {
+                if (loader.item && loader.item.saveForSync) loader.item.saveForSync()
+                win.closeNotebook()
+            } else {
+                BackKey.leaveApp()
+            }
+        }
+    }
+    // (Should the window still be asked to close from a notebook, it goes back instead.)
     onClosing: close => {
         if (Qt.platform.os === "android" && openNotebook) {
             close.accepted = false
@@ -76,6 +93,7 @@ ApplicationWindow {
     Component {
         id: libraryPage
         Library {
+            services: win.work
             onOpenRequested: (id, title) => win.open(id, title)
             onToggleDark: AppSettings.store.theme = Theme.dark ? "light" : "dark"
             onNotify: (message, error) => toast.show(message, error)

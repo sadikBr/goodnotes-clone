@@ -1,6 +1,8 @@
 // The app's icons: SVG path data by name (24 × 24, stroked; see Icon.qml).
 .pragma library
 var paths = {
+ "cloud": "<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.6 9.1 4.7 4.7 0 0 0 7 18.5z\"/>",
+ "cloudOff": "<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.6 9.1 4.7 4.7 0 0 0 7 18.5z\"/><path d=\"M12 10.5v3.2M12 16.3v.01\"/>",
  "menu": "<path d=\"M4 7h16M4 12h16M4 17h16\"/>",
  "phone": "<rect x=\"6.5\" y=\"2.5\" width=\"11\" height=\"19\" rx=\"2.2\"/><path d=\"M10.5 18.5h3\"/><path d=\"M9.5 12.5c1-1.4 1.8-.2 2.6-1s1.4-1.8 2.4-.6\"/>",
  "qr": "<rect x=\"3.5\" y=\"3.5\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"14.5\" y=\"3.5\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"3.5\" y=\"14.5\" width=\"6\" height=\"6\" rx=\"1\"/><path d=\"M14.5 14.5h2.5v2.5M20.5 14.5v.01M14.5 20.5h.01M17.5 20.5h3v-3\"/>",
