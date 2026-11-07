@@ -99,7 +99,7 @@ std::vector<P2> ptsOf(const QJsonArray& a) {
 
 bool isClosedShape(const QJsonObject& s) {
   const QString k = s["kind"].toString();
-  if (k == "line" || k == "arrow") return false;
+  if (k == "line" || k == "arrow" || k == "doubleArrow") return false;
   if (k == "path") return s["closed"].toBool();
   return true;
 }
@@ -163,7 +163,8 @@ void drawShape(Canvas& c, const QJsonObject& el) {
   c.stroke();
   c.setDash({});
   c.setLineWidth(width);
-  if (kind == "arrow" && pts.size() >= 2) drawArrowHead(c, pts[pts.size() - 2], pts.back(), width);
+  if ((kind == "arrow" || kind == "doubleArrow") && pts.size() >= 2) drawArrowHead(c, pts[pts.size() - 2], pts.back(), width);
+  if (kind == "doubleArrow" && pts.size() >= 2) drawArrowHead(c, pts[1], pts.front(), width);
   c.restore();
 }
 

@@ -46,12 +46,14 @@ Shape Shape::fromJson(const QJsonObject& o) {
   }
   s.closed = o["closed"].toBool();
   for (const QJsonValue& b : o["breaks"].toArray()) s.breaks.push_back(b.toInt());
+  s.name = o["name"].toString();
   return s;
 }
 
 QJsonObject Shape::toJson() const {
   if (kind == "ellipse") return {{"kind", kind}, {"cx", cx}, {"cy", cy}, {"rx", rx}, {"ry", ry}};
   QJsonObject o{{"kind", kind}, {"points", p2s(points)}};
+  if (!name.isEmpty()) o["name"] = name;
   if (kind == "path") {
     o["closed"] = closed;
     if (!breaks.empty()) {

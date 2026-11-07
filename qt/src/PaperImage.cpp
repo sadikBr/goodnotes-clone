@@ -17,6 +17,8 @@
 #include "draw/Strokes.h"
 
 #include "draw/Render.h"
+#include "draw/Elements.h"
+#include "editor/Geometry.h"
 #include "Canvas.h"
 
 QImage PaperImage::requestImage(const QString& id, QSize* size, const QSize& requested) {
@@ -141,6 +143,20 @@ QImage InkSampleImage::requestImage(const QString& id, QSize* size, const QSize&
     QImage img = im ? *im : QImage();
     if (!img.isNull() && requested.isValid() && !requested.isEmpty() && (img.width() > requested.width() || img.height() > requested.height()))
       img = img.scaled(requested, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    if (size) *size = img.size();
+    return img;
+  }
+  // A shape as the shape tool draws it, for the shape picker: image://ink/shape/<kind>/<hex>.
+  if (p.value(0) == "shape") {
+    const QSize want = requested.isValid() && !requested.isEmpty() ? requested : QSize(48, 48);
+    Canvas canvas(want.width(), want.height());
+    const double k = want.width() / 24.0, m = 4 * k;
+    const bool segment = ed::isSegmentKind(p.value(1));
+    // Lines go corner to corner; the rest fill the tile, a little wider than tall.
+    const auto sh = segment ? ed::buildShape(p.value(1), {m, want.height() - m}, {want.width() - m, m})
+                            : ed::buildShape(p.value(1), {m * 0.75, m * 1.25}, {want.width() - m * 0.75, want.height() - m * 1.25});
+    if (sh) draw::drawElement(canvas, QJsonObject{{"kind", "shape"}, {"shape", sh->toJson()}, {"color", "#" + p.value(2, "111827")}, {"width", 1.6 * k}});
+    QImage img = canvas.image();
     if (size) *size = img.size();
     return img;
   }

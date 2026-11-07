@@ -138,6 +138,25 @@ TEST("buildShape", "builds stars, diamonds, triangles and arrows") {
   CHECK(buildShape("arrow", {0, 0}, {50, 50})->kind == "arrow");
 }
 
+TEST("buildShape", "builds every closed shape to fill the box it was dragged") {
+  for (const char* k : {"roundRect", "bubble", "rightTriangle", "parallelogram", "trapezoid", "pentagon", "hexagon", "octagon", "cross", "blockArrow", "lightning", "heart", "cloud", "moon"}) {
+    const auto sh = buildShape(k, {10, 20}, {210, 120});
+    CHECK(sh && sh->kind == "polygon" && sh->name == k && sh->points.size() >= 3);
+    if (!sh) continue;
+    double x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (const P2& p : sh->points) x0 = std::min(x0, p[0]), y0 = std::min(y0, p[1]), x1 = std::max(x1, p[0]), y1 = std::max(y1, p[1]);
+    CHECK(std::abs(x0 - 10) < 0.5 && std::abs(y0 - 20) < 0.5 && std::abs(x1 - 210) < 0.5 && std::abs(y1 - 120) < 0.5);
+    CHECK(isClosedShape(*sh));
+  }
+}
+
+TEST("buildShape", "a double arrow is a line with two heads") {
+  const auto d = buildShape("doubleArrow", {0, 0}, {80, 0});
+  CHECK(d && d->kind == "doubleArrow" && d->points.size() == 2 && !isClosedShape(*d));
+  CHECK(convertShape(shapeEl("d", *d), "line").shape.kind == "line");
+  CHECK(convertShape(shapeEl("d", *d), "hexagon").shape.kind == "doubleArrow");
+}
+
 TEST("buildShape", "ignores taps and auto mode") {
   CHECK(!buildShape("rectangle", {0, 0}, {1, 1}));
   CHECK(!buildShape("auto", {0, 0}, {100, 100}));

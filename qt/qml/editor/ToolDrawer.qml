@@ -6,6 +6,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Inkleaf
 import "Fonts.js" as Fonts
+import "Shapes.js" as Shapes
 
 Item {
     id: root
@@ -36,7 +37,6 @@ Item {
     implicitHeight: Math.max(48, content.implicitHeight + 12)
 
     readonly property var smoothings: [{ id: "off", label: "Off", v: 0 }, { id: "light", label: "Light", v: 0.2 }, { id: "normal", label: "Normal", v: 0.38 }, { id: "strong", label: "Strong", v: 0.62 }]
-    readonly property var shapeKinds: [{ id: "auto", label: "Auto shape", icon: "sAuto" }, { id: "line", label: "Line", icon: "sLine" }, { id: "arrow", label: "Arrow", icon: "sArrow" }, { id: "rectangle", label: "Rectangle", icon: "sRectangle" }, { id: "ellipse", label: "Ellipse / circle", icon: "sEllipse" }, { id: "triangle", label: "Triangle", icon: "sTriangle" }, { id: "diamond", label: "Diamond", icon: "sDiamond" }, { id: "star", label: "Star", icon: "sStar" }]
     /// The pen and the brush: their kind (each its own), and its ink.
     readonly property bool inks: tool === "pen" || tool === "brush"
     readonly property string styleNow: tool === "brush" ? canvas.brushStyle : canvas.penStyle
@@ -49,6 +49,7 @@ Item {
     readonly property string toolHex: (canvas.colors[tool] || canvas.colors.pen || "#111827").replace("#", "")
 
     PopupMenu { id: menu }
+    ShapePicker { id: shapePicker; onPicked: id => root.prefs.store.shapeKind = id }
     // Two cases: the pens, and the brushes.
     component InkCase: PenCase {
         lines: root.prefs.dashable(root.styleNow)
@@ -224,10 +225,16 @@ Item {
             Chip {
                 corner: Theme.radius
                 id: shapeChip
-                label: (root.shapeKinds.find(k => k.id === root.canvas.shapeKind) || root.shapeKinds[0]).label
+                label: root.compact ? "" : Shapes.label(root.canvas.shapeKind)
                 tip: "Shape to draw"
-                art: Component { Icon { name: (root.shapeKinds.find(k => k.id === root.canvas.shapeKind) || root.shapeKinds[0]).icon; size: 18; color: Theme.text } }
-                onClicked: menu.show(shapeChip, root.shapeKinds.map(k => ({ label: k.label, icon: k.icon, checked: k.id === root.canvas.shapeKind, action: () => root.prefs.store.shapeKind = k.id })))
+                art: Component {
+                    Item {
+                        implicitWidth: 18; implicitHeight: 18
+                        Icon { visible: root.canvas.shapeKind === "auto"; anchors.centerIn: parent; name: "sAuto"; size: 18; color: Theme.text }
+                        Image { visible: root.canvas.shapeKind !== "auto"; anchors.fill: parent; sourceSize: Qt.size(36, 36); source: "image://ink/shape/" + root.canvas.shapeKind + "/" + String(Theme.text).replace("#", "") }
+                    }
+                }
+                onClicked: { shapePicker.current = root.canvas.shapeKind; shapePicker.withAuto = true; shapePicker.only = "all"; shapePicker.show(shapeChip) }
             }
             SmallTool { iconName: "fill"; active: root.canvas.shapeFill; tip: root.canvas.shapeFill ? "Fill on" : "Fill off"; onClicked: root.canvas.shapeFill = !root.canvas.shapeFill }
             ModeGroup {

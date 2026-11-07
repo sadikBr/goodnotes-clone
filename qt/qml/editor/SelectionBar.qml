@@ -6,6 +6,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Inkleaf
 import "Fonts.js" as Fonts
+import "Shapes.js" as Shapes
 
 Item {
     id: root
@@ -13,7 +14,6 @@ Item {
     readonly property var s: canvas.selection
     readonly property bool shown: (s.count || 0) > 0 && !!s.box
     readonly property var inkColors: ["#111827", "#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c"]
-    readonly property var shapeKinds: [{ id: "line", label: "Line", icon: "sLine" }, { id: "arrow", label: "Arrow", icon: "sArrow" }, { id: "rectangle", label: "Rectangle", icon: "sRectangle" }, { id: "ellipse", label: "Ellipse / circle", icon: "sEllipse" }, { id: "triangle", label: "Triangle", icon: "sTriangle" }, { id: "diamond", label: "Diamond", icon: "sDiamond" }, { id: "star", label: "Star", icon: "sStar" }]
     /// Hidden while something else edits the selection (cropping).
     property bool held: false
     visible: shown && !held
@@ -37,6 +37,7 @@ Item {
     }
 
     PopupMenu { id: menu }
+    ShapePicker { id: shapePicker; onPicked: id => root.canvas.changeShape(id) }
     InkToText { id: inkToText; canvas: root.canvas }
     /// Ask the AI about the selection: "explain", "solve", "translate", "summarise", "ask".
     signal askAi(string what)
@@ -192,9 +193,11 @@ Item {
             spacing: 4
             SmallTool {
                 id: kindBtn
-                iconName: root.s.shape ? (root.shapeKinds.find(k => k.id === root.s.shape.kind) || { icon: "shape" }).icon : "shape"
+                readonly property bool known: !!(root.s.shape && Shapes.find(root.s.shape.kind))
+                iconName: known ? "" : "shape"
+                imageSource: known ? "image://ink/shape/" + root.s.shape.kind + "/" + String(Theme.text).replace("#", "") : ""
                 tip: "Change shape"
-                onClicked: menu.show(kindBtn, root.shapeKinds.filter(k => root.s.shape.closed ? k.id !== "line" && k.id !== "arrow" : k.id === "line" || k.id === "arrow").map(k => ({ label: k.label, icon: k.icon, checked: k.id === root.s.shape.kind, action: () => root.canvas.changeShape(k.id) })))
+                onClicked: { shapePicker.current = root.s.shape.kind; shapePicker.withAuto = false; shapePicker.only = root.s.shape.closed ? "closed" : "segments"; shapePicker.show(kindBtn) }
             }
             UiSlider {
                 Layout.preferredWidth: 90

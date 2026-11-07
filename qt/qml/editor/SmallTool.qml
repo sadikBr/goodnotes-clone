@@ -6,6 +6,8 @@ import Inkleaf
 AbstractButton {
     id: root
     property string iconName
+    /// A picture instead of an icon (a shape drawn as it is).
+    property string imageSource: ""
     property string label: ""
     property bool active: false
     property string tip
@@ -33,6 +35,7 @@ AbstractButton {
         }
     }
     contentItem: Item {
+        Image { visible: root.imageSource.length > 0; anchors.centerIn: parent; width: 18; height: 18; sourceSize: Qt.size(36, 36); source: root.imageSource }
         Icon { visible: root.iconName.length > 0; anchors.centerIn: parent; name: root.iconName; size: 17; color: root.active ? Theme.accent : Theme.text }
         Label {
             id: lbl

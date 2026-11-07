@@ -108,11 +108,16 @@ std::vector<std::vector<P2>> shapeLines(const Shape& s, double width) {
     std::vector<P2> ring;
     for (int i = 0; i <= 72; ++i) ring.push_back({s.cx + s.rx * std::cos(i * M_PI / 36), s.cy + s.ry * std::sin(i * M_PI / 36)});
     out.push_back(ring);
-  } else if (s.kind == "arrow" && s.points.size() >= 2) {
+  } else if ((s.kind == "arrow" || s.kind == "doubleArrow") && s.points.size() >= 2) {
     const P2 a = s.points.front(), b = s.points.back();
     out.push_back({a, b});
-    const double ang = std::atan2(b[1] - a[1], b[0] - a[0]), len = std::max(14.0, width * 4.5);
-    out.push_back({{b[0] - len * std::cos(ang - 0.45), b[1] - len * std::sin(ang - 0.45)}, b, {b[0] - len * std::cos(ang + 0.45), b[1] - len * std::sin(ang + 0.45)}});
+    const double len = std::max(14.0, width * 4.5);
+    auto head = [&](P2 from, P2 to) {
+      const double ang = std::atan2(to[1] - from[1], to[0] - from[0]);
+      out.push_back({{to[0] - len * std::cos(ang - 0.45), to[1] - len * std::sin(ang - 0.45)}, to, {to[0] - len * std::cos(ang + 0.45), to[1] - len * std::sin(ang + 0.45)}});
+    };
+    head(a, b);
+    if (s.kind == "doubleArrow") head(b, a);
   } else {
     for (std::vector<P2> part : shapeParts(s)) {
       if (part.size() < 2) continue;
@@ -1157,7 +1162,7 @@ El EditorCore::straightHighlight(const std::vector<P2>& line) const {
 
 P2 EditorCore::pivotFor(const El& el) const {
   const Shape& s = el.shape;
-  if ((s.kind == "line" || s.kind == "arrow") && !s.points.empty()) return s.points[0];
+  if (isSegmentKind(s.kind) && !s.points.empty()) return s.points[0];
   const Rect r = geomBox(el);
   return {r.x + r.w / 2, r.y + r.h / 2};
 }
@@ -1349,7 +1354,7 @@ ElPtr EditorCore::singleShape() {
 
 ElPtr EditorCore::singleSegment() {
   ElPtr el = singleShape();
-  return el && (el->shape.kind == "line" || el->shape.kind == "arrow") && isResizable(*el) ? el : nullptr;
+  return el && isSegmentKind(el->shape.kind) && isResizable(*el) ? el : nullptr;
 }
 
 std::optional<Rect> EditorCore::transformBox() {
@@ -1387,7 +1392,7 @@ QVariantMap EditorCore::selectionInfo() {
   if (!texts.empty() && all([](const ElPtr& t) { return currentList(t->text) == "bullet"; })) list = "bullet";
   else if (!texts.empty() && all([](const ElPtr& t) { return currentList(t->text) == "number"; })) list = "number";
   out["list"] = list;
-  out["shape"] = single ? QVariant(QVariantMap{{"kind", single->shape.kind}, {"closed", isClosedShape(single->shape)}, {"width", single->width}, {"fill", bool(single->fill)}}) : QVariant();
+  out["shape"] = single ? QVariant(QVariantMap{{"kind", single->shape.name.isEmpty() ? single->shape.kind : single->shape.name}, {"closed", isClosedShape(single->shape)}, {"width", single->width}, {"fill", bool(single->fill)}}) : QVariant();
   if (els.size() == 1 && els[0]->kind == Kind::Graph) {
     const El& g = *els[0];
     out["graph"] = QVariantMap{{"functions", g.text}, {"xmin", g.extra.value("xmin").toDouble(-5)}, {"xmax", g.extra.value("xmax").toDouble(5)},

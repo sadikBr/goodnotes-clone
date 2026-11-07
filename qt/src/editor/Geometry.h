@@ -23,6 +23,8 @@ bool rectContains(const Rect& r, double x, double y);
 /// A shape's separate strokes (a path with breaks is several polylines).
 std::vector<std::vector<P2>> shapeParts(const Shape& s);
 bool isClosedShape(const Shape& s);
+/// A line with two ends and no inside: a line, an arrow, a double arrow.
+bool isSegmentKind(const QString& kind);
 /// Whether a point (with radius) touches an element (the eraser).
 bool hitTest(const El& el, double x, double y, double radius);
 /// Tap-to-select: closed shapes also count when tapped inside.

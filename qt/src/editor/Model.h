@@ -27,6 +27,7 @@ struct Shape {
   double cx = 0, cy = 0, rx = 0, ry = 0;  ///< ellipse
   bool closed = false;                    ///< path
   std::vector<int> breaks;                ///< path: where a new stroke starts (multi-stroke symbols)
+  QString name;                           ///< which shape it was drawn as ("heart", "hexagon"…) when kind doesn't say
   static Shape fromJson(const QJsonObject& o);
   QJsonObject toJson() const;
 };

@@ -6,6 +6,7 @@
 #include "../draw/Elements.h"
 
 namespace ed {
+bool isSegmentKind(const QString& k) { return k == "line" || k == "arrow" || k == "doubleArrow"; }
 namespace {
 
 constexpr double INF = std::numeric_limits<double>::infinity();
@@ -47,7 +48,7 @@ Rect rotatedBounds(const Rect& r, double angle) {
   return {cx - w / 2, cy - h / 2, w, h};
 }
 
-bool isSegment(const El& el) { return el.kind == Kind::Shape && (el.shape.kind == "line" || el.shape.kind == "arrow"); }
+bool isSegment(const El& el) { return el.kind == Kind::Shape && isSegmentKind(el.shape.kind); }
 
 /// Splits a polyline where a circle (cx, cy, reach) touches it; none when untouched.
 template <typename T, typename Lerp>
@@ -179,7 +180,7 @@ std::vector<std::vector<P2>> shapeParts(const Shape& s) {
 }
 
 bool isClosedShape(const Shape& s) {
-  if (s.kind == "line" || s.kind == "arrow") return false;
+  if (isSegmentKind(s.kind)) return false;
   if (s.kind == "path") return s.closed;
   return true;
 }
@@ -309,7 +310,7 @@ std::optional<Shape> buildShape(const QString& kind, P2 a, P2 b, bool constrain)
   const double x0 = a[0], y0 = a[1];
   if (kind == "auto") return std::nullopt;
   Shape s;
-  if (kind == "line" || kind == "arrow") {
+  if (isSegmentKind(kind)) {
     if (constrain) {
       const double len = std::hypot(x1 - x0, y1 - y0);
       const double step = M_PI / 4;
@@ -355,9 +356,81 @@ std::optional<Shape> buildShape(const QString& kind, P2 a, P2 b, bool constrain)
       const double t = -M_PI / 2 + (i * M_PI) / 5;
       s.points.push_back({cx + std::cos(t) * rx * r, cy + std::sin(t) * ry * r});
     }
+  } else if (kind == "roundRect" || kind == "bubble") {
+    // Rounded corners (quarter circles); a speech bubble has a tail at the bottom left.
+    const double bodyBottom = kind == "bubble" ? top + (bottom - top) * 0.78 : bottom;
+    const double r = std::min(right - left, bodyBottom - top) * 0.2;
+    s.kind = "polygon";
+    auto arc = [&](double ox, double oy, double from) {
+      for (int i = 0; i <= 8; i++) {
+        const double t = from + i * (M_PI / 2) / 8;
+        s.points.push_back({ox + std::cos(t) * r, oy + std::sin(t) * r});
+      }
+    };
+    arc(left + r, top + r, M_PI);
+    arc(right - r, top + r, -M_PI / 2);
+    arc(right - r, bodyBottom - r, 0);
+    if (kind == "bubble") {
+      const double w = right - left;
+      s.points.push_back({left + w * 0.4, bodyBottom});
+      s.points.push_back({left + w * 0.14, bottom});
+      s.points.push_back({left + w * 0.24, bodyBottom});
+    }
+    arc(left + r, bodyBottom - r, M_PI / 2);
   } else {
-    return std::nullopt;
+    // The rest are drawn in a unit square, then fitted to the box.
+    std::vector<P2> unit;
+    auto regular = [&](int n, double start) {
+      for (int i = 0; i < n; i++) unit.push_back({std::cos(start + i * 2 * M_PI / n), std::sin(start + i * 2 * M_PI / n)});
+    };
+    if (kind == "rightTriangle") unit = {{0, 0}, {1, 1}, {0, 1}};
+    else if (kind == "parallelogram") unit = {{0.25, 0}, {1, 0}, {0.75, 1}, {0, 1}};
+    else if (kind == "trapezoid") unit = {{0.22, 0}, {0.78, 0}, {1, 1}, {0, 1}};
+    else if (kind == "pentagon") regular(5, -M_PI / 2);
+    else if (kind == "hexagon") regular(6, 0);
+    else if (kind == "octagon") regular(8, M_PI / 8);
+    else if (kind == "cross") {
+      const double a = 1.0 / 3, b = 2.0 / 3;
+      unit = {{a, 0}, {b, 0}, {b, a}, {1, a}, {1, b}, {b, b}, {b, 1}, {a, 1}, {a, b}, {0, b}, {0, a}, {a, a}};
+    } else if (kind == "blockArrow") unit = {{0, 0.3}, {0.6, 0.3}, {0.6, 0}, {1, 0.5}, {0.6, 1}, {0.6, 0.7}, {0, 0.7}};
+    else if (kind == "lightning") unit = {{0.56, 0}, {0.12, 0.58}, {0.44, 0.58}, {0.3, 1}, {0.88, 0.38}, {0.55, 0.38}, {0.74, 0}};
+    else if (kind == "heart") {
+      for (int i = 0; i < 96; i++) {
+        const double t = i * 2 * M_PI / 96;
+        unit.push_back({16 * std::pow(std::sin(t), 3), -(13 * std::cos(t) - 5 * std::cos(2 * t) - 2 * std::cos(3 * t) - std::cos(4 * t))});
+      }
+    } else if (kind == "cloud") {
+      // Round puffs all the way round (an ellipse with bumps).
+      for (int i = 0; i < 120; i++) {
+        const double t = i * 2 * M_PI / 120;
+        const double r = 0.82 + 0.18 * std::sqrt(std::abs(std::sin(t * 4)));
+        unit.push_back({std::cos(t) * r, std::sin(t) * r * 0.78});
+      }
+    } else if (kind == "moon") {
+      // A crescent: the outer circle's arc round the left, then a second circle
+      // (as big, moved right) back between the two points where they cross.
+      const double d = 0.6, cx2 = d / 2, cy2 = std::sqrt(1 - cx2 * cx2);
+      const double from = std::atan2(-cy2, cx2), sweep = 2 * M_PI - 2 * std::abs(from);
+      for (int i = 0; i <= 48; i++) {
+        const double t = from - sweep * i / 48;
+        unit.push_back({std::cos(t), std::sin(t)});
+      }
+      const double in0 = std::atan2(cy2, cx2 - d), in1 = std::atan2(-cy2, cx2 - d) + 2 * M_PI;
+      for (int i = 1; i < 48; i++) {
+        const double t = in0 + (in1 - in0) * i / 48;
+        unit.push_back({d + std::cos(t), std::sin(t)});
+      }
+    } else return std::nullopt;
+    double ux0 = 1e9, uy0 = 1e9, ux1 = -1e9, uy1 = -1e9;
+    for (const P2& p : unit) {
+      ux0 = std::min(ux0, p[0]), uy0 = std::min(uy0, p[1]);
+      ux1 = std::max(ux1, p[0]), uy1 = std::max(uy1, p[1]);
+    }
+    s.kind = "polygon";
+    for (const P2& p : unit) s.points.push_back({left + (p[0] - ux0) / std::max(1e-9, ux1 - ux0) * (right - left), top + (p[1] - uy0) / std::max(1e-9, uy1 - uy0) * (bottom - top)});
   }
+  // Which shape it is, when its kind doesn't say (a polygon): to show it as chosen, and to change it.
+  if (s.kind != kind) s.name = kind;
   return s;
 }
 
@@ -455,14 +528,14 @@ El convertShape(const El& el, const QString& kind) {
   if (el.kind != Kind::Shape || kind == "auto") return el;
   El out = el;
   if (isSegment(el)) {
-    if (kind == "line" || kind == "arrow") {
+    if (isSegmentKind(kind)) {
       out.shape = Shape();
       out.shape.kind = kind;
       out.shape.points = el.shape.points;
     }
     return out;
   }
-  if (kind == "line" || kind == "arrow") return el;
+  if (isSegmentKind(kind)) return el;
   const Rect r = geomBox(el);
   if (auto s = buildShape(kind, {r.x, r.y}, {r.x + r.w, r.y + r.h})) out.shape = *s;
   return out;
@@ -548,17 +621,21 @@ std::optional<std::vector<El>> eraseElement(const El& el, double x, double y, do
     const double reach = radius + el.width / 2;
     auto runs = cutPolyline(outlineOf(el.shape), x, y, reach, lerp2);
     if (!runs) return std::nullopt;
-    const bool arrow = el.shape.kind == "arrow";
-    const P2 tip = arrow ? el.shape.points.back() : P2{0, 0};
+    // An arrow's heads stay on the pieces that keep its ends.
+    const bool headAtEnd = el.shape.kind == "arrow" || el.shape.kind == "doubleArrow";
+    const bool headAtStart = el.shape.kind == "doubleArrow";
+    const P2 tip = el.shape.points.empty() ? P2{0, 0} : el.shape.points.back();
+    const P2 tail = el.shape.points.empty() ? P2{0, 0} : el.shape.points.front();
     std::vector<El> out;
     for (size_t i = 0; i < runs->size(); ++i) {
-      const auto& pts = (*runs)[i];
-      const P2 last = pts.back();
-      const bool keepsTip = arrow && std::hypot(last[0] - tip[0], last[1] - tip[1]) < 1e-6;
+      auto pts = (*runs)[i];
+      const bool keepsTip = headAtEnd && std::hypot(pts.back()[0] - tip[0], pts.back()[1] - tip[1]) < 1e-6;
+      const bool keepsTail = headAtStart && std::hypot(pts.front()[0] - tail[0], pts.front()[1] - tail[1]) < 1e-6;
       El piece = el;
       piece.id = i == 0 ? el.id : newId();
       piece.shape = Shape();
-      piece.shape.kind = keepsTip ? "arrow" : "path";
+      if (keepsTail && !keepsTip) std::reverse(pts.begin(), pts.end());
+      piece.shape.kind = keepsTip && keepsTail ? "doubleArrow" : keepsTip || keepsTail ? "arrow" : "path";
       piece.shape.points = pts;
       piece.fill.reset();
       out.push_back(piece);

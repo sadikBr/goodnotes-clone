@@ -24,6 +24,8 @@ section here before it can be published (`scripts/check-version.py`).
 - **Nothing under the phone's bars:** on Android 15 the top bar and the tool strip stay clear of the status bar, the camera cutout and the gesture bar.
 - **Sync keeps up with you:** Inkleaf syncs when you leave it (switch apps, lock the phone, or click another window on a computer) and again when you come back after a while, and every two minutes instead of five, so what you wrote on one device is on the other when you pick it up. The side bar says how sync is doing: when it last synced, how many changes are waiting, offline, or that it didn't work (tap it to sync now); before you sign in, it takes you to the sync settings.
 - When the notebook you have open was changed on another device, Inkleaf says so: those changes come in when you close it here (and if you changed it too, both versions are kept).
+- **More shapes:** a double arrow, rounded rectangle, right triangle, parallelogram, trapezoid, pentagon, hexagon, octagon, cross, heart, moon, cloud, speech bubble, block arrow and lightning bolt, with the line, arrow, rectangle, ellipse, triangle, diamond and star you had. They fill, dash, resize, rotate, erase and export like the others.
+- **A shape picker that fits them all:** the shapes are tiles in groups (lines, basic, polygons, symbols), each drawn exactly as it comes out, with Auto shape on top; it fits a phone too. Changing a selected shape uses the same picker and offers only the shapes it can become.
 - Sync errors are written plainly, and a phone names itself "Phone" (not "Tablet") in copies kept after a conflict.
 
 ## 0.19.2
