@@ -1364,7 +1364,7 @@ void EditorCore::eraseAlong(P2 p, double t) {
   if (m_g.last && now > m_eraseT) {
     const double speed = std::hypot(p[0] - from[0], p[1] - from[1]) * zoom / (now - m_eraseT);  // screen px a ms
     const double target = 1 + std::clamp((speed - 0.8) / 2.0, 0.0, 0.8);
-    eraseBoost = eraseBoost * 0.75 + target * 0.25;
+    if (eraseGrows) eraseBoost = eraseBoost * 0.75 + target * 0.25;
   }
   m_eraseT = now;
   const double step = std::max(1.0, widths.value("eraser") / 4);

@@ -47,7 +47,7 @@ QJsonValue rectJson(const std::optional<ed::Rect>& r) {
 
 struct NativeDriver : Driver {
   ed::EditorCore core;
-  explicit NativeDriver(const QJsonArray& pages) : core(pages) {}
+  explicit NativeDriver(const QJsonArray& pages) : core(pages) { core.eraseGrows = false; }
   QString down(int pi, double x, double y, double p, double t, const QString& tool, bool shift) override { return core.down(pi, x, y, p, t, tool, shift); }
   void move(double x, double y, double p, double t, bool shift, bool alt) override { core.move(x, y, p, t, shift, alt); }
   QJsonValue call(const QString& m, const QVariantList& a) override {

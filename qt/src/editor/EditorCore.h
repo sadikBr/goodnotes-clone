@@ -42,6 +42,9 @@ public:
   QHash<QString, QString> colors{{"pen", "#111827"}, {"highlighter", "#facc15"}, {"shape", "#111827"}, {"text", "#111827"}, {"sticky", "#fef08a"}, {"laser", "#ff1f1f"}};
   /// How much bigger the eraser is right now (rubbing fast makes it grow).
   double eraseBoost = 1;
+  /// Whether it grows at all (the recorded test sessions replay at whatever speed
+  /// the machine runs, so there it stays its size and their results stay the same).
+  bool eraseGrows = true;
   /// Goes up each time something snaps into place (a straightened shape, a round
   /// angle, square or parallel, a joined end, a line-up): a phone gives a tick.
   quint64 snapTicks = 0;
