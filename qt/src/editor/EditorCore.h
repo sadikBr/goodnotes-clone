@@ -246,6 +246,8 @@ private:
     QString mode;  ///< transform, move
     ElPtr base;
     P2 anchor, pivot, still;
+    /// How far a held shape (not a line) has been turned, in degrees (counter-clockwise).
+    double turned = 0;
   };
   struct Guided {
     EdgeGuide edge;
@@ -351,6 +353,8 @@ private:
   /// An element as the group transform `g` leaves it.
   El transformed(const El& el, const Gesture& g) const;
   void drawHeldHint(Canvas& c, const El& el, const QString& mode) const;
+  /// A held line's angle (0° level, counter-clockwise positive) and length, by its end.
+  void drawAngleHint(Canvas& c, P2 a, P2 b) const;
   double nextZ() { return nextZOf(elements()); }
   static double nextZOf(const Els& els);
   void stopTimers();

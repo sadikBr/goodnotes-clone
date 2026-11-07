@@ -5,6 +5,10 @@ Updates → What's new) and on its GitHub release. Keep them short, one line
 per change, written for the people using Inkleaf. A release needs its
 section here before it can be published (`scripts/check-version.py`).
 
+## 0.21.0
+
+- **See the angle of a straight line:** draw a line and hold still until it straightens, then keep the pen down and turn it: a label by its end shows its angle (0° is level, 90° upright, up to the right is positive) and its length in centimetres, with a dashed level line and an arc from where it starts. It settles exactly on 0°, 15°, 30°, 45°… when you come close (the label turns green), so a level or a 45° line is easy. Works with the highlighter's straight lines too, and a held shape (a box, a triangle…) shows how far it's turned and settles back straight.
+
 ## 0.20.1
 
 - **Fixed (Android):** checking for updates always said "Couldn't reach GitHub (offline)": the check used a part of Qt that can't make secure connections on Android. It now goes through Inkleaf's own connection (the one sync uses), so the phone and tablet find new versions and offer to install them.

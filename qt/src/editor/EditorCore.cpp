@@ -1202,7 +1202,19 @@ void EditorCore::updateHeld(P2 p) {
       shape = h.base->shape;
     } else {
       const double scale = std::max(0.05, std::min(20.0, std::hypot(v1[0], v1[1]) / l0));
-      const double angle = std::atan2(v1[1], v1[0]) - std::atan2(v0[1], v0[0]);
+      double angle = std::atan2(v1[1], v1[0]) - std::atan2(v0[1], v0[0]);
+      // Close to a round angle (level, upright, every 15°): it settles exactly
+      // there, so a line can be made perfectly level, or a box straight again.
+      const auto& pts = h.base->shape.points;
+      const bool segment = isSegmentKind(h.base->shape.kind) && pts.size() >= 2;
+      const double from = segment ? std::atan2(pts.back()[1] - pts.front()[1], pts.back()[0] - pts.front()[0]) : 0;
+      const double deg = -(from + angle) * 180 / M_PI;  // counter-clockwise, as on paper
+      const double near = std::round(deg / 15) * 15;
+      if (std::abs(deg - near) < 1.5) angle += (deg - near) * M_PI / 180;
+      double turned = std::fmod(-angle * 180 / M_PI, 360);
+      if (turned > 180) turned -= 360;
+      if (turned <= -180) turned += 360;
+      h.turned = segment ? 0 : turned;
       shape = transformShape(h.base->shape, h.pivot, angle, scale);
     }
   }
@@ -2363,11 +2375,13 @@ void EditorCore::drawOverlay(Canvas& c, int pi) {
   if (g.type == G::Draw) {
     if (g.preview && g.tool == "highlighter" && g.preview->shape.kind == "line") {
       draw::drawStroke(c, straightHighlight(g.preview->shape.points).toJson());
+      if (g.held && g.preview->shape.points.size() >= 2) drawAngleHint(c, g.preview->shape.points.front(), g.preview->shape.points.back());
     } else if (g.preview) {
       if (g.tool == "pen" && (keepsPen(penStyle) || penDashed()))
         for (const El& el : penStrokes(*g.preview)) draw::drawStroke(c, el.toJson());
       else draw::drawElement(c, g.preview->toJson());
       if (g.held) drawHeldHint(c, *g.preview, g.held->mode);
+      if (g.held && isSegmentKind(g.preview->shape.kind) && g.preview->shape.points.size() >= 2) drawAngleHint(c, g.preview->shape.points.front(), g.preview->shape.points.back());
     } else if (g.ruler) {
       El live;
       live.id = "live";
@@ -2465,6 +2479,11 @@ std::optional<Rect> EditorCore::overlayBounds() {
   if (g.type == G::Draw && (g.preview || g.ruler)) {
     if (g.preview) parts.push_back(bounds(*g.preview));
     if (!g.points.empty()) parts.push_back(rectOf(flat(g.points)));
+    // A held line's angle label, past its end.
+    if (g.held && g.preview && g.preview->shape.points.size() >= 2) {
+      const P2 e = g.preview->shape.points.back();
+      parts.push_back({e[0] - 160 / zoom, e[1] - 60 / zoom, 320 / zoom, 120 / zoom});
+    }
   }
   if (g.type == G::Shape && g.preview) parts.push_back(bounds(*g.preview));
   if (g.type == G::Lasso) parts.push_back(rectOf(g.lasso));
@@ -2485,7 +2504,10 @@ std::optional<Rect> EditorCore::overlayBounds() {
 }
 
 void EditorCore::drawHeldHint(Canvas& c, const El& el, const QString& mode) const {
-  const QString text = mode == "transform" ? QStringLiteral("Rotate & resize · hold still to move") : QStringLiteral("Move · hold still to rotate & resize");
+  QString text = mode == "transform" ? QStringLiteral("Rotate & resize · hold still to move") : QStringLiteral("Move · hold still to rotate & resize");
+  // A line shows its angle by its end instead; a shape says how far it's turned.
+  if (isSegmentKind(el.shape.kind)) return;
+  if (m_g.held && std::abs(m_g.held->turned) >= 0.5) text = QString::number(int(std::lround(m_g.held->turned))).replace('-', QChar(0x2212)) + QChar(0xB0) + " · " + text;
   const Rect r = bounds(el);
   const double z = zoom;
   c.save();
@@ -2501,6 +2523,57 @@ void EditorCore::drawHeldHint(Canvas& c, const El& el, const QString& mode) cons
   c.setFill(QStringLiteral("#fff"));
   c.setTextBaseline("middle");
   c.fillText(text, x + 8 / z, y + hgt / 2);
+  c.restore();
+}
+
+void EditorCore::drawAngleHint(Canvas& c, P2 a, P2 b) const {
+  const double dx = b[0] - a[0], dy = b[1] - a[1], len = std::hypot(dx, dy);
+  if (len < 1e-6) return;
+  const double z = zoom;
+  // 0° level, 90° upright; rising to the right is positive (as on paper).
+  double deg = std::atan2(-dy, dx) * 180 / M_PI;
+  if (deg > 90) deg -= 180;
+  if (deg <= -90) deg += 180;
+  const double shown = std::round(deg);
+  const bool round = std::abs(deg - std::round(deg / 15) * 15) < 0.05;
+  const QString accent = round ? QStringLiteral("#16a34a") : QStringLiteral("#2563eb");
+  c.save();
+  // A level line from the start, and the arc between it and the line.
+  const double side = dx >= 0 ? 1 : -1;
+  const double guide = std::min(len, 70 / z);
+  c.setStroke(accent);
+  c.setLineWidth(1.2 / z);
+  c.setDash({4 / z, 3 / z});
+  c.beginPath();
+  c.moveTo(a[0], a[1]);
+  c.lineTo(a[0] + side * guide, a[1]);
+  c.stroke();
+  c.setDash({});
+  if (std::abs(shown) >= 1) {
+    const double r = std::min(len * 0.8, 30 / z);
+    const double base = side > 0 ? 0 : M_PI, line = std::atan2(dy, dx);
+    double sweep = line - base;
+    while (sweep > M_PI) sweep -= 2 * M_PI;
+    while (sweep < -M_PI) sweep += 2 * M_PI;
+    c.beginPath();
+    c.arc(a[0], a[1], r, base, base + sweep, sweep < 0);
+    c.stroke();
+  }
+  // The label past the end: the angle, and the length in centimetres (96 px an inch).
+  const QString text = QString::number(int(shown)).replace('-', QChar(0x2212)) + QChar(0xB0) + "  " + QString::number(len / (96 / 2.54), 'f', 1) + " cm";
+  c.setFont(draw::jsNumber(12 / z) + "px system-ui, sans-serif");
+  const double w = c.textWidth(text) + 14 / z, hgt = 22 / z;
+  const double ux = dx / len, uy = dy / len;
+  double cx = b[0] + ux * (14 / z + w / 2), cy = b[1] + uy * (14 / z + hgt / 2);
+  cx = std::max(w / 2 + 4 / z, std::min(pageWidth() - w / 2 - 4 / z, cx));
+  cy = std::max(hgt / 2 + 4 / z, cy);
+  c.setFill(round ? QStringLiteral("rgba(22, 163, 74, 0.92)") : QStringLiteral("rgba(17, 24, 39, 0.85)"));
+  c.beginPath();
+  c.roundRect(cx - w / 2, cy - hgt / 2, w, hgt, QJSValue(6 / z));
+  c.fill();
+  c.setFill(QStringLiteral("#fff"));
+  c.setTextBaseline("middle");
+  c.fillText(text, cx - w / 2 + 7 / z, cy);
   c.restore();
 }
 
