@@ -571,6 +571,7 @@ Rectangle {
                     ToolStrip {
                         id: toolRail
                         visible: root.rail && !root.focusMode
+                        maxLength: parent.height - 16
                         x: 10
                         anchors.verticalCenter: parent.verticalCenter
                         vertical: true
@@ -827,6 +828,7 @@ Rectangle {
                     z: 9
                     // Under the top bar's tool, or beside the rail's.
                     fromLeft: root.rail
+                    maxWidth: area.width - (root.rail ? 18 : 24)
                     y: root.rail ? Math.round(Math.max(12, Math.min(root.toolMiddle - height / 2, area.height - height - 12))) : 14
                     x: root.rail ? 6 : Math.round(Math.max(12, Math.min(root.toolCenter - width / 2, area.width - width - 12)))
                     // The pointer stays on the tool while the drawer slides.

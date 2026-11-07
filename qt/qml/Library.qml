@@ -30,6 +30,8 @@ Rectangle {
     readonly property int pickedCount: Object.keys(picked).length
     /// Selecting (the Select button), or something is picked.
     property bool selectMode: false
+    /// Too narrow for the heading, search and buttons on one line.
+    readonly property bool narrowHead: width < 1240
     readonly property bool selecting: selectMode || pickedCount > 0
     property string lastPicked: ""
     /// A bulk action is running: the library reloads once at its end.
@@ -757,15 +759,28 @@ Rectangle {
             Layout.fillHeight: true
             spacing: 0
 
-            // Heading, search and sort.
+            // Heading, search and sort. Narrow: the heading on a line of its own,
+            // the buttons as icons.
+            ColumnLayout {
+                id: headCol
+                Layout.fillWidth: true
+                Layout.leftMargin: 36
+                Layout.rightMargin: 36
+                Layout.topMargin: root.narrowHead ? 22 : 30
+                visible: root.narrowHead
+                spacing: 6
+                Label { text: root.heading(); font.pixelSize: 26; font.weight: Font.Bold; font.letterSpacing: -0.5; color: Theme.text; elide: Text.ElideRight; Layout.fillWidth: true }
+                Label { text: root.summary(); color: Theme.muted; elide: Text.ElideRight; Layout.fillWidth: true }
+            }
             RowLayout {
                 Layout.fillWidth: true
                 Layout.leftMargin: 36
                 Layout.rightMargin: 36
-                Layout.topMargin: 30
+                Layout.topMargin: root.narrowHead ? 12 : 30
                 Layout.bottomMargin: 18
-                spacing: 20
+                spacing: root.narrowHead ? 10 : 20
                 ColumnLayout {
+                    visible: !root.narrowHead
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignBottom
                     spacing: 6
@@ -774,6 +789,8 @@ Rectangle {
                 }
                 // Search.
                 Item {
+                    Layout.fillWidth: root.narrowHead
+                    Layout.maximumWidth: root.narrowHead ? 420 : -1
                     Layout.alignment: Qt.AlignBottom
                     implicitWidth: searchRow.implicitWidth + 22
                     implicitHeight: 38
@@ -789,7 +806,7 @@ Rectangle {
                         Icon { name: "search"; size: 18; color: Theme.muted }
                         TextField {
                             id: search
-                            Layout.preferredWidth: 240
+                            Layout.preferredWidth: root.narrowHead ? 200 : 240
                             placeholderText: "Search documents and text…"
                             placeholderTextColor: Theme.muted
                             color: Theme.text
@@ -831,7 +848,7 @@ Rectangle {
                     Layout.alignment: Qt.AlignBottom
                     kind: root.selecting ? "primary" : "ghost"
                     iconName: "check"
-                    text: root.selecting ? "Done" : "Select"
+                    text: root.selecting ? "Done" : root.narrowHead ? "" : "Select"
                     onClicked: root.selecting ? root.clearPicks() : (root.selectMode = true)
                 }
                 UiButton {
@@ -840,7 +857,9 @@ Rectangle {
                     Layout.alignment: Qt.AlignBottom
                     kind: "ghost"
                     iconName: "sort"
-                    text: (root.sorts.find(s => s.id === prefs.sort) || root.sorts[0]).label
+                    text: root.narrowHead ? "" : (root.sorts.find(s => s.id === prefs.sort) || root.sorts[0]).label
+                    ToolTip.visible: root.narrowHead && hovered
+                    ToolTip.text: "Sort: " + (root.sorts.find(s => s.id === prefs.sort) || root.sorts[0]).label
                     onClicked: menu.show(sortBtn, [{ header: "SORT BY" }].concat(root.sorts.map(s => ({ icon: s.icon, label: s.label, checked: prefs.sort === s.id, action: () => prefs.sort = s.id }))))
                 }
                 UiButton {

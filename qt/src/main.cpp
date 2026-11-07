@@ -7,6 +7,7 @@
 #include <QFontDatabase>
 #include <QGuiApplication>
 #include <QTimer>
+#include <QWindow>
 #include <QQmlComponent>
 #include <QNetworkProxyFactory>
 #include <QIcon>
@@ -123,6 +124,12 @@ int main(int argc, char* argv[]) {
     });
   }
   engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Inkleaf/qml/Main.qml")));
+  // For checking the layout at a given size (INKLEAF_WINDOW_SIZE=1000x700).
+  if (const QString size = qEnvironmentVariable("INKLEAF_WINDOW_SIZE"); !size.isEmpty() && !engine.rootObjects().isEmpty())
+    if (auto* w = qobject_cast<QWindow*>(engine.rootObjects().first())) {
+      const QStringList wh = size.split('x');
+      if (wh.size() == 2) w->resize(wh[0].toInt(), wh[1].toInt());
+    }
   if (smoke) {
     QQmlComponent extra(&engine);
     // The dialogs' modules, and the editor (it loads only when a notebook opens).

@@ -24,8 +24,16 @@ Rectangle {
     readonly property var fav: prefs.get(canvas.tool)
     readonly property bool hasColor: !!fav && fav.colors.length > 0
     readonly property var presets: prefs.railColors()
-    readonly property int btn: vertical ? 42 : 38
     readonly property var groups: [["lasso"], ["pen", "brush", "highlighter", "eraser"], ["shape", "text", "sticky", "ruler"], ["laser", "hand"]]
+    /// The room it has (down the side): in a short window the buttons get
+    /// smaller, and your colours show as many as fit (they're in the options too).
+    property real maxLength: 100000
+    readonly property int toolCount: groups.reduce((n, g) => n + g.length, 0)
+    function toolsLength(b) { return toolCount * (b + 2) + groups.length * 11 + 12 }
+    readonly property bool tight: vertical && toolsLength(42) + 40 > maxLength
+    readonly property int btn: vertical ? (tight ? 34 : 42) : 38
+    readonly property int colorRoom: vertical ? Math.max(0, Math.floor((maxLength - toolsLength(btn) - 24) / 36)) : 99
+    readonly property var shownColors: presets.slice(0, Math.max(0, colorRoom - 1))
 
     implicitWidth: vertical ? btn + 12 : strip.implicitWidth + 12
     implicitHeight: vertical ? strip.implicitHeight + 12 : btn + 10
@@ -108,7 +116,7 @@ Rectangle {
         // put for every tool (dimmed for one without colours), so nothing shifts.
         Sep {}
         Repeater {
-            model: root.presets
+            model: root.shownColors
             delegate: AbstractButton {
                 id: sw
                 enabled: root.hasColor
@@ -138,7 +146,7 @@ Rectangle {
         }
         AbstractButton {
             id: add
-            visible: root.presets.length < root.prefs.maxRailColors
+            visible: root.presets.length < root.prefs.maxRailColors && root.colorRoom > root.shownColors.length
             enabled: root.hasColor
             opacity: enabled ? 1 : 0.3
             Behavior on opacity { NumberAnimation { duration: 120 } }

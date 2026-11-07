@@ -20,6 +20,9 @@ Item {
     property real pointerY: height / 2
     /// Squarer corners, as the tool strip has.
     readonly property bool squared: true
+    /// The room it has: in a narrow window it drops the pen's name and the sizes' numbers.
+    property real maxWidth: 100000
+    readonly property bool compact: maxWidth < 760
     readonly property string tool: canvas.tool
     readonly property var fav: prefs.get(tool)
     readonly property var spec: prefs.specs[tool]
@@ -191,7 +194,7 @@ Item {
                 corner: Theme.radius
                 id: nibChip
                 readonly property bool seen: root.tool === "brush" ? root.prefs.store.brushCaseSeen : root.prefs.store.penCaseSeen
-                label: root.caseNow.penFor(root.styleNow).label
+                label: root.compact ? "" : root.caseNow.penFor(root.styleNow).label
                 tip: (root.tool === "brush" ? "Brushes" : "Pens") + ", line and smoothing"
                 art: Component { Image { source: "image://ink/nib/" + root.styleNow + "/" + root.hex + "/" + root.inkWidth + "/" + root.dark + "/" + root.canvas.penDash + "/" + root.canvas.penGap; sourceSize: Qt.size(72, 36); width: 36; height: 18; cache: false } }
                 open: root.caseNow.opened
@@ -401,6 +404,7 @@ Item {
                                 }
                                 Label {
                                     id: label
+                                    visible: !root.compact
                                     anchors.verticalCenter: parent.verticalCenter
                                     text: sz.num
                                     font.pixelSize: 11
