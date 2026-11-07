@@ -69,6 +69,7 @@ Popup {
                 fillMode: Image.PreserveAspectFit
                 Rectangle { anchors.fill: parent; color: "transparent"; border.color: Theme.accent; border.width: 2; radius: 4 }
             }
+            Timer { id: keep; property real y: 0; interval: 0; onTriggered: grid.contentY = Math.min(y, Math.max(grid.originY - grid.topMargin, grid.contentHeight + grid.originY - grid.height + grid.bottomMargin)) }
             Timer {
                 id: scroller
                 property int dir: 0
@@ -137,7 +138,12 @@ Popup {
                             root.dragTo = -1
                             grid.interactive = true
                             scroller.dir = 0
-                            if (to >= 0 && to !== from) root.canvas.movePage(from, to)
+                            if (to >= 0 && to !== from) {
+                                // (The refreshed list would start at the top again: it stays where it was.)
+                                keep.y = grid.contentY
+                                root.canvas.movePage(from, to)
+                                keep.start()
+                            }
                         }
                         onCanceled: { root.dragFrom = -1; root.dragTo = -1; grid.interactive = true; scroller.dir = 0 }
                         onClicked: if (root.dragFrom < 0) { root.canvas.goToPage(cell.index); root.close() }

@@ -140,8 +140,35 @@ Rectangle {
             spacing: 0
             model: root.canvas.pages
             ScrollBar.vertical: ScrollBar {}
-            currentIndex: root.canvas.currentPage
-            onCurrentIndexChanged: positionViewAtIndex(currentIndex, ListView.Contain)
+            // Follows the page you're on. (Not the list's own current item: a refreshed
+            // list resets that to the first page, which scrolled it back to the top.)
+            readonly property int here: root.canvas.currentPage
+            onHereChanged: if (here >= 0 && here < count) positionViewAtIndex(here, ListView.Contain)
+            // The pages list being refreshed (a page added, moved or deleted, sync) puts a
+            // list back at the top: it stays where it was instead, with the current page
+            // in view. (keptY: where it was; lastY: the one before, in case the reset to
+            // the top arrived before this list heard of the new pages.)
+            property real keptY: 0
+            property real lastY: 0
+            property bool restoring: false
+            onContentYChanged: if (!restoring) { lastY = keptY; keptY = contentY }
+            onModelChanged: {
+                restoreTo.y = Math.abs(contentY - originY + topMargin) < 1 && lastY > keptY ? lastY : keptY
+                restoring = true
+                restoreTo.start()
+            }
+            // (A moment later, once the new list is laid out.)
+            Timer {
+                id: restoreTo
+                property real y: 0
+                interval: 0
+                onTriggered: {
+                    list.contentY = Math.max(list.originY - list.topMargin, Math.min(y, list.contentHeight + list.originY - list.height + list.bottomMargin))
+                    if (list.here >= 0 && list.here < list.count) list.positionViewAtIndex(list.here, ListView.Contain)
+                    list.restoring = false
+                    list.keptY = list.contentY
+                }
+            }
             delegate: Item {
                 id: cell
                 required property var modelData
