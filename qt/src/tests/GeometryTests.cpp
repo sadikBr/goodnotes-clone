@@ -326,3 +326,32 @@ TEST("transformShape", "translates") {
   const Shape r = transformShape(poly("rectangle", {{0, 0}, {1, 0}, {1, 1}, {0, 1}}), {0, 0}, 0, 1, 5, 7);
   CHECK(r.points[0] == (P2{5, 7}));
 }
+
+TEST("drafting", "a line settles parallel, square to the line it starts on, or on a round angle") {
+  const std::vector<DraftLine> lines{{{0, 0}, {100, 37}, "a"}};
+  const double par = std::atan2(37, 100);
+  AngleSnap s = snapDirection(par + 0.01, lines, std::nullopt);
+  CHECK(s.why == "parallel" && std::abs(s.angle - par) < 1e-9);
+  s = snapDirection(par + M_PI / 2 + 0.01, lines, lines[0]);
+  CHECK(s.why == "square" && std::abs(s.angle - (par + M_PI / 2)) < 1e-9);
+  s = snapDirection(M_PI / 4 + 0.015, {}, std::nullopt);
+  CHECK(s.why == "round" && std::abs(s.angle - M_PI / 4) < 1e-9);
+  s = snapDirection(0.3, {}, std::nullopt);
+  CHECK(s.why.isEmpty() && s.angle == 0.3);
+}
+
+TEST("drafting", "ends join nearby corners; angles between lines read as drawn") {
+  CHECK(nearestCorner({{10, 10}, {50, 50}}, {12, 11}, 5) == P2({10, 10}));
+  CHECK(!nearestCorner({{10, 10}}, {30, 30}, 5));
+  const DraftLine base{{0, 0}, {100, 0}, "b"};
+  CHECK(std::abs(angleBetween(base, {0, 0}, {50, -50}) - 45) < 1e-9);
+  CHECK(std::abs(angleBetween(base, {0, 0}, {-50, -50}) - 135) < 1e-9);
+  CHECK(std::abs(angleBetween(base, {50, 0}, {50, -80}) - 90) < 1e-9);
+}
+
+TEST("drafting", "nearly square boxes and nearly round ellipses become exact") {
+  auto r = buildShape("rectangle", {0, 0}, {100, 97});
+  CHECK(r && squareUp(*r) && std::abs(shapeSize(*r).first - shapeSize(*r).second) < 1e-9);
+  auto e = buildShape("ellipse", {0, 0}, {100, 60});
+  CHECK(e && !squareUp(*e));
+}

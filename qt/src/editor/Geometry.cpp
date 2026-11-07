@@ -748,3 +748,167 @@ El transformElement(const El& el, const Affine& m, double sx, double sy, double 
 }
 
 }  // namespace ed
+
+// --- drafting --------------------------------------------------------------------
+
+namespace ed {
+
+/// A pen stroke that's a straight line (a held line drawn with a pen that keeps its look): its two ends.
+std::optional<std::pair<P2, P2>> straightStroke(const El& e) {
+  if (e.kind != Kind::Stroke || e.points.size() < 2) return std::nullopt;
+  const P2 a{e.points.front()[0], e.points.front()[1]}, b{e.points.back()[0], e.points.back()[1]};
+  const double len = std::hypot(b[0] - a[0], b[1] - a[1]);
+  if (len < 20) return std::nullopt;
+  const double tol = std::max(1.5, len * 0.01);
+  for (const Pt& p : e.points)
+    if (std::abs((b[0] - a[0]) * (a[1] - p[1]) - (a[0] - p[0]) * (b[1] - a[1])) / len > tol) return std::nullopt;
+  return std::pair{a, b};
+}
+
+std::vector<DraftLine> draftingLines(const std::vector<ElPtr>& els, const QString& skip) {
+  std::vector<DraftLine> out;
+  for (const ElPtr& e : els) {
+    if (e && e->id != skip)
+      if (auto st = straightStroke(*e)) out.push_back({st->first, st->second, e->id});
+    if (!e || e->kind != Kind::Shape || e->id == skip) continue;
+    const Shape& s = e->shape;
+    if (s.kind == "ellipse" || s.name == "point" || s.points.size() < 2) continue;
+    if (isSegmentKind(s.kind)) {
+      out.push_back({s.points.front(), s.points.back(), e->id});
+      continue;
+    }
+    // A polygon's straight sides (not the many short ones of a curve).
+    if (s.kind == "path" || s.points.size() > 12) continue;
+    for (size_t i = 0; i < s.points.size(); ++i) out.push_back({s.points[i], s.points[(i + 1) % s.points.size()], e->id});
+    if (out.size() > 400) break;
+  }
+  return out;
+}
+
+std::vector<P2> draftingCorners(const std::vector<ElPtr>& els, const QString& skip) {
+  std::vector<P2> out;
+  for (const ElPtr& e : els) {
+    if (e && e->id != skip)
+      if (auto st = straightStroke(*e)) out.push_back(st->first), out.push_back(st->second);
+    if (!e || e->kind != Kind::Shape || e->id == skip) continue;
+    const Shape& s = e->shape;
+    if (s.name == "point") out.push_back({s.cx, s.cy});
+    else if (isSegmentKind(s.kind) && s.points.size() >= 2) out.push_back(s.points.front()), out.push_back(s.points.back());
+    else if (s.kind != "ellipse" && s.kind != "path" && s.points.size() <= 12) out.insert(out.end(), s.points.begin(), s.points.end());
+    if (out.size() > 800) break;
+  }
+  return out;
+}
+
+std::optional<P2> nearestCorner(const std::vector<P2>& corners, P2 p, double radius) {
+  std::optional<P2> best;
+  double bestD = radius;
+  for (const P2& c : corners) {
+    const double d = std::hypot(c[0] - p[0], c[1] - p[1]);
+    if (d <= bestD) bestD = d, best = c;
+  }
+  return best;
+}
+
+namespace {
+double distToSeg(P2 p, P2 a, P2 b) {
+  const double dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy;
+  const double t = l2 > 0 ? std::clamp(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2, 0.0, 1.0) : 0;
+  return std::hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
+}
+/// The angle a line makes (radians), folded to [0, π): a line has no direction.
+double lineAngle(const DraftLine& s) {
+  double a = std::atan2(s.b[1] - s.a[1], s.b[0] - s.a[0]);
+  while (a < 0) a += M_PI;
+  while (a >= M_PI) a -= M_PI;
+  return a;
+}
+/// How far `a` (a direction) is from `target` (a line's angle), either way along it, in radians.
+double offLine(double a, double target) {
+  double d = std::fmod(a - target, M_PI);
+  if (d > M_PI / 2) d -= M_PI;
+  if (d < -M_PI / 2) d += M_PI;
+  return d;
+}
+}  // namespace
+
+std::optional<DraftLine> lineThrough(const std::vector<DraftLine>& lines, P2 p, double radius) {
+  std::optional<DraftLine> best;
+  double bestD = radius;
+  for (const DraftLine& s : lines) {
+    const double d = distToSeg(p, s.a, s.b);
+    if (d <= bestD) bestD = d, best = s;
+  }
+  return best;
+}
+
+AngleSnap snapDirection(double angle, const std::vector<DraftLine>& lines, const std::optional<DraftLine>& startsOn, double toleranceDeg) {
+  // Lines drawn by hand are a little off: square and parallel reach further (2×) than round angles.
+  const double tol = toleranceDeg * M_PI / 180;
+  AngleSnap best{angle, "", std::nullopt};
+  double bestScore = 1;  // how far off, as a share of what that kind allows
+  auto consider = [&](double target, const QString& why, const std::optional<DraftLine>& ref, double reach) {
+    const double off = offLine(angle, target);
+    const double score = std::abs(off) / (tol * reach);
+    if (score < bestScore) {
+      bestScore = score;
+      best = {angle - off, why, ref};
+    }
+  };
+  if (startsOn) consider(lineAngle(*startsOn) + M_PI / 2, "square", startsOn, 2.0);
+  int n = 0;
+  for (const DraftLine& s : lines) {
+    if (std::hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]) < 8) continue;
+    consider(lineAngle(s), "parallel", s, 2.0);
+    if (++n > 200) break;
+  }
+  for (int k = 0; k < 12; ++k) consider(k * M_PI / 12, "round", std::nullopt, 1.0);
+  return best;
+}
+
+double angleBetween(const DraftLine& s, P2 from, P2 to) {
+  const double a = std::atan2(to[1] - from[1], to[0] - from[0]);
+  double d = std::abs(offLine(a, lineAngle(s)));  // 0 … π/2
+  d = d * 180 / M_PI;
+  // Which side of the other line: if it starts at one of its ends, the angle
+  // inside (towards the rest of that line), which can be more than 90°.
+  const auto at = [&](P2 q) { return std::hypot(q[0] - from[0], q[1] - from[1]) < 1e-6 + 0.5; };
+  if (at(s.a) || at(s.b)) {
+    const P2 other = at(s.a) ? s.b : s.a;
+    const double b = std::atan2(other[1] - from[1], other[0] - from[0]);
+    double diff = std::abs(a - b);
+    if (diff > M_PI) diff = 2 * M_PI - diff;
+    return diff * 180 / M_PI;
+  }
+  return d;
+}
+
+bool squareUp(Shape& s, double tolerance) {
+  if (s.kind == "ellipse") {
+    const double m = std::max(s.rx, s.ry);
+    if (m <= 0 || std::abs(s.rx - s.ry) / m > tolerance) return false;
+    s.rx = s.ry = (s.rx + s.ry) / 2;
+    return true;
+  }
+  if (s.kind != "rectangle" || s.points.size() != 4) return false;
+  const P2 p0 = s.points[0], p1 = s.points[1], p3 = s.points[3];
+  const double a = std::hypot(p1[0] - p0[0], p1[1] - p0[1]), b = std::hypot(p3[0] - p0[0], p3[1] - p0[1]);
+  if (a <= 0 || b <= 0 || std::abs(a - b) / std::max(a, b) > tolerance) return false;
+  const double side = (a + b) / 2;
+  const P2 u{(p1[0] - p0[0]) / a, (p1[1] - p0[1]) / a}, v{(p3[0] - p0[0]) / b, (p3[1] - p0[1]) / b};
+  const P2 c{(s.points[0][0] + s.points[2][0]) / 2, (s.points[0][1] + s.points[2][1]) / 2};
+  const double h = side / 2;
+  s.points = {{c[0] - u[0] * h - v[0] * h, c[1] - u[1] * h - v[1] * h}, {c[0] + u[0] * h - v[0] * h, c[1] + u[1] * h - v[1] * h},
+              {c[0] + u[0] * h + v[0] * h, c[1] + u[1] * h + v[1] * h}, {c[0] - u[0] * h + v[0] * h, c[1] - u[1] * h + v[1] * h}};
+  return true;
+}
+
+std::pair<double, double> shapeSize(const Shape& s) {
+  if (s.kind == "ellipse") return {2 * s.rx, 2 * s.ry};
+  if (s.kind == "rectangle" && s.points.size() == 4)
+    return {std::hypot(s.points[1][0] - s.points[0][0], s.points[1][1] - s.points[0][1]), std::hypot(s.points[3][0] - s.points[0][0], s.points[3][1] - s.points[0][1])};
+  const Rect r = rectOf(s.points, 0);
+  return {r.w, r.h};
+}
+
+}  // namespace ed

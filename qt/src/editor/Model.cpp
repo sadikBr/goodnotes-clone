@@ -51,7 +51,11 @@ Shape Shape::fromJson(const QJsonObject& o) {
 }
 
 QJsonObject Shape::toJson() const {
-  if (kind == "ellipse") return {{"kind", kind}, {"cx", cx}, {"cy", cy}, {"rx", rx}, {"ry", ry}};
+  if (kind == "ellipse") {
+    QJsonObject o{{"kind", kind}, {"cx", cx}, {"cy", cy}, {"rx", rx}, {"ry", ry}};
+    if (!name.isEmpty()) o["name"] = name;
+    return o;
+  }
   QJsonObject o{{"kind", kind}, {"points", p2s(points)}};
   if (!name.isEmpty()) o["name"] = name;
   if (kind == "path") {

@@ -86,4 +86,35 @@ struct GroupTransform {
 GroupTransform groupTransform(const Rect& box, const QString& handle, P2 start, P2 p, bool constrain);
 El transformElement(const El& el, const Affine& m, double sx, double sy, double angle);
 
+// --- drafting: the help a held line or shape gets ------------------------------
+
+/// A straight piece of a drawing: a line, an arrow, a side of a polygon.
+struct DraftLine {
+  P2 a, b;
+  QString id;  ///< the element it belongs to
+};
+/// The straight lines on a page (lines, arrows, polygon sides); not `skip`.
+std::vector<DraftLine> draftingLines(const std::vector<ElPtr>& els, const QString& skip = {});
+/// Where lines may join: line ends, polygon corners, points; not `skip`.
+std::vector<P2> draftingCorners(const std::vector<ElPtr>& els, const QString& skip = {});
+/// The nearest corner within `radius`, if any.
+std::optional<P2> nearestCorner(const std::vector<P2>& corners, P2 p, double radius);
+/// The line that passes within `radius` of `p` (the nearest), if any.
+std::optional<DraftLine> lineThrough(const std::vector<DraftLine>& lines, P2 p, double radius);
+/// How a held line's direction settled: on a round angle (every 15°), parallel
+/// to a line, or square to the line it starts on; none when it didn't.
+struct AngleSnap {
+  double angle;  ///< the direction (radians, screen coordinates)
+  QString why;   ///< "", "round", "parallel", "square"
+  std::optional<DraftLine> ref;
+};
+AngleSnap snapDirection(double angle, const std::vector<DraftLine>& lines, const std::optional<DraftLine>& startsOn, double toleranceDeg = 1.5);
+/// The smaller angle between two lines, in degrees (0–90 folded to 0–180 as drawn).
+double angleBetween(const DraftLine& s, P2 from, P2 to);
+/// A box or ellipse that's nearly square or round becomes exactly so (in place).
+bool squareUp(Shape& s, double tolerance = 0.06);
+/// Its size in page units, for the size label: width × height (sides of a box,
+/// axes of an ellipse; else as drawn).
+std::pair<double, double> shapeSize(const Shape& s);
+
 }  // namespace ed

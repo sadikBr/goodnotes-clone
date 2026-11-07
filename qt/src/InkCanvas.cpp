@@ -210,6 +210,20 @@ InkCanvas::InkCanvas(QQuickItem* parent) : QQuickItem(parent) {
     afterCore();
     emit selectedByTap();
   });
+  m_holdPoint.setSingleShot(true);
+  m_holdPoint.setInterval(650);
+  connect(&m_holdPoint, &QTimer::timeout, this, [this] {
+    // Held still with the pen where there's nothing: no dot of ink, a point.
+    if (!m_ed || m_g.kind != Gesture::Draw || m_holdPage < 0) return;
+    m_ed->cancel();
+    m_g = Gesture();
+    m_liveChanged = true;
+    setWriting(false);
+    const QPointF p = toPageOf(m_holdPage, m_holdFrom);
+    m_ed->activate(m_holdPage);
+    m_ed->addPoint(p.x(), p.y());
+    afterCore();
+  });
   m_hoverTimer.setSingleShot(true);
   m_hoverTimer.setTimerType(Qt::PreciseTimer);
   m_hoverTimer.setInterval(kMoveEveryMs);
@@ -2363,6 +2377,7 @@ void InkCanvas::press(QPointF s, float pressure, bool stylus, const QString& too
   // that word. Not the eraser (it erases), nor the side button or eraser end.
   const bool picks = toolOverride.isEmpty() && !m_skipTapSelect && (tool == "pen" || tool == "brush" || tool == "highlighter" || tool == "shape");
   m_holdSelect.stop();
+  m_holdPoint.stop();
   m_holdIds.clear();
   if (picks) {
     const QString obj = m_ed->objectAt(pi, p.x(), p.y());
@@ -2384,6 +2399,11 @@ void InkCanvas::press(QPointF s, float pressure, bool stylus, const QString& too
       m_holdPage = pi;
       m_holdFrom = s;
       m_holdSelect.start();
+    } else if (tool == "pen") {
+      // On blank paper, with the pen: a point if it stays.
+      m_holdPage = pi;
+      m_holdFrom = s;
+      m_holdPoint.start();
     }
   }
   if (r == "draw") {
@@ -2421,6 +2441,7 @@ void InkCanvas::drag(QPointF s, float pressure, bool stylus, Qt::KeyboardModifie
   if (m_dismissing && QLineF(m_dismissFrom, s).length() >= 6) m_dismissing = false;
   // Moved: not a hold on ink.
   if (m_holdSelect.isActive() && QLineF(m_holdFrom, s).length() > 4) m_holdSelect.stop();
+  if (m_holdPoint.isActive() && QLineF(m_holdFrom, s).length() > 4) m_holdPoint.stop();
   // A press on a placed thing that moves: a stroke after all, from where it began.
   if (m_g.kind == Gesture::TapSelect) {
     if (QLineF(m_g.tapStart, s).length() < 6) return;
@@ -2518,6 +2539,7 @@ void InkCanvas::selectAt(QPointF s) {
 void InkCanvas::release() {
   setWriting(false);
   m_holdSelect.stop();
+  m_holdPoint.stop();
   const Gesture::Kind k = m_g.kind;
   // A tap on a placed thing: it's selected.
   if (k == Gesture::TapSelect) {

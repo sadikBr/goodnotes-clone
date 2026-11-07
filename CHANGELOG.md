@@ -8,6 +8,10 @@ section here before it can be published (`scripts/check-version.py`).
 ## 0.21.0
 
 - **See the angle of a straight line:** draw a line and hold still until it straightens, then keep the pen down and turn it: a label by its end shows its angle (0° is level, 90° upright, up to the right is positive) and its length in centimetres, with a dashed level line and an arc from where it starts. It settles exactly on 0°, 15°, 30°, 45°… when you come close (the label turns green), so a level or a 45° line is easy. Works with the highlighter's straight lines too, and a held shape (a box, a triangle…) shows how far it's turned and settles back straight.
+- **Lines that connect:** a straight line (held, or drawn with the shape tool) joins the end or corner of another line or shape when it comes close, so triangles and figures close properly; a green ring shows where it joined.
+- **Square and parallel:** a line that starts on another line settles at a right angle to it (with the little square mark), and a line nearly parallel to another settles parallel (that line lights up and the label shows ∥). The label also gives the angle between it and the line it starts on (∠).
+- **Sizes:** while you hold a shape, or draw one with the shape tool, its size shows under it in centimetres (width × height, ⌀ for a circle); a box that's nearly square, or an ellipse that's nearly round, becomes exactly so.
+- **Points:** press and hold the pen still on blank paper to place a clean dot, named A, B, C… in order on the page (the letter is a text box you can change). Lines join points too.
 
 ## 0.20.1
 

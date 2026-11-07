@@ -468,6 +468,8 @@ private:
   };
   /// Press and hold still on ink: that word is selected (`m_holdIds`, page `m_holdPage`).
   QTimer m_holdSelect;
+  /// Press and hold the pen still on blank paper: a point (a dot named A, B, C…).
+  QTimer m_holdPoint;
   QStringList m_holdIds;
   int m_holdPage = -1;
   QPointF m_holdFrom;

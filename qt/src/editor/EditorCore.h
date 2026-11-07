@@ -163,6 +163,8 @@ public:
   void insertImage(const QString& src, double naturalW, double naturalH, double cx, double cy);
   /// A text box with `value` at (x, y) on the active page (`w` wide), selected.
   void insertText(const QString& value, double x, double y, double w);
+  /// A point for a figure (a clean dot) at (x, y), named A, B, C… in order on the page.
+  void addPoint(double x, double y);
   /// A graph ({ functions (one per line), xmin, xmax, ymin, ymax, grid }) in
   /// the box (x, y, w, h), selected.
   void insertGraph(const QVariantMap& spec, double x, double y, double w, double h);
@@ -249,6 +251,17 @@ private:
     /// How far a held shape (not a line) has been turned, in degrees (counter-clockwise).
     double turned = 0;
   };
+  /// The help a straight line or a shape gets while it's drawn: lines that
+  /// join other lines' ends, settle square or parallel to them; boxes and
+  /// circles that settle square and round.
+  struct Draft {
+    std::vector<DraftLine> lines;
+    std::vector<P2> corners;
+    std::optional<DraftLine> startsOn;  ///< the line this one starts on
+    QString why;                  ///< how its direction settled ("", round, parallel, square)
+    std::optional<DraftLine> ref;       ///< the line it settled against
+    bool joinedStart = false, joinedEnd = false;
+  };
   struct Guided {
     EdgeGuide edge;
     double offset;
@@ -262,6 +275,7 @@ private:
     std::vector<double> times;
     ElPtr preview;  ///< draw, shape, handle
     std::optional<Held> held;
+    std::optional<Draft> draft;
     std::vector<QString> absorb;
     std::optional<Guided> ruler;
     // erase
@@ -355,6 +369,12 @@ private:
   void drawHeldHint(Canvas& c, const El& el, const QString& mode) const;
   /// A held line's angle (0° level, counter-clockwise positive) and length, by its end.
   void drawAngleHint(Canvas& c, P2 a, P2 b) const;
+  /// A shape's size in centimetres, under it (⌀ for a circle).
+  void drawSizeHint(Canvas& c, const El& el) const;
+  /// The drafting help for this page (its lines and corners), and where a line starting at `start` begins.
+  Draft makeDraft(P2& start, const QString& skip = {});
+  /// A line's end joins a corner close by.
+  bool joinEnd(Draft& d, P2& end) const;
   double nextZ() { return nextZOf(elements()); }
   static double nextZOf(const Els& els);
   void stopTimers();

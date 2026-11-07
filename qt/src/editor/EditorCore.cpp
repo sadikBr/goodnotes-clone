@@ -646,7 +646,23 @@ void EditorCore::move(double x, double y, double p, double t, bool shift, bool a
       break;
     }
     case G::Shape: {
-      const auto shape = buildShape(shapeKind, g.start, {x, y}, shift);
+      P2 end{x, y};
+      const bool segment = isSegmentKind(shapeKind);
+      if (!g.draft) g.draft = makeDraft(g.start);
+      if (segment && !shift) {
+        // Settles square, parallel or on a round angle; its end joins a corner close by.
+        const double len = std::hypot(end[0] - g.start[0], end[1] - g.start[1]);
+        if (len > 0) {
+          const AngleSnap snap = snapDirection(std::atan2(end[1] - g.start[1], end[0] - g.start[0]), g.draft->lines, g.draft->startsOn);
+          g.draft->why = snap.why;
+          g.draft->ref = snap.ref;
+          end = {g.start[0] + std::cos(snap.angle) * len, g.start[1] + std::sin(snap.angle) * len};
+        }
+        g.draft->joinedEnd = joinEnd(*g.draft, end);
+        if (g.draft->joinedEnd) g.draft->why.clear();
+      }
+      auto shape = buildShape(shapeKind, g.start, end, shift);
+      if (shape && !segment && !shift) squareUp(*shape);
       g.preview = shape ? makeShapeEl(*shape) : nullptr;
       break;
     }
@@ -981,12 +997,36 @@ void EditorCore::holdFired() {
   auto multi = multiStrokeSymbol();
   ElPtr shape = multi ? multi->shape : refine();
   if (!shape) return;
+  // A straight line joins the corners near its ends; a nearly square box or round ellipse becomes exactly so.
+  std::optional<Draft> draft;
+  if (!multi) {
+    El e = *shape;
+    if (isSegmentKind(e.shape.kind) && e.shape.points.size() >= 2) {
+      auto& pts = e.shape.points;
+      draft = makeDraft(pts.front());
+      // It straightens already settled: square, parallel or on a round angle.
+      const P2 a = pts.front(), b = pts.back();
+      const double len = std::hypot(b[0] - a[0], b[1] - a[1]);
+      if (len > 0) {
+        const AngleSnap snap = snapDirection(std::atan2(b[1] - a[1], b[0] - a[0]), draft->lines, draft->startsOn);
+        draft->why = snap.why;
+        draft->ref = snap.ref;
+        pts.back() = {a[0] + std::cos(snap.angle) * len, a[1] + std::sin(snap.angle) * len};
+      }
+      draft->joinedEnd = joinEnd(*draft, pts.back());
+      if (draft->joinedEnd) draft->why.clear();
+    } else {
+      squareUp(e.shape);
+    }
+    shape = makeEl(std::move(e));
+  }
   g.preview = shape;
   g.absorb = multi ? multi->absorb : std::vector<QString>{};
   for (const QString& id : g.absorb) m_hidden.insert(id);
   if (!g.absorb.empty()) ++rev;
   const P2 anchor{g.points.back()[0], g.points.back()[1]};
   g.held = Held{"transform", shape, anchor, pivotFor(*shape), anchor};
+  g.draft = draft;
   armModeToggle();
   touchOverlay();
 }
@@ -1208,14 +1248,24 @@ void EditorCore::updateHeld(P2 p) {
       const auto& pts = h.base->shape.points;
       const bool segment = isSegmentKind(h.base->shape.kind) && pts.size() >= 2;
       const double from = segment ? std::atan2(pts.back()[1] - pts.front()[1], pts.back()[0] - pts.front()[0]) : 0;
-      const double deg = -(from + angle) * 180 / M_PI;  // counter-clockwise, as on paper
-      const double near = std::round(deg / 15) * 15;
-      if (std::abs(deg - near) < 1.5) angle += (deg - near) * M_PI / 180;
+      if (segment && m_g.draft) {
+        // A line: square to the line it starts on, parallel to another, or a round angle.
+        const AngleSnap snap = snapDirection(from + angle, m_g.draft->lines, m_g.draft->startsOn);
+        angle = snap.angle - from;
+        m_g.draft->why = snap.why;
+        m_g.draft->ref = snap.ref;
+      } else {
+        const double deg = -(from + angle) * 180 / M_PI;  // counter-clockwise, as on paper
+        const double near = std::round(deg / 15) * 15;
+        if (std::abs(deg - near) < 1.5) angle += (deg - near) * M_PI / 180;
+      }
       double turned = std::fmod(-angle * 180 / M_PI, 360);
       if (turned > 180) turned -= 360;
       if (turned <= -180) turned += 360;
       h.turned = segment ? 0 : turned;
       shape = transformShape(h.base->shape, h.pivot, angle, scale);
+      // Its end joins a corner close by (that wins over the angle).
+      if (segment && m_g.draft && shape.points.size() >= 2) m_g.draft->joinedEnd = joinEnd(*m_g.draft, shape.points.back());
     }
   }
   El next = *h.base;
@@ -2382,6 +2432,7 @@ void EditorCore::drawOverlay(Canvas& c, int pi) {
       else draw::drawElement(c, g.preview->toJson());
       if (g.held) drawHeldHint(c, *g.preview, g.held->mode);
       if (g.held && isSegmentKind(g.preview->shape.kind) && g.preview->shape.points.size() >= 2) drawAngleHint(c, g.preview->shape.points.front(), g.preview->shape.points.back());
+      else if (g.held && g.preview->kind == Kind::Shape) drawSizeHint(c, *g.preview);
     } else if (g.ruler) {
       El live;
       live.id = "live";
@@ -2396,6 +2447,8 @@ void EditorCore::drawOverlay(Canvas& c, int pi) {
     }
   } else if (g.type == G::Shape) {
     if (g.preview) draw::drawElement(c, g.preview->toJson());
+    if (g.preview && isSegmentKind(g.preview->shape.kind) && g.preview->shape.points.size() >= 2) drawAngleHint(c, g.preview->shape.points.front(), g.preview->shape.points.back());
+    else if (g.preview) drawSizeHint(c, *g.preview);
   } else if (g.type == G::Lasso) {
     drawLasso(c, g.lasso, zoom);
   } else if (g.type == G::Move) {
@@ -2480,12 +2533,13 @@ std::optional<Rect> EditorCore::overlayBounds() {
     if (g.preview) parts.push_back(bounds(*g.preview));
     if (!g.points.empty()) parts.push_back(rectOf(flat(g.points)));
     // A held line's angle label, past its end.
+    if (g.held && g.preview) parts.push_back(pad(bounds(*g.preview), 60 / zoom));
     if (g.held && g.preview && g.preview->shape.points.size() >= 2) {
       const P2 e = g.preview->shape.points.back();
       parts.push_back({e[0] - 160 / zoom, e[1] - 60 / zoom, 320 / zoom, 120 / zoom});
     }
   }
-  if (g.type == G::Shape && g.preview) parts.push_back(bounds(*g.preview));
+  if (g.type == G::Shape && g.preview) parts.push_back(pad(bounds(*g.preview), 170 / zoom));
   if (g.type == G::Lasso) parts.push_back(rectOf(g.lasso));
   // Ink just scratched out, while it fades.
   if (fadeLevel > 0)
@@ -2526,6 +2580,89 @@ void EditorCore::drawHeldHint(Canvas& c, const El& el, const QString& mode) cons
   c.restore();
 }
 
+EditorCore::Draft EditorCore::makeDraft(P2& start, const QString& skip) {
+  Draft d;
+  d.lines = draftingLines(elements(), skip);
+  d.corners = draftingCorners(elements(), skip);
+  if (auto c = nearestCorner(d.corners, start, 10 / zoom)) {
+    start = *c;
+    d.joinedStart = true;
+  }
+  d.startsOn = lineThrough(d.lines, start, 6 / zoom);
+  return d;
+}
+
+bool EditorCore::joinEnd(Draft& d, P2& end) const {
+  if (auto c = nearestCorner(d.corners, end, 10 / zoom)) {
+    end = *c;
+    return true;
+  }
+  return false;
+}
+
+void EditorCore::addPoint(double x, double y) {
+  // Named after the points already on the page: A, B, … Z, then A1, B1, …
+  int n = 0;
+  for (const ElPtr& e : elements())
+    if (e->kind == Kind::Shape && e->shape.name == "point") ++n;
+  const QString name = QString(QChar('A' + n % 26)) + (n >= 26 ? QString::number(n / 26) : QString());
+  const QString color = colors.value("pen", "#111827");
+  El dot;
+  dot.id = newId();
+  dot.z = nextZ();
+  dot.kind = Kind::Shape;
+  dot.shape.kind = "ellipse";
+  dot.shape.name = "point";
+  dot.shape.cx = x;
+  dot.shape.cy = y;
+  dot.shape.rx = dot.shape.ry = std::max(2.5, widths.value("pen", 2) * 0.9);
+  dot.color = color;
+  dot.fill = color;
+  dot.width = 1;
+  El label;
+  label.id = newId();
+  label.z = nextZ() + 1;
+  label.kind = Kind::Text;
+  label.x = x + 5;
+  label.y = std::max(0.0, y - 26);
+  label.w = 44;
+  label.text = name;
+  label.fontSize = 17;
+  label.color = color;
+  label.font = textFont;
+  snapshot();
+  elements().push_back(makeEl(std::move(dot)));
+  elements().push_back(makeEl(std::move(label)));
+  changed();
+}
+
+void EditorCore::drawSizeHint(Canvas& c, const El& el) const {
+  if (el.kind != Kind::Shape) return;
+  const auto [w, h] = shapeSize(el.shape);
+  if (w < 1 && h < 1) return;
+  const double z = zoom, cm = 96 / 2.54;
+  const bool even = std::abs(w - h) < 0.01 * std::max(w, h);
+  QString text;
+  if (el.shape.kind == "ellipse" && even) text = QStringLiteral("\u2300 ") + QString::number(w / cm, 'f', 1) + " cm";
+  else text = QString::number(w / cm, 'f', 1) + QStringLiteral(" \u00d7 ") + QString::number(h / cm, 'f', 1) + " cm";
+  const Rect r = bounds(el);
+  c.save();
+  c.setFont(draw::jsNumber(12 / z) + "px system-ui, sans-serif");
+  const double tw = c.textWidth(text) + 14 / z, th = 22 / z;
+  const double x = std::max(4 / z, std::min(pageWidth() - tw - 4 / z, r.x + r.w / 2 - tw / 2));
+  const double y = r.y + r.h + 10 / z;
+  // Green when it settled square or round.
+  const bool squared = even && (el.shape.kind == "ellipse" || el.shape.kind == "rectangle");
+  c.setFill(squared ? QStringLiteral("rgba(22, 163, 74, 0.92)") : QStringLiteral("rgba(17, 24, 39, 0.85)"));
+  c.beginPath();
+  c.roundRect(x, y, tw, th, QJSValue(6 / z));
+  c.fill();
+  c.setFill(QStringLiteral("#fff"));
+  c.setTextBaseline("middle");
+  c.fillText(text, x + 7 / z, y + th / 2);
+  c.restore();
+}
+
 void EditorCore::drawAngleHint(Canvas& c, P2 a, P2 b) const {
   const double dx = b[0] - a[0], dy = b[1] - a[1], len = std::hypot(dx, dy);
   if (len < 1e-6) return;
@@ -2535,7 +2672,9 @@ void EditorCore::drawAngleHint(Canvas& c, P2 a, P2 b) const {
   if (deg > 90) deg -= 180;
   if (deg <= -90) deg += 180;
   const double shown = std::round(deg);
-  const bool round = std::abs(deg - std::round(deg / 15) * 15) < 0.05;
+  const Draft* d = m_g.draft ? &*m_g.draft : nullptr;
+  const QString why = d ? d->why : QString();
+  const bool round = !why.isEmpty() || std::abs(deg - std::round(deg / 15) * 15) < 0.05 || (d && d->joinedEnd);
   const QString accent = round ? QStringLiteral("#16a34a") : QStringLiteral("#2563eb");
   c.save();
   // A level line from the start, and the arc between it and the line.
@@ -2559,8 +2698,68 @@ void EditorCore::drawAngleHint(Canvas& c, P2 a, P2 b) const {
     c.arc(a[0], a[1], r, base, base + sweep, sweep < 0);
     c.stroke();
   }
-  // The label past the end: the angle, and the length in centimetres (96 px an inch).
-  const QString text = QString::number(int(shown)).replace('-', QChar(0x2212)) + QChar(0xB0) + "  " + QString::number(len / (96 / 2.54), 'f', 1) + " cm";
+  // Where it joins other lines: a ring at each joined end.
+  if (d) {
+    c.setStroke(QStringLiteral("#16a34a"));
+    c.setLineWidth(1.6 / z);
+    for (const auto& [on, p] : {std::pair{d->joinedStart, a}, std::pair{d->joinedEnd, b}}) {
+      if (!on) continue;
+      c.beginPath();
+      c.arc(p[0], p[1], 6 / z, 0, 2 * M_PI);
+      c.stroke();
+    }
+  }
+  // Parallel to another line: that line lit up, with ∥ marks on both.
+  if (d && why == "parallel" && d->ref) {
+    const DraftLine& r = *d->ref;
+    c.setStroke(QStringLiteral("rgba(22, 163, 74, 0.55)"));
+    c.setLineWidth(4 / z);
+    c.beginPath();
+    c.moveTo(r.a[0], r.a[1]);
+    c.lineTo(r.b[0], r.b[1]);
+    c.stroke();
+  }
+  // The angle with the line it starts on: an arc between them (a square at 90°).
+  QString between;
+  if (d && d->startsOn) {
+    const DraftLine& o = *d->startsOn;
+    const double ang = angleBetween(o, a, b);
+    between = QStringLiteral("\u2220") + QString::number(int(std::lround(ang))) + QChar(0xB0);
+    const double r = std::min(len * 0.6, 22 / z);
+    const double t1 = std::atan2(dy, dx);
+    // The other line's arm: towards its far end when it starts at one, else the nearer side.
+    const auto atA = std::hypot(o.a[0] - a[0], o.a[1] - a[1]) < 0.5, atB = std::hypot(o.b[0] - a[0], o.b[1] - a[1]) < 0.5;
+    P2 arm = atA ? o.b : atB ? o.a : o.b;
+    double t0 = std::atan2(arm[1] - a[1], arm[0] - a[0]);
+    double sweep = t1 - t0;
+    while (sweep > M_PI) sweep -= 2 * M_PI;
+    while (sweep < -M_PI) sweep += 2 * M_PI;
+    if (!atA && !atB && std::abs(sweep) > M_PI / 2) {
+      t0 += M_PI;
+      sweep = t1 - t0;
+      while (sweep > M_PI) sweep -= 2 * M_PI;
+      while (sweep < -M_PI) sweep += 2 * M_PI;
+    }
+    c.setStroke(QStringLiteral("#16a34a"));
+    c.setLineWidth(1.4 / z);
+    c.beginPath();
+    if (std::abs(std::abs(ang) - 90) < 0.5) {
+      // A right angle: the little square.
+      const double q = r * 0.6;
+      const P2 u{std::cos(t0) * q, std::sin(t0) * q}, v{std::cos(t1) * q, std::sin(t1) * q};
+      c.moveTo(a[0] + u[0], a[1] + u[1]);
+      c.lineTo(a[0] + u[0] + v[0], a[1] + u[1] + v[1]);
+      c.lineTo(a[0] + v[0], a[1] + v[1]);
+    } else {
+      c.arc(a[0], a[1], r, t0, t0 + sweep, sweep < 0);
+    }
+    c.stroke();
+  }
+  // The label past the end: the angle (∥ or ∠ with another line), and the length in centimetres (96 px an inch).
+  QString text = QString::number(int(shown)).replace('-', QChar(0x2212)) + QChar(0xB0);
+  if (why == "parallel") text += QStringLiteral(" \u2225");
+  if (!between.isEmpty()) text += "  " + between;
+  text += "  " + QString::number(len / (96 / 2.54), 'f', 1) + " cm";
   c.setFont(draw::jsNumber(12 / z) + "px system-ui, sans-serif");
   const double w = c.textWidth(text) + 14 / z, hgt = 22 / z;
   const double ux = dx / len, uy = dy / len;
