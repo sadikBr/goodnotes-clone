@@ -85,9 +85,10 @@ Rectangle {
                 readOnly: root.same
                 tool: root.prefs.store.tool
                 penStyle: root.prefs.store.penStyle
+                brushStyle: root.prefs.store.brushStyle
                 deskColor: Theme.desk
-                penDash: root.prefs.store.penDash
-                penGap: root.prefs.store.penGap
+                penDash: { void root.prefs.data; return root.prefs.dashOf(root.prefs.store.tool) }
+                penGap: { void root.prefs.data; return root.prefs.gapOf(root.prefs.store.tool) }
                 colors: root.prefs.colors
                 widths: root.prefs.widths
                 shapeKind: root.prefs.store.shapeKind

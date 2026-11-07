@@ -5,6 +5,14 @@ Updates → What's new) and on its GitHub release. Keep them short, one line
 per change, written for the people using Inkleaf. A release needs its
 section here before it can be published (`scripts/check-version.py`).
 
+## 0.20.0
+
+- **Pens and brushes, apart:** the pen (P) has the fountain pen, ballpoint, a new fineliner, pencil and calligraphy; the new brush tool (B) has the brush pen, marker, watercolour, neon and tape, and five new brushes: **ink brush** (long tapers, deep ink), **flat brush** (a wide slanted tip with bristle streaks), **airbrush** (a soft spray), **chalk** and **crayon**. Each tool keeps its own kind, colour and size. They look the same on screen and in exports.
+- **Dashed and dotted lines are an option now**, not a pen of their own: the ballpoint, fineliner, marker and neon can be solid, dashed or dotted, with close to very wide gaps, and so can shapes. Each pen remembers its own. Your dashed lines stay as they were (the dashed pen became a ballpoint with dashes).
+- **The options strip is short again:** the line, its gaps and smoothing are at the bottom of the pen and brush cases; the strip keeps the pen (drawn as it writes), colours and sizes.
+- **Select without the lasso:** with the pen, brush, highlighter or shape tool, tap a text box, picture, sticky note, graph or a shape's outline to select it; press and hold still on handwriting to select that word; or right-click anything with the mouse. The lasso takes over to move it or resize it, and your tool comes back when you deselect. (Dragging over things still writes on them, and the eraser always erases.)
+- Blanking the screen while presenting is now **.** (B is the brush).
+
 ## 0.19.2
 
 - **Fixed, properly this time:** exports and page pictures still showed blobs where a stroke started, stopped or turned sharply (0.19.1 only smoothed them). The fountain pen, ballpoint and brush are now exported with exactly the shape the screen draws, so a PDF or image looks like your page.

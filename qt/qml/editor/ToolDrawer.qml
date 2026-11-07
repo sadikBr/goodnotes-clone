@@ -32,13 +32,31 @@ Item {
 
     readonly property var smoothings: [{ id: "off", label: "Off", v: 0 }, { id: "light", label: "Light", v: 0.2 }, { id: "normal", label: "Normal", v: 0.38 }, { id: "strong", label: "Strong", v: 0.62 }]
     readonly property var shapeKinds: [{ id: "auto", label: "Auto shape", icon: "sAuto" }, { id: "line", label: "Line", icon: "sLine" }, { id: "arrow", label: "Arrow", icon: "sArrow" }, { id: "rectangle", label: "Rectangle", icon: "sRectangle" }, { id: "ellipse", label: "Ellipse / circle", icon: "sEllipse" }, { id: "triangle", label: "Triangle", icon: "sTriangle" }, { id: "diamond", label: "Diamond", icon: "sDiamond" }, { id: "star", label: "Star", icon: "sStar" }]
-    readonly property string hex: (canvas.colors.pen || "#111827").replace("#", "")
+    /// The pen and the brush: their kind (each its own), and its ink.
+    readonly property bool inks: tool === "pen" || tool === "brush"
+    readonly property string styleNow: tool === "brush" ? canvas.brushStyle : canvas.penStyle
+    readonly property string hex: (canvas.colors[inks ? tool : "pen"] || canvas.colors.pen || "#111827").replace("#", "")
+    readonly property real inkWidth: canvas.widths[inks ? tool : "pen"] || 3
+    readonly property var lineStyles: [{ value: "solid", label: "——", tip: "Solid line" }, { value: "dash", label: "– – –", tip: "Dashed line" }, { value: "dot", label: "• • •", tip: "Dotted line" }]
+    readonly property var gaps: [{ v: 0.6, label: "Close gaps" }, { v: 1, label: "Normal gaps" }, { v: 1.8, label: "Wide gaps" }, { v: 3, label: "Very wide gaps" }]
     readonly property string dark: Theme.dark ? "1" : "0"
     /// This tool's colour, for its size previews.
     readonly property string toolHex: (canvas.colors[tool] || canvas.colors.pen || "#111827").replace("#", "")
 
     PopupMenu { id: menu }
-    PenCase { id: penCase; onPicked: id => { root.prefs.store.penStyle = id; root.penPicked() } }
+    // Two cases: the pens, and the brushes.
+    component InkCase: PenCase {
+        lines: root.prefs.dashable(root.styleNow)
+        lineStyle: root.canvas.penDash
+        gap: root.canvas.penGap
+        smoothing: AppSettings.store.smoothing
+        onLinePicked: v => root.prefs.setDash(root.tool, v)
+        onGapPicked: v => root.prefs.setGap(root.tool, v)
+        onSmoothingPicked: v => AppSettings.store.smoothing = v
+    }
+    InkCase { id: penCase; family: "pen"; onPicked: id => { root.prefs.store.penStyle = id; root.penPicked() } }
+    InkCase { id: brushCase; family: "brush"; onPicked: id => { root.prefs.store.brushStyle = id; root.penPicked() } }
+    readonly property var caseNow: tool === "brush" ? brushCase : penCase
     ColorPopover { id: colorPop }
     Popup {
         id: sizePop
@@ -71,7 +89,7 @@ Item {
                     anchors.centerIn: parent
                     big: true
                     active: true
-                    tool: root.tool; penStyle: root.canvas.penStyle; hex: root.toolHex; dark: root.dark
+                    tool: root.tool; penStyle: root.styleNow; hex: root.toolHex; dark: root.dark
                     dash: root.canvas.penDash; gap: root.canvas.penGap
                     value: sizeSlider.value
                     relative: root.spec ? (sizeSlider.value - root.spec.min) / (root.spec.max - root.spec.min) : 0.5
@@ -167,59 +185,29 @@ Item {
 
         // --- the tool's own choices ---
         RowLayout {
-            visible: root.tool === "pen"
+            visible: root.inks
             spacing: 6
             Chip {
                 corner: Theme.radius
                 id: nibChip
-                label: penCase.penFor(root.canvas.penStyle).label
-                tip: "Pen case"
-                art: Component { Image { source: "image://ink/nib/" + root.canvas.penStyle + "/" + root.hex + "/" + (root.canvas.widths.pen || 3) + "/" + root.dark + "/" + root.canvas.penDash; sourceSize: Qt.size(72, 36); width: 36; height: 18; cache: false } }
-                open: penCase.opened
-                onClicked: { penCase.current = root.canvas.penStyle; penCase.hex = root.hex; penCase.penWidth = root.canvas.widths.pen || 3; penCase.dash = root.canvas.penDash; penCase.inks = root.prefs.penInks(); penCase.show(nibChip); root.prefs.store.penCaseSeen = true }
-                // A dot until the pen case has been opened once (there are new pens in it).
+                readonly property bool seen: root.tool === "brush" ? root.prefs.store.brushCaseSeen : root.prefs.store.penCaseSeen
+                label: root.caseNow.penFor(root.styleNow).label
+                tip: (root.tool === "brush" ? "Brushes" : "Pens") + ", line and smoothing"
+                art: Component { Image { source: "image://ink/nib/" + root.styleNow + "/" + root.hex + "/" + root.inkWidth + "/" + root.dark + "/" + root.canvas.penDash + "/" + root.canvas.penGap; sourceSize: Qt.size(72, 36); width: 36; height: 18; cache: false } }
+                open: root.caseNow.opened
+                onClicked: {
+                    const pc = root.caseNow; pc.current = root.styleNow; pc.hex = root.hex; pc.penWidth = root.inkWidth; pc.dash = "solid"; pc.inks = root.prefs.penInks(); pc.show(nibChip)
+                    if (root.tool === "brush") root.prefs.store.brushCaseSeen = true; else root.prefs.store.penCaseSeen = true
+                }
+                // A dot until the case has been opened once (there are new ones in it).
                 Rectangle {
-                    visible: !root.prefs.store.penCaseSeen
+                    visible: !nibChip.seen
                     anchors.right: parent.right; anchors.top: parent.top
                     anchors.margins: -3
                     width: 10; height: 10; radius: 3
                     color: Theme.accent
                     border.color: Theme.surface; border.width: 2
                 }
-            }
-            // Construction lines: dashes or dots, and how far apart.
-            ModeGroup {
-                corner: Theme.radiusLg
-                visible: root.canvas.penStyle === "construction"
-                options: [{ value: "dash", label: "– – –", tip: "Dashes" }, { value: "dot", label: "• • •", tip: "Dots" }]
-                value: root.canvas.penDash
-                onPicked: v => root.prefs.store.penDash = v
-            }
-            Chip {
-                corner: Theme.radius
-                id: gapChip
-                visible: root.canvas.penStyle === "construction"
-                readonly property var gaps: [{ v: 0.6, label: "Close" }, { v: 1, label: "Normal" }, { v: 1.8, label: "Wide" }, { v: 3, label: "Very wide" }]
-                label: (gaps.find(g => Math.abs(g.v - root.canvas.penGap) < 0.01) || gaps[1]).label
-                tip: "Spacing"
-                art: Component { Image { source: "image://ink/nib/construction/" + root.hex + "/" + (root.canvas.widths.pen || 3) + "/" + root.dark + "/" + root.canvas.penDash + "/" + root.canvas.penGap; sourceSize: Qt.size(72, 36); width: 36; height: 18; cache: false } }
-                onClicked: menu.show(gapChip, gaps.map(g => ({ label: g.label, image: "image://ink/nib/construction/" + root.hex + "/" + (root.canvas.widths.pen || 3) + "/" + root.dark + "/" + root.canvas.penDash + "/" + g.v, checked: Math.abs(g.v - root.canvas.penGap) < 0.01, action: () => root.prefs.store.penGap = g.v })))
-            }
-            Label {
-                visible: root.canvas.penStyle === "tape"
-                text: "Tap tape to peek under it"
-                color: Theme.muted
-                font.pixelSize: 12
-                leftPadding: 4; rightPadding: 4
-            }
-            Chip {
-                corner: Theme.radius
-                id: smoothChip
-                visible: root.canvas.penStyle !== "tape"
-                label: (root.smoothings.find(s => s.id === AppSettings.store.smoothing) || root.smoothings[2]).label
-                tip: "Smoothing: evens out shaky lines (Off draws exactly what you write)"
-                art: Component { Image { source: "image://ink/smooth/" + AppSettings.streamline + "/" + root.hex + "/" + root.dark; sourceSize: Qt.size(72, 36); width: 36; height: 18; cache: false } }
-                onClicked: menu.show(smoothChip, root.smoothings.map(s => ({ label: s.label, image: "image://ink/smooth/" + s.v + "/" + root.hex + "/" + root.dark, checked: s.id === AppSettings.store.smoothing, action: () => AppSettings.store.smoothing = s.id })))
             }
         }
         RowLayout {
@@ -234,6 +222,12 @@ Item {
                 onClicked: menu.show(shapeChip, root.shapeKinds.map(k => ({ label: k.label, icon: k.icon, checked: k.id === root.canvas.shapeKind, action: () => root.prefs.store.shapeKind = k.id })))
             }
             SmallTool { iconName: "fill"; active: root.canvas.shapeFill; tip: root.canvas.shapeFill ? "Fill on" : "Fill off"; onClicked: root.canvas.shapeFill = !root.canvas.shapeFill }
+            ModeGroup {
+                corner: Theme.radiusLg
+                options: root.lineStyles
+                value: root.canvas.penDash
+                onPicked: v => root.prefs.setDash("shape", v)
+            }
         }
         RowLayout {
             visible: root.tool === "text" || root.tool === "sticky"
@@ -399,7 +393,7 @@ Item {
                                 SizePreview {
                                     id: preview
                                     anchors.verticalCenter: parent.verticalCenter
-                                    tool: root.tool; penStyle: root.canvas.penStyle; hex: root.toolHex; dark: root.dark
+                                    tool: root.tool; penStyle: root.styleNow; hex: root.toolHex; dark: root.dark
                                     dash: root.canvas.penDash; gap: root.canvas.penGap
                                     value: sz.modelData
                                     relative: sz.modelData / root.fav.sizes[2]

@@ -125,6 +125,17 @@ void drawShape(Canvas& c, const QJsonObject& el) {
   c.setLineCap("round");
   c.setLineJoin("round");
   c.setStroke(el["color"].toString());
+  // Dashed or dotted (the shape tool's line style).
+  if (el["dash"].isString()) {
+    const double gap = el["gap"].isDouble() ? std::clamp(el["gap"].toDouble(), 0.5, 4.0) : 1.0;
+    if (el["dash"].toString() == "dot") {
+      const double lw = std::max(1.1, width * 1.15);
+      c.setLineWidth(lw);
+      c.setDash({0.001, lw / 2 * 4.5 * gap});
+    } else {
+      c.setDash({width * 3, width * 2.5 * gap + width});
+    }
+  }
   c.beginPath();
   const std::vector<P2> pts = ptsOf(s["points"].toArray());
   if (kind == "ellipse") {
@@ -150,6 +161,8 @@ void drawShape(Canvas& c, const QJsonObject& el) {
     c.fill();
   }
   c.stroke();
+  c.setDash({});
+  c.setLineWidth(width);
   if (kind == "arrow" && pts.size() >= 2) drawArrowHead(c, pts[pts.size() - 2], pts.back(), width);
   c.restore();
 }

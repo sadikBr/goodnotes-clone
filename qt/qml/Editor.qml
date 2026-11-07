@@ -49,6 +49,7 @@ Rectangle {
 
     readonly property var tools: [
         { id: "pen", label: "Pen", key: "P", tray: 0, icon: "pen" },
+        { id: "brush", label: "Brush", key: "B", tray: 0, icon: "brush" },
         { id: "highlighter", label: "Highlighter", key: "H", tray: 0, icon: "highlighter" },
         { id: "eraser", label: "Eraser", key: "E", tray: 0, icon: "eraser" },
         { id: "lasso", label: "Lasso select", key: "L", tray: 1, icon: "lasso" },
@@ -65,7 +66,22 @@ Rectangle {
     /// The tools sit in a rail down the left side (Settings → Appearance), not in the top bar.
     readonly property bool rail: AppSettings.store.toolbar === "rail"
 
+    /// Something selected without the lasso (a tap, a hold, a right-click): the
+    /// lasso takes over to move or resize it, and this tool comes back once
+    /// nothing is selected.
+    property string returnTool: ""
+    Connections {
+        target: canvas
+        function onSelectedByTap() {
+            if (prefs.store.tool !== "lasso") { root.returnTool = prefs.store.tool; prefs.store.tool = "lasso" }
+        }
+        function onSelectionChanged() {
+            if (root.returnTool && !((canvas.selection.count || 0) > 0)) { const t = root.returnTool; root.returnTool = ""; prefs.store.tool = t }
+        }
+    }
+
     function pick(tool) {
+        root.returnTool = ""
         if (canvas.tool === tool) {
             drawerOpen = !drawerOpen
             return
@@ -588,8 +604,10 @@ Rectangle {
                     notebookId: root.notebookId
                     tool: prefs.store.tool
                     penStyle: prefs.store.penStyle
-                    penDash: prefs.store.penDash
-                    penGap: prefs.store.penGap
+                    brushStyle: prefs.store.brushStyle
+                    // The line style of the tool in use (each pen its own; the shape tool's).
+                    penDash: { void prefs.data; return prefs.dashOf(prefs.store.tool) }
+                    penGap: { void prefs.data; return prefs.gapOf(prefs.store.tool) }
                     colors: prefs.colors
                     widths: prefs.widths
                     shapeKind: prefs.store.shapeKind
@@ -759,7 +777,7 @@ Rectangle {
                             font.weight: Font.DemiBold
                             color: Theme.text
                         }
-                        IconButton { iconName: "blank"; tip: presenter.blank ? "Show the page again (B)" : "Blank the screen (B)"; active: presenter.blank; implicitWidth: 30; implicitHeight: 30; iconSize: 16; onClicked: presenter.blank = !presenter.blank }
+                        IconButton { iconName: "blank"; tip: presenter.blank ? "Show the page again (.)" : "Blank the screen (.)"; active: presenter.blank; implicitWidth: 30; implicitHeight: 30; iconSize: 16; onClicked: presenter.blank = !presenter.blank }
                         IconButton { iconName: "close"; tip: "Stop presenting (F5)"; implicitWidth: 30; implicitHeight: 30; iconSize: 16; onClicked: presenter.close() }
                     }
                 }
@@ -781,8 +799,8 @@ Rectangle {
                     function flash() { opacity = 1; tagTimer.restart() }
                     Timer { id: tagTimer; interval: 1400; onTriggered: railTag.opacity = 0 }
                     readonly property string tool: canvas.tool
-                    readonly property var nibs: ({ fountain: "Fountain pen", ballpoint: "Ballpoint", pencil: "Pencil", calligraphy: "Calligraphy", brush: "Brush pen", marker: "Marker", watercolor: "Watercolour", neon: "Neon", construction: "Dashed", tape: "Tape" })
-                    readonly property string name: tool === "pen" ? (nibs[canvas.penStyle] || "Pen") : ((root.tools.find(t => t.id === tool) || {}).label || "")
+                    readonly property var nibs: ({ fountain: "Fountain pen", ballpoint: "Ballpoint", fineliner: "Fineliner", pencil: "Pencil", calligraphy: "Calligraphy", brush: "Brush pen", inkbrush: "Ink brush", flat: "Flat brush", airbrush: "Airbrush", chalk: "Chalk", crayon: "Crayon", marker: "Marker", watercolor: "Watercolour", neon: "Neon", construction: "Dashed", tape: "Tape" })
+                    readonly property string name: tool === "pen" ? (nibs[canvas.penStyle] || "Pen") : tool === "brush" ? (nibs[canvas.brushStyle] || "Brush") : ((root.tools.find(t => t.id === tool) || {}).label || "")
                     readonly property var size: canvas.widths[tool]
                     Row {
                         id: tagRow
@@ -1062,7 +1080,7 @@ Rectangle {
     Shortcut { sequence: "F"; enabled: !root.typing; onActivated: root.focusMode = !root.focusMode }
     Shortcut { sequences: [StandardKey.Find]; onActivated: finder.open() }
     Shortcut { sequence: "F5"; onActivated: root.togglePresenting() }
-    Shortcut { sequence: "B"; enabled: !root.typing && presenter.visible; onActivated: presenter.blank = !presenter.blank }
+    Shortcut { sequence: "."; enabled: !root.typing && presenter.visible; onActivated: presenter.blank = !presenter.blank }
     Shortcut { sequence: "Z"; enabled: !root.typing; onActivated: zoomBox.active ? zoomBox.stop() : zoomBox.start() }
     Shortcut { sequence: "["; enabled: !root.typing; onActivated: root.toggleSidebar() }
     Shortcut { sequence: "?"; enabled: !root.typing; onActivated: shortcuts.open() }

@@ -1,7 +1,6 @@
-// The pen case: every pen as a stroke drawn with it, on a little piece of
-// paper, in three trays: pens for writing, pens for colour and light, and
-// the special ones (construction lines, masking tape). A line under the
-// trays says what the pen under the pointer (or the chosen one) does.
+// The pen case (or the brush case): every pen or brush as a stroke drawn
+// with it, on a little piece of paper, in trays. A line under the trays says
+// what the one under the pointer (or the chosen one) does.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -17,24 +16,43 @@ Popup {
     /// Each pen's own ink and size (id → { hex, width }); else hex and penWidth for all.
     property var inks: ({})
     signal picked(string id)
+    /// The settings at the bottom: the line (pens with an even line), its gaps, and smoothing.
+    property bool lines: false
+    property string lineStyle: "solid"
+    property real gap: 1
+    property string smoothing: "normal"
+    signal linePicked(string v)
+    signal gapPicked(real v)
+    signal smoothingPicked(string v)
 
-    readonly property var trays: [
-        { title: "Writing", pens: [
+    /// "pen": the pens; "brush": the brushes (two tools, two cases).
+    property string family: "pen"
+    readonly property var penTrays: [
+        { title: "Pens", pens: [
             { id: "fountain", label: "Fountain", about: "Fountain pen: thick and thin with pressure and speed." },
-            { id: "ballpoint", label: "Ballpoint", about: "Ballpoint: the same line all the way." },
+            { id: "ballpoint", label: "Ballpoint", about: "Ballpoint: the same line all the way. Can be dashed or dotted." },
+            { id: "fineliner", label: "Fineliner", about: "Fineliner: thin and perfectly even, for diagrams and labels. Can be dashed or dotted." },
             { id: "pencil", label: "Pencil", about: "Pencil: soft grain, lighter when you press lightly." },
-            { id: "calligraphy", label: "Calligraphy", about: "Calligraphy: a flat nib, broad one way and fine the other." },
-            { id: "brush", label: "Brush", about: "Brush pen: pointed ends that swell with pressure." }] },
+            { id: "calligraphy", label: "Calligraphy", about: "Calligraphy: a flat nib, broad one way and fine the other." }] }
+    ]
+    readonly property var brushTrays: [
+        { title: "Brushes", pens: [
+            { id: "brush", label: "Brush pen", about: "Brush pen: pointed ends that swell with pressure." },
+            { id: "inkbrush", label: "Ink brush", about: "Ink brush: long tapers and deep ink, like a sumi brush." },
+            { id: "flat", label: "Flat brush", about: "Flat brush: a wide, slanted tip with the streaks of its bristles." },
+            { id: "airbrush", label: "Airbrush", about: "Airbrush: a soft spray, for shading and glows." }] },
+        { title: "Texture", pens: [
+            { id: "chalk", label: "Chalk", about: "Chalk: grainy and dusty, at its best on dark and whiteboard pages." },
+            { id: "crayon", label: "Crayon", about: "Crayon: waxy, catching on the paper's grain." },
+            { id: "watercolor", label: "Watercolour", about: "Watercolour: soft washes that deepen as you layer them." }] },
         { title: "Colour & light", pens: [
-            { id: "marker", label: "Marker", about: "Marker: a see-through felt tip, darker where strokes cross." },
-            { id: "watercolor", label: "Watercolour", about: "Watercolour: soft washes that deepen as you layer them." },
-            { id: "neon", label: "Neon", about: "Neon: a bright line with a glow around it.", night: true }] },
-        { title: "Special", pens: [
-            { id: "construction", label: "Dashed", about: "Construction lines: dashes or dots, for guides and hidden edges." },
+            { id: "marker", label: "Marker", about: "Marker: a see-through felt tip, darker where strokes cross. Can be dashed or dotted." },
+            { id: "neon", label: "Neon", about: "Neon: a bright line with a glow around it. Can be dashed or dotted.", night: true },
             { id: "tape", label: "Tape", about: "Masking tape: cover answers and tap the tape to peek under it." }] }
     ]
+    readonly property var trays: family === "brush" ? brushTrays : penTrays
     function penFor(id) {
-        for (const t of trays) for (const p of t.pens) if (p.id === id) return p
+        for (const t of penTrays.concat(brushTrays)) for (const p of t.pens) if (p.id === id) return p
         return trays[0].pens[0]
     }
     property string hovered: ""
@@ -50,7 +68,7 @@ Popup {
 
     parent: Overlay.overlay
     padding: 14
-    width: 392
+    width: family === "brush" ? 452 : 412
     modal: true
     dim: false
     Overlay.modal: Item {}
@@ -140,28 +158,29 @@ Popup {
             spacing: 4
             Repeater { model: root.trays[0].pens; delegate: Tile { required property var modelData; pen: modelData } }
         }
-        Rectangle { Layout.fillWidth: true; Layout.topMargin: 2; Layout.bottomMargin: 2; implicitHeight: 1; color: Theme.border }
+        Rectangle { visible: root.trays.length > 2; Layout.fillWidth: true; Layout.topMargin: 2; Layout.bottomMargin: 2; implicitHeight: 1; color: Theme.border }
         RowLayout {
+            visible: root.trays.length > 2
             spacing: 12
             ColumnLayout {
                 spacing: 8
                 Layout.preferredWidth: 3
                 Layout.fillWidth: true
-                TrayTitle { text: root.trays[1].title.toUpperCase() }
+                TrayTitle { text: (root.trays[1] || { title: "" }).title.toUpperCase() }
                 RowLayout {
                     spacing: 4
-                    Repeater { model: root.trays[1].pens; delegate: Tile { required property var modelData; pen: modelData } }
+                    Repeater { model: (root.trays[1] || { pens: [] }).pens; delegate: Tile { required property var modelData; pen: modelData } }
                 }
             }
             Rectangle { Layout.fillHeight: true; implicitWidth: 1; color: Theme.border }
             ColumnLayout {
                 spacing: 8
-                Layout.preferredWidth: 2
+                Layout.preferredWidth: 3
                 Layout.fillWidth: true
-                TrayTitle { text: root.trays[2].title.toUpperCase() }
+                TrayTitle { text: (root.trays[2] || { title: "" }).title.toUpperCase() }
                 RowLayout {
                     spacing: 4
-                    Repeater { model: root.trays[2].pens; delegate: Tile { required property var modelData; pen: modelData } }
+                    Repeater { model: (root.trays[2] || { pens: [] }).pens; delegate: Tile { required property var modelData; pen: modelData } }
                 }
             }
         }
@@ -183,6 +202,47 @@ Popup {
                 color: Theme.muted
                 verticalAlignment: Text.AlignVCenter
             }
+        }
+        // How it draws: the line, its gaps, smoothing (kept here, not in the strip).
+        component SettingRow: RowLayout {
+            property alias text: rowLabel.text
+            Layout.fillWidth: true
+            spacing: 10
+            Label { id: rowLabel; Layout.preferredWidth: 70; font.pixelSize: 12; font.weight: Font.DemiBold; color: Theme.muted }
+        }
+        Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.border; visible: root.current !== "tape" }
+        SettingRow {
+            text: "Line"
+            visible: root.lines
+            ModeGroup {
+                corner: Theme.radiusLg
+                options: [{ value: "solid", label: "Solid" }, { value: "dash", label: "– – Dashed" }, { value: "dot", label: "• • Dotted" }]
+                value: root.lineStyle
+                onPicked: v => root.linePicked(v)
+            }
+            Item { Layout.fillWidth: true }
+        }
+        SettingRow {
+            text: "Gaps"
+            visible: root.lines && root.lineStyle !== "solid"
+            ModeGroup {
+                corner: Theme.radiusLg
+                options: [{ value: 0.6, label: "Close" }, { value: 1, label: "Normal" }, { value: 1.8, label: "Wide" }, { value: 3, label: "Very wide" }]
+                value: [0.6, 1, 1.8, 3].reduce((a, b) => Math.abs(b - root.gap) < Math.abs(a - root.gap) ? b : a)
+                onPicked: v => root.gapPicked(v)
+            }
+            Item { Layout.fillWidth: true }
+        }
+        SettingRow {
+            text: "Smoothing"
+            visible: root.current !== "tape"
+            ModeGroup {
+                corner: Theme.radiusLg
+                options: [{ value: "off", label: "Off", tip: "Draws exactly what you write" }, { value: "light", label: "Light" }, { value: "normal", label: "Normal" }, { value: "strong", label: "Strong", tip: "Evens out shaky lines the most" }]
+                value: root.smoothing
+                onPicked: v => root.smoothingPicked(v)
+            }
+            Item { Layout.fillWidth: true }
         }
     }
 }

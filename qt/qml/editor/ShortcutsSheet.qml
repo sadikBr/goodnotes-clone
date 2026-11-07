@@ -15,9 +15,9 @@ Popup {
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     Overlay.modal: Rectangle { color: Qt.rgba(20 / 255, 18 / 255, 14 / 255, 0.45) }
     readonly property var groups: [
-        { title: "Tools", items: [["P", "Pen"], ["H", "Highlighter"], ["E", "Eraser"], ["L", "Lasso select"], ["S", "Shape"], ["T", "Text box"], ["N", "Sticky note"], ["K", "Laser pointer"], ["R", "Ruler"]] },
+        { title: "Tools", items: [["P", "Pen"], ["B", "Brush"], ["H", "Highlighter"], ["E", "Eraser"], ["L", "Lasso select"], ["S", "Shape"], ["T", "Text box"], ["N", "Sticky note"], ["K", "Laser pointer"], ["R", "Ruler"]] },
         { title: "Editing", items: [["Ctrl+Z", "Undo"], ["Ctrl+Shift+Z", "Redo"], ["Ctrl+C / Ctrl+V", "Copy / paste"], ["Ctrl+D", "Duplicate"], ["Ctrl+A", "Select all"], ["Delete", "Delete selection"], ["Esc", "Deselect"]] },
-        { title: "View", items: [["Ctrl+= / Ctrl+−", "Zoom in / out"], ["Ctrl+0", "Fit width"], ["Page Up / Down", "Previous / next page"], ["[", "Show or hide pages"], ["F", "Focus mode"], ["Z", "Zoom box"], ["Ctrl+F", "Find in the notebook"], ["F5", "Present (B blanks the screen)"], ["?", "This list"]] },
+        { title: "View", items: [["Ctrl+= / Ctrl+−", "Zoom in / out"], ["Ctrl+0", "Fit width"], ["Page Up / Down", "Previous / next page"], ["[", "Show or hide pages"], ["F", "Focus mode"], ["Z", "Zoom box"], ["Ctrl+F", "Find in the notebook"], ["F5", "Present (. blanks the screen)"], ["?", "This list"]] },
         { title: "Pen and touch", items: [["Scribble over ink", "Erase it"], ["2-finger tap", "Undo"], ["3-finger tap", "Redo"], ["Pinch", "Zoom"]] }
     ]
     background: Item {

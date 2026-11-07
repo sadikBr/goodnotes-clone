@@ -83,7 +83,7 @@ Window {
     }
     // Esc leaves; a double click switches full screen.
     Shortcut { sequences: ["Esc", "F5"]; onActivated: root.close() }
-    Shortcut { sequence: "B"; onActivated: root.blank = !root.blank }
+    Shortcut { sequence: "."; onActivated: root.blank = !root.blank }
     MouseArea {
         anchors.fill: parent
         hoverEnabled: true

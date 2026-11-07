@@ -25,7 +25,7 @@ Rectangle {
     readonly property bool hasColor: !!fav && fav.colors.length > 0
     readonly property var presets: prefs.railColors()
     readonly property int btn: vertical ? 42 : 38
-    readonly property var groups: [["lasso"], ["pen", "highlighter", "eraser"], ["shape", "text", "sticky", "ruler"], ["laser", "hand"]]
+    readonly property var groups: [["lasso"], ["pen", "brush", "highlighter", "eraser"], ["shape", "text", "sticky", "ruler"], ["laser", "hand"]]
 
     implicitWidth: vertical ? btn + 12 : strip.implicitWidth + 12
     implicitHeight: vertical ? strip.implicitHeight + 12 : btn + 10

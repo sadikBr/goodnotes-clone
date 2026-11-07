@@ -3,6 +3,7 @@
 #include "Table.h"
 #include "Gestures.h"
 #include "../draw/Render.h"
+#include "../Ink.h"
 
 #include <QJsonDocument>
 #include <QRegularExpression>
@@ -13,6 +14,7 @@
 #include "../Core.h"
 #include "../Canvas.h"
 #include "../draw/Render.h"
+#include "../Ink.h"
 #include "../draw/Elements.h"
 #include "../draw/Fonts.h"
 #include "../draw/Papers.h"
@@ -81,9 +83,13 @@ std::vector<std::vector<Pt>> clipToRect(const std::vector<Pt>& pts, double w, do
   return out;
 }
 /// Scribbling with these is shading or painting, never a scratch-out.
-bool scratchable(const QString& style) { return style != "marker" && style != "watercolor" && style != "neon" && style != "tape"; }
+bool scratchable(const QString& style) {
+  return style != "marker" && style != "watercolor" && style != "neon" && style != "tape" && style != "airbrush" && style != "chalk" && style != "crayon" && style != "flat";
+}
 /// Pens whose look a held shape keeps (it is drawn with the pen, not as a plain shape).
-bool keepsPen(const QString& style) { return style == "marker" || style == "watercolor" || style == "neon" || style == "construction"; }
+bool keepsPen(const QString& style) {
+  return style == "marker" || style == "watercolor" || style == "neon" || style == "construction" || style == "airbrush" || style == "chalk" || style == "crayon" || style == "flat" || style == "inkbrush";
+}
 /// Points every `step` along a polyline (its corners kept).
 std::vector<P2> densify(const std::vector<P2>& pts, double step) {
   std::vector<P2> out;
@@ -705,7 +711,7 @@ void EditorCore::up() {
         hl.id = newId();
         hl.z = nextZ();
         addElement(makeEl(std::move(hl)));
-      } else if (shape && g.tool == "pen" && keepsPen(penStyle)) {
+      } else if (shape && g.tool == "pen" && (keepsPen(penStyle) || penDashed())) {
         // A held shape drawn with the pen (dashed, marker, watercolour, neon): pen strokes, not a plain shape.
         if (!g.absorb.empty()) {
           QSet<QString> gone(g.absorb.begin(), g.absorb.end());
@@ -766,7 +772,7 @@ void EditorCore::up() {
         el.width = widths.value(g.tool);
         el.points = thinPoints(tl == "highlighter" ? draw::steadyHighlight(g.points, widths.value("highlighter")) : g.points, std::min(0.3, 0.6 / zoom));
         if (tl == "pen") el.smooth = streamline;
-        if (tl == "pen" && penStyle == "construction") {
+        if (tl == "pen" && penDashed()) {
           el.extra.insert("dash", penDash == "dot" ? "dot" : "dash");
           if (penGap != 1) el.extra.insert("gap", penGap);
         }
@@ -949,7 +955,7 @@ std::vector<El> EditorCore::penStrokes(const El& shape) const {
     el.width = widths.value("pen");
     el.smooth = 0;
     for (const P2& p : line) el.points.push_back({p[0], p[1], 0.5});
-    if (penStyle == "construction") {
+    if (penDashed()) {
       el.extra.insert("dash", penDash == "dot" ? "dot" : "dash");
       if (penGap != 1) el.extra.insert("gap", penGap);
     }
@@ -989,6 +995,11 @@ ElPtr EditorCore::shapeElement(const Shape& shape, const QString& colorOf) const
   el.color = colors.value(colorOf);
   el.width = widths.value(colorOf);
   el.fill = std::nullopt;
+  // The shape tool's line style.
+  if (colorOf == "shape" && tool == "shape" && (penDash == "dash" || penDash == "dot")) {
+    el.extra.insert("dash", penDash);
+    if (penGap != 1) el.extra.insert("gap", penGap);
+  }
   return makeEl(std::move(el));
 }
 
@@ -1667,6 +1678,63 @@ void EditorCore::replaceOnPage(int pi, const std::function<bool(const El&)>& dro
   ++selectionRev;
 }
 
+QString EditorCore::objectAt(int pi, double x, double y) {
+  const Els& els = load(pi);
+  const double tol = 6 / std::max(0.05, zoom);
+  for (auto it = els.rbegin(); it != els.rend(); ++it) {
+    const El& el = **it;
+    if (el.kind == Kind::Stroke || el.kind == Kind::Table) continue;  // ink is held; tables are written in
+    const Rect b = bounds(el);
+    if (el.kind == Kind::Shape) {
+      // A shape by its outline only: writing inside a box you drew must still write.
+      const double w = std::max(tol, el.width / 2 + tol / 2);
+      const bool nearOuter = x >= b.x - w && x <= b.x + b.w + w && y >= b.y - w && y <= b.y + b.h + w;
+      const bool inside = x > b.x + w && x < b.x + b.w - w && y > b.y + w && y < b.y + b.h - w;
+      if (!nearOuter) continue;
+      if (inside) {
+        // Lines and arrows have no inside; for the rest, only near the line itself.
+        const std::vector<P2>& pts = el.shape.points;
+        bool near = false;
+        if (el.shape.kind == "ellipse" && el.shape.rx > 0 && el.shape.ry > 0) {
+          // Roughly how far from the ellipse's line (exact on a circle).
+          const double dx = (x - el.shape.cx) / el.shape.rx, dy = (y - el.shape.cy) / el.shape.ry;
+          near = std::abs(std::sqrt(dx * dx + dy * dy) - 1) * std::min(el.shape.rx, el.shape.ry) <= w;
+        }
+        for (size_t i = 0; i + 1 < pts.size() && !near; ++i) near = distToSegment(x, y, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]) <= w;
+        if (!near) continue;
+      }
+      return el.id;
+    }
+    if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return el.id;
+  }
+  return {};
+}
+
+QStringList EditorCore::inkAt(int pi, double x, double y) {
+  const Els& els = load(pi);
+  const double tol = 4 / std::max(0.05, zoom);
+  QString hit;
+  for (auto it = els.rbegin(); it != els.rend() && hit.isEmpty(); ++it) {
+    const El& el = **it;
+    if (el.kind != Kind::Stroke || el.points.empty()) continue;
+    const double reach = el.width / 2 + tol;
+    if (el.points.size() == 1) {
+      if (std::hypot(el.points[0][0] - x, el.points[0][1] - y) <= reach) hit = el.id;
+      continue;
+    }
+    for (size_t i = 0; i + 1 < el.points.size(); ++i)
+      if (distToSegment(x, y, el.points[i][0], el.points[i][1], el.points[i + 1][0], el.points[i + 1][1]) <= reach) {
+        hit = el.id;
+        break;
+      }
+  }
+  if (hit.isEmpty()) return {};
+  // With the rest of its word.
+  for (const InkWord& w : inkWords(pi, false))
+    if (w.ids.contains(hit)) return w.ids;
+  return {hit};
+}
+
 void EditorCore::selectIds(int pi, const QStringList& ids) {
   activate(pi);
   m_selection.clear();
@@ -2291,7 +2359,7 @@ void EditorCore::drawOverlay(Canvas& c, int pi) {
     if (g.preview && g.tool == "highlighter" && g.preview->shape.kind == "line") {
       draw::drawStroke(c, straightHighlight(g.preview->shape.points).toJson());
     } else if (g.preview) {
-      if (g.tool == "pen" && keepsPen(penStyle))
+      if (g.tool == "pen" && (keepsPen(penStyle) || penDashed()))
         for (const El& el : penStrokes(*g.preview)) draw::drawStroke(c, el.toJson());
       else draw::drawElement(c, g.preview->toJson());
       if (g.held) drawHeldHint(c, *g.preview, g.held->mode);

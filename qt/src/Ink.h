@@ -18,10 +18,12 @@ struct Point {
   float x, y, p;  // page units, pressure 0..1
 };
 
-enum class Pen { Fountain, Ballpoint, Pencil, Calligraphy, Brush, Highlighter, Marker, Watercolor, Neon, Construction, Tape };
+enum class Pen { Fountain, Ballpoint, Pencil, Calligraphy, Brush, Highlighter, Marker, Watercolor, Neon, Construction, Tape, Fineliner, InkBrush, Chalk, Crayon, Airbrush, FlatBrush };
 
 Pen penFromName(const QString& style, bool highlighter);
 QString penName(Pen pen);
+/// Pens whose line is even enough to be dashed or dotted (the line style option).
+bool dashable(const QString& style);
 /// Fountain and brush widths follow speed.
 bool speedSensitive(Pen pen);
 /// Saved strokes of this style are drawn as one mesh (else as a picture:

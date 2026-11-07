@@ -16,6 +16,12 @@ Pen penFromName(const QString& s, bool highlighter) {
   if (s == "neon") return Pen::Neon;
   if (s == "construction") return Pen::Construction;
   if (s == "tape") return Pen::Tape;
+  if (s == "fineliner") return Pen::Fineliner;
+  if (s == "inkbrush") return Pen::InkBrush;
+  if (s == "chalk") return Pen::Chalk;
+  if (s == "crayon") return Pen::Crayon;
+  if (s == "airbrush") return Pen::Airbrush;
+  if (s == "flat") return Pen::FlatBrush;
   return Pen::Fountain;  // also strokes saved before pen styles existed
 }
 
@@ -31,14 +37,22 @@ QString penName(Pen pen) {
     case Pen::Neon: return "neon";
     case Pen::Construction: return "construction";
     case Pen::Tape: return "tape";
+    case Pen::Fineliner: return "fineliner";
+    case Pen::InkBrush: return "inkbrush";
+    case Pen::Chalk: return "chalk";
+    case Pen::Crayon: return "crayon";
+    case Pen::Airbrush: return "airbrush";
+    case Pen::FlatBrush: return "flat";
     default: return "fountain";
   }
 }
 
-bool speedSensitive(Pen pen) { return pen == Pen::Fountain || pen == Pen::Brush || pen == Pen::Watercolor; }
+bool speedSensitive(Pen pen) { return pen == Pen::Fountain || pen == Pen::Brush || pen == Pen::Watercolor || pen == Pen::InkBrush; }
+
+bool dashable(const QString& s) { return s == "ballpoint" || s == "fineliner" || s == "marker" || s == "neon" || s == "construction"; }
 
 bool meshDrawn(const QString& style, bool highlighter) {
-  return highlighter || style.isEmpty() || style == "fountain" || style == "ballpoint" || style == "brush";
+  return highlighter || style.isEmpty() || style == "fountain" || style == "ballpoint" || style == "brush" || style == "fineliner";
 }
 
 float tapeWidth(float penWidth) { return std::clamp(penWidth * 5.f, 12.f, 80.f); }
@@ -49,6 +63,11 @@ QColor liveColor(const QColor& c, Pen pen) {
     case Pen::Highlighter: out.setAlphaF(0.35f); break;
     case Pen::Marker: out.setAlphaF(0.62f); break;
     case Pen::Watercolor: out.setAlphaF(0.3f); break;
+    case Pen::Chalk: out.setAlphaF(0.78f); break;
+    case Pen::Crayon: out.setAlphaF(0.85f); break;
+    case Pen::Airbrush: out.setAlphaF(0.22f); break;
+    case Pen::FlatBrush: out.setAlphaF(0.8f); break;
+    case Pen::InkBrush: out.setAlphaF(0.94f); break;
     case Pen::Neon:  // the bright core
       out = QColor::fromRgbF(c.redF() + (1 - c.redF()) * 0.55f, c.greenF() + (1 - c.greenF()) * 0.55f, c.blueF() + (1 - c.blueF()) * 0.55f);
       break;
@@ -118,6 +137,12 @@ Nib nibFor(Pen pen, float width) {
     case Pen::Neon: return {std::max(0.8f, width * 0.8f), 0.f, 0, 0};
     case Pen::Construction: return {std::max(0.7f, width * 0.6f), 0.f, 0, 0};
     case Pen::Tape: return {width, 0.f, 0, 0};
+    case Pen::Fineliner: return {std::max(0.6f, width * 0.7f), 0.f, 0, 0};
+    case Pen::InkBrush: return {width * 2.f, 0.92f, width * 2, width * 6};
+    case Pen::Chalk: return {width * 2.f, 0.05f, 0, 0};
+    case Pen::Crayon: return {width * 1.7f, 0.15f, 0, 0};
+    case Pen::Airbrush: return {width * 1.2f, 0.f, 0, 0};
+    case Pen::FlatBrush: return {width * 2.4f, 0.2f, 0, 0};
     default: return {width * 0.875f, 0.5f, 0, 0};
   }
 }
@@ -213,7 +238,7 @@ void strokeMesh(const std::vector<Point>& raw, Pen pen, float width, float strea
     return;
   }
   // See-through pens: nothing drawn twice (overlaps would show darker).
-  const bool clear = pen == Pen::Marker || pen == Pen::Watercolor || pen == Pen::Neon;
+  const bool clear = pen == Pen::Marker || pen == Pen::Watercolor || pen == Pen::Neon || pen == Pen::Chalk || pen == Pen::Crayon || pen == Pen::Airbrush || pen == Pen::FlatBrush;
   // A tap: a round dot as wide as the line (whatever the pressure).
   float x0 = raw[0].x, x1 = raw[0].x, y0 = raw[0].y, y1 = raw[0].y;
   for (const Point& p : raw) {
@@ -258,7 +283,7 @@ void strokeMesh(const std::vector<Point>& raw, Pen pen, float width, float strea
     if (nib.taperEnd > 0 && total - len[i] < nib.taperEnd) rad *= std::max(0.15f, (total - len[i]) / nib.taperEnd);
     r[i] = rad;
   }
-  if (pen == Pen::Construction && dashed > 0) {
+  if (dashed > 0) {
     dashMesh(p, dashed == 2 ? std::max(0.55f, width * 0.45f) : r[0], dashed == 2, gap, out);
     return;
   }
@@ -323,7 +348,7 @@ void strokeMesh(const std::vector<Point>& raw, Pen pen, float width, float strea
     }
   };
   strip(out, 1.f);
-  if (pen == Pen::Neon) {
+  if (pen == Pen::Neon || pen == Pen::Airbrush) {
     Mesh g;
     strip(g, 3.f);
     out.glow = std::move(g.tris);

@@ -19,8 +19,9 @@ Item {
     /// Larger (the panel that sets your own size).
     property bool big: false
 
-    readonly property bool line: tool === "pen" || tool === "highlighter" || tool === "shape"
-    readonly property string style: tool === "pen" ? penStyle : tool === "highlighter" ? "marker" : "ballpoint"
+    readonly property bool line: tool === "pen" || tool === "brush" || tool === "highlighter" || tool === "shape"
+    /// (For the pen and the brush, `penStyle` is the kind in use.)
+    readonly property string style: tool === "pen" || tool === "brush" ? penStyle : tool === "highlighter" ? "marker" : "ballpoint"
     readonly property color ink: "#" + hex
     /// The ink, unless it would vanish on the panel (dark ink in dark mode, light in light).
     readonly property color shownInk: {

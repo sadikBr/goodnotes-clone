@@ -105,8 +105,8 @@ InkCanvas::InkCanvas(QQuickItem* parent) : QQuickItem(parent) {
   setAcceptedMouseButtons(Qt::AllButtons);
   setAcceptTouchEvents(true);
   setAcceptHoverEvents(true);
-  m_colors = {{"pen", "#111827"}, {"highlighter", "#facc15"}, {"shape", "#111827"}, {"text", "#111827"}, {"sticky", "#fef08a"}, {"laser", "#ff1f1f"}};
-  m_widths = {{"pen", 3}, {"highlighter", 18}, {"eraser", 14}, {"shape", 3}, {"text", 20}, {"sticky", 18}};
+  m_colors = {{"pen", "#111827"}, {"brush", "#111827"}, {"highlighter", "#facc15"}, {"shape", "#111827"}, {"text", "#111827"}, {"sticky", "#fef08a"}, {"laser", "#ff1f1f"}};
+  m_widths = {{"pen", 3}, {"brush", 5}, {"highlighter", 18}, {"eraser", 14}, {"shape", 3}, {"text", 20}, {"sticky", 18}};
   updateCursor();
   // A new desk colour (dark mode) repaints the strips around the pages.
   connect(this, &InkCanvas::settingsChanged, this, [this] { update(); });
@@ -178,6 +178,20 @@ InkCanvas::InkCanvas(QQuickItem* parent) : QQuickItem(parent) {
   m_pendingMoveTimer.setTimerType(Qt::PreciseTimer);
   m_pendingMoveTimer.setInterval(kMoveEveryMs);
   connect(&m_pendingMoveTimer, &QTimer::timeout, this, &InkCanvas::flushPendingMove);
+  m_holdSelect.setSingleShot(true);
+  m_holdSelect.setInterval(500);
+  connect(&m_holdSelect, &QTimer::timeout, this, [this] {
+    // Held still on ink: no dot, that word selected.
+    if (!m_ed || m_g.kind != Gesture::Draw || m_holdIds.isEmpty()) return;
+    m_ed->cancel();
+    m_g = Gesture();
+    m_liveChanged = true;
+    setWriting(false);
+    m_ed->selectIds(m_holdPage, m_holdIds);
+    m_holdIds.clear();
+    afterCore();
+    emit selectedByTap();
+  });
   m_hoverTimer.setSingleShot(true);
   m_hoverTimer.setTimerType(Qt::PreciseTimer);
   m_hoverTimer.setInterval(kMoveEveryMs);
@@ -212,10 +226,16 @@ void InkCanvas::itemChange(ItemChange change, const ItemChangeData& value) {
 void InkCanvas::pushToolState() {
   if (!m_ed) return;
   ed::EditorCore& c = *m_ed;
-  c.tool = m_tool;
+  // The brush is a pen to the core, with the brush's own kind, colour and size.
+  const bool brush = m_tool == "brush";
+  c.tool = brush ? QStringLiteral("pen") : m_tool;
   for (auto it = m_colors.begin(); it != m_colors.end(); ++it) c.colors[it.key()] = it.value().toString();
   for (auto it = m_widths.begin(); it != m_widths.end(); ++it) c.widths[it.key()] = it.value().toDouble();
-  c.penStyle = m_penStyleName;
+  if (brush) {
+    c.colors["pen"] = m_colors.value("brush", m_colors.value("pen")).toString();
+    c.widths["pen"] = m_widths.value("brush", m_widths.value("pen", 3)).toDouble();
+  }
+  c.penStyle = styleNow();
   c.penDash = m_penDash;
   c.penGap = m_penGap;
   c.streamline = m_smoothing;
@@ -340,8 +360,8 @@ void InkCanvas::syncPage(int i) {
     if (el->kind == ed::Kind::Stroke) {
       const QString style = el->style.value_or(QString());
       const bool hl = el->tool == "highlighter";
-      if (ink::meshDrawn(style, hl)) {
-        // Pen and highlighter ink: a mesh, as when it was written.
+      if (ink::meshDrawn(style, hl) && !el->extra.contains("dash")) {
+        // Pen and highlighter ink: a mesh, as when it was written (dashed lines are pictures).
         std::vector<ink::Point> p;
         p.reserve(el->points.size());
         for (const ed::Pt& q : el->points) p.push_back({float(q[0]), float(q[1]), float(q[2])});
@@ -957,6 +977,12 @@ void InkCanvas::setPenStyle(const QString& s) {
   pushToolState();
   emit toolStateChanged();
 }
+void InkCanvas::setBrushStyle(const QString& s) {
+  if (s == m_brushStyleName) return;
+  m_brushStyleName = s;
+  pushToolState();
+  emit toolStateChanged();
+}
 void InkCanvas::setPenDash(const QString& s) {
   if (s == m_penDash) return;
   m_penDash = s;
@@ -1539,7 +1565,7 @@ QJsonObject InkCanvas::liveStroke(int page) const {
   const bool hl = m_g.pen == ink::Pen::Highlighter;
   QJsonObject el{{"id", "live"}, {"z", 0}, {"kind", "stroke"}, {"tool", hl ? "highlighter" : "pen"}, {"color", m_g.color.name(QColor::HexRgb)},
                  {"width", m_g.width}, {"points", pts}};
-  if (!hl) el["style"] = m_tool == "shape" ? QStringLiteral("ballpoint") : m_penStyleName;
+  if (!hl) el["style"] = m_tool == "shape" ? QStringLiteral("ballpoint") : styleNow();
   if (m_g.dashed) {
     el["dash"] = m_g.dashed == 2 ? "dot" : "dash";
     el["gap"] = m_penGap;
@@ -2268,18 +2294,46 @@ void InkCanvas::press(QPointF s, float pressure, bool stylus, const QString& too
   if (!m_pages[pi].synced) syncPage(pi);
   const QPointF p = toPageOf(pi, s);
   m_g.page = pi;
+  // Selecting with any writing tool: a tap on a placed thing selects it (a
+  // stroke starts instead if the pen moves), and holding still on ink selects
+  // that word. Not the eraser (it erases), nor the side button or eraser end.
+  const bool picks = toolOverride.isEmpty() && !m_skipTapSelect && (tool == "pen" || tool == "brush" || tool == "highlighter" || tool == "shape");
+  m_holdSelect.stop();
+  m_holdIds.clear();
+  if (picks) {
+    const QString obj = m_ed->objectAt(pi, p.x(), p.y());
+    if (!obj.isEmpty()) {
+      m_g.kind = Gesture::TapSelect;
+      m_g.tapStart = s;
+      m_g.tapId = obj;
+      m_g.tapPressure = pressure;
+      m_g.tapMods = mods;
+      return;
+    }
+  }
   m_ed->scratchOut = m_scratchOut;
-  const QString r = m_ed->down(pi, p.x(), p.y(), pressure, inputMs(), tool, bool(mods & Qt::ShiftModifier));
+  const QString r = m_ed->down(pi, p.x(), p.y(), pressure, inputMs(), tool == "brush" ? QStringLiteral("pen") : tool, bool(mods & Qt::ShiftModifier));
   m_g.kind = Gesture::Core;
+  if (r == "draw" && picks && tool != "shape") {
+    m_holdIds = m_ed->inkAt(pi, p.x(), p.y());
+    if (!m_holdIds.isEmpty()) {
+      m_holdPage = pi;
+      m_holdFrom = s;
+      m_holdSelect.start();
+    }
+  }
   if (r == "draw") {
     m_g.kind = Gesture::Draw;
     const bool hl = tool == "highlighter";
     const bool shape = tool == "shape";
-    m_g.pen = hl ? ink::Pen::Highlighter : shape ? ink::Pen::Ballpoint : ink::penFromName(m_penStyleName, false);
+    const QString style = tool == "brush" ? m_brushStyleName : m_penStyleName;
+    m_g.pen = hl ? ink::Pen::Highlighter : shape ? ink::Pen::Ballpoint : ink::penFromName(style, false);
     m_g.color = Canvas::parseColor(m_colors.value(tool).toString());
     m_g.width = float(m_widths.value(tool, 3).toDouble());
     if (m_g.pen == ink::Pen::Tape) m_g.width = ink::tapeWidth(m_g.width);
-    m_g.dashed = m_g.pen == ink::Pen::Construction ? (m_penDash == "dot" ? 2 : 1) : 0;
+    // Dashes or dots: the line style of a pen with an even line, or of the shape tool (construction lines always).
+    const bool dashed = m_g.pen == ink::Pen::Construction || ((m_penDash == "dash" || m_penDash == "dot") && (shape || (!hl && ink::dashable(style))));
+    m_g.dashed = dashed ? (m_penDash == "dot" ? 2 : 1) : 0;
     const float pr = ink::speedSensitive(m_g.pen) ? m_g.speed.next(float(p.x()), float(p.y()), inputMs(), stylus && !m_noPressure ? pressure : -1.f) : (stylus && !m_noPressure ? pressure : 0.5f);
     m_g.pts.push_back({float(p.x()), float(p.y()), pr});
     m_g.mesh = std::make_shared<ink::Mesh>();
@@ -2301,6 +2355,19 @@ void InkCanvas::press(QPointF s, float pressure, bool stylus, const QString& too
 void InkCanvas::drag(QPointF s, float pressure, bool stylus, Qt::KeyboardModifiers mods) {
   // Moved: not the tap that closes the drawer, a stroke.
   if (m_dismissing && QLineF(m_dismissFrom, s).length() >= 6) m_dismissing = false;
+  // Moved: not a hold on ink.
+  if (m_holdSelect.isActive() && QLineF(m_holdFrom, s).length() > 4) m_holdSelect.stop();
+  // A press on a placed thing that moves: a stroke after all, from where it began.
+  if (m_g.kind == Gesture::TapSelect) {
+    if (QLineF(m_g.tapStart, s).length() < 6) return;
+    const Gesture g = m_g;
+    m_g = Gesture();
+    m_skipTapSelect = true;
+    press(g.tapStart, g.tapPressure, g.stylus, QString(), g.touch, g.tapMods);
+    m_skipTapSelect = false;
+    drag(s, pressure, stylus, mods);
+    return;
+  }
   switch (m_g.kind) {
     case Gesture::None:
       return;
@@ -2369,16 +2436,49 @@ void InkCanvas::setHover(QPointF p) {
   }
 }
 
+void InkCanvas::selectAt(QPointF s) {
+  if (!m_ed) return;
+  const int pi = pageAt(s);
+  if (pi < 0) return;
+  if (!m_pages[pi].synced) syncPage(pi);
+  const QPointF p = toPageOf(pi, s);
+  const QString obj = m_ed->objectAt(pi, p.x(), p.y());
+  const QStringList ids = obj.isEmpty() ? m_ed->inkAt(pi, p.x(), p.y()) : QStringList{obj};
+  if (ids.isEmpty()) return;
+  m_ed->finishTextEdit();
+  m_ed->selectIds(pi, ids);
+  afterCore();
+  emit selectedByTap();
+}
+
 void InkCanvas::release() {
   setWriting(false);
+  m_holdSelect.stop();
   const Gesture::Kind k = m_g.kind;
+  // A tap on a placed thing: it's selected.
+  if (k == Gesture::TapSelect) {
+    const int page = m_g.page;
+    const QString id = m_g.tapId;
+    m_g = Gesture();
+    if (m_ed) {
+      m_ed->finishTextEdit();
+      m_ed->selectIds(page, {id});
+      afterCore();
+      emit selectedByTap();
+    }
+    return;
+  }
   if (m_rubbing) {
     m_rubbing = false;
     emit pointerChanged();
   }
   if (k == Gesture::Pan) {
+    // A right-click (not a drag): select what's under it, whatever the tool.
+    const bool click = m_g.rightClick && QLineF(m_g.tapStart, m_g.lastScreen).length() < 4;
+    const QPointF at = m_g.tapStart;
     m_g = Gesture();
     updateCursor();
+    if (click) selectAt(at);
     return;
   }
   if (k == Gesture::Laser) {
@@ -2509,6 +2609,8 @@ void InkCanvas::mousePressEvent(QMouseEvent* e) {
     m_g = Gesture();
     m_g.kind = Gesture::Pan;
     m_g.lastScreen = e->position();
+    m_g.tapStart = e->position();
+    m_g.rightClick = e->button() == Qt::RightButton;
     setCursor(Qt::ClosedHandCursor);
     return;
   }

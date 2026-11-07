@@ -43,8 +43,12 @@ public:
   QHash<QString, double> widths{{"pen", 3}, {"highlighter", 18}, {"eraser", 14}, {"shape", 3}, {"text", 20}, {"sticky", 18}};
   QString penStyle = "fountain";
   /// Construction lines: "dash" or "dot", and the spacing (1 = normal).
-  QString penDash = "dash";
+  /// The line style of the pen (or shape tool) in use: "solid", "dash" or "dot".
+  QString penDash = "solid";
   double penGap = 1;
+  /// The pen draws dashes or dots: its line style says so and its line is even
+  /// (ink::dashable), or it's a construction line (always dashed).
+  bool penDashed() const { return penStyle == "construction" || ((penDash == "dash" || penDash == "dot") && (penStyle == "ballpoint" || penStyle == "fineliner" || penStyle == "marker" || penStyle == "neon")); }
   double streamline = 0.38;
   QString shapeKind = "auto";
   bool shapeFill = false;
@@ -174,6 +178,12 @@ public:
   void replaceOnPage(int pi, const std::function<bool(const El&)>& drop, std::vector<El> add);
   /// Selects these elements on page `pi`.
   void selectIds(int pi, const QStringList& ids);
+  /// Selecting without the lasso. The placed thing (text, picture, sticky
+  /// note, graph, or a shape's outline) at a point on page `pi`, topmost; or "".
+  QString objectAt(int pi, double x, double y);
+  /// The handwriting at a point: the stroke there and the rest of its word
+  /// (empty if there's no ink right there).
+  QStringList inkAt(int pi, double x, double y);
   /// The words written on page `pi` (pen strokes grouped into lines and words; only the
   /// selected ones if `selectionOnly`): each word's box and strokes, in reading order.
   struct InkWord {

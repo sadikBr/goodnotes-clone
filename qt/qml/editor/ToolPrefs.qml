@@ -24,14 +24,26 @@ QtObject {
         "pen:watercolor": { colors: ["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6"], color: 0, sizes: [3, 5, 8], size: 1 },
         "pen:neon": { colors: ["#22d3ee", "#f472b6", "#a3e635", "#facc15", "#c084fc"], color: 0, sizes: [2, 3, 5], size: 1 },
         "pen:construction": { colors: ["#111827", "#2563eb", "#dc2626", "#16a34a", "#6b7280"], color: 0, sizes: [1, 2, 3], size: 1 },
-        "pen:tape": { colors: ["#f9a8d4", "#93c5fd", "#fde68a", "#a7f3d0", "#d1d5db"], color: 0, sizes: [3, 4, 6], size: 1 }
+        "pen:tape": { colors: ["#f9a8d4", "#93c5fd", "#fde68a", "#a7f3d0", "#d1d5db"], color: 0, sizes: [3, 4, 6], size: 1 },
+        "pen:fineliner": { colors: ["#111827", "#2563eb", "#dc2626", "#16a34a", "#9333ea"], color: 0, sizes: [0.8, 1.2, 2], size: 1 },
+        "pen:inkbrush": { colors: ["#111827", "#1e3a8a", "#7c2d12", "#b91c1c", "#14532d"], color: 0, sizes: [3, 5, 8], size: 1 },
+        "pen:flat": { colors: ["#111827", "#2563eb", "#dc2626", "#16a34a", "#f59e0b"], color: 0, sizes: [3, 5, 8], size: 1 },
+        "pen:airbrush": { colors: ["#111827", "#2563eb", "#ec4899", "#f59e0b", "#8b5cf6"], color: 0, sizes: [4, 8, 14], size: 1 },
+        "pen:chalk": { colors: ["#1f2937", "#2563eb", "#dc2626", "#16a34a", "#ffffff"], color: 0, sizes: [2, 3, 5], size: 1 },
+        "pen:crayon": { colors: ["#dc2626", "#2563eb", "#16a34a", "#f59e0b", "#8b5cf6"], color: 0, sizes: [2, 3, 5], size: 1 }
     })
+    /// The pens and the brushes (each tool has its own kind, chosen in its case).
+    readonly property var penKinds: ["fountain", "ballpoint", "fineliner", "pencil", "calligraphy"]
+    readonly property var brushKinds: ["brush", "inkbrush", "flat", "airbrush", "chalk", "crayon", "watercolor", "marker", "neon", "tape"]
+    /// Pens whose line is even enough to dash (as ink::dashable).
+    function dashable(style) { return style === "ballpoint" || style === "fineliner" || style === "marker" || style === "neon" }
     readonly property var writingPens: ["fountain", "ballpoint", "pencil", "brush", "construction"]
     /// Where a tool's colours and sizes are kept: the pen's under its type ("pen:marker").
-    function key(tool) { return tool === "pen" ? "pen:" + (store.penStyle || "fountain") : tool }
+    function key(tool) { return tool === "pen" ? "pen:" + (store.penStyle || "fountain") : tool === "brush" ? "pen:" + (store.brushStyle || "brush") : tool }
     // Size ranges (src/editor/editor.ts SIZE_SPECS).
     readonly property var specs: ({
         pen: { label: "Pen size", min: 0.5, max: 20, step: 0.5 },
+        brush: { label: "Brush size", min: 0.5, max: 20, step: 0.5 },
         highlighter: { label: "Highlighter size", min: 4, max: 48, step: 1 },
         eraser: { label: "Eraser size", min: 4, max: 80, step: 1 },
         shape: { label: "Line width", min: 0.5, max: 20, step: 0.5 },
@@ -60,9 +72,14 @@ QtObject {
         property string daftarOutlines: "[]"
         property string tool: "pen"
         property string penStyle: "fountain"
+        property string brushStyle: "brush"
+        /// (Before 0.20: the construction pen's dashes; now each pen's line style is in favs.)
         property string penDash: "dash"
         property real penGap: 1
         property bool penCaseSeen: false
+        property bool brushCaseSeen: false
+        /// The pens and brushes were split, and dashes became each pen's line style (0.20).
+        property bool brushesSplit: false
         property string shapeKind: "auto"
         property string eraserMode: "precise"
         property string laserMode: "trail"
@@ -82,6 +99,8 @@ QtObject {
                 if (!s) continue
                 if (Array.isArray(s.colors) && s.colors.length === out[t].colors.length) out[t].colors = s.colors
                 if (typeof s.color === "number" && s.color < out[t].colors.length) out[t].color = s.color
+                if (s.dash === "dash" || s.dash === "dot") out[t].dash = s.dash
+                if (typeof s.gap === "number") out[t].gap = s.gap
                 if (!out[t].sizes.length || !Array.isArray(s.sizes)) continue
                 // Your own size (the fourth); from before it existed, a preset you'd changed.
                 const presets = out[t].sizes.slice(0, 3)
@@ -156,6 +175,43 @@ QtObject {
         else setColor(tool, f.color, c)
     }
 
-    readonly property var colors: ({ pen: color("pen"), highlighter: color("highlighter"), shape: color("shape"), text: color("text"), sticky: color("sticky"), laser: color("laser") })
-    readonly property var widths: ({ pen: size("pen"), highlighter: size("highlighter"), eraser: size("eraser"), shape: size("shape"), text: size("text"), sticky: size("sticky") })
+    /// A tool's line style ("solid", "dash", "dot") and its spacing: each pen's own, and the shape tool's.
+    function dashOf(tool) {
+        if (tool === "shape") return (data.shape || {}).dash || "solid"
+        if (tool !== "pen" && tool !== "brush") return "solid"
+        const st = tool === "brush" ? store.brushStyle : store.penStyle
+        return dashable(st) ? ((get(tool) || {}).dash || "solid") : "solid"
+    }
+    function gapOf(tool) { const f = tool === "shape" ? data.shape : get(tool); return f && typeof f.gap === "number" ? f.gap : 1 }
+    function setDash(tool, v) { edit(tool, f => f.dash = v) }
+    function setGap(tool, v) { edit(tool, f => f.gap = v) }
+
+    /// Once: a brush-like pen chosen before the split becomes the brush (and
+    /// the brush the tool in use if the pen was); the construction pen
+    /// becomes a ballpoint with its dashes.
+    function splitBrushes() {
+        if (store.brushesSplit) return
+        const st = store.penStyle
+        if (brushKinds.indexOf(st) >= 0) {
+            store.brushStyle = st
+            store.penStyle = "fountain"
+            if (store.tool === "pen") store.tool = "brush"
+        } else if (st === "construction") {
+            const d = JSON.parse(JSON.stringify(data))
+            const c = d["pen:construction"] || {}
+            const b = d["pen:ballpoint"]
+            if (b) {
+                b.dash = store.penDash === "dot" ? "dot" : "dash"
+                b.gap = store.penGap
+                if (Array.isArray(c.colors) && typeof c.color === "number") { b.colors[b.color] = c.colors[c.color] }
+                save(d)
+            }
+            store.penStyle = "ballpoint"
+        }
+        store.brushesSplit = true
+    }
+    Component.onCompleted: splitBrushes()
+
+    readonly property var colors: ({ pen: color("pen"), brush: color("brush"), highlighter: color("highlighter"), shape: color("shape"), text: color("text"), sticky: color("sticky"), laser: color("laser") })
+    readonly property var widths: ({ pen: size("pen"), brush: size("brush"), highlighter: size("highlighter"), eraser: size("eraser"), shape: size("shape"), text: size("text"), sticky: size("sticky") })
 }

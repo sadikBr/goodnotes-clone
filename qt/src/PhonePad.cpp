@@ -499,7 +499,7 @@ void PhonePad::sendState() {
   const QSizeF ps = m_canvas->pageSize(m_page);
   // The line as the desktop will draw it (the phone shows it so while it's written).
   const bool hl = tool == "highlighter";
-  const ink::Pen pen = hl ? ink::Pen::Highlighter : tool == "shape" ? ink::Pen::Ballpoint : ink::penFromName(m_canvas->penStyle(), false);
+  const ink::Pen pen = hl ? ink::Pen::Highlighter : tool == "shape" ? ink::Pen::Ballpoint : ink::penFromName(m_canvas->styleNow(), false);
   const double width = m_canvas->widths().value(tool, 3).toDouble();
   const QColor live = ink::liveColor(QColor(m_canvas->colors().value(tool, "#1d1f23").toString()), pen);
   sendText({{"t", "state"},
@@ -514,7 +514,7 @@ void PhonePad::sendState() {
             {"color", live.name(QColor::HexRgb)},
             {"alpha", live.alphaF()},
             {"width", width},
-            {"line", tool == "pen" || hl || tool == "shape" ? double(ink::lineWidth(pen, float(width))) : width}});
+            {"line", tool == "pen" || tool == "brush" || hl || tool == "shape" ? double(ink::lineWidth(pen, float(width))) : width}});
 }
 
 void PhonePad::scheduleImage(int ms) {

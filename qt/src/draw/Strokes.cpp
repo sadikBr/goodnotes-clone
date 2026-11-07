@@ -47,6 +47,20 @@ FreehandOptions options(const QString& style, double width, bool last) {
   } else if (style == "marker") {
     o.size = width * 2.4;
     o.thinning = 0.1;
+  } else if (style == "fineliner") {
+    o.size = std::max(0.6, width * 0.7);
+    o.thinning = 0;
+  } else if (style == "inkbrush") {
+    o.size = width * 2.0;
+    o.thinning = 0.92;
+    o.startTaper = width * 2;
+    o.endTaper = width * 6;
+  } else if (style == "chalk") {
+    o.size = width * 2.0;
+    o.thinning = 0.05;
+  } else if (style == "crayon") {
+    o.size = width * 1.7;
+    o.thinning = 0.15;
   } else if (style == "watercolor") {
     o.size = width * 3.2;
     o.thinning = 0.55;
@@ -138,6 +152,56 @@ QImage grainTile(const QString& color) {
     px[i] = char(70 + (seed % 186));  // alpha 70..255
   }
   t.putPixels(px, 0, 0, 48, 48);
+  const QImage img = t.image();
+  cache.insert(color, img);
+  return img;
+}
+
+// Chalk: coarse grain with gaps (dust on a board), in 2×2 specks.
+QImage chalkTile(const QString& color) {
+  thread_local QHash<QString, QImage> cache;
+  if (auto it = cache.constFind(color); it != cache.constEnd()) return *it;
+  Canvas t(64, 64);
+  t.setFill(color);
+  t.fillRect(0, 0, 64, 64);
+  QByteArray px = t.pixels(0, 0, 64, 64);
+  long long seed = 11;
+  for (int by = 0; by < 64; by += 2)
+    for (int bx = 0; bx < 64; bx += 2) {
+      seed = (seed * 16807) % 2147483647;
+      const int r = int(seed % 1000);
+      const char a = char(r < 300 ? (r % 50) : 150 + (r % 106));  // a third nearly bare
+      for (int dy = 0; dy < 2; ++dy)
+        for (int dx = 0; dx < 2; ++dx) px[((by + dy) * 64 + bx + dx) * 4 + 3] = a;
+    }
+  t.putPixels(px, 0, 0, 64, 64);
+  const QImage img = t.image();
+  cache.insert(color, img);
+  return img;
+}
+
+// Crayon: wax caught on the paper's tooth, in short streaks with small gaps.
+QImage crayonTile(const QString& color) {
+  thread_local QHash<QString, QImage> cache;
+  if (auto it = cache.constFind(color); it != cache.constEnd()) return *it;
+  Canvas t(64, 64);
+  t.setFill(color);
+  t.fillRect(0, 0, 64, 64);
+  QByteArray px = t.pixels(0, 0, 64, 64);
+  long long seed = 23;
+  for (int y = 0; y < 64; ++y) {
+    int left = 0, level = 220;
+    for (int x = 0; x < 64; ++x) {
+      seed = (seed * 16807) % 2147483647;
+      if (left-- <= 0) {
+        // A new streak: 3–12 px long, mostly dense, sometimes a gap.
+        left = 3 + int(seed % 10);
+        level = (seed / 10) % 100 < 18 ? 40 : 170 + int((seed / 1000) % 86);
+      }
+      px[(y * 64 + x) * 4 + 3] = char(std::clamp(level + int(seed % 31) - 15, 0, 255));
+    }
+  }
+  t.putPixels(px, 0, 0, 64, 64);
   const QImage img = t.image();
   cache.insert(color, img);
   return img;
@@ -257,7 +321,8 @@ bool tapDot(const std::vector<Pt>& pts, const QString& style, double width, Dot*
     y1 = std::max(y1, p[1]);
   }
   if (std::max(x1 - x0, y1 - y0) > width * 0.6) return false;
-  const double k = style == "marker" ? 1.1 : style == "watercolor" ? 1.5 : style == "brush" ? 0.6 : style == "ballpoint" || style == "pencil" ? 0.42 : 0.5;
+  const double k = style == "marker" ? 1.1 : style == "watercolor" ? 1.5 : style == "brush" ? 0.6 : style == "ballpoint" || style == "pencil" ? 0.42
+                 : style == "fineliner" ? 0.36 : style == "inkbrush" ? 0.75 : style == "chalk" ? 0.65 : style == "crayon" ? 0.75 : style == "airbrush" ? 1.3 : style == "flat" ? 1.1 : 0.5;
   *out = {(x0 + x1) / 2, (y0 + y1) / 2, std::max(0.6, width * k)};
   return true;
 }
@@ -415,6 +480,129 @@ void drawEffect(Canvas& c, const QJsonObject& el, const std::vector<Pt>& pts, co
   }
 }
 
+/// A dashed or dotted line in any pen that has an even line (the line style
+/// option): the pen's own width and look, cut into dashes or dots.
+void drawDashed(Canvas& c, const QJsonObject& el, const std::vector<Pt>& pts, const QString& style, double width, const QString& color) {
+  const double streamline = el["smooth"].isDouble() ? el["smooth"].toDouble() : kStreamlineNormal;
+  std::vector<Pt> sm = smoothPoints(pts, streamline);
+  if (pts.size() > 1) sm.back() = pts.back();
+  const std::vector<P2> line = flattenSmooth(sm);
+  const bool dots = el["dash"].toString() == "dot";
+  const double gap = el["gap"].isDouble() ? std::clamp(el["gap"].toDouble(), 0.5, 4.0) : 1.0;
+  double lw = ink::lineWidth(ink::penFromName(style, false), float(width));
+  if (dots) lw = std::max(1.1, lw * 1.15);
+  const double r = lw / 2;
+  const auto dash = [&] {
+    c.setLineCap("round");
+    if (dots) c.setDash({0.001, r * 4.5 * gap});
+    else c.setDash({r * 8 - lw, r * 5 * gap + lw});
+  };
+  c.setStroke(color);
+  if (style == "neon") {
+    const double rings[][2] = {{4.4, 0.07}, {3.3, 0.1}, {2.4, 0.16}, {1.7, 0.3}};
+    for (const auto& k : rings) {
+      c.setGlobalAlpha(k[1]);
+      c.setLineWidth(lw * k[0]);
+      dash();
+      polyPath(c, line);
+      c.stroke();
+    }
+    c.setGlobalAlpha(1);
+    c.setLineWidth(lw * 1.05);
+    dash();
+    polyPath(c, line);
+    c.stroke();
+    c.setLineWidth(lw * 0.35);
+    c.setStroke(mixWhite(color, 0.5));
+    polyPath(c, line);
+    c.stroke();
+    return;
+  }
+  if (style == "marker") {
+    c.setComposite("multiply");
+    c.setGlobalAlpha(0.62);
+  }
+  c.setLineWidth(lw);
+  dash();
+  polyPath(c, line);
+  c.stroke();
+}
+
+/// Airbrush: a soft spray, densest along the middle and fading out at the
+/// edges (several passes, each wider and fainter).
+void drawAirbrush(Canvas& c, const QJsonObject& el, const std::vector<Pt>& pts, double width, const QString& color) {
+  const double streamline = el["smooth"].isDouble() ? el["smooth"].toDouble() : kStreamlineNormal;
+  std::vector<Pt> sm = smoothPoints(pts, streamline);
+  if (pts.size() > 1) sm.back() = pts.back();
+  std::vector<P2> line = flattenSmooth(sm);
+  if (line.size() == 1) line.push_back({line[0].first + 0.01, line[0].second});
+  c.setComposite("multiply");
+  c.setStroke(color);
+  c.setLineCap("round");
+  c.setLineJoin("round");
+  const double passes[][2] = {{4.2, 0.035}, {3.4, 0.045}, {2.6, 0.06}, {1.9, 0.08}, {1.3, 0.1}, {0.8, 0.12}};
+  for (const auto& k : passes) {
+    c.setGlobalAlpha(k[1]);
+    c.setLineWidth(width * k[0]);
+    polyPath(c, line);
+    c.stroke();
+  }
+}
+
+/// Flat brush: a wide, flat tip held at a slant, a little see-through, with
+/// the streaks of its bristles along the stroke.
+void drawFlatBrush(Canvas& c, const std::vector<Pt>& points, double width, const QString& color) {
+  const double angle = -M_PI / 2.6;  // the tip, about 70° from the line of writing
+  const double ux = std::cos(angle), uy = std::sin(angle);
+  auto half = [&](const Pt& p) { return (width * 2.4 * (0.7 + 0.45 * std::min(1.0, std::max(0.05, p[2])))) / 2; };
+  const double step = std::max(0.6, width * 0.25);
+  const std::vector<Pt> pts = calligraphyPath(points, step, int(jsRound(std::max(4.0, width * 0.9) / step)));
+  if (pts.empty()) return;
+  c.setComposite("multiply");
+  c.setFill(color);
+  c.setGlobalAlpha(0.8);
+  c.beginPath();
+  if (pts.size() == 1) {
+    const double h = half(pts[0]);
+    c.moveTo(pts[0][0] - ux * h - uy * 0.6, pts[0][1] - uy * h + ux * 0.6);
+    c.lineTo(pts[0][0] + ux * h - uy * 0.6, pts[0][1] + uy * h + ux * 0.6);
+    c.lineTo(pts[0][0] + ux * h + uy * 0.6, pts[0][1] + uy * h - ux * 0.6);
+    c.lineTo(pts[0][0] - ux * h + uy * 0.6, pts[0][1] - uy * h - ux * 0.6);
+    c.closePath();
+    c.fill("nonzero");
+    return;
+  }
+  for (size_t i = 1; i < pts.size(); i++) {
+    const Pt& a = pts[i - 1];
+    const Pt& b = pts[i];
+    const double ha = half(a), hb = half(b);
+    std::array<P2, 4> quad = {P2{a[0] + ux * ha, a[1] + uy * ha}, P2{b[0] + ux * hb, b[1] + uy * hb}, P2{b[0] - ux * hb, b[1] - uy * hb}, P2{a[0] - ux * ha, a[1] - uy * ha}};
+    double area = 0;
+    for (int k = 0; k < 4; k++) area += quad[k].first * quad[(k + 1) % 4].second - quad[(k + 1) % 4].first * quad[k].second;
+    if (area < 0) std::reverse(quad.begin(), quad.end());
+    c.moveTo(quad[0].first, quad[0].second);
+    for (int k = 1; k < 4; k++) c.lineTo(quad[k].first, quad[k].second);
+    c.closePath();
+  }
+  c.fill("nonzero");
+  // The bristles: a few darker streaks across the tip, all along the stroke.
+  c.setStroke(color);
+  c.setLineCap("round");
+  c.setLineJoin("round");
+  const double offsets[] = {-0.78, -0.45, -0.12, 0.2, 0.52, 0.8};
+  for (int k = 0; k < 6; ++k) {
+    c.setGlobalAlpha(k % 2 ? 0.22 : 0.14);
+    c.setLineWidth(std::max(0.35, width * (k % 3 == 0 ? 0.22 : 0.14)));
+    c.beginPath();
+    for (size_t i = 0; i < pts.size(); ++i) {
+      const double h = half(pts[i]) * offsets[k];
+      const double x = pts[i][0] + ux * h, y = pts[i][1] + uy * h;
+      i == 0 ? c.moveTo(x, y) : c.lineTo(x, y);
+    }
+    c.stroke();
+  }
+}
+
 }  // namespace
 
 std::vector<std::vector<P2>> strokeOutline(const std::vector<Pt>& raw, const QString& style, double width, bool last, double streamline) {
@@ -527,6 +715,22 @@ void drawStroke(Canvas& c, const QJsonObject& el, bool live) {
     return;
   }
   const QString style = el["style"].toString().isEmpty() ? QStringLiteral("fountain") : el["style"].toString();
+  // Dashed or dotted (the line style option; construction lines draw their own).
+  if (el["dash"].isString() && style != "construction" && ink::dashable(style) && pts.size() > 1) {
+    drawDashed(c, el, pts, style, width, color);
+    c.restore();
+    return;
+  }
+  if (style == "airbrush") {
+    drawAirbrush(c, el, pts, width, color);
+    c.restore();
+    return;
+  }
+  if (style == "flat") {
+    drawFlatBrush(c, pts, width, color);
+    c.restore();
+    return;
+  }
   if (style == "marker" || style == "watercolor" || style == "neon" || style == "construction" || style == "tape") {
     drawEffect(c, el, pts, style, width, color, live);
     c.restore();
@@ -585,7 +789,25 @@ void drawStroke(Canvas& c, const QJsonObject& el, bool live) {
     const double streamline = el["smooth"].isDouble() ? el["smooth"].toDouble() : kStreamlineNormal;
     for (const auto& outline : strokeOutline(pts, style, width, !live, streamline)) outlinePath(c, outline);
   }
-  if (style == "pencil") {
+  if (style == "chalk" || style == "crayon") {
+    c.setFill(QBrush(style == "chalk" ? chalkTile(color) : crayonTile(color)));
+    c.setGlobalAlpha(style == "chalk" ? 0.95 : 0.9);
+  } else if (style == "inkbrush") {
+    // Ink: a little see-through at the edges, deeper where it pools along the middle.
+    c.setComposite("multiply");
+    c.setFill(color);
+    c.setGlobalAlpha(0.9);
+    c.fill("nonzero");
+    if (!isDot) {
+      c.beginPath();
+      const double streamline = el["smooth"].isDouble() ? el["smooth"].toDouble() : kStreamlineNormal;
+      for (const auto& outline : strokeOutline(pts, style, width * 0.45, !live, streamline)) outlinePath(c, outline);
+      c.setGlobalAlpha(0.35);
+      c.fill("nonzero");
+    }
+    c.restore();
+    return;
+  } else if (style == "pencil") {
     double avg = 0;
     for (const Pt& p : pts) avg += p[2];
     avg /= double(pts.size());

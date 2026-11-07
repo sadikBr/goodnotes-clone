@@ -1,4 +1,5 @@
 #include "PaperImage.h"
+#include "Ink.h"
 
 #include "daftar/Cover.h"
 
@@ -82,7 +83,7 @@ void nibSample(Canvas& c, const QString& style, const QString& color, double siz
     points = {{8, hgt / 2 + 2, 0.5}, {w - 10, hgt / 2 - 2, 0.5}};
   } else {
     // (The wide and glowing pens keep further from the edges.)
-    const bool wide = style == "neon" || style == "watercolor" || style == "marker";
+    const bool wide = style == "neon" || style == "watercolor" || style == "marker" || style == "airbrush" || style == "flat" || style == "inkbrush" || style == "crayon" || style == "chalk";
     const double amp = wide ? 4.5 : 6, inset = wide ? 7 : 4;
     for (int i = 0; i <= 24; ++i) {
       const double t = i / 24.0;
@@ -90,15 +91,21 @@ void nibSample(Canvas& c, const QString& style, const QString& color, double siz
     }
   }
   double width = std::min(6.5, std::max(1.4, size * 0.9));
-  const double cap = style == "tape" ? 11 : style == "marker" ? 2.6 : style == "watercolor" ? 2.0 : style == "neon" ? 3.0 : 6.5;
+  const double cap = style == "tape" ? 11 : style == "marker" ? 2.6 : style == "watercolor" ? 2.0 : style == "neon" ? 3.0
+                     : style == "airbrush" ? 2.2 : style == "flat" ? 2.4 : style == "inkbrush" ? 2.8 : style == "crayon" || style == "chalk" ? 3.6 : 6.5;
   if (style == "tape") width = 11;
+  else if (style == "airbrush") width = std::min(2.2, width);
+  else if (style == "flat") width = std::min(2.4, width);
+  else if (style == "inkbrush") width = std::min(2.8, width);
+  else if (style == "crayon" || style == "chalk") width = std::min(3.6, width);
   else if (style == "marker") width = std::min(2.6, width);
   else if (style == "watercolor") width = std::min(2.0, width);
   else if (style == "neon") width = std::min(3.0, std::max(1.8, width));
   // A size among a pen's sizes (0..1 of the largest): thicker for the larger ones.
   if (relative > 0) width = cap * 1.25 * (0.15 + 0.85 * std::min(1.0, relative));
   QJsonObject el{{"id", "sample"}, {"z", 0}, {"kind", "stroke"}, {"tool", "pen"}, {"style", style}, {"color", sampleInk(color, dark)}, {"width", width}, {"points", pts(points)}};
-  if (style == "construction") {
+  // Construction lines are always dashed; other even pens when their line style is.
+  if (style == "construction" || (ink::dashable(style) && (dash == "dash" || dash == "dot"))) {
     el["dash"] = dash == "dot" ? "dot" : "dash";
     if (gap > 0) el["gap"] = gap;
   }

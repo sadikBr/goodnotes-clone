@@ -39,6 +39,8 @@ class InkCanvas : public QQuickItem {
   Q_PROPERTY(QString notebookId READ notebookId WRITE setNotebookId NOTIFY notebookIdChanged)
   Q_PROPERTY(QString tool READ tool WRITE setTool NOTIFY toolChanged)
   Q_PROPERTY(QString penStyle READ penStyle WRITE setPenStyle NOTIFY toolStateChanged)
+  /// The brush tool's own kind (brush, inkbrush, flat, airbrush, chalk, crayon, marker, watercolor, neon, tape).
+  Q_PROPERTY(QString brushStyle READ brushStyle WRITE setBrushStyle NOTIFY toolStateChanged)
   /// Construction lines: "dash" or "dot", and how far apart (1 = normal).
   Q_PROPERTY(QString penDash READ penDash WRITE setPenDash NOTIFY toolStateChanged)
   Q_PROPERTY(double penGap READ penGap WRITE setPenGap NOTIFY toolStateChanged)
@@ -116,6 +118,10 @@ public:
   void setTool(const QString& t);
   QString penStyle() const { return m_penStyleName; }
   void setPenStyle(const QString& s);
+  QString brushStyle() const { return m_brushStyleName; }
+  void setBrushStyle(const QString& s);
+  /// The kind of pen the current tool writes with (the pen's, or the brush's).
+  QString styleNow() const { return m_tool == "brush" ? m_brushStyleName : m_penStyleName; }
   QString penDash() const { return m_penDash; }
   void setPenDash(const QString& s);
   double penGap() const { return m_penGap; }
@@ -358,6 +364,8 @@ signals:
   void pagesChanged();
   /// The stroke being written changed (the zoom box shows it too).
   void liveInkChanged();
+  /// Something was selected by a tap, a hold or a right-click (not with the lasso).
+  void selectedByTap();
   /// What a gesture shows over the page changed (gestureRev).
   void gestureShown();
   void scrollSpeedChanged();
@@ -432,7 +440,7 @@ private:
   };
   /// A gesture as the canvas sees it (the editor core has the details).
   struct Gesture {
-    enum Kind { None, Core, Draw, Pan, Laser } kind = None;
+    enum Kind { None, Core, Draw, Pan, Laser, TapSelect } kind = None;
     int page = -1;
     std::vector<ink::Point> pts;  // live ink, page units
     ink::SpeedInk speed;
@@ -444,7 +452,22 @@ private:
     QPointF lastScreen;
     bool touch = false;
     bool stylus = false;
+    // Selecting without the lasso: a tap on a placed thing (it's selected if
+    // the pen lifts without moving; else the stroke starts after all), and a
+    // right-click.
+    QPointF tapStart;
+    QString tapId;
+    float tapPressure = 0.5f;
+    Qt::KeyboardModifiers tapMods;
+    bool rightClick = false;
   };
+  /// Press and hold still on ink: that word is selected (`m_holdIds`, page `m_holdPage`).
+  QTimer m_holdSelect;
+  QStringList m_holdIds;
+  int m_holdPage = -1;
+  QPointF m_holdFrom;
+  bool m_skipTapSelect = false;
+  void selectAt(QPointF s);
 
   // The editor
   void pushToolState();
@@ -487,6 +510,7 @@ private:
   QString m_notebookId;
   QString m_tool = "pen";
   QString m_penStyleName = "fountain";
+  QString m_brushStyleName = "brush";
   QString m_penDash = "dash";
   double m_penGap = 1;
   QVariantMap m_colors, m_widths;
