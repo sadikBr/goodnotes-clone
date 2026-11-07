@@ -63,7 +63,7 @@ Rectangle {
     property bool sidebarShown: prefs.store.sidebar
     property bool focusMode: false
     /// The tools sit in a rail down the left side (Settings → Appearance), not in the top bar.
-    readonly property bool rail: AppSettings.store.toolbar === "rail"
+    readonly property bool rail: AppSettings.store.toolbar === "rail" && !Theme.phone
 
     /// Something selected without the lasso (a tap, a hold, a right-click): the
     /// lasso takes over to move or resize it, and this tool comes back once
@@ -91,6 +91,8 @@ Rectangle {
         if (!prefs.store.drawerPinned) drawerOpen = false
     }
     function toggleSidebar() {
+        // A phone: the pages slide in over the page.
+        if (Theme.phone) { pagesDrawer.opened ? pagesDrawer.close() : pagesDrawer.open(); return }
         prefs.store.sidebar = !prefs.store.sidebar
     }
 
@@ -284,7 +286,7 @@ Rectangle {
                     spacing: 2
                     IconButton { iconName: "back"; tip: "Library"; implicitWidth: 36; implicitHeight: 36; onClicked: { canvas.finishEdit(); canvas.flush(); if (sidePane.item) { sidePane.item.canvas.finishEdit(); sidePane.item.canvas.flush() } root.back() } }
                     IconButton { iconName: "sidebar"; tip: "Pages sidebar"; implicitWidth: 36; implicitHeight: 36; iconColor: Theme.muted; onClicked: root.toggleSidebar() }
-                    IconButton { iconName: "split"; tip: root.split ? "Close the side view" : "Side by side: another page or notebook beside this one"; active: root.split; implicitWidth: 36; implicitHeight: 36; iconColor: root.split ? Theme.accentContrast : Theme.muted; onClicked: root.toggleSplit() }
+                    IconButton { visible: !Theme.phone; iconName: "split"; tip: root.split ? "Close the side view" : "Side by side: another page or notebook beside this one"; active: root.split; implicitWidth: 36; implicitHeight: 36; iconColor: root.split ? Theme.accentContrast : Theme.muted; onClicked: root.toggleSplit() }
                     AbstractButton {
                         id: titleBtn
                         // In a daftar the bar beside it needs room: the title gives way (to 5.5em),
@@ -310,7 +312,7 @@ Rectangle {
                     }
                     // A daftar's class (switches section), New lesson, outline and its menu.
                     Pill {
-                        visible: !!root.daftar
+                        visible: !!root.daftar && !Theme.phone
                         Layout.leftMargin: 6
                         AbstractButton {
                             id: classChip
@@ -380,7 +382,7 @@ Rectangle {
                 // Middle: the tools (or nothing, with them in the side rail).
                 ToolStrip {
                     id: trays
-                    visible: !root.rail
+                    visible: !root.rail && !Theme.phone
                     vertical: false
                     canvas: root.mainCanvas
                     prefs: root.toolPrefs
@@ -388,7 +390,7 @@ Rectangle {
                     menu: root.mainMenu
                     drawerOpen: root.drawerOpen
                     onPicked: id => root.pick(id)
-                    onActiveButton: item => { if (!root.rail) drawer.anchorItem = item }
+                    onActiveButton: item => { if (!root.rail && !Theme.phone) drawer.anchorItem = item }
                     onAddColor: anchor => root.addRailColor(anchor)
                 }
 
@@ -401,6 +403,7 @@ Rectangle {
                     spacing: 8
                     Item { Layout.fillWidth: true }
                     Pill {
+                        visible: !Theme.phone
                         IconButton { iconName: "search"; tip: "Find in this notebook (Ctrl+F)"; implicitWidth: 34; implicitHeight: 34; active: finder.active; onClicked: finder.active ? finder.close() : finder.open() }
                         IconButton { iconName: "sparkle"; tip: "Assistant: ask, or have it make things"; implicitWidth: 34; implicitHeight: 34; iconColor: Theme.accent; onClicked: assistant.opened ? assistant.close() : assistant.show({ id: root.notebookId, title: root.title, page: canvas.currentPage, daftar: !!root.daftar }) }
                     }
@@ -409,6 +412,7 @@ Rectangle {
                         IconButton { iconName: "redo"; tip: "Redo (Ctrl+Shift+Z)"; implicitWidth: 34; implicitHeight: 34; enabled: root.activeCanvas.canRedo; onClicked: root.activeCanvas.redo() }
                     }
                     Pill {
+                        visible: !Theme.phone
                         AbstractButton {
                             id: paperBtn
                             readonly property var meta: canvas.pages[canvas.currentPage] || ({})
@@ -447,6 +451,7 @@ Rectangle {
                     }
                     // Things to put on the page, in one menu.
                     Pill {
+                        visible: !Theme.phone
                         AbstractButton {
                             id: insertBtn
                             readonly property bool open: menu.opened && menu.anchorItem === insertBtn
@@ -489,6 +494,7 @@ Rectangle {
                     }
                     AbstractButton {
                         id: exportBtn
+                        visible: !Theme.phone
                         implicitHeight: 40
                         implicitWidth: exportRow.implicitWidth + 24
                         hoverEnabled: true
@@ -525,15 +531,22 @@ Rectangle {
                             id: moreBtn
                             iconName: "more"; tip: "More"; implicitWidth: 34; implicitHeight: 34
                             onClicked: menu.show(moreBtn, [
+                                ...(Theme.phone ? [
+                                    { icon: "search", label: "Find in this notebook", action: () => finder.open() },
+                                    { icon: "sparkle", label: "Assistant", action: () => assistant.show({ id: root.notebookId, title: root.title, page: canvas.currentPage, daftar: !!root.daftar }) },
+                                    { icon: "plus", label: "Insert…", action: () => Qt.callLater(() => insertBtn.clicked()) },
+                                    { icon: "page", label: "Paper…", action: () => Qt.callLater(() => paperBtn.clicked()) },
+                                    { icon: "download", label: "Export…", action: () => Qt.callLater(() => exportBtn.clicked()) },
+                                    { separator: true }] : []),
                                 { icon: "stylus", label: "Pen-only mode", toggle: AppSettings.store.penOnly, action: () => AppSettings.store.penOnly = !AppSettings.store.penOnly },
                                 { icon: "focus", label: "Focus mode", key: "F", toggle: root.focusMode, action: () => root.focusMode = !root.focusMode },
                                 { icon: "zoombox", label: "Zoom box", key: "Z", toggle: zoomBox.active, action: () => zoomBox.active ? zoomBox.stop() : zoomBox.start() },
-                                ...(Qt.platform.os === "android" || Qt.platform.os === "ios" ? [] : [{ icon: "phone", label: "Write from your phone", toggle: phoneWriting.active, action: () => phoneWriting.open() }]),
-                                { icon: "present", label: "Present", key: "F5", toggle: presenter.visible, action: () => root.togglePresenting() },
+                                ...(Qt.platform.os === "android" || Qt.platform.os === "ios" || Theme.phone ? [] : [{ icon: "phone", label: "Write from your phone", toggle: phoneWriting.active, action: () => phoneWriting.open() }]),
+                                ...(Theme.phone ? [] : [{ icon: "present", label: "Present", key: "F5", toggle: presenter.visible, action: () => root.togglePresenting() }]),
                                 { icon: "spell", label: "Check spelling on this page", action: () => spell.check(root.mainCanvas.currentPage, false) },
-                                { icon: "sidebar", label: "Tools on the side", toggle: root.rail, action: () => AppSettings.store.toolbar = root.rail ? "top" : "rail" },
+                                ...(Theme.phone ? [] : [{ icon: "sidebar", label: "Tools on the side", toggle: root.rail, action: () => AppSettings.store.toolbar = root.rail ? "top" : "rail" }]),
                                 { separator: true },
-                                { icon: "sidebar", label: root.sidebarShown ? "Hide pages" : "Show pages", key: "[", action: () => root.toggleSidebar() },
+                                { icon: "sidebar", label: Theme.phone ? "Pages" : root.sidebarShown ? "Hide pages" : "Show pages", key: Theme.phone ? "" : "[", action: () => root.toggleSidebar() },
                                 { icon: Theme.dark ? "sun" : "moon", label: Theme.dark ? "Light mode" : "Dark mode", action: () => AppSettings.store.theme = Theme.dark ? "light" : "dark" },
                                 { separator: true },
                                 { icon: "keyboard", label: "Shortcuts and gestures", key: "?", action: () => shortcuts.open() },
@@ -556,7 +569,7 @@ Rectangle {
                 daftar: !!root.daftar
                 onAddDaftarPage: { if (canvas.daftar("addClassPage", [root.notebookId]).plain) canvas.addPage(-1, "") }
                 Layout.fillHeight: true
-                Layout.preferredWidth: root.sidebarShown && !root.focusMode ? pageSidebar.wantWidth : 0
+                Layout.preferredWidth: root.sidebarShown && !root.focusMode && !Theme.phone ? pageSidebar.wantWidth : 0
                 visible: Layout.preferredWidth > 0
                 Behavior on Layout.preferredWidth { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
             }
@@ -738,7 +751,7 @@ Rectangle {
                     z: 9
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.bottom: parent.bottom
-                    anchors.bottomMargin: zoomBox.active ? zoomBox.panelHeight + 34 : 78
+                    anchors.bottomMargin: Theme.phone && drawer.visible ? drawer.height + 26 : zoomBox.active ? zoomBox.panelHeight + 34 : 78
                     onMoreRequested: shortcuts.open()
                     Connections { target: root.mainCanvas; function onToolChanged() { tipCard.offer(root.mainCanvas.tool) } }
                     Component.onCompleted: offer(root.mainCanvas.tool)
@@ -829,7 +842,8 @@ Rectangle {
                     // Under the top bar's tool, or beside the rail's.
                     fromLeft: root.rail
                     maxWidth: area.width - (root.rail ? 18 : 24)
-                    y: root.rail ? Math.round(Math.max(12, Math.min(root.toolMiddle - height / 2, area.height - height - 12))) : 14
+                    fromBelow: Theme.phone
+                    y: Theme.phone ? area.height - height - 12 : root.rail ? Math.round(Math.max(12, Math.min(root.toolMiddle - height / 2, area.height - height - 12))) : 14
                     x: root.rail ? 6 : Math.round(Math.max(12, Math.min(root.toolCenter - width / 2, area.width - width - 12)))
                     // The pointer stays on the tool while the drawer slides.
                     pointerX: root.toolCenter - x
@@ -928,6 +942,60 @@ Rectangle {
                 onLoaded: item.canvas.activeFocusChanged.connect(() => { if (item && item.canvas.activeFocus) root.activeCanvas = item.canvas })
                 onActiveChanged: if (!active) root.activeCanvas = canvas
             }
+        }
+
+        // --- a phone's tools: along the bottom, by your thumb (scrolls sideways) ---
+        Rectangle {
+            id: bottomBar
+            visible: Theme.phone && !root.focusMode
+            Layout.fillWidth: true
+            Layout.preferredHeight: visible ? 62 : 0
+            color: Theme.surface
+            z: 6
+            Rectangle { width: parent.width; height: 1; color: Theme.border }
+            Flickable {
+                id: bottomFlick
+                anchors.fill: parent
+                anchors.leftMargin: 4
+                anchors.rightMargin: 4
+                contentWidth: Math.max(width, bottomTools.width + 8)
+                contentHeight: height
+                clip: true
+                flickableDirection: Flickable.HorizontalFlick
+                boundsBehavior: Flickable.StopAtBounds
+                onContentXChanged: root.anchorMoved++
+                ToolStrip {
+                    id: bottomTools
+                    x: Math.max(4, (bottomFlick.width - width) / 2)
+                    y: (bottomFlick.height - height) / 2
+                    vertical: false
+                    canvas: root.mainCanvas
+                    prefs: root.toolPrefs
+                    tools: root.tools
+                    menu: root.mainMenu
+                    drawerOpen: root.drawerOpen
+                    onPicked: id => root.pick(id)
+                    onActiveButton: item => { if (Theme.phone) drawer.anchorItem = item }
+                    onAddColor: anchor => root.addRailColor(anchor)
+                }
+            }
+        }
+    }
+
+    // A phone's pages: they slide in over the page.
+    Drawer {
+        id: pagesDrawer
+        edge: Qt.LeftEdge
+        width: Math.min(300, root.width * 0.8)
+        height: root.height
+        interactive: Theme.phone
+        padding: 0
+        background: Rectangle { color: Theme.surface }
+        PageSidebar {
+            anchors.fill: parent
+            canvas: root.mainCanvas
+            daftar: !!root.daftar
+            onAddDaftarPage: { if (canvas.daftar("addClassPage", [root.notebookId]).plain) canvas.addPage(-1, "") }
         }
     }
 

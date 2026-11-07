@@ -18,6 +18,8 @@ section here before it can be published (`scripts/check-version.py`).
 - **Smoother with heavy pages:** the soft brushes draw faster, and a page full of brush strokes sharpens over a few frames after zooming instead of pausing.
 - **Small windows:** in a narrow window the library's heading goes on a line of its own and its buttons become icons; the options strip drops the pen's name and the sizes' numbers; and in a short window the tool rail gets smaller and shows only the colours that fit, so nothing runs off the edge.
 - Blanking the screen while presenting is now **.** (B is the brush).
+- **Inkleaf on a phone:** on a phone-sized screen (or a window that narrow) the library shows two notebooks a row, its folders slide in from ☰ and New is a round button in the corner. In a notebook the tools are a strip along the bottom with their options just above, the pages slide in from the side, and Find, the assistant, Insert, Paper and Export are in the ⋯ menu, which opens as a sheet from the bottom. The pen and brush cases, colours, papers, covers, the selection bar, Settings (full screen) and the new-notebook dialog all fit the screen.
+- **Fixed:** opening the Trash in a narrow window could close Inkleaf.
 
 ## 0.19.2
 

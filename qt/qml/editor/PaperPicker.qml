@@ -15,8 +15,9 @@ Popup {
     property string category: "basic"
     parent: Overlay.overlay
     padding: 14
-    // Five papers a row: the categories fit above them.
-    width: 5 * 96 + 4 * 10 + 28
+    // Five papers a row (three on a phone): the categories fit above them.
+    readonly property int cols: Theme.phone ? 3 : 5
+    width: cols * 96 + (cols - 1) * 10 + 28
     focus: true
     // Modal without dimming: a press outside only closes it (it doesn't draw on the
     // page or reopen it from its button), as in the web app.
@@ -59,6 +60,8 @@ Popup {
         const p = anchor.mapToItem(parent, 0, 0)
         x = Math.max(8, Math.min(parent.width - width - 8, p.x + anchor.width - width))
         y = p.y + anchor.height + 8
+        // On a phone (its button is in the ⋯ menu) it sits at the bottom, over the tools.
+        if (Theme.phone) { x = (parent.width - width) / 2; y = Qt.binding(() => Math.max(8, parent.height - height - 12)) }
         open()
     }
 
@@ -78,7 +81,7 @@ Popup {
         // Your templates: keep this page, or use one you kept.
         GridLayout {
             visible: root.category === "mine"
-            columns: 5
+            columns: root.cols
             columnSpacing: 10
             rowSpacing: 10
             AbstractButton {
@@ -180,7 +183,7 @@ Popup {
         }
         GridLayout {
             visible: root.category !== "mine"
-            columns: 5
+            columns: root.cols
             columnSpacing: 10
             rowSpacing: 10
             Repeater {

@@ -31,7 +31,8 @@ Popup {
         val = c.hsvValue
         const p = anchor.mapToItem(parent, 0, 0)
         x = Math.max(8, Math.min(parent.width - width - 8, p.x + anchor.width / 2 - width / 2))
-        y = p.y + anchor.height + 10
+        // On a phone the tools are at the bottom: it opens above them.
+        y = Theme.phone ? Math.max(8, p.y - implicitHeight - 10) : p.y + anchor.height + 10
         open()
     }
     function pick(c) {

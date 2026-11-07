@@ -17,7 +17,7 @@ Popup {
     readonly property bool landscape: (meta.width || 794) > (meta.height || 1123)
     parent: Overlay.overlay
     padding: 14
-    width: 420
+    width: Theme.phone && parent ? Math.min(420, parent.width - 16) : 420
     focus: true
     // Modal without dimming: a press outside only closes it (it doesn't draw on the
     // page or reopen it from its button), as in the web app.
@@ -30,6 +30,8 @@ Popup {
         const p = anchor.mapToItem(parent, 0, 0)
         x = Math.max(8, Math.min(parent.width - width - 8, p.x + anchor.width - width))
         y = p.y + anchor.height + 8
+        // On a phone (its button is in the ⋯ menu) it sits at the bottom.
+        if (Theme.phone) { x = (parent.width - width) / 2; y = Qt.binding(() => Math.max(8, parent.height - height - 12)) }
         open()
     }
     function apply(d, c) {

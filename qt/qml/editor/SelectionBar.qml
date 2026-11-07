@@ -58,9 +58,21 @@ Item {
     Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusLg; color: Theme.surface; border.color: Theme.border }
     MouseArea { anchors.fill: parent }
 
+    // Wider than the window (a phone): it scrolls sideways.
+    width: Math.min(implicitWidth, parent ? parent.width - 16 : implicitWidth)
+    height: implicitHeight
+    Flickable {
+        id: scroller
+        anchors.fill: parent
+        contentWidth: row.implicitWidth + 16
+        interactive: contentWidth > width + 1
+        flickableDirection: Flickable.HorizontalFlick
+        boundsBehavior: Flickable.StopAtBounds
+        clip: true
     RowLayout {
         id: row
-        anchors.centerIn: parent
+        x: 8
+        y: (scroller.height - height) / 2
         spacing: 6
 
         // The AI.
@@ -289,5 +301,6 @@ Item {
             ], 240)
         }
         SmallTool { iconName: "trash"; tip: "Delete"; onClicked: root.canvas.deleteSelection() }
+    }
     }
 }

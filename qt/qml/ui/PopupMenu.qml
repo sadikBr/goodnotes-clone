@@ -31,6 +31,14 @@ Popup {
         const p = anchor.mapToItem(parent, 0, 0)
         const h = list.reduce((t, i) => t + (i.separator ? 9 : i.header ? 28 : i.sub ? 52 : 38), 0) + 12
         menuWidth = width || (list.some(i => !!i.sub) ? 280 : list.some(i => i.toggle !== undefined) ? 252 : list.some(i => !!i.image) ? 240 : 220)
+        // On a phone: a sheet across the bottom of the screen, by your thumb.
+        if (Theme.phone) {
+            menuWidth = parent.width - 16
+            x = 8
+            y = Math.max(8, parent.height - h - 12)
+            open()
+            return
+        }
         const below = p.y + anchor.height + 6 + h < parent.height
         x = Math.max(8, Math.min(parent.width - menuWidth - 8, p.x + anchor.width - menuWidth))
         y = below ? p.y + anchor.height + 6 : Math.max(8, p.y - 6 - h)
@@ -39,6 +47,7 @@ Popup {
     /// The same, to the right of `anchor` (for the side rail).
     function showBeside(anchor, list, width) {
         show(anchor, list, width)
+        if (Theme.phone) return
         const p = anchor.mapToItem(parent, 0, 0)
         const h = list.reduce((t, i) => t + (i.separator ? 9 : i.header ? 28 : i.sub ? 52 : 38), 0) + 12
         x = Math.min(parent.width - menuWidth - 8, p.x + anchor.width + 10)

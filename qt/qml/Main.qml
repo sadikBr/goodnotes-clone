@@ -7,14 +7,17 @@ ApplicationWindow {
     id: win
     width: 1280
     height: 860
-    minimumWidth: 760
-    minimumHeight: 520
+    // (On Android the window is the screen, a phone's included.)
+    minimumWidth: Qt.platform.os === "android" ? 0 : 760
+    minimumHeight: Qt.platform.os === "android" ? 0 : 520
     visible: true
     title: openNotebook ? openTitle + " — Inkleaf" : "Inkleaf"
     color: Theme.bg
     font.family: Theme.font
 
     property string openNotebook: ""
+    // Phone-sized: the screens lay themselves out for it.
+    Binding { target: Theme; property: "phone"; value: win.width < 600 }
     property string openTitle: ""
 
     // Applies the theme; starts the AI (reading handwriting in the background); takes the keyboard.

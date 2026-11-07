@@ -17,6 +17,8 @@ Item {
     property real pointerX: width / 2
     /// The drawer sits beside the tool (the side rail): the pointer is on its left, at `pointerY`.
     property bool fromLeft: false
+    /// The drawer sits above the tool (a phone's bottom bar): the pointer is under it.
+    property bool fromBelow: false
     property real pointerY: height / 2
     /// Squarer corners, as the tool strip has.
     readonly property bool squared: true
@@ -154,7 +156,7 @@ Item {
         sizePop.index = index
         const p = item.mapToItem(sizePop.parent, 0, 0)
         sizePop.x = Math.max(8, Math.min(sizePop.parent.width - sizePop.width - 8, p.x + item.width / 2 - sizePop.width / 2))
-        sizePop.y = p.y + item.height + 8
+        sizePop.y = Theme.phone ? Math.max(8, p.y - sizePop.implicitHeight - 8) : p.y + item.height + 8
         sizePop.open()
     }
 
@@ -163,7 +165,7 @@ Item {
     Rectangle {
         id: caret
         width: 12; height: 12; rotation: 45
-        y: root.fromLeft ? Math.round(Math.max(12, Math.min(root.height - 24, root.pointerY - 6))) : -6
+        y: root.fromLeft ? Math.round(Math.max(12, Math.min(root.height - 24, root.pointerY - 6))) : root.fromBelow ? root.height - 6 : -6
         x: root.fromLeft ? -6 : Math.round(Math.max(16, Math.min(root.width - 28, root.pointerX - 6)))
         antialiasing: true
         color: Theme.surface
@@ -176,15 +178,18 @@ Item {
         color: Theme.surface
         border.color: Theme.border
         // Hide the pointer's inner half.
-        Rectangle { x: root.fromLeft ? 0.5 : caret.x - 2; y: root.fromLeft ? caret.y - 2 : 0.5; width: root.fromLeft ? 8 : 16; height: root.fromLeft ? 16 : 8; color: Theme.surface }
+        Rectangle { x: root.fromLeft ? 0.5 : caret.x - 2; y: root.fromLeft ? caret.y - 2 : root.fromBelow ? parent.height - 8.5 : 0.5; width: root.fromLeft ? 8 : 16; height: root.fromLeft ? 16 : 8; color: Theme.surface }
     }
     MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons }
 
-    RowLayout {
+    // In a row; on a phone, one above the other (the pen, its colours, its sizes).
+    GridLayout {
         id: content
         x: 10
         anchors.verticalCenter: parent.verticalCenter
-        spacing: 14
+        columns: Theme.phone ? 1 : -1
+        columnSpacing: 14
+        rowSpacing: 8
 
         // --- the tool's own choices ---
         RowLayout {

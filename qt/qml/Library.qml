@@ -115,6 +115,7 @@ Rectangle {
     readonly property var sorts: [{ id: "recent", label: "Recently edited", icon: "pen" }, { id: "created", label: "Recently created", icon: "clock" }, { id: "name", label: "Name", icon: "az" }]
 
     function show(v) {
+        if (navDrawer.opened) navDrawer.close()
         view = v
         clearPicks()
         reload()
@@ -313,7 +314,8 @@ Rectangle {
         }
         prefs.sort // re-sort when it changes
         const out = []
-        if ((folders.length || notebooks.length) && (v.kind === "all" || v.kind === "folder")) out.push({ type: "new" })
+        // (A phone has the round + button instead.)
+        if (!Theme.phone && (folders.length || notebooks.length) && (v.kind === "all" || v.kind === "folder")) out.push({ type: "new" })
         for (const f of folders.slice().sort((a, b) => a.name.localeCompare(b.name))) out.push({ type: "folder", item: f })
         for (const n of sorted(notebooks)) out.push({ type: "notebook", item: n })
         return out
@@ -620,15 +622,47 @@ Rectangle {
     }
     Shortcut { sequence: "N"; enabled: !!(root.view.kind !== "trash" && !dialog.opened); onActivated: root.newNotebook(root.folderId || null) }
 
+    Drawer {
+        id: navDrawer
+        edge: Qt.LeftEdge
+        width: Math.min(300, root.width * 0.84)
+        height: root.height
+        interactive: Theme.phone
+        padding: 0
+        background: Rectangle { color: Theme.surface }
+    }
+    // A phone's New: a round button in the corner.
+    RoundButton {
+        id: fab
+        z: 20
+        visible: Theme.phone && root.view.kind !== "trash"
+        anchors.right: parent.right; anchors.bottom: parent.bottom
+        anchors.margins: 18
+        width: 58; height: 58
+        onClicked: createMenu.show(fab, root.createOptions())
+        background: Item {
+            Shadow { anchors.fill: parent; radius: width / 2; level: 3 }
+            Rectangle { anchors.fill: parent; radius: width / 2; antialiasing: true; color: fab.pressed ? Theme.accentHover : Theme.accent }
+        }
+        contentItem: Item { Icon { anchors.centerIn: parent; name: "plus"; size: 24; color: Theme.accentContrast } }
+    }
     RowLayout {
         id: body
         anchors.fill: parent
         spacing: 0
 
         // ------------------------------------------------------------ sidebar
-        Rectangle {
+        // (On a phone it slides in from the left, from ☰: it lives in navDrawer then.)
+        Item {
+            id: sideSlot
+            visible: !Theme.phone
             Layout.fillHeight: true
-            Layout.preferredWidth: 248
+            Layout.preferredWidth: Theme.phone ? 0 : 248
+        }
+        Rectangle {
+            id: sideBar
+            parent: Theme.phone ? navDrawer.contentItem : sideSlot
+            anchors.fill: parent
             color: Theme.surface
             Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Theme.border }
 
@@ -764,18 +798,23 @@ Rectangle {
             ColumnLayout {
                 id: headCol
                 Layout.fillWidth: true
-                Layout.leftMargin: 36
-                Layout.rightMargin: 36
+                Layout.leftMargin: Theme.phone ? 14 : 36
+                Layout.rightMargin: Theme.phone ? 14 : 36
                 Layout.topMargin: root.narrowHead ? 22 : 30
                 visible: root.narrowHead
                 spacing: 6
-                Label { text: root.heading(); font.pixelSize: 26; font.weight: Font.Bold; font.letterSpacing: -0.5; color: Theme.text; elide: Text.ElideRight; Layout.fillWidth: true }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    IconButton { visible: Theme.phone; iconName: "menu"; tip: "Folders and more"; implicitWidth: 38; implicitHeight: 38; iconSize: 20; onClicked: navDrawer.open() }
+                    Label { text: root.heading(); font.pixelSize: Theme.phone ? 22 : 26; font.weight: Font.Bold; font.letterSpacing: -0.5; color: Theme.text; elide: Text.ElideRight; Layout.fillWidth: true }
+                }
                 Label { text: root.summary(); color: Theme.muted; elide: Text.ElideRight; Layout.fillWidth: true }
             }
             RowLayout {
                 Layout.fillWidth: true
-                Layout.leftMargin: 36
-                Layout.rightMargin: 36
+                Layout.leftMargin: Theme.phone ? 14 : 36
+                Layout.rightMargin: Theme.phone ? 14 : 36
                 Layout.topMargin: root.narrowHead ? 12 : 30
                 Layout.bottomMargin: 18
                 spacing: root.narrowHead ? 10 : 20
@@ -806,7 +845,7 @@ Rectangle {
                         Icon { name: "search"; size: 18; color: Theme.muted }
                         TextField {
                             id: search
-                            Layout.preferredWidth: root.narrowHead ? 200 : 240
+                            Layout.preferredWidth: Theme.phone ? 120 : root.narrowHead ? 200 : 240
                             placeholderText: "Search documents and text…"
                             placeholderTextColor: Theme.muted
                             color: Theme.text
@@ -830,7 +869,7 @@ Rectangle {
                     Layout.alignment: Qt.AlignBottom
                     kind: "ghost"
                     iconName: "sparkle"
-                    text: "Ask"
+                    text: root.narrowHead ? "" : "Ask"
                     ToolTip.visible: hovered
                     ToolTip.delay: 600
                     ToolTip.text: "Ask AI about your notes"
@@ -867,7 +906,7 @@ Rectangle {
                     Layout.alignment: Qt.AlignBottom
                     kind: "danger"
                     iconName: "trash"
-                    text: "Empty trash"
+                    text: Theme.phone ? "Empty" : "Empty trash"
                     onClicked: root.emptyTrash()
                 }
             }
@@ -987,7 +1026,8 @@ Rectangle {
                         columnSpacing: 10
                         rowSpacing: 10
                         Repeater {
-                            model: root.canCreate ? root.createOptions() : []
+                            // (Kept while hidden: emptying it under the layout crashed Qt.)
+                            model: root.createOptions()
                             delegate: CreateItem {
                                 required property var modelData
                                 Layout.fillWidth: true
@@ -1007,12 +1047,12 @@ Rectangle {
                 visible: !!(!results.visible && root.shelf.length > 0)
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.leftMargin: 36
-                Layout.rightMargin: 36 - 28
+                Layout.leftMargin: Theme.phone ? 14 : 36
+                Layout.rightMargin: Theme.phone ? 14 - 14 : 36 - 28
                 topMargin: 14
                 bottomMargin: 80
                 clip: true
-                readonly property int columns: Math.max(1, Math.floor(width / (178 + 28)))
+                readonly property int columns: Theme.phone ? 2 : Math.max(1, Math.floor(width / (178 + 28)))
                 cellWidth: Math.floor(width / columns)
                 cellHeight: (cellWidth - 28) * 4 / 3 + 14 + 20 + 3 + 16 + 34
                 model: root.shelf

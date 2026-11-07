@@ -10,8 +10,9 @@ Popup {
     id: root
     parent: Overlay.overlay
     anchors.centerIn: parent
-    width: Math.min(parent.width - 32, 860)
-    height: Math.min(parent.height - 32, 680)
+    // On a phone it takes the whole screen.
+    width: Theme.phone ? parent.width : Math.min(parent.width - 32, 860)
+    height: Theme.phone ? parent.height : Math.min(parent.height - 32, 680)
     /// Side list of sections, or tabs across the top on a narrow window.
     readonly property bool narrow: width < 640
     /// The section shown (kept between openings).
@@ -81,7 +82,7 @@ Popup {
     exit: Transition { NumberAnimation { property: "opacity"; to: 0; duration: 100 } }
     background: Item {
         Shadow { anchors.fill: parent; radius: Theme.radiusXl; level: 3 }
-        Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.radiusXl; color: Theme.surface; border.color: Theme.border }
+        Rectangle { antialiasing: true; anchors.fill: parent; radius: Theme.phone ? 0 : Theme.radiusXl; color: Theme.surface; border.color: Theme.phone ? "transparent" : Theme.border }
     }
 
     readonly property var pages: [
@@ -152,23 +153,30 @@ Popup {
         property string help
         property bool first: false
         default property alias control: holder.data
+        /// On a phone a wide control goes under its words (a switch stays beside them).
+        readonly property bool stacked: Theme.phone && holder.childrenRect.width > 90
         Layout.fillWidth: true
-        implicitHeight: Math.max(text.implicitHeight, holder.childrenRect.height) + 22
+        implicitHeight: stacked ? text.implicitHeight + holder.childrenRect.height + 32 : Math.max(text.implicitHeight, holder.childrenRect.height) + 22
         Rectangle { visible: !row.first; width: parent.width; height: 1; color: Theme.border; opacity: 0.7 }
         ColumnLayout {
             id: text
             anchors.left: parent.left
-            anchors.right: holder.left
-            anchors.rightMargin: 16
-            anchors.verticalCenter: parent.verticalCenter
+            anchors.right: row.stacked ? parent.right : holder.left
+            anchors.rightMargin: row.stacked ? 0 : 16
+            anchors.verticalCenter: row.stacked ? undefined : parent.verticalCenter
+            anchors.top: row.stacked ? parent.top : undefined
+            anchors.topMargin: 12
             spacing: 2
             Label { text: row.title; font.weight: Font.Medium; color: Theme.text; Layout.fillWidth: true; wrapMode: Text.Wrap }
             Label { visible: row.help.length > 0; text: row.help; textFormat: Text.StyledText; font.pixelSize: 12; color: Theme.muted; linkColor: Theme.text; Layout.fillWidth: true; wrapMode: Text.Wrap; lineHeight: 1.15 }
         }
         Item {
             id: holder
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
+            anchors.right: row.stacked ? undefined : parent.right
+            anchors.left: row.stacked ? parent.left : undefined
+            anchors.verticalCenter: row.stacked ? undefined : parent.verticalCenter
+            anchors.top: row.stacked ? text.bottom : undefined
+            anchors.topMargin: 8
             width: childrenRect.width
             height: childrenRect.height
         }

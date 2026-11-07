@@ -5,6 +5,8 @@ import QtQuick
 QtObject {
     // Follows the system's dark mode where Qt can tell (6.5+), or the setting.
     property bool dark: false
+    /// A phone-sized window (set by the app window): one column, tools at the bottom, sheets for popups.
+    property bool phone: false
 
     readonly property color bg: dark ? "#131412" : "#f6f4ef"
     readonly property color surface: dark ? "#1b1c1a" : "#ffffff"

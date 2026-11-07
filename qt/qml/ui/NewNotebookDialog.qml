@@ -63,8 +63,8 @@ Popup {
 
     parent: Overlay.overlay
     anchors.centerIn: parent
-    width: Math.min(parent.width - 32, 860)
-    height: Math.min(parent.height - 32, 620)
+    width: Math.min(parent.width - (Theme.phone ? 16 : 32), 860)
+    height: Theme.phone ? parent.height - 24 : Math.min(parent.height - 32, 620)
     modal: true
     focus: true
     padding: 0
@@ -242,9 +242,12 @@ Popup {
                     x: 22
                     width: parent.width - 44
                     spacing: 0
-                    RowLayout {
+                    // Side by side; on a phone, one under the other.
+                    GridLayout {
                         Layout.fillWidth: true
-                        spacing: 16
+                        columns: Theme.phone ? 1 : 2
+                        columnSpacing: 16
+                        rowSpacing: 4
                         ColumnLayout {
                             spacing: 0
                             FieldLabel { text: "Size" }

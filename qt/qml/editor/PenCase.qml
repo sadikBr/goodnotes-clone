@@ -62,13 +62,14 @@ Popup {
         hovered = ""
         const p = anchor.mapToItem(parent, 0, 0)
         x = Math.max(8, Math.min(parent.width - width - 8, p.x + anchor.width / 2 - width / 2))
-        y = p.y + anchor.height + 10
+        // On a phone the tools are at the bottom: the case opens above them.
+        y = Theme.phone ? Math.max(8, p.y - implicitHeight - 10) : p.y + anchor.height + 10
         open()
     }
 
     parent: Overlay.overlay
     padding: 14
-    width: family === "brush" ? 452 : 412
+    width: Theme.phone && parent ? Math.min(parent.width - 16, 412) : family === "brush" ? 452 : 412
     modal: true
     dim: false
     Overlay.modal: Item {}
@@ -159,9 +160,12 @@ Popup {
             Repeater { model: root.trays[0].pens; delegate: Tile { required property var modelData; pen: modelData } }
         }
         Rectangle { visible: root.trays.length > 2; Layout.fillWidth: true; Layout.topMargin: 2; Layout.bottomMargin: 2; implicitHeight: 1; color: Theme.border }
-        RowLayout {
+        // Side by side; on a phone, one under the other.
+        GridLayout {
             visible: root.trays.length > 2
-            spacing: 12
+            columns: Theme.phone ? 1 : 3
+            columnSpacing: 12
+            rowSpacing: 8
             ColumnLayout {
                 spacing: 8
                 Layout.preferredWidth: 3
@@ -172,7 +176,7 @@ Popup {
                     Repeater { model: (root.trays[1] || { pens: [] }).pens; delegate: Tile { required property var modelData; pen: modelData } }
                 }
             }
-            Rectangle { Layout.fillHeight: true; implicitWidth: 1; color: Theme.border }
+            Rectangle { Layout.fillHeight: !Theme.phone; Layout.fillWidth: Theme.phone; implicitWidth: 1; implicitHeight: 1; color: Theme.border }
             ColumnLayout {
                 spacing: 8
                 Layout.preferredWidth: 3
