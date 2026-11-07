@@ -260,6 +260,17 @@ QtObject {
     }
     /** Looks for an update; `manual` also reports "up to date" and errors. */
     function checkForUpdates(manual) {
+        // Android: Qt has no HTTPS there (no OpenSSL), so the core fetches it.
+        if (Qt.platform.os === "android") {
+            InkleafCore.callAsync("fetchJson", { url: Updater.releasesUrl(repo), userAgent: "Inkleaf/" + version }, (rel, err) => {
+                if (err) {
+                    if (manual) root.notify("Couldn't reach GitHub (" + (String(err).indexOf("offline") >= 0 ? "offline" : err) + ")", true)
+                    return
+                }
+                root.gotRelease(rel, manual)
+            })
+            return
+        }
         if (pending) pending.abort()
         const xhr = new XMLHttpRequest()
         pending = xhr
@@ -276,18 +287,22 @@ QtObject {
             }
             let rel
             try { rel = JSON.parse(xhr.responseText) } catch (e) { return }
-            if (!rel.tag_name || !root.newer(rel.tag_name, root.version)) {
-                if (manual) root.notify("Inkleaf is up to date", false)
-                return
-            }
-            const v = rel.tag_name.replace(/^v/, "")
-            if (!manual && root.later.indexOf(v) >= 0) return
-            root.update = { version: v, notes: String(rel.body || "").trim(), url: root.assetFor(rel), install: root.installableFor(rel) }
+            root.gotRelease(rel, manual)
         }
         xhr.open("GET", Updater.releasesUrl(repo))
         xhr.setRequestHeader("Accept", "application/vnd.github+json")
         xhr.setRequestHeader("User-Agent", "Inkleaf/" + version)
         xhr.send()
+    }
+    /** The latest release, found: an update when it's newer (else "up to date" when asked). */
+    function gotRelease(rel, manual) {
+        if (!rel || !rel.tag_name || !root.newer(rel.tag_name, root.version)) {
+            if (manual) root.notify("Inkleaf is up to date", false)
+            return
+        }
+        const v = rel.tag_name.replace(/^v/, "")
+        if (!manual && root.later.indexOf(v) >= 0) return
+        root.update = { version: v, notes: String(rel.body || "").trim(), url: root.assetFor(rel), install: root.installableFor(rel) }
     }
     property var pending: null
     property bool pendingManual: false

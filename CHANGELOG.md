@@ -5,6 +5,10 @@ Updates → What's new) and on its GitHub release. Keep them short, one line
 per change, written for the people using Inkleaf. A release needs its
 section here before it can be published (`scripts/check-version.py`).
 
+## 0.20.1
+
+- **Fixed (Android):** checking for updates always said "Couldn't reach GitHub (offline)": the check used a part of Qt that can't make secure connections on Android. It now goes through Inkleaf's own connection (the one sync uses), so the phone and tablet find new versions and offer to install them.
+
 ## 0.20.0
 
 - **Pens and brushes, apart:** the pen (P) has the fountain pen, ballpoint, a new fineliner, pencil and calligraphy; the new brush tool (B) has the brush pen, marker, watercolour, neon and tape, and five new brushes: **ink brush** (long tapers, deep ink), **flat brush** (a wide slanted tip with bristle streaks), **airbrush** (a soft spray), **chalk** and **crayon**. Each tool keeps its own kind, colour and size. They look the same on screen and in exports.

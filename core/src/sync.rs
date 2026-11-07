@@ -550,6 +550,17 @@ fn agent() -> ureq::Agent {
     ureq::AgentBuilder::new().timeout_connect(Duration::from_secs(15)).timeout(Duration::from_secs(180)).try_proxy_from_env(true).build()
 }
 
+/// A JSON document from the web (GitHub's latest release, for the update
+/// check): Inkleaf's own HTTPS, which works where Qt's doesn't (Android has
+/// no OpenSSL for Qt). `Err` says why it couldn't be had.
+pub fn fetch_json(url: &str, user_agent: &str) -> AppResult<Value> {
+    match agent().get(url).set("Accept", "application/vnd.github+json").set("User-Agent", user_agent).call() {
+        Ok(resp) => json_of(resp),
+        Err(ureq::Error::Status(code, _)) => Err(invalid(format!("status {code}"))),
+        Err(e) => Err(invalid(format!("offline: {e}"))),
+    }
+}
+
 fn read_all(resp: ureq::Response) -> AppResult<Vec<u8>> {
     let mut buf = Vec::new();
     resp.into_reader().read_to_end(&mut buf)?;

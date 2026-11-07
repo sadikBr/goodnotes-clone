@@ -175,6 +175,7 @@ impl Core {
                 s.pending = inkleaf_core::sync::pending_changes(db).unwrap_or(0);
                 to(&s)
             }
+            "fetchJson" => to(&inkleaf_core::sync::fetch_json(&a.s("url")?, &a.s("userAgent")?)?),
             "syncSignInStart" => to(&self.sync.sign_in_start()?),
             "syncSignInWait" => to(&self.sync.sign_in_wait(&a.s("device")?)?),
             "syncSignInCancel" => {
