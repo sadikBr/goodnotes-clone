@@ -381,6 +381,19 @@ int golden(const QString& mode, const QString& dir, const QString& diffDir) {
 
   const QJsonObject editor = editorResults(), daftarNow = daftarResults();
   total += editor.size() + daftarNow.size();
+  // Which Qt drew them: text comes out a few pixels different from one Qt
+  // version to another, so a check on another version says so up front.
+  QString recordedQt;
+  {
+    QFile f(dir + "/qt-version.txt");
+    if (record) {
+      if (f.open(QIODevice::WriteOnly)) f.write(QByteArray(qVersion()) + "\n");
+    } else if (f.open(QIODevice::ReadOnly)) {
+      recordedQt = QString::fromLatin1(f.readAll()).trimmed();
+    }
+  }
+  if (!record && !recordedQt.isEmpty() && recordedQt != QLatin1String(qVersion()))
+    qWarning().noquote() << QString("golden: recorded with Qt %1, checking with Qt %2: text may differ by a few pixels (CI checks with the same Qt)").arg(recordedQt, QLatin1String(qVersion()));
   if (record) {
     writeJson(dir + "/editor.json", editor);
     writeJson(dir + "/daftar.json", daftarNow);
@@ -438,6 +451,6 @@ int golden(const QString& mode, const QString& dir, const QString& diffDir) {
     qInfo().noquote() << QString("golden: %1 results recorded in %2").arg(total).arg(dir);
     return 0;
   }
-  qInfo().noquote() << QString("golden: %1 of %2 results differ").arg(failed).arg(total);
+  qInfo().noquote() << QString("golden: %1 of %2 results differ").arg(failed).arg(total) + (!recordedQt.isEmpty() && recordedQt != QLatin1String(qVersion()) ? QString(" (recorded with Qt %1, this is Qt %2)").arg(recordedQt, QLatin1String(qVersion())) : QString());
   return failed ? 1 : 0;
 }

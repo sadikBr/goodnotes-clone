@@ -14,6 +14,8 @@ section here before it can be published (`scripts/check-version.py`).
 - **What you draw is what stays:** the textured and effect pens (pencil, calligraphy, marker, watercolour, neon, chalk, crayon, the brushes) and dashed lines look the same while you draw as when you lift the pen; they used to show a plain line until then.
 - After holding on handwriting to select it, keep the pen down and drag: it moves with you.
 - **Tips:** the first time you pick a tool, a small card says what it can do that you wouldn't guess (hold still for clean shapes, hold on writing to select it, tap to select a picture…). Shortcuts and gestures lists every gesture, and can show the tips again.
+- **Safer saving:** what you write is saved when Inkleaf quits and whenever you switch to another app, not only a moment after each change; and if a save fails (a full disk, say), it tells you once, keeps your changes and tries again until it works.
+- **Smoother with heavy pages:** the soft brushes draw faster, and a page full of brush strokes sharpens over a few frames after zooming instead of pausing.
 - Blanking the screen while presenting is now **.** (B is the brush).
 
 ## 0.19.2

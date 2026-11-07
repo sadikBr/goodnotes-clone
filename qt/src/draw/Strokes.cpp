@@ -328,6 +328,18 @@ bool tapDot(const std::vector<Pt>& pts, const QString& style, double width, Dot*
 }
 
 
+/// Fewer points along a line: none closer than `minGap` to the one before
+/// (the ends kept). Wide, soft lines look the same with far fewer, and each of
+/// their passes is much quicker to draw.
+std::vector<P2> thinLine(const std::vector<P2>& line, double minGap) {
+  if (line.size() < 3) return line;
+  std::vector<P2> out{line.front()};
+  for (size_t i = 1; i + 1 < line.size(); ++i)
+    if (std::hypot(line[i].first - out.back().first, line[i].second - out.back().second) >= minGap) out.push_back(line[i]);
+  out.push_back(line.back());
+  return out;
+}
+
 /// The stroke's smoothed curve as a polyline.
 void polyPath(Canvas& c, const std::vector<P2>& line) {
   c.beginPath();
@@ -346,7 +358,8 @@ void drawEffect(Canvas& c, const QJsonObject& el, const std::vector<Pt>& pts, co
   const double streamline = el["smooth"].isDouble() ? el["smooth"].toDouble() : kStreamlineNormal;
   std::vector<Pt> sm = smoothPoints(pts, streamline);
   if (!live && pts.size() > 1) sm.back() = pts.back();
-  const std::vector<P2> line = flattenSmooth(sm);
+  // (Construction lines keep every point: their dashes follow the line exactly.)
+  const std::vector<P2> line = style == "construction" ? flattenSmooth(sm) : thinLine(flattenSmooth(sm), std::max(0.4, width * 0.3));
   if (style == "tape") {
     // A straight strip with zigzag (torn) ends and a faint sheen; when
     // peeked at, only a ghost of it.
@@ -534,7 +547,7 @@ void drawAirbrush(Canvas& c, const QJsonObject& el, const std::vector<Pt>& pts, 
   const double streamline = el["smooth"].isDouble() ? el["smooth"].toDouble() : kStreamlineNormal;
   std::vector<Pt> sm = smoothPoints(pts, streamline);
   if (pts.size() > 1) sm.back() = pts.back();
-  std::vector<P2> line = flattenSmooth(sm);
+  std::vector<P2> line = thinLine(flattenSmooth(sm), std::max(0.5, width * 0.35));
   if (line.size() == 1) line.push_back({line[0].first + 0.01, line[0].second});
   c.setComposite("multiply");
   c.setStroke(color);
@@ -555,8 +568,9 @@ void drawFlatBrush(Canvas& c, const std::vector<Pt>& points, double width, const
   const double angle = -M_PI / 2.6;  // the tip, about 70° from the line of writing
   const double ux = std::cos(angle), uy = std::sin(angle);
   auto half = [&](const Pt& p) { return (width * 2.4 * (0.7 + 0.45 * std::min(1.0, std::max(0.05, p[2])))) / 2; };
-  const double step = std::max(0.6, width * 0.25);
-  const std::vector<Pt> pts = calligraphyPath(points, step, int(jsRound(std::max(4.0, width * 0.9) / step)));
+  // Steps of about half the line's width: the tip is wide, so its pieces overlap plenty.
+  const double step = std::max(0.8, width * 0.5);
+  const std::vector<Pt> pts = calligraphyPath(points, step, std::max(1, int(jsRound(std::max(4.0, width * 0.9) / step))));
   if (pts.empty()) return;
   c.setComposite("multiply");
   c.setFill(color);

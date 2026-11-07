@@ -230,6 +230,8 @@ public:
   /// The stroke being written is drawn as a picture (in the overlay), as it will be once finished.
   bool livePicture() const;
   bool m_livePicShown = false;
+  bool m_saveFailing = false;
+  bool m_overlaySlow = false;  ///< the last live picture stroke took too long to draw  ///< the last save failed (said once; retried)
   quint64 pageVersion(int page) const;
   /// Spelling: the words written on page `page` (only selected ones if `selectionOnly`):
   /// [{ n, x, y, w, h, ids }] (page units), in reading order.

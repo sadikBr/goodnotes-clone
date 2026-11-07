@@ -1,6 +1,7 @@
 #include "draw/Elements.h"
 #include "draw/Strokes.h"
 #include "InkCanvas.h"
+#include <QGuiApplication>
 #include "FindText.h"
 #include "editor/Table.h"
 #include "ContentsPage.h"
@@ -114,6 +115,13 @@ InkCanvas::InkCanvas(QQuickItem* parent) : QQuickItem(parent) {
   m_saveTimer.setSingleShot(true);
   m_saveTimer.setInterval(600);
   connect(&m_saveTimer, &QTimer::timeout, this, &InkCanvas::flush);
+  // Saved before the app quits, and whenever it stops being the one in use
+  // (another window, the phone's home screen): nothing written waits on a timer then.
+  connect(qApp, &QCoreApplication::aboutToQuit, this, &InkCanvas::flush);
+  if (auto* gui = qobject_cast<QGuiApplication*>(QCoreApplication::instance()))
+    connect(gui, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState st) {
+      if (st != Qt::ApplicationActive) flush();
+    });
   // Imported PDF pages get their thumbnails in the background, one at a time.
   m_scrollGlide.setInterval(8);
   m_scrollGlide.setTimerType(Qt::PreciseTimer);
@@ -622,9 +630,16 @@ void InkCanvas::flush() {
     QString err;
     InkleafCore::instance()->callRaw("saveElements", out, &err);
     if (!err.isEmpty()) {
+      // Kept, and tried again in a few seconds (said once, not every try).
       m_ed->markDirty(i);
-      emit message(err, true);
+      if (!m_saveFailing) emit message(QStringLiteral("Couldn't save page %1 (%2). Inkleaf keeps your changes and will keep trying.").arg(i + 1).arg(err), true);
+      m_saveFailing = true;
+      QTimer::singleShot(5000, this, [this] { if (m_saveFailing) flush(); });
       continue;
+    }
+    if (m_saveFailing) {
+      m_saveFailing = false;
+      emit message(QStringLiteral("Saved"), false);
     }
     // A new page picture for the library and the sidebar.
     storeThumbnail(i);
@@ -2189,11 +2204,18 @@ void InkCanvas::updatePolish() {
       Q_UNUSED(pg);
       if (!r.isEmpty()) {
         const double dpr = window() ? window()->effectiveDevicePixelRatio() : 1.0;
-        const double s = m_zoom * dpr;
+        // A long soft stroke (airbrush, watercolour, neon) that took too long to
+        // draw last frame is drawn at half the resolution while it's written:
+        // soft anyway, so it looks the same, and the pen stays smooth.
+        const bool soft = livePic && (m_g.pen == ink::Pen::Airbrush || m_g.pen == ink::Pen::Watercolor || m_g.pen == ink::Pen::Neon);
+        const double s = m_zoom * dpr * (soft && m_overlaySlow ? 0.5 : 1.0);
+        QElapsedTimer took;
+        took.start();
         Canvas canvas(int(std::ceil(r.width() * s)), int(std::ceil(r.height() * s)));
         canvas.setTransform(s, 0, 0, s, -r.x() * s, -r.y() * s);
         m_ed->drawOverlay(canvas, pi);
         if (livePic) draw::drawStroke(canvas, liveStroke(pi), true);
+        m_overlaySlow = livePic && took.nsecsElapsed() > 14e6 * (soft && m_overlaySlow ? 0.25 : 1.0);
         m_overlayImg = canvas.image();
         m_overlayRect = r;
         m_overlayPage = pi;
@@ -2269,7 +2291,10 @@ void InkCanvas::renderPictures(bool missingOnly) {
       const double cap = kMaxTexture / std::max(1.0, std::max(it->rect.width(), it->rect.height()));
       const double want = std::min(s, cap);
       if (it->scale == want || (missingOnly && it->scale > 0)) continue;
-      if (budget.elapsed() > 40 && !visible && it->scale > 0) {
+      // Over budget: what has a picture already (just not sharp yet) waits for
+      // the next frames, on screen too; only missing ones are drawn now. A page
+      // full of brush strokes sharpens over a few frames instead of freezing.
+      if (budget.elapsed() > 40 && it->scale > 0) {
         more = true;
         continue;
       }
