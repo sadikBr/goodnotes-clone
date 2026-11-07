@@ -14,7 +14,7 @@ Item {
 
     readonly property bool on: (canvas.tool === "eraser" || canvas.rubbing) && canvas.pointer.x >= 0
     readonly property bool rubbing: canvas.rubbing
-    readonly property real radius: Math.max(4, ((canvas.widths && canvas.widths.eraser) || 14) / 2 * canvas.zoom)
+    readonly property real radius: Math.max(4, ((canvas.widths && canvas.widths.eraser) || 14) / 2 * canvas.zoom * canvas.eraserScale)
     readonly property color pink: "#f472b6"
     readonly property bool whole: canvas.eraserMode === "stroke"
 

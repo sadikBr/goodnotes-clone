@@ -40,6 +40,11 @@ public:
   // Tool state (set by the app).
   QString tool = "pen";
   QHash<QString, QString> colors{{"pen", "#111827"}, {"highlighter", "#facc15"}, {"shape", "#111827"}, {"text", "#111827"}, {"sticky", "#fef08a"}, {"laser", "#ff1f1f"}};
+  /// How much bigger the eraser is right now (rubbing fast makes it grow).
+  double eraseBoost = 1;
+  /// Goes up each time something snaps into place (a straightened shape, a round
+  /// angle, square or parallel, a joined end, a line-up): a phone gives a tick.
+  quint64 snapTicks = 0;
   QHash<QString, double> widths{{"pen", 3}, {"highlighter", 18}, {"eraser", 14}, {"shape", 3}, {"text", 20}, {"sticky", 18}};
   QString penStyle = "fountain";
   /// Construction lines: "dash" or "dot", and the spacing (1 = normal).
@@ -316,6 +321,10 @@ private:
   QSet<QString> m_selection;
   /// The last nudge: when, and the page's state after it (a run of nudges undoes as one).
   double m_nudgeAt = -1e9;
+  double m_eraseT = 0;
+  /// What the drawing has snapped to just now ("" for nothing): a new snap is a tick.
+  QString m_snapSig;
+  void noteSnap(const QString& sig);
   quint64 m_nudgeRev = 0;
   QSet<QString> m_hidden;
   Gesture m_g;
@@ -361,7 +370,7 @@ private:
   void buildSnap(const Els& moving);
   ElPtr makeShapeEl(const Shape& shape);
   ElPtr shapeElement(const Shape& shape, const QString& colorOf) const;
-  void eraseAlong(P2 p);
+  void eraseAlong(P2 p, double t = 0);
   void eraseAt(double x, double y);
   Els selectedList();
   ElPtr singleShape();
@@ -378,8 +387,12 @@ private:
   void drawAngleHint(Canvas& c, P2 a, P2 b) const;
   /// A shape's size in centimetres, under it (⌀ for a circle).
   void drawSizeHint(Canvas& c, const El& el) const;
+  /// An arc's radius and angle, with its centre.
+  void drawArcHint(Canvas& c, const El& el) const;
   /// The drafting help for this page (its lines and corners), and where a line starting at `start` begins.
   Draft makeDraft(P2& start, const QString& skip = {});
+  /// The chosen mark for a tap at `p` (ticks on a side, a corner's square or arc), or none.
+  ElPtr markEl(P2 p);
   /// A line's end joins a corner close by.
   bool joinEnd(Draft& d, P2& end) const;
   double nextZ() { return nextZOf(elements()); }

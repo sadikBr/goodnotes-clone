@@ -132,6 +132,16 @@ Rectangle {
         onOpened: place()
     }
     /// + in the tool strip: pick a colour; it's used now and added for every tool when the picker closes.
+    /// The eyedropper: the next tap on the page takes its colour (for the tool, and kept in the strip).
+    property bool pickingColor: false
+    function pickedColor(c) {
+        pickingColor = false
+        if (!c) return
+        const t = canvas.tool
+        toolPrefs.addRailColor(c)
+        toolPrefs.useColor(t, c)
+        Notice.post("Colour picked: " + c.toUpperCase(), false, { icon: "palette" })
+    }
     function addRailColor(anchor) {
         const t = canvas.tool
         railColorPop.tool = t
@@ -392,6 +402,7 @@ Rectangle {
                     onPicked: id => root.pick(id)
                     onActiveButton: item => { if (!root.rail && !Theme.phone) drawer.anchorItem = item }
                     onAddColor: anchor => root.addRailColor(anchor)
+                    onPickColor: root.pickingColor = true
                 }
 
                 // Right: history, page, export, more.
@@ -597,6 +608,7 @@ Rectangle {
                         onPicked: id => root.pick(id)
                         onActiveButton: item => { if (root.rail) drawer.anchorItem = item }
                         onAddColor: anchor => root.addRailColor(anchor)
+                    onPickColor: root.pickingColor = true
                     }
             }
             Item {
@@ -640,6 +652,7 @@ Rectangle {
                     fingerTaps: AppSettings.store.fingerTaps
                     onScratchedOut: scratchNotice.show(this)
                     onFingerTapped: redo => Notice.post(redo ? "Redone" : "Undone", false, { icon: redo ? "redo" : "undo" })
+                    onFitToggled: fit => Notice.post(fit === "page" ? "Whole page" : "Page width", false, { icon: "fit" })
                     penCursor: AppSettings.store.penCursor
                     property bool penSeen: false
                     onPenUsed: if (!AppSettings.store.penOnly && !penSeen) { penSeen = true; AppSettings.store.penOnly = true }
@@ -892,7 +905,7 @@ Rectangle {
                         IconButton { iconName: "zoomOut"; tip: "Zoom out (Ctrl+−)"; implicitWidth: 30; implicitHeight: 30; iconSize: 16; onClicked: canvas.zoomBy(1 / 1.2) }
                         Label { text: Math.round(canvas.zoom * 100) + "%"; color: Theme.muted; font.pixelSize: 13; font.weight: Font.DemiBold; Layout.preferredWidth: 46; horizontalAlignment: Text.AlignHCenter }
                         IconButton { iconName: "zoomIn"; tip: "Zoom in (Ctrl+=)"; implicitWidth: 30; implicitHeight: 30; iconSize: 16; onClicked: canvas.zoomBy(1.2) }
-                        IconButton { iconName: "fit"; tip: "Fit width (Ctrl+0)"; implicitWidth: 30; implicitHeight: 30; iconSize: 16; onClicked: canvas.fitWidth() }
+                        IconButton { iconName: "fit"; tip: "Fit width (Ctrl+0) · again: whole page (Ctrl+9)"; implicitWidth: 30; implicitHeight: 30; iconSize: 16; onClicked: canvas.toggleFit() }
                         IconButton { iconName: "zoombox"; tip: zoomBox.active ? "Close the zoom box" : "Zoom box: write large, it lands small (Z)"; active: zoomBox.active; implicitWidth: 30; implicitHeight: 30; iconSize: 16; onClicked: zoomBox.active ? zoomBox.stop() : zoomBox.start() }
                     }
                 }
@@ -994,6 +1007,36 @@ Rectangle {
     Connections {
         target: root.activeCanvas
         function onOverviewRequested() { if (!pagesGrid.opened) pagesGrid.open() }
+    }
+    // The eyedropper: a tap on the page picks its colour (a loupe shows it under the pointer).
+    MouseArea {
+        id: dropper
+        parent: area
+        anchors.fill: parent
+        z: 40
+        visible: root.pickingColor
+        hoverEnabled: true
+        cursorShape: Qt.CrossCursor
+        property string under: ""
+        onPositionChanged: m => { const p = mapToItem(root.activeCanvas, m.x, m.y); under = root.activeCanvas.colorAt(p.x, p.y) }
+        onPressed: m => { const p = mapToItem(root.activeCanvas, m.x, m.y); under = root.activeCanvas.colorAt(p.x, p.y) }
+        onReleased: m => { const p = mapToItem(root.activeCanvas, m.x, m.y); root.pickedColor(root.activeCanvas.colorAt(p.x, p.y)) }
+        Rectangle {
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: 18
+            width: hint.implicitWidth + 28; height: 40; radius: 20
+            color: Qt.rgba(0.07, 0.09, 0.15, 0.88)
+            Label { id: hint; anchors.centerIn: parent; text: "Tap the page to pick its colour · Esc to cancel"; color: "white"; font.pixelSize: 13 }
+        }
+        // The colour under the pointer.
+        Rectangle {
+            visible: dropper.containsMouse && dropper.under !== ""
+            x: dropper.mouseX + 16; y: dropper.mouseY - 52
+            width: 36; height: 36; radius: 18
+            color: dropper.under || "transparent"
+            border.color: "white"; border.width: 3
+            Rectangle { anchors.fill: parent; anchors.margins: -1; radius: width / 2; color: "transparent"; border.color: Qt.rgba(0, 0, 0, 0.35) }
+        }
     }
     // The page number, big, while you scroll from page to page.
     Rectangle {
@@ -1179,6 +1222,7 @@ Rectangle {
     readonly property bool typing: !!canvas.editing.id
     /// Back (a phone's back button): undoes the last thing opened or chosen, one at a time; false when there's nothing left (the notebook then closes).
     function goBack() {
+        if (root.pickingColor) { root.pickingColor = false; return true }
         if (root.typing) { root.activeCanvas.finishEdit(); return true }
         if ((root.activeCanvas.selection.count || 0) > 0) { root.activeCanvas.clearSelection(); return true }
         if (finder.active) { finder.close(); return true }
@@ -1200,8 +1244,9 @@ Rectangle {
     Shortcut { sequences: [StandardKey.ZoomIn, "Ctrl+="]; onActivated: canvas.zoomBy(1.2); onActivatedAmbiguously: canvas.zoomBy(1.2) }
     Shortcut { sequences: [StandardKey.ZoomOut]; onActivated: canvas.zoomBy(1 / 1.2) }
     Shortcut { sequence: "Ctrl+0"; onActivated: canvas.fitWidth() }
+    Shortcut { sequence: "Ctrl+9"; onActivated: canvas.fitPage() }
     Shortcut { sequences: ["Delete", "Backspace"]; enabled: !!(!root.typing && (root.activeCanvas.selection.count || 0) > 0); onActivated: root.activeCanvas.deleteSelection() }
-    Shortcut { sequence: "Esc"; enabled: !root.typing; onActivated: { if ((root.activeCanvas.selection.count || 0) > 0) root.activeCanvas.clearSelection(); else if (root.focusMode) root.focusMode = false; else root.drawerOpen = prefs.store.drawerPinned } }
+    Shortcut { sequence: "Esc"; enabled: !root.typing; onActivated: { if (root.pickingColor) root.pickingColor = false; else if ((root.activeCanvas.selection.count || 0) > 0) root.activeCanvas.clearSelection(); else if (root.focusMode) root.focusMode = false; else root.drawerOpen = prefs.store.drawerPinned } }
     // Arrows: with something selected they nudge it (1 px; 10 with Shift); else ← → turn pages.
     readonly property bool nudging: !root.typing && (root.activeCanvas.selection.count || 0) > 0
     Shortcut { sequences: ["PgDown"]; enabled: !root.typing; onActivated: canvas.goToPage(canvas.currentPage + 1) }

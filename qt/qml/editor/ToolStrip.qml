@@ -20,6 +20,8 @@ Rectangle {
     signal activeButton(Item item)
     /// + was pressed: pick a colour to add, by `anchor`.
     signal addColor(Item anchor)
+    /// Hold "+": pick a colour off the page.
+    signal pickColor()
 
     readonly property var fav: prefs.get(canvas.tool)
     readonly property bool hasColor: !!fav && fav.colors.length > 0
@@ -155,8 +157,9 @@ Rectangle {
             hoverEnabled: true
             ToolTip.visible: hovered
             ToolTip.delay: 500
-            ToolTip.text: "Add a colour (for every tool)"
+            ToolTip.text: "Add a colour (for every tool) · hold to pick one off the page"
             onClicked: root.addColor(add)
+            onPressAndHold: root.pickColor()
             contentItem: Item {
                 Rectangle {
                     antialiasing: true

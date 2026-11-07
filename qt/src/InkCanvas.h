@@ -89,6 +89,8 @@ class InkCanvas : public QQuickItem {
   /// The pointer over the canvas (-1, -1 when away), and whether it's erasing now (eraser tool or the pen's eraser end).
   Q_PROPERTY(QPointF pointer READ pointer NOTIFY pointerChanged)
   Q_PROPERTY(bool rubbing READ rubbing NOTIFY pointerChanged)
+  /// How much bigger the eraser is just now (it grows when you rub fast).
+  Q_PROPERTY(qreal eraserScale READ eraserScale NOTIFY pointerChanged)
   /// Writing, erasing or selecting on the page right now (the zoom bar
   /// fades meanwhile).
   Q_PROPERTY(bool writing READ writing NOTIFY writingChanged)
@@ -148,6 +150,7 @@ public:
   QPointF pointer() const { return m_hover; }
   bool writing() const { return m_writing; }
   bool rubbing() const { return m_rubbing; }
+  qreal eraserScale() const { return m_ed ? m_ed->eraseBoost : 1.0; }
   int pageCount() const { return int(m_pages.size()); }
   int currentPage() const;
   int activePage() const;
@@ -172,6 +175,10 @@ public:
   Q_INVOKABLE void zoomBy(qreal factor);
   Q_INVOKABLE void setZoomLevel(qreal z);
   Q_INVOKABLE void fitWidth();
+  /// The whole page in view (its width and height), the page you're on.
+  Q_INVOKABLE void fitPage();
+  /// Fit width ↔ fit page (a two-finger double tap, Ctrl+9).
+  Q_INVOKABLE void toggleFit();
   Q_INVOKABLE void goToPage(int index);
   /// A page-units rectangle on page `page` in this item's coordinates.
   Q_INVOKABLE QRectF pageRectToItem(int page, const QRectF& r) const;
@@ -203,6 +210,8 @@ public:
   Q_INVOKABLE void insertText(const QString& text);
   /// Moves the selection by (dx, dy) page units (arrow keys).
   Q_INVOKABLE void nudge(qreal dx, qreal dy);
+  /// The colour on the page at (x, y) in the canvas ("#rrggbb"; the paper where nothing's drawn), or "".
+  Q_INVOKABLE QString colorAt(qreal x, qreal y);
   /// A graph ({ functions, xmin, xmax, ymin, ymax, grid }): beside the
   /// selection, else in the middle of the view.
   Q_INVOKABLE void insertGraph(const QVariantMap& spec);
@@ -395,6 +404,8 @@ signals:
   void scratchedOut();
   /// Two or three fingers tapped: undone or redone.
   void fingerTapped(bool redo);
+  /// A two-finger double tap switched the fit: "page" or "width".
+  void fitToggled(const QString& fit);
   /// The text tool tapped a table: type in this cell ({ id, row, col }).
   void cellEditRequested(const QVariantMap& cell);
   void writingChanged();
@@ -474,6 +485,11 @@ private:
   QTimer m_holdSelect;
   /// Press and hold the pen still on blank paper: a point (a dot named A, B, C…).
   QTimer m_holdPoint;
+  /// While drawing or moving: a light tick from the phone each time something snaps.
+  QTimer m_snapPoll;
+  quint64 m_snapSeen = 0;
+  /// A short, light vibration (Android; nothing elsewhere).
+  void hapticTick();
   /// Asked once per zoom-out gesture that goes past the smallest zoom: show all the pages.
   bool m_overviewAsked = false;
   QStringList m_holdIds;
@@ -556,6 +572,9 @@ private:
     bool moved = false;
     QHash<int, QPointF> at;
   } m_tap;
+  /// The last two-finger tap (a second one soon after switches the fit instead).
+  double m_twoTapAt = -1e9;
+  bool m_twoTapUndid = false;
   QString m_penCursor = "cross";
   double m_lastPenMs = -1e9;
   /// Input with no pressure though it's a pen (the phone pad): its weight follows its speed.

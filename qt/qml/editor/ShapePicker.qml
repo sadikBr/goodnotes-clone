@@ -19,7 +19,7 @@ Popup {
 
     readonly property int columns: 7
     readonly property int tile: 44
-    readonly property var groups: Shapes.groups.filter(g => only === "all" || (only === "segments") === !!g.segments)
+    readonly property var groups: Shapes.groups.filter(g => (only === "all" || (only === "segments") === !!g.segments) && (withAuto || !g.marks))
     property string hovered: ""
     readonly property string inkHex: String(Theme.text).replace("#", "")
 

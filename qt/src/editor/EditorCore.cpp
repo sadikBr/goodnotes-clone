@@ -467,7 +467,8 @@ QString EditorCore::down(int pi, double x, double y, double p, double t, const Q
     m_g = Gesture{};
     m_g.type = G::Erase;
     m_g.serial = ++m_serial;
-    eraseAlong({x, y});
+    eraseBoost = 1;
+    eraseAlong({x, y}, t);
     return {};
   }
   if (tl == "lasso") {
@@ -612,7 +613,7 @@ void EditorCore::move(double x, double y, double p, double t, bool shift, bool a
       return;
     }
     case G::Erase:
-      eraseAlong({x, y});
+      eraseAlong({x, y}, t);
       return;
     case G::Lasso:
       g.lasso.push_back({x, y});
@@ -635,6 +636,9 @@ void EditorCore::move(double x, double y, double p, double t, bool shift, bool a
           g.dy = e.dy;
           for (Guide& gd : e.guides) g.guides.push_back(std::move(gd));
         }
+        QString sig;
+        for (const Guide& gd : g.guides) sig += gd.label + gd.axis + (gd.span ? QString() : QString::number(gd.value));
+        noteSnap(sig);
       }
       break;
     case G::Handle:
@@ -656,6 +660,11 @@ void EditorCore::move(double x, double y, double p, double t, bool shift, bool a
     }
     case G::Shape: {
       P2 end{x, y};
+      // A mark: where it would go, under the pen (it's placed on lifting it).
+      if (isMarkKind(shapeKind)) {
+        g.preview = markEl({x, y});
+        break;
+      }
       const bool segment = isSegmentKind(shapeKind);
       if (!g.draft) g.draft = makeDraft(g.start);
       if (segment && !shift) {
@@ -671,7 +680,8 @@ void EditorCore::move(double x, double y, double p, double t, bool shift, bool a
         if (g.draft->joinedEnd) g.draft->why.clear();
       }
       auto shape = buildShape(shapeKind, g.start, end, shift);
-      if (shape && !segment && !shift) squareUp(*shape);
+      const bool squared = shape && !segment && !shift && squareUp(*shape);
+      noteSnap(segment ? g.draft->why + (g.draft->ref ? g.draft->ref->id : QString()) + (g.draft->joinedEnd ? "|j" : "") : squared ? "square" : "");
       g.preview = shape ? makeShapeEl(*shape) : nullptr;
       break;
     }
@@ -703,6 +713,7 @@ QString EditorCore::cursorAt(double x, double y) {
 
 void EditorCore::up() {
   if (m_g.type == G::None) return;
+  m_snapSig.clear();
   // A stroke's shape is worked out while the gesture is still current.
   ElPtr shape;
   std::optional<El> highlight;
@@ -840,6 +851,7 @@ void EditorCore::up() {
     }
     case G::Erase:
       if (g.changed) changed();
+      eraseBoost = 1;
       break;
     case G::Lasso: {
       double x0 = INFINITY, x1 = -INFINITY, y0 = INFINITY, y1 = -INFINITY;
@@ -914,6 +926,8 @@ void EditorCore::up() {
       }
       break;
     case G::Shape:
+      // A tap with a mark chosen: on the side or corner tapped.
+      if (!g.preview && isMarkKind(shapeKind)) g.preview = markEl(g.start);
       if (g.preview) {
         El s = *g.preview;
         s.z = nextZ();
@@ -1036,6 +1050,8 @@ void EditorCore::holdFired() {
   const P2 anchor{g.points.back()[0], g.points.back()[1]};
   g.held = Held{"transform", shape, anchor, pivotFor(*shape), anchor};
   g.draft = draft;
+  ++snapTicks;
+  m_snapSig = draft ? draft->why + (draft->joinedEnd ? "|j" : "") : QString();
   armModeToggle();
   touchOverlay();
 }
@@ -1068,6 +1084,9 @@ ElPtr EditorCore::refine() {
   } else {
     const auto sym = pts.size() > 3 ? matchSymbol({pts}) : std::nullopt;
     shape = sym ? std::optional<Shape>(symbolShape(*sym, rectOf(pts))) : beautify(pts);
+    // A curve that's part of a circle: that arc, exactly.
+    if (!sym && shape && shape->kind == "path" && !shape->closed && shape->breaks.empty())
+      if (auto arc = fitArc(pts)) shape = arc;
   }
   if (!shape) return nullptr;
   ElPtr el = shapeElement(*shape, g.tool);
@@ -1275,6 +1294,8 @@ void EditorCore::updateHeld(P2 p) {
       shape = transformShape(h.base->shape, h.pivot, angle, scale);
       // Its end joins a corner close by (that wins over the angle).
       if (segment && m_g.draft && shape.points.size() >= 2) m_g.draft->joinedEnd = joinEnd(*m_g.draft, shape.points.back());
+      if (segment && m_g.draft) noteSnap(m_g.draft->why + (m_g.draft->ref ? m_g.draft->ref->id : QString()) + (m_g.draft->joinedEnd ? "|j" : ""));
+      else noteSnap(std::abs(std::remainder(h.turned, 15.0)) < 0.01 ? QString::number(std::lround(h.turned)) : QString());
     }
   }
   El next = *h.base;
@@ -1334,9 +1355,18 @@ ElPtr EditorCore::makeShapeEl(const Shape& shape) {
 
 // ------------------------------------------------------------ erasing
 
-void EditorCore::eraseAlong(P2 p) {
+void EditorCore::eraseAlong(P2 p, double t) {
   if (m_g.type != G::Erase) return;
   const P2 from = m_g.last.value_or(p);
+  // Rubbing fast: the eraser grows (up to 1.8×) and settles back as you slow down for detail.
+  // (Timed by the input itself, so a replayed session erases the same.)
+  const double now = t;
+  if (m_g.last && now > m_eraseT) {
+    const double speed = std::hypot(p[0] - from[0], p[1] - from[1]) * zoom / (now - m_eraseT);  // screen px a ms
+    const double target = 1 + std::clamp((speed - 0.8) / 2.0, 0.0, 0.8);
+    eraseBoost = eraseBoost * 0.75 + target * 0.25;
+  }
+  m_eraseT = now;
   const double step = std::max(1.0, widths.value("eraser") / 4);
   const int n = std::max(1, int(std::ceil(std::hypot(p[0] - from[0], p[1] - from[1]) / step)));
   for (int i = m_g.last ? 1 : 0; i <= n; ++i) eraseAt(from[0] + ((p[0] - from[0]) * i) / n, from[1] + ((p[1] - from[1]) * i) / n);
@@ -1345,7 +1375,7 @@ void EditorCore::eraseAlong(P2 p) {
 
 void EditorCore::eraseAt(double x, double y) {
   if (m_g.type != G::Erase) return;
-  const double radius = widths.value("eraser") / 2;
+  const double radius = widths.value("eraser") / 2 * eraseBoost;
   bool any = false;
   Els next;
   Els& els = elements();
@@ -1469,6 +1499,32 @@ QVariantMap EditorCore::selectionInfo() {
   if (!texts.empty() && all([](const ElPtr& t) { return currentList(t->text) == "bullet"; })) list = "bullet";
   else if (!texts.empty() && all([](const ElPtr& t) { return currentList(t->text) == "number"; })) list = "number";
   out["list"] = list;
+  // One line or shape: what it measures (a line's angle and length; a shape's size).
+  if (els.size() == 1) {
+    const El& e = *els[0];
+    const double cm = 96 / 2.54;
+    auto lineText = [&](P2 a, P2 b) {
+      double deg = std::atan2(-(b[1] - a[1]), b[0] - a[0]) * 180 / M_PI;
+      if (deg > 90) deg -= 180;
+      if (deg <= -90) deg += 180;
+      return QString::number(int(std::lround(deg))).replace('-', QChar(0x2212)) + QChar(0xB0) + QStringLiteral(" \u00b7 ") +
+             QString::number(std::hypot(b[0] - a[0], b[1] - a[1]) / cm, 'f', 1) + " cm";
+    };
+    if (e.kind == Kind::Shape && isSegmentKind(e.shape.kind) && e.shape.points.size() >= 2) {
+      out["measure"] = lineText(e.shape.points.front(), e.shape.points.back());
+    } else if (auto arc = e.kind == Kind::Shape ? arcInfo(e.shape) : std::nullopt) {
+      out["measure"] = "r " + QString::number(arc->r / cm, 'f', 1) + QStringLiteral(" cm \u00b7 ") + QString::number(int(std::lround(std::abs(arc->sweep)))) + QChar(0xB0);
+    } else if (e.kind == Kind::Shape && e.shape.name != "point") {
+      const auto [w, h] = shapeSize(e.shape);
+      if (e.shape.kind == "ellipse" && std::abs(w - h) < 0.01 * std::max(w, h))
+        out["measure"] = QStringLiteral("\u2300 ") + QString::number(w / cm, 'f', 1) + " cm";
+      else if (w > 0 || h > 0)
+        out["measure"] = QString::number(w / cm, 'f', 1) + QStringLiteral(" \u00d7 ") + QString::number(h / cm, 'f', 1) + " cm";
+    } else {
+      const auto lines = draftingLines({els[0]});
+      if (lines.size() == 1) out["measure"] = lineText(lines[0].a, lines[0].b);
+    }
+  }
   out["shape"] = single ? QVariant(QVariantMap{{"kind", single->shape.name.isEmpty() ? single->shape.kind : single->shape.name}, {"closed", isClosedShape(single->shape)}, {"width", single->width}, {"fill", bool(single->fill)}}) : QVariant();
   if (els.size() == 1 && els[0]->kind == Kind::Graph) {
     const El& g = *els[0];
@@ -2447,6 +2503,7 @@ void EditorCore::drawOverlay(Canvas& c, int pi) {
       else draw::drawElement(c, g.preview->toJson());
       if (g.held) drawHeldHint(c, *g.preview, g.held->mode);
       if (g.held && isSegmentKind(g.preview->shape.kind) && g.preview->shape.points.size() >= 2) drawAngleHint(c, g.preview->shape.points.front(), g.preview->shape.points.back());
+      else if (g.held && g.preview->kind == Kind::Shape && g.preview->shape.name == "arc") drawArcHint(c, *g.preview);
       else if (g.held && g.preview->kind == Kind::Shape) drawSizeHint(c, *g.preview);
     } else if (g.ruler) {
       El live;
@@ -2574,8 +2631,8 @@ std::optional<Rect> EditorCore::overlayBounds() {
 
 void EditorCore::drawHeldHint(Canvas& c, const El& el, const QString& mode) const {
   QString text = mode == "transform" ? QStringLiteral("Rotate & resize · hold still to move") : QStringLiteral("Move · hold still to rotate & resize");
-  // A line shows its angle by its end instead; a shape says how far it's turned.
-  if (isSegmentKind(el.shape.kind)) return;
+  // A line shows its angle by its end instead, an arc its radius; a shape says how far it's turned.
+  if (isSegmentKind(el.shape.kind) || el.shape.name == "arc") return;
   if (m_g.held && std::abs(m_g.held->turned) >= 0.5) text = QString::number(int(std::lround(m_g.held->turned))).replace('-', QChar(0x2212)) + QChar(0xB0) + " · " + text;
   const Rect r = bounds(el);
   const double z = zoom;
@@ -2593,6 +2650,16 @@ void EditorCore::drawHeldHint(Canvas& c, const El& el, const QString& mode) cons
   c.setTextBaseline("middle");
   c.fillText(text, x + 8 / z, y + hgt / 2);
   c.restore();
+}
+
+ElPtr EditorCore::markEl(P2 p) {
+  const auto mark = markShape(shapeKind, draftingLines(elements()), p, 24 / zoom, 12 + widths.value("shape", 3));
+  if (!mark) return nullptr;
+  ElPtr el = shapeElement(*mark, "shape");
+  el->fill.reset();
+  el->extra.remove("dash");
+  el->width = std::max(1.2, el->width * 0.75);
+  return el;
 }
 
 EditorCore::Draft EditorCore::makeDraft(P2& start, const QString& skip) {
@@ -2613,6 +2680,12 @@ bool EditorCore::joinEnd(Draft& d, P2& end) const {
     return true;
   }
   return false;
+}
+
+void EditorCore::noteSnap(const QString& sig) {
+  if (sig == m_snapSig) return;
+  if (!sig.isEmpty()) ++snapTicks;
+  m_snapSig = sig;
 }
 
 void EditorCore::nudge(double dx, double dy) {
@@ -2660,6 +2733,42 @@ void EditorCore::addPoint(double x, double y) {
   elements().push_back(makeEl(std::move(dot)));
   elements().push_back(makeEl(std::move(label)));
   changed();
+}
+
+void EditorCore::drawArcHint(Canvas& c, const El& el) const {
+  const auto info = arcInfo(el.shape);
+  if (!info) return;
+  const double z = zoom, cm = 96 / 2.54;
+  // The centre, a radius to the middle of the arc, and the label there.
+  const P2 mid = el.shape.points[el.shape.points.size() / 2];
+  c.save();
+  c.setStroke(QStringLiteral("#2563eb"));
+  c.setLineWidth(1.2 / z);
+  c.setDash({4 / z, 3 / z});
+  c.beginPath();
+  c.moveTo(info->c[0], info->c[1]);
+  c.lineTo(mid[0], mid[1]);
+  c.stroke();
+  c.setDash({});
+  c.setFill(QStringLiteral("#2563eb"));
+  c.beginPath();
+  c.arc(info->c[0], info->c[1], 2.5 / z, 0, 2 * M_PI);
+  c.fill();
+  const QString text = "r " + QString::number(info->r / cm, 'f', 1) + " cm  " + QString::number(int(std::lround(std::abs(info->sweep)))) + QChar(0xB0);
+  c.setFont(draw::jsNumber(12 / z) + "px system-ui, sans-serif");
+  const double tw = c.textWidth(text) + 14 / z, th = 22 / z;
+  const double ux = (mid[0] - info->c[0]) / std::max(1e-9, info->r), uy = (mid[1] - info->c[1]) / std::max(1e-9, info->r);
+  double cx = mid[0] + ux * (16 / z + tw / 2), cy = mid[1] + uy * (16 / z + th / 2);
+  cx = std::max(tw / 2 + 4 / z, std::min(pageWidth() - tw / 2 - 4 / z, cx));
+  cy = std::max(th / 2 + 4 / z, cy);
+  c.setFill(QStringLiteral("rgba(17, 24, 39, 0.85)"));
+  c.beginPath();
+  c.roundRect(cx - tw / 2, cy - th / 2, tw, th, QJSValue(6 / z));
+  c.fill();
+  c.setFill(QStringLiteral("#fff"));
+  c.setTextBaseline("middle");
+  c.fillText(text, cx - tw / 2 + 7 / z, cy);
+  c.restore();
 }
 
 void EditorCore::drawSizeHint(Canvas& c, const El& el) const {

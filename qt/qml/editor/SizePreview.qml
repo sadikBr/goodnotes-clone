@@ -40,7 +40,7 @@ Item {
         height: root.big ? 44 : 16
         sourceSize: Qt.size(width * 2, height * 2)
         cache: false
-        source: root.line ? "image://ink/nib/" + root.style + "/" + root.hex + "/" + root.value + "/" + root.dark + "/" + root.dash + "/" + root.gap + "/" + root.k : ""
+        source: root.line ? "image://ink/nib/" + root.style + "/" + root.hex + "/" + root.value + "/" + root.dark + "/" + root.dash + "/" + root.gap + "/" + root.k + "/" + (AppSettings.store.pressure || "normal") + "/" + (root.big ? "1" : "0") : ""
     }
     // The eraser: its circle, with a soft fill.
     Rectangle {

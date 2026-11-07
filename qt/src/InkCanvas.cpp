@@ -37,6 +37,10 @@
 #include <cmath>
 
 #include "Core.h"
+#ifdef Q_OS_ANDROID
+#include <QJniObject>
+#include <QtCore/qcoreapplication_platform.h>
+#endif
 #include "draw/Render.h"
 #include "Canvas.h"
 #include "Pdf.h"
@@ -209,6 +213,15 @@ InkCanvas::InkCanvas(QQuickItem* parent) : QQuickItem(parent) {
     m_g.lastScreen = m_holdFrom;
     afterCore();
     emit selectedByTap();
+  });
+  m_snapPoll.setInterval(30);
+  connect(&m_snapPoll, &QTimer::timeout, this, [this] {
+    if (!m_ed) return m_snapPoll.stop();
+    if (m_ed->snapTicks != m_snapSeen) {
+      m_snapSeen = m_ed->snapTicks;
+      hapticTick();
+    }
+    if (m_g.kind == Gesture::None) m_snapPoll.stop();
   });
   m_holdPoint.setSingleShot(true);
   m_holdPoint.setInterval(650);
@@ -1895,6 +1908,42 @@ void InkCanvas::insertText(const QString& text) {
   afterCore();
 }
 
+void InkCanvas::hapticTick() {
+#ifdef Q_OS_ANDROID
+  // The window's own view, with Android's "clock tick" (the lightest there is).
+  QNativeInterface::QAndroidApplication::runOnAndroidMainThread([] {
+    QJniObject activity = QNativeInterface::QAndroidApplication::context();
+    if (!activity.isValid()) return;
+    QJniObject window = activity.callObjectMethod("getWindow", "()Landroid/view/Window;");
+    if (!window.isValid()) return;
+    QJniObject view = window.callObjectMethod("getDecorView", "()Landroid/view/View;");
+    if (view.isValid()) view.callMethod<jboolean>("performHapticFeedback", "(I)Z", jint(4));
+  });
+#endif
+}
+
+QString InkCanvas::colorAt(qreal x, qreal y) {
+  const int pi = pageAt(QPointF(x, y));
+  if (pi < 0 || pi >= int(m_pages.size())) return {};
+  const QPointF p = toPageOf(pi, QPointF(x, y));
+  // A small patch around the tap (a few screen pixels): the colour that stands out
+  // most from the paper, so a near miss on a thin line still gets its ink.
+  const double r = std::max(1.5, 4 / m_zoom);
+  const QImage img = regionImage(pi, QRectF(p.x() - r, p.y() - r, 2 * r, 2 * r), 2);
+  if (img.isNull()) return {};
+  const QColor paper(m_pages[pi].paper);
+  QColor best = paper;
+  int bestD = 40;  // less than this from the paper: it's the paper
+  for (int y = 0; y < img.height(); ++y)
+    for (int x = 0; x < img.width(); ++x) {
+      const QColor c = img.pixelColor(x, y);
+      if (c.alpha() < 10) continue;
+      const int d = std::abs(c.red() - paper.red()) + std::abs(c.green() - paper.green()) + std::abs(c.blue() - paper.blue());
+      if (d > bestD) bestD = d, best = c;
+    }
+  return best.name(QColor::HexRgb);
+}
+
 void InkCanvas::nudge(qreal dx, qreal dy) {
   if (!m_ed) return;
   m_ed->nudge(dx, dy);
@@ -2096,6 +2145,37 @@ void InkCanvas::fitWidth() {
   m_settle.start();
   emit viewChanged();
   refresh();
+}
+
+void InkCanvas::fitPage() {
+  if (width() <= 0 || m_pages.empty()) return;
+  m_fitPending = false;
+  m_scrollGlide.stop();
+  const int i = std::clamp(currentPage(), 0, int(m_pages.size()) - 1);
+  const Page& p = m_pages[size_t(i)];
+  const qreal z = std::min((width() - 2 * kPad) / p.w, (height() - kPadTop - 16) / p.h);
+  m_zoom = std::clamp(z, kMinZoom, kMaxZoom);
+  m_scroll = QPointF(0, p.top * m_zoom);
+  clampScroll();
+  pushToolState();
+  m_overlayDirty = true;
+  m_settle.start();
+  emit viewChanged();
+  refresh();
+}
+
+void InkCanvas::toggleFit() {
+  const qreal widthZoom = std::clamp(std::min<qreal>(1.6, (width() - 2 * kPad) / m_maxPageW), kMinZoom, kMaxZoom);
+  if (std::abs(m_zoom - widthZoom) < 0.01) {
+    fitPage();
+    emit fitToggled("page");
+  } else {
+    // Back to the width, keeping the page you're on at the top.
+    const int i = std::clamp(currentPage(), 0, int(m_pages.size()) - 1);
+    fitWidth();
+    if (!m_pages.empty()) goToPage(i);
+    emit fitToggled("width");
+  }
 }
 
 void InkCanvas::goToPage(int i) {
@@ -2353,6 +2433,8 @@ void InkCanvas::press(QPointF s, float pressure, bool stylus, const QString& too
   if (m_dismissOnPress) emit dismissed();
   // A view-only page (the same notebook beside itself) only scrolls.
   const QString tool = m_readOnly ? QStringLiteral("hand") : toolOverride.isEmpty() ? m_tool : toolOverride;
+  // A mark's tap does its job too (the drawer still closes): marks are only ever taps.
+  if (tool == "shape" && ed::isMarkKind(m_shapeKind)) m_dismissing = false;
   if (!hasActiveFocus()) forceActiveFocus();
   m_g.lastScreen = s;
   m_g.touch = touch;
@@ -2391,7 +2473,8 @@ void InkCanvas::press(QPointF s, float pressure, bool stylus, const QString& too
   // Selecting with any writing tool: a tap on a placed thing selects it (a
   // stroke starts instead if the pen moves), and holding still on ink selects
   // that word. Not the eraser (it erases), nor the side button or eraser end.
-  const bool picks = toolOverride.isEmpty() && !m_skipTapSelect && (tool == "pen" || tool == "brush" || tool == "highlighter" || tool == "shape");
+  // (Not with a mark chosen: its tap places the mark on the line under it.)
+  const bool picks = toolOverride.isEmpty() && !m_skipTapSelect && (tool == "pen" || tool == "brush" || tool == "highlighter" || (tool == "shape" && !ed::isMarkKind(m_shapeKind)));
   m_holdSelect.stop();
   m_holdPoint.stop();
   m_holdIds.clear();
@@ -2408,6 +2491,10 @@ void InkCanvas::press(QPointF s, float pressure, bool stylus, const QString& too
   }
   m_ed->scratchOut = m_scratchOut;
   const QString r = m_ed->down(pi, p.x(), p.y(), pressure, inputMs(), tool == "brush" ? QStringLiteral("pen") : tool, bool(mods & Qt::ShiftModifier));
+#ifdef Q_OS_ANDROID
+  m_snapSeen = m_ed->snapTicks;
+  m_snapPoll.start();
+#endif
   m_g.kind = Gesture::Core;
   if (r == "draw" && picks && tool != "shape") {
     m_holdIds = m_ed->inkAt(pi, p.x(), p.y());
@@ -2882,8 +2969,19 @@ void InkCanvas::trackFingerTap(QTouchEvent* e) {
   m_tap = FingerTap{};
   if (!tap) return;
   if (fingers == 2) {
+    // A second two-finger tap right after the first: switch the fit (and put back what the first undid).
+    if (now - m_twoTapAt < 380) {
+      if (m_twoTapUndid && canRedo()) redo();
+      m_twoTapAt = -1e9;
+      m_twoTapUndid = false;
+      toggleFit();
+      return;
+    }
+    m_twoTapAt = now;
+    m_twoTapUndid = false;
     if (!canUndo()) return;
     undo();
+    m_twoTapUndid = true;
     emit fingerTapped(false);
   } else {
     if (!canRedo()) return;

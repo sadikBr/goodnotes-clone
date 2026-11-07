@@ -187,6 +187,16 @@ Item {
         }
         Rectangle { visible: !!root.s.hasInk; Layout.preferredWidth: 1; Layout.preferredHeight: 22; color: Theme.border }
 
+        // What it measures: a line's angle and length, a shape's size.
+        Label {
+            visible: !!root.s.measure
+            text: root.s.measure || ""
+            font.pixelSize: 12
+            font.weight: Font.DemiBold
+            color: Theme.muted
+            Layout.leftMargin: 4
+            Layout.rightMargin: 4
+        }
         // A single shape.
         RowLayout {
             visible: !!root.s.shape

@@ -18,8 +18,8 @@ Popup {
     readonly property var groups: [
         { title: "Tools", items: [["P", "Pen"], ["B", "Brush"], ["H", "Highlighter"], ["E", "Eraser"], ["L", "Lasso select"], ["S", "Shape"], ["T", "Text box"], ["N", "Sticky note"], ["K", "Laser pointer"], ["R", "Ruler"]] },
         { title: "Editing", items: [["Ctrl+Z", "Undo"], ["Ctrl+Shift+Z", "Redo"], ["Ctrl+C / Ctrl+V", "Copy / paste"], ["Ctrl+D", "Duplicate"], ["Ctrl+A", "Select all"], ["Delete", "Delete selection"], ["Esc", "Deselect"]] },
-        { title: "View", items: [["Ctrl+= / Ctrl+−", "Zoom in / out"], ["Ctrl+0", "Fit width"], ["Page Up / Down", "Previous / next page"], ["[", "Show or hide pages"], ["F", "Focus mode"], ["Z", "Zoom box"], ["Ctrl+F", "Find in the notebook"], ["F5", "Present"], [".", "Blank the screen (presenting)"], ["?", "This list"]] },
-        { title: "Gestures", items: [["Draw, then hold still", "A clean shape"], ["Hold still on writing", "Select it (keep holding to drag)"], ["Tap a box, picture, note", "Select it"], ["Right-click", "Select anything"], ["Scribble over ink", "Erase it"], ["2-finger tap", "Undo"], ["3-finger tap", "Redo"], ["Pinch", "Zoom"]] }
+        { title: "View", items: [["Ctrl+= / Ctrl+−", "Zoom in / out"], ["Ctrl+0", "Fit width"], ["Ctrl+9", "Whole page"], ["Page Up / Down", "Previous / next page"], ["Arrows", "Move the selection (Shift: further)"], ["[", "Show or hide pages"], ["F", "Focus mode"], ["Z", "Zoom box"], ["Ctrl+F", "Find in the notebook"], ["F5", "Present"], [".", "Blank the screen (presenting)"], ["?", "This list"]] },
+        { title: "Gestures", items: [["Draw, then hold still", "A clean shape"], ["Hold still on writing", "Select it (keep holding to drag)"], ["Tap a box, picture, note", "Select it"], ["Right-click", "Select anything"], ["Scribble over ink", "Erase it"], ["Hold the pen still on paper", "A point (A, B, C…)"], ["2-finger tap", "Undo"], ["2-finger double tap", "Whole page ↔ page width"], ["3-finger tap", "Redo"], ["Pinch", "Zoom (out past the page: all pages)"]] }
     ]
     background: Item {
         Shadow { anchors.fill: parent; radius: Theme.radiusXl; level: 3 }

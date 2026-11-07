@@ -113,6 +113,21 @@ AngleSnap snapDirection(double angle, const std::vector<DraftLine>& lines, const
 double angleBetween(const DraftLine& s, P2 from, P2 to);
 /// A box or ellipse that's nearly square or round becomes exactly so (in place).
 bool squareUp(Shape& s, double tolerance = 0.06);
+/// A curve drawn as part of a circle: that arc, exactly (a path named "arc"); none
+/// when it isn't round enough, too flat, or nearly a whole circle.
+std::optional<Shape> fitArc(const std::vector<P2>& pts);
+/// An arc's centre, radius and sweep (degrees, positive counter-clockwise on paper).
+struct ArcInfo {
+  P2 c;
+  double r, sweep;
+};
+std::optional<ArcInfo> arcInfo(const Shape& s);
+/// Marks for figures, placed with the shape tool by tapping: ticks on equal sides
+/// ("tick1"…"tick3", across the middle of the side tapped), a right-angle square
+/// ("rightMark") or an angle's arc ("angleMark") in the corner tapped.
+bool isMarkKind(const QString& kind);
+/// The mark for a tap at `p` (within `reach` of a side or corner), `size` long; none away from any.
+std::optional<Shape> markShape(const QString& kind, const std::vector<DraftLine>& lines, P2 p, double reach, double size);
 /// Its size in page units, for the size label: width × height (sides of a box,
 /// axes of an ellipse; else as drawn).
 std::pair<double, double> shapeSize(const Shape& s);

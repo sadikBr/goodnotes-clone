@@ -5,6 +5,18 @@ Updates → What's new) and on its GitHub release. Keep them short, one line
 per change, written for the people using Inkleaf. A release needs its
 section here before it can be published (`scripts/check-version.py`).
 
+## 0.22.0
+
+- **Arcs:** draw part of a circle and hold still: it becomes a clean arc, with its centre, and a label giving its radius and angle ("r 3.4 cm  105°").
+- **Marks for figures:** the shape picker has a Marks group: one, two or three ticks for equal sides (tap a side) and the right-angle square or an angle's arc (tap a corner).
+- **Measure what you drew:** select a line, shape or arc and the selection bar says its angle and length, its size, or its radius and angle.
+- **Eyedropper:** hold the + under your colours, then tap the page: that colour is picked up (from the ink, even on a thin line) and kept in your colours; a loupe shows it under the pointer. Esc or Back cancels.
+- **Move pages in All pages:** press and hold a page in the grid and drag it where it goes.
+- **Whole page ↔ page width:** a two-finger double tap switches between them (Ctrl+9 and Ctrl+0 on a keyboard; the zoom bar's fit button switches too).
+- **The eraser grows when you rub fast** and shrinks back when you slow down for details; its ring shows its size.
+- **Pressure in the size preview:** your own size's sample stroke goes from a light touch to a full press, following your Pressure setting (light, normal, firm), so you see how your pen will write.
+- **A little tick on the phone** (a light vibration) when a line snaps to an angle, joins, goes square or parallel, a box squares up, or something lines up while moving.
+
 ## 0.21.0
 
 - **See the angle of a straight line:** draw a line and hold still until it straightens, then keep the pen down and turn it: a label by its end shows its angle (0° is level, 90° upright, up to the right is positive) and its length in centimetres, with a dashed level line and an arc from where it starts. It settles exactly on 0°, 15°, 30°, 45°… when you come close (the label turns green), so a level or a 45° line is easy. Works with the highlighter's straight lines too, and a held shape (a box, a triangle…) shows how far it's turned and settles back straight.

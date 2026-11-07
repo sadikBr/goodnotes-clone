@@ -28,7 +28,13 @@ var groups = [
         { id: "cloud", label: "Cloud" },
         { id: "bubble", label: "Speech bubble" },
         { id: "blockArrow", label: "Block arrow" },
-        { id: "lightning", label: "Lightning" }] }
+        { id: "lightning", label: "Lightning" }] },
+    { title: "Marks · tap a side or corner", marks: true, shapes: [
+        { id: "tick1", label: "Equal sides: one tick (tap a side)" },
+        { id: "tick2", label: "Equal sides: two ticks (tap a side)" },
+        { id: "tick3", label: "Equal sides: three ticks (tap a side)" },
+        { id: "rightMark", label: "Right angle (tap a corner)" },
+        { id: "angleMark", label: "Angle (tap a corner)" }] }
 ]
 
 function find(id) {

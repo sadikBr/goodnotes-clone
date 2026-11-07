@@ -911,4 +911,165 @@ std::pair<double, double> shapeSize(const Shape& s) {
   return {r.w, r.h};
 }
 
+namespace {
+/// The circle through three points, if they aren't in a line.
+std::optional<std::pair<P2, double>> circleThrough(P2 a, P2 b, P2 c) {
+  const double d = 2 * (a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1]));
+  if (std::abs(d) < 1e-9) return std::nullopt;
+  const double a2 = a[0] * a[0] + a[1] * a[1], b2 = b[0] * b[0] + b[1] * b[1], c2 = c[0] * c[0] + c[1] * c[1];
+  const P2 o{(a2 * (b[1] - c[1]) + b2 * (c[1] - a[1]) + c2 * (a[1] - b[1])) / d, (a2 * (c[0] - b[0]) + b2 * (a[0] - c[0]) + c2 * (b[0] - a[0])) / d};
+  return std::pair{o, std::hypot(a[0] - o[0], a[1] - o[1])};
+}
+}  // namespace
+
+std::optional<Shape> fitArc(const std::vector<P2>& pts) {
+  if (pts.size() < 8) return std::nullopt;
+  // The best circle through all the points (least squares, Kåsa's method).
+  double sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0, sxz = 0, syz = 0, sz = 0;
+  const double n = double(pts.size());
+  for (const P2& p : pts) {
+    const double z = p[0] * p[0] + p[1] * p[1];
+    sx += p[0], sy += p[1], sxx += p[0] * p[0], syy += p[1] * p[1], sxy += p[0] * p[1], sxz += p[0] * z, syz += p[1] * z, sz += z;
+  }
+  // Solve for x² + y² + D·x + E·y + F = 0.
+  const double m[3][4] = {{sxx, sxy, sx, -sxz}, {sxy, syy, sy, -syz}, {sx, sy, n, -sz}};
+  double a[3][4];
+  std::copy(&m[0][0], &m[0][0] + 12, &a[0][0]);
+  for (int i = 0; i < 3; ++i) {
+    int piv = i;
+    for (int k = i + 1; k < 3; ++k)
+      if (std::abs(a[k][i]) > std::abs(a[piv][i])) piv = k;
+    if (std::abs(a[piv][i]) < 1e-12) return std::nullopt;
+    for (int j = 0; j < 4; ++j) std::swap(a[i][j], a[piv][j]);
+    for (int k = 0; k < 3; ++k) {
+      if (k == i) continue;
+      const double f = a[k][i] / a[i][i];
+      for (int j = i; j < 4; ++j) a[k][j] -= f * a[i][j];
+    }
+  }
+  const double D = a[0][3] / a[0][0], E = a[1][3] / a[1][1], F = a[2][3] / a[2][2];
+  P2 c{-D / 2, -E / 2};
+  const double r2 = c[0] * c[0] + c[1] * c[1] - F;
+  if (r2 <= 0) return std::nullopt;
+  double r = std::sqrt(r2);
+  // A few steps towards the circle closest to the points themselves (that estimate
+  // runs small on a short, wobbly arc).
+  for (int it = 0; it < 30; ++it) {
+    double mr = 0;
+    for (const P2& p : pts) mr += std::hypot(p[0] - c[0], p[1] - c[1]);
+    mr /= n;
+    P2 next{0, 0};
+    for (const P2& p : pts) {
+      const double d = std::max(1e-9, std::hypot(p[0] - c[0], p[1] - c[1]));
+      next[0] += p[0] - mr * (p[0] - c[0]) / d;
+      next[1] += p[1] - mr * (p[1] - c[1]) / d;
+    }
+    c = {next[0] / n, next[1] / n};
+    r = mr;
+  }
+  // Round enough: every point close to the circle.
+  double worst = 0;
+  for (const P2& p : pts) worst = std::max(worst, std::abs(std::hypot(p[0] - c[0], p[1] - c[1]) - r));
+  if (worst > std::max(2.0, r * 0.09) || r > 4000) return std::nullopt;
+  // How far round it goes (always the same way).
+  double sweep = 0, prev = std::atan2(pts[0][1] - c[1], pts[0][0] - c[0]);
+  for (size_t i = 1; i < pts.size(); ++i) {
+    const double t = std::atan2(pts[i][1] - c[1], pts[i][0] - c[0]);
+    double d = t - prev;
+    if (d > M_PI) d -= 2 * M_PI;
+    if (d < -M_PI) d += 2 * M_PI;
+    sweep += d;
+    prev = t;
+  }
+  const double deg = std::abs(sweep) * 180 / M_PI;
+  if (deg < 25 || deg > 330) return std::nullopt;
+  // Not a flat curve that's really a line (that's the line's job).
+  const P2 a0 = pts.front(), a1 = pts.back();
+  const double chord = std::hypot(a1[0] - a0[0], a1[1] - a0[1]);
+  if (chord > 0 && r - std::sqrt(std::max(0.0, r * r - chord * chord / 4)) < chord * 0.06 && deg < 90) return std::nullopt;
+  Shape s;
+  s.kind = "path";
+  s.name = "arc";
+  s.closed = false;
+  const double from = std::atan2(a0[1] - c[1], a0[0] - c[0]);
+  const int steps = std::clamp(int(deg / 3), 12, 120);
+  for (int i = 0; i <= steps; ++i) {
+    const double t = from + sweep * i / steps;
+    s.points.push_back({c[0] + std::cos(t) * r, c[1] + std::sin(t) * r});
+  }
+  return s;
+}
+
+std::optional<ArcInfo> arcInfo(const Shape& s) {
+  if (s.name != "arc" || s.points.size() < 3) return std::nullopt;
+  const P2 a = s.points.front(), m = s.points[s.points.size() / 2], b = s.points.back();
+  const auto circle = circleThrough(a, m, b);
+  if (!circle) return std::nullopt;
+  const auto [c, r] = *circle;
+  double sweep = 0, prev = std::atan2(a[1] - c[1], a[0] - c[0]);
+  for (size_t i = 1; i < s.points.size(); ++i) {
+    const double t = std::atan2(s.points[i][1] - c[1], s.points[i][0] - c[0]);
+    double d = t - prev;
+    if (d > M_PI) d -= 2 * M_PI;
+    if (d < -M_PI) d += 2 * M_PI;
+    sweep += d;
+    prev = t;
+  }
+  return ArcInfo{c, r, -sweep * 180 / M_PI};
+}
+
+bool isMarkKind(const QString& kind) { return kind == "tick1" || kind == "tick2" || kind == "tick3" || kind == "rightMark" || kind == "angleMark"; }
+
+std::optional<Shape> markShape(const QString& kind, const std::vector<DraftLine>& lines, P2 p, double reach, double size) {
+  Shape s;
+  s.kind = "path";
+  s.name = "mark";
+  if (kind.startsWith("tick")) {
+    // Across the middle of the nearest side, one to three short strokes.
+    std::optional<DraftLine> side = lineThrough(lines, p, reach);
+    if (!side) return std::nullopt;
+    const double len = std::hypot(side->b[0] - side->a[0], side->b[1] - side->a[1]);
+    if (len < 1e-6) return std::nullopt;
+    const P2 u{(side->b[0] - side->a[0]) / len, (side->b[1] - side->a[1]) / len}, nrm{-u[1], u[0]};
+    const P2 mid{(side->a[0] + side->b[0]) / 2, (side->a[1] + side->b[1]) / 2};
+    const int n = kind == "tick3" ? 3 : kind == "tick2" ? 2 : 1;
+    const double gap = size * 0.35;
+    for (int k = 0; k < n; ++k) {
+      const double off = (k - (n - 1) / 2.0) * gap;
+      if (k > 0) s.breaks.push_back(int(s.points.size()));
+      s.points.push_back({mid[0] + u[0] * off - nrm[0] * size / 2, mid[1] + u[1] * off - nrm[1] * size / 2});
+      s.points.push_back({mid[0] + u[0] * off + nrm[0] * size / 2, mid[1] + u[1] * off + nrm[1] * size / 2});
+    }
+    return s;
+  }
+  // A corner: two lines that meet at an end, the nearest to the tap.
+  std::optional<std::tuple<P2, P2, P2>> best;  // corner, the far ends of the two arms
+  double bestD = reach * 2;
+  auto same = [](P2 a, P2 b) { return std::hypot(a[0] - b[0], a[1] - b[1]) < 1.0; };
+  for (size_t i = 0; i < lines.size(); ++i)
+    for (size_t j = i + 1; j < lines.size(); ++j)
+      for (const auto& [ci, fi] : {std::pair{lines[i].a, lines[i].b}, std::pair{lines[i].b, lines[i].a}})
+        for (const auto& [cj, fj] : {std::pair{lines[j].a, lines[j].b}, std::pair{lines[j].b, lines[j].a}}) {
+          if (!same(ci, cj)) continue;
+          const double d = std::hypot(ci[0] - p[0], ci[1] - p[1]);
+          if (d < bestD) bestD = d, best = std::tuple{ci, fi, fj};
+        }
+  if (!best) return std::nullopt;
+  const auto [c, f1, f2] = *best;
+  const double l1 = std::hypot(f1[0] - c[0], f1[1] - c[1]), l2 = std::hypot(f2[0] - c[0], f2[1] - c[1]);
+  if (l1 < 1e-6 || l2 < 1e-6) return std::nullopt;
+  const P2 u1{(f1[0] - c[0]) / l1, (f1[1] - c[1]) / l1}, u2{(f2[0] - c[0]) / l2, (f2[1] - c[1]) / l2};
+  const double r = std::min({size, l1 * 0.4, l2 * 0.4});
+  if (kind == "rightMark") {
+    s.points = {{c[0] + u1[0] * r, c[1] + u1[1] * r}, {c[0] + (u1[0] + u2[0]) * r, c[1] + (u1[1] + u2[1]) * r}, {c[0] + u2[0] * r, c[1] + u2[1] * r}};
+    return s;
+  }
+  double t0 = std::atan2(u1[1], u1[0]), sweep = std::atan2(u2[1], u2[0]) - t0;
+  while (sweep > M_PI) sweep -= 2 * M_PI;
+  while (sweep < -M_PI) sweep += 2 * M_PI;
+  const double ar = r * 1.3;
+  for (int i = 0; i <= 24; ++i) s.points.push_back({c[0] + std::cos(t0 + sweep * i / 24) * ar, c[1] + std::sin(t0 + sweep * i / 24) * ar});
+  return s;
+}
+
 }  // namespace ed

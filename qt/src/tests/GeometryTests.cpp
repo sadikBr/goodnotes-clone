@@ -372,3 +372,25 @@ TEST("snapGaps", "a box settles midway between its neighbours, or at the gap the
   s = snapGaps({100, 5, 40, 40}, others, 3, 0, 7, true, false);
   CHECK(s.dx == 3);
 }
+
+TEST("fitArc", "a curve round a circle becomes that arc; lines, wiggles and whole circles don't") {
+  std::vector<P2> quarter;
+  for (int i = 0; i <= 30; ++i) {
+    const double t = M_PI / 2 * i / 30;
+    const double wobble = (i % 2 ? 1.2 : -1.2);
+    quarter.push_back({200 + std::cos(t) * (100 + wobble), 200 - std::sin(t) * (100 + wobble)});
+  }
+  const auto arc = fitArc(quarter);
+  CHECK(arc && arc->name == "arc" && !arc->closed);
+  const auto info = arc ? arcInfo(*arc) : std::nullopt;
+  CHECK(info && std::abs(info->r - 100) < 2 && std::abs(std::abs(info->sweep) - 90) < 3);
+  std::vector<P2> line, wiggle, circle;
+  for (int i = 0; i <= 30; ++i) {
+    line.push_back({i * 10.0, 50 + (i % 2) * 0.8});
+    wiggle.push_back({i * 10.0, 50 + std::sin(i * 0.9) * 25});
+    circle.push_back({100 + std::cos(i * 2 * M_PI / 30) * 50, 100 + std::sin(i * 2 * M_PI / 30) * 50});
+  }
+  CHECK(!fitArc(line));
+  CHECK(!fitArc(wiggle));
+  CHECK(!fitArc(circle));
+}
