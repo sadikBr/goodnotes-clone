@@ -128,7 +128,11 @@ int main(int argc, char* argv[]) {
   if (const QString size = qEnvironmentVariable("INKLEAF_WINDOW_SIZE"); !size.isEmpty() && !engine.rootObjects().isEmpty())
     if (auto* w = qobject_cast<QWindow*>(engine.rootObjects().first())) {
       const QStringList wh = size.split('x');
-      if (wh.size() == 2) w->resize(wh[0].toInt(), wh[1].toInt());
+      if (wh.size() == 2) {
+        // (Smaller than the window allows, too: a phone's screen, say.)
+        w->setMinimumSize(QSize(std::min(w->minimumWidth(), wh[0].toInt()), std::min(w->minimumHeight(), wh[1].toInt())));
+        w->resize(wh[0].toInt(), wh[1].toInt());
+      }
     }
   if (smoke) {
     QQmlComponent extra(&engine);
