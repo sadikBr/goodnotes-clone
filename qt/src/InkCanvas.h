@@ -227,6 +227,9 @@ public:
   /// Changes whenever what a gesture shows over the page changes.
   quint64 gestureRev() const { return m_gestureRev; }
   QJsonObject liveStroke(int page) const;
+  /// The stroke being written is drawn as a picture (in the overlay), as it will be once finished.
+  bool livePicture() const;
+  bool m_livePicShown = false;
   quint64 pageVersion(int page) const;
   /// Spelling: the words written on page `page` (only selected ones if `selectionOnly`):
   /// [{ n, x, y, w, h, ids }] (page units), in reading order.

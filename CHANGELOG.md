@@ -11,6 +11,8 @@ section here before it can be published (`scripts/check-version.py`).
 - **Dashed and dotted lines are an option now**, not a pen of their own: the ballpoint, fineliner, marker and neon can be solid, dashed or dotted, with close to very wide gaps, and so can shapes. Each pen remembers its own. Your dashed lines stay as they were (the dashed pen became a ballpoint with dashes).
 - **The options strip is short again:** the line, its gaps and smoothing are at the bottom of the pen and brush cases; the strip keeps the pen (drawn as it writes), colours and sizes.
 - **Select without the lasso:** with the pen, brush, highlighter or shape tool, tap a text box, picture, sticky note, graph or a shape's outline to select it; press and hold still on handwriting to select that word; or right-click anything with the mouse. The lasso takes over to move it or resize it, and your tool comes back when you deselect. (Dragging over things still writes on them, and the eraser always erases.)
+- **What you draw is what stays:** the textured and effect pens (pencil, calligraphy, marker, watercolour, neon, chalk, crayon, the brushes) and dashed lines look the same while you draw as when you lift the pen; they used to show a plain line until then.
+- After holding on handwriting to select it, keep the pen down and drag: it moves with you.
 - Blanking the screen while presenting is now **.** (B is the brush).
 
 ## 0.19.2

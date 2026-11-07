@@ -1,4 +1,5 @@
 #include "draw/Elements.h"
+#include "draw/Strokes.h"
 #include "InkCanvas.h"
 #include "FindText.h"
 #include "editor/Table.h"
@@ -184,11 +185,20 @@ InkCanvas::InkCanvas(QQuickItem* parent) : QQuickItem(parent) {
     // Held still on ink: no dot, that word selected.
     if (!m_ed || m_g.kind != Gesture::Draw || m_holdIds.isEmpty()) return;
     m_ed->cancel();
+    const bool stylus = m_g.stylus, touch = m_g.touch;
     m_g = Gesture();
     m_liveChanged = true;
     setWriting(false);
     m_ed->selectIds(m_holdPage, m_holdIds);
     m_holdIds.clear();
+    // The same press goes on as a move: drag to take the word somewhere else.
+    const QPointF p = toPageOf(m_holdPage, m_holdFrom);
+    m_ed->down(m_holdPage, p.x(), p.y(), 0.5f, inputMs(), QStringLiteral("lasso"), false);
+    m_g.kind = Gesture::Core;
+    m_g.page = m_holdPage;
+    m_g.stylus = stylus;
+    m_g.touch = touch;
+    m_g.lastScreen = m_holdFrom;
     afterCore();
     emit selectedByTap();
   });
@@ -302,6 +312,13 @@ void InkCanvas::afterCore() {
     m_liveHidden = hidden;
     m_liveChanged = true;
     shown = true;
+  }
+  // A stroke drawn as a picture is redrawn in the overlay as it grows (and
+  // taken away from it once it's on the page).
+  const bool pic = livePicture();
+  if (pic || m_livePicShown) {
+    m_overlayDirty = true;
+    m_livePicShown = pic;
   }
   if (shown) {
     ++m_gestureRev;
@@ -1558,6 +1575,12 @@ QImage InkCanvas::regionImage(int page, const QRectF& region, double scale, bool
   return img;
 }
 
+bool InkCanvas::livePicture() const {
+  if (m_g.kind != Gesture::Draw || m_g.pts.empty() || m_liveHidden) return false;
+  const bool hl = m_g.pen == ink::Pen::Highlighter;
+  return m_g.dashed || !ink::meshDrawn(ink::penName(m_g.pen), hl);
+}
+
 QJsonObject InkCanvas::liveStroke(int page) const {
   if (m_g.kind != Gesture::Draw || m_g.page != page || m_g.pts.size() < 1 || m_liveHidden) return {};
   QJsonArray pts;
@@ -1566,6 +1589,7 @@ QJsonObject InkCanvas::liveStroke(int page) const {
   QJsonObject el{{"id", "live"}, {"z", 0}, {"kind", "stroke"}, {"tool", hl ? "highlighter" : "pen"}, {"color", m_g.color.name(QColor::HexRgb)},
                  {"width", m_g.width}, {"points", pts}};
   if (!hl) el["style"] = m_tool == "shape" ? QStringLiteral("ballpoint") : styleNow();
+  if (!hl && m_tool != "shape") el["smooth"] = m_smoothing;
   if (m_g.dashed) {
     el["dash"] = m_g.dashed == 2 ? "dot" : "dash";
     el["gap"] = m_penGap;
@@ -2141,7 +2165,21 @@ void InkCanvas::updatePolish() {
     m_overlayImg = QImage();
     m_overlayPage = -1;
     const int pi = m_ed->active;
-    const auto b = m_ed->overlayBounds();
+    auto b = m_ed->overlayBounds();
+    // The stroke being written, when it's drawn as a picture (textured and
+    // effect pens, dashes): drawn here by the same code as the finished ink.
+    const bool livePic = livePicture() && m_g.page == pi;
+    if (livePic) {
+      float x0 = m_g.pts[0].x, x1 = x0, y0 = m_g.pts[0].y, y1 = y0;
+      for (const ink::Point& q : m_g.pts) x0 = std::min(x0, q.x), x1 = std::max(x1, q.x), y0 = std::min(y0, q.y), y1 = std::max(y1, q.y);
+      const double pad = m_g.width * 6 + 10;
+      const ed::Rect lr{x0 - pad, y0 - pad, x1 - x0 + 2 * pad, y1 - y0 + 2 * pad};
+      if (!b) b = lr;
+      else {
+        const double l = std::min(b->x, lr.x), t = std::min(b->y, lr.y);
+        b = ed::Rect{l, t, std::max(b->x + b->w, lr.x + lr.w) - l, std::max(b->y + b->h, lr.y + lr.h) - t};
+      }
+    }
     // (Not while something covers the selection, as cropping a picture does.)
     if (b && !m_hideSelection && pi >= 0 && pi < int(m_pages.size())) {
       const Page& pg = m_pages[pi];
@@ -2155,6 +2193,7 @@ void InkCanvas::updatePolish() {
         Canvas canvas(int(std::ceil(r.width() * s)), int(std::ceil(r.height() * s)));
         canvas.setTransform(s, 0, 0, s, -r.x() * s, -r.y() * s);
         m_ed->drawOverlay(canvas, pi);
+        if (livePic) draw::drawStroke(canvas, liveStroke(pi), true);
         m_overlayImg = canvas.image();
         m_overlayRect = r;
         m_overlayPage = pi;
@@ -2996,7 +3035,7 @@ QSGNode* InkCanvas::updatePaintNode(QSGNode* old, UpdatePaintNodeData*) {
   // The stroke being written.
   if (m_liveChanged) {
     m_liveChanged = false;
-    if (m_g.kind == Gesture::Draw && m_g.mesh && !m_liveHidden) {
+    if (m_g.kind == Gesture::Draw && m_g.mesh && !m_liveHidden && !livePicture()) {
       setMesh(live, m_g.mesh->tris, inkColor(m_g.color, m_g.pen));
       QColor glow = m_g.color;
       glow.setAlphaF(0.16f);
