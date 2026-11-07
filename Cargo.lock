@@ -428,7 +428,7 @@ dependencies = [
 
 [[package]]
 name = "inkleaf-core"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "argon2",
  "base64",
@@ -450,7 +450,7 @@ dependencies = [
 
 [[package]]
 name = "inkleaf-native"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "inkleaf-core",
  "serde",
